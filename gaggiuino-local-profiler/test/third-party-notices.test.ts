@@ -65,6 +65,12 @@ describe('THIRD_PARTY_NOTICES.md', () => {
         expect(missing, 'bundled font(s) with no section:\n' + missing.join('\n')).toEqual([]);
     });
 
+    // The notices are user-facing prose served to the About sheet, so they must
+    // not point at a folder that only exists in the source tree.
+    it('names no source-tree path', () => {
+        expect(notices).not.toContain('public-src/');
+    });
+
     // The settings UI and the parser in #2080 slice 3 group the components by
     // these headings and walk them in this order, so a reordering or a renamed
     // group breaks the About page rather than this test being cosmetic.
