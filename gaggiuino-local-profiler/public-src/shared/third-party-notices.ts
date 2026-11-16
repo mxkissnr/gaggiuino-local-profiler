@@ -45,8 +45,6 @@ function isBlank(line: string): boolean {
     return line.trim() === '';
 }
 
-// The file is hard-wrapped: a continuation line is indented by two spaces and
-// belongs to the bullet or paragraph above it.
 function firstSentence(text: string): string {
     for (let i = 0; i < text.length; i += 1) {
         if (text.charAt(i) !== '.') continue;
@@ -56,6 +54,8 @@ function firstSentence(text: string): string {
     return text;
 }
 
+// The file is hard-wrapped: a continuation line is indented by two spaces and
+// belongs to the bullet or paragraph above it.
 function joinWrapped(lines: string[]): string {
     return lines.map((line) => line.trim()).join(' ');
 }
