@@ -333,7 +333,8 @@
         .topbar-nav-more > summary::-webkit-details-marker { display: none; }
         .topbar-nav-more[open] > summary { color: var(--gray-200); background: color-mix(in srgb, var(--paper) 4%, transparent); }
         /* A badge on a tab inside the menu must still be visible from the
-           closed row: a dot at the icon's top right. */
+           closed row: a dot at the icon's top right, in the .maint-badge
+           background colour (that rule paints it with var(--err) too). */
         .topbar-nav-more.has-badge .rail-icon-slot::after {
             content: "";
             position: absolute; top: -1px; right: -1px;
