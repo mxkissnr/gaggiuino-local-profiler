@@ -166,7 +166,10 @@ export async function updateStatus(machineId?: string | number | null): Promise<
     // #411/#655: the topbar dot carries the reachability class and its
     // tooltip. Since #2056 it is the only status dot; the shot list footer
     // copy is gone.
-    if (railDot) { railDot.className = dotClass; railDot.title = dotTitle; }
+    // #2079: the sync time stays readable as the dot's tooltip when the bar
+    // compacts it away -- time first, the reachability/error text after it.
+    const dotTip = [timeEl.textContent?.trim(), dotTitle].filter(Boolean).join(' · ');
+    if (railDot) { railDot.className = dotClass; railDot.title = dotTip; }
     // #837: the topbar's ambient machine icon mirrors the same reachability
     // signal as its SSE-less fallback — a no-op whenever SSE is already
     // driving it with richer detail (see syncTopbarMachineIconFallback()).
