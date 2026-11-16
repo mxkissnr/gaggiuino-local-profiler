@@ -240,14 +240,55 @@ const readTopbar = (): TopbarReport => {
     };
 };
 
-// The entries the open "More" menu offers, in the order it shows them.
-const readMenuEntries = (): TopbarMenuEntryReport[] =>
-    [...document.querySelectorAll<HTMLButtonElement>('#topbarNavMenu [data-nav-target]')]
-        .map(el => ({ target: el.dataset['navTarget'] ?? '', disabled: el.disabled }));
+// The tabs marked hidden and the entries the open "More" menu offers, read in
+// one go: topbar-nav-overflow.ts rebuilds the menu from those very classes
+// whenever it lays the row out, so a single snapshot is the only way to
+// compare them.
+const readMenuAndOverflow = (): { overflow: string[]; entries: TopbarMenuEntryReport[] } => ({
+    overflow: [...document.querySelectorAll<HTMLElement>('.topbar-nav-list > .topbar-nav.topbar-nav-overflow')]
+        .map(tab => tab.id),
+    entries: [...document.querySelectorAll<HTMLButtonElement>('#topbarNavMenu [data-nav-target]')]
+        .map(el => ({ target: el.dataset['navTarget'] ?? '', disabled: el.disabled })),
+});
+
+// What the last layout decided plus the two texts it shares the bar with, as a
+// short string -- see waitForStableRow(). The texts are part of it because a
+// late status poll rewrites the sync time (or the machine name), and the row
+// re-measures when that happens.
+const readLayoutSignature = (): string => {
+    const bar = document.getElementById('content-topbar');
+    const moreBox = document.getElementById('topbarNavMore')!.getBoundingClientRect();
+    const overflow = [...document.querySelectorAll<HTMLElement>('.topbar-nav-list > .topbar-nav.topbar-nav-overflow')]
+        .map(tab => tab.id);
+    return [
+        bar?.classList.contains('topbar-compact') ? 'compact' : '-',
+        moreBox.width > 0 ? 'more' : '-',
+        overflow.join(','),
+        document.getElementById('syncTime')?.textContent ?? '',
+        document.getElementById('railMachineName')?.textContent ?? '',
+    ].join('|');
+};
+
+// The same for the open menu: what it offers plus what the row hides, so the
+// two can be compared at one moment -- see waitForStable().
+const readMenuSignature = (): string => {
+    const bar = document.getElementById('content-topbar');
+    const overflow = [...document.querySelectorAll<HTMLElement>('.topbar-nav-list > .topbar-nav.topbar-nav-overflow')]
+        .map(tab => tab.id);
+    const entries = [...document.querySelectorAll<HTMLElement>('#topbarNavMenu [data-nav-target]')]
+        .map(el => el.dataset['navTarget'] ?? '');
+    return [overflow.join(','), entries.join(','), bar?.classList.contains('topbar-compact') ? 'compact' : '-'].join('|');
+};
 
 const readMenuState = (): { open: boolean; summaryFocused: boolean } => {
     const more = document.getElementById('topbarNavMore') as HTMLDetailsElement;
     return { open: more.open, summaryFocused: document.activeElement === more.querySelector('summary') };
+};
+
+// Waits for the <details> to be open with a rendered entry.
+const readMenuOpen = (): boolean => {
+    const more = document.getElementById('topbarNavMore') as HTMLDetailsElement | null;
+    return more?.open === true && document.querySelectorAll('#topbarNavMenu [data-nav-target]').length > 0;
 };
 /* eslint-enable no-undef */
 
@@ -284,13 +325,49 @@ async function useLang(lang: string): Promise<void> {
 async function resizeTo(width: number, height = 900): Promise<void> {
     await page.setViewportSize({ width, height });
     await settleFrame();
+    await waitForStableRow();
+}
+
+// The row shares its bar with the sync time and the machine name and re-measures
+// whenever either text changes -- which a status poll landing right after the
+// reload does ("kein Sync" becomes "13:16", a shorter text, so a tab can move
+// back out of the menu). Reading the row and the menu at different moments then
+// compares two different layouts. Poll until three reads at least a frame apart
+// agree, and only then measure.
+const STABLE_READS = 3;
+
+async function waitForStable(read: () => string, what: string): Promise<void> {
+    let previous: string | null = null;
+    let same = 0;
+    for (let attempt = 0; attempt < 60; attempt++) {
+        await page.waitForTimeout(60);
+        const current = await page.evaluate(read);
+        same = current === previous ? same + 1 : 1;
+        previous = current;
+        if (same >= STABLE_READS) return;
+    }
+    assert.fail(`the top bar ${what} never settled (last read: ${previous})`);
+}
+
+async function waitForStableRow(): Promise<void> {
+    await waitForStable(readLayoutSignature, 'layout');
 }
 
 // The <details>/<summary> toggle event is what rebuilds the menu, and the
-// browser dispatches it after the click, so wait for the first entry.
-async function openMoreMenu(): Promise<void> {
-    await page.locator('#topbarNavMore > summary').click();
-    await page.locator('#topbarNavMenu [data-nav-target]').first().waitFor({ timeout: 5000 });
+// browser dispatches it after the click; a closed menu keeps its previous
+// entries in the DOM, so wait for the open state and then for the content to
+// stop changing rather than trust whatever is there. Resolves false when the
+// row no longer needs the button, so the caller can skip instead of clicking a
+// hidden element.
+async function openMoreMenu(): Promise<boolean> {
+    const toggle = page.locator('#topbarNavMore > summary');
+    if (!(await toggle.isVisible())) return false;
+    // Clicking the summary toggles, so only click a closed menu.
+    const alreadyOpen = await page.evaluate(readMenuOpen);
+    if (!alreadyOpen) await toggle.click();
+    await page.waitForFunction(readMenuOpen, undefined, { timeout: 5000 });
+    await waitForStable(readMenuSignature, 'menu');
+    return true;
 }
 
 // Every tab that is in the row is fully inside it, left of the settings gear
@@ -328,15 +405,13 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
         await useLang(lang);
 
         for (const width of [1280, 1144, 1024]) {
-            const report = await assertTopbarFits(lang, width);
-            if (!report.moreShown) continue;
+            await assertTopbarFits(lang, width);
 
             // The menu lists exactly the hidden tabs, in row order, and Escape
             // closes it leaving focus on the toggle.
-            await openMoreMenu();
-            const entries = await page.evaluate(readMenuEntries);
-            const hidden = report.tabs.filter(tab => tab.overflow).map(tab => tab.id);
-            assert.deepEqual(entries.map(entry => entry.target), hidden,
+            if (!(await openMoreMenu())) continue;
+            const shownMenu = await page.evaluate(readMenuAndOverflow);
+            assert.deepEqual(shownMenu.entries.map(entry => entry.target), shownMenu.overflow,
                 `${lang} at ${width} px: the More menu does not list the hidden tabs`);
 
             await page.keyboard.press('Escape');
@@ -347,16 +422,16 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
 
         // A tab picked from the menu comes into the row as the active one, so
         // the page the user just opened is never hidden.
-        const beforePick = await assertTopbarFits(lang, 1024);
-        if (beforePick.moreShown) {
-            await openMoreMenu();
-            const entries = await page.evaluate(readMenuEntries);
+        await assertTopbarFits(lang, 1024);
+        if (await openMoreMenu()) {
+            const { entries } = await page.evaluate(readMenuAndOverflow);
             const pickable = entries.filter(entry => !entry.disabled).map(entry => entry.target);
             const picked = pickable[pickable.length - 1];
             assert.ok(picked, `${lang}: the More menu has no enabled entry to pick`);
 
             await page.locator(`#topbarNavMenu [data-nav-target="${picked}"]`).click();
             await settleFrame();
+            await waitForStableRow();
 
             const afterPick = await page.evaluate(readTopbar);
             assert.ok(afterPick.tabs.find(tab => tab.id === picked)?.visible,
@@ -368,13 +443,15 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
             // The tab now sits in the row, so the menu no longer offers it. A
             // row that fits again has no menu left to open.
             if (afterPick.moreShown) {
-                await openMoreMenu();
-                const relisted = (await page.evaluate(readMenuEntries)).map(entry => entry.target);
-                assert.ok(!relisted.includes(picked), `${lang}: the tab opened from the menu is still listed`);
-                await page.keyboard.press('Escape');
+                if (await openMoreMenu()) {
+                    const relisted = (await page.evaluate(readMenuAndOverflow)).entries.map(entry => entry.target);
+                    assert.ok(!relisted.includes(picked), `${lang}: the tab opened from the menu is still listed`);
+                    await page.keyboard.press('Escape');
+                }
             }
         }
         await openTopbarTab(page, '#btnShots');
+        await waitForStableRow();
 
         // Nothing is hidden on a wide screen in the reference language.
         if (lang === 'en') {
