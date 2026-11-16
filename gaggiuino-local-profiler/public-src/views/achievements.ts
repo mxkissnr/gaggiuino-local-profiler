@@ -291,10 +291,10 @@ function pageHtml(cardBadges: Achievement[], key: string, chosen: string, nowSec
   </div>`;
 }
 
-// The whole page: the two chip rows, then the verdict and the card — no
-// title bar, the active tab already names the page. The category chips replace the old arrows/dots/"Card
-// n of 8" line — eight categories are pages of one depicted card, which is
-// what the chips say. The filter is pure CSS: the layout carries
+// The whole page: the two chip rows, then the verdict and the card — no title
+// bar, the active tab already names the page. The category chips replace the
+// old arrows/dots/"Card n of 8" line — eight categories are pages of one
+// depicted card, which is what the chips say. The filter is pure CSS: the layout carries
 // data-ach-filter and the stylesheet dims the stamps that do not match, so
 // the card stays one object and nothing is hidden or reflowed.
 export function achPageHtml(
