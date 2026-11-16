@@ -15,6 +15,7 @@ import type { BeanMixPartInput } from '../../shared/bean-mix.js';
 import { COFFEE_ICON_SVG, SNOWFLAKE_ICON_SVG, STAR_ICON_SVG, EDIT_ICON_SVG } from '../../icons.js';
 import { classifyBeanBags, renderBagCard, _expandedPastSections } from './bags.js';
 import { _beanList, _field, _el } from './bean-shared.js';
+import { renderBeanProfiles } from './bean-profiles.js';
 import type { BeanListRow, OriginBean } from './bean-shared.js';
 import * as library from '../library.js';
 
@@ -327,6 +328,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
       ${ratingHtml}
       ${bestComboHtml}
       ${lastGrindHtml}
+      ${renderBeanProfiles(b)}
       ${flavorBlockHtml}
       ${invHtml}
       ${frozenHtml}

@@ -26,6 +26,7 @@ import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrind
          removeRecipeStep, _submitManualScan, restockMilk, deleteMilk, editBasket, deleteBasket,
          editPuckScreen, deletePuckScreen } from '../views/library.js';
 import { editProfile, duplicateProfile, deleteMachineProfile, createProfileFromBean, removeProfilePhase } from '../views/library-profile-editor.js';
+import { toggleBeanProfilePin } from '../views/library/bean-profiles.js';
 import { openGaggiMateProfileEditor, duplicateGaggiMateProfile, openNewGaggiMateProfile, handleGmEditorAction } from '../views/gaggimate-profile-editor.js';
 import { openDialinWizard, startDialinFromBean, dialinGrinderChange, dialinConfirmShot, dialinAcceptNext,
          dialinOverride, dialinEnd, dialinSaveKnownGrind, dialinClose } from '../views/dialin-wizard.js';
@@ -101,6 +102,7 @@ export function wireDelegation(): void {
       case 'edit-bean':          editBean(numId()); break;
       case 'delete-bean':        void deleteBean(numId()); break;
       case 'toggle-bean-active': void toggleBeanActive(numId()); break;
+      case 'toggle-bean-profile-pin': void toggleBeanProfilePin(numId(), Number(el.dataset.machineId), el.dataset.profile ?? ''); break;
       case 'edit-grinder':       editGrinder(numId()); break;
       case 'delete-grinder':     void deleteGrinder(numId()); break;
       case 'reset-grinder-burrs': void resetGrinderBurrs(numId()); break;
