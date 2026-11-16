@@ -12,6 +12,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { NOTICE_GROUPS, parseNotices } from '../public-src/shared/third-party-notices.js';
 
 const ROOT = resolve(import.meta.dirname, '..');
 
@@ -73,5 +74,145 @@ describe('THIRD_PARTY_NOTICES.md', () => {
         );
         expect(groups, 'missing group heading(s) in THIRD_PARTY_NOTICES.md').not.toContain(-1);
         expect(groups, 'group headings are out of order').toEqual([...groups].sort((a, b) => a - b));
+    });
+});
+
+// The parser below is what the About sheet will read the file with, so these
+// cases are the guard that every licence a component names also has a full
+// text: prose can name a licence the file never reproduces, and nothing else
+// in the tree would notice.
+describe('parseNotices', () => {
+    const parsed = parseNotices(notices);
+
+    it('finds components in every group', () => {
+        const missing = NOTICE_GROUPS.filter(
+            (group) => !parsed.components.some((component) => component.group === group),
+        );
+        expect(missing, 'group(s) with no parsed component:\n' + missing.join('\n')).toEqual([]);
+    });
+
+    it('gives every component a unique title', () => {
+        const seen = new Set<string>();
+        const duplicates: string[] = [];
+        for (const component of parsed.components) {
+            if (seen.has(component.title)) duplicates.push(component.title);
+            seen.add(component.title);
+        }
+        expect(duplicates, 'duplicate component heading(s):\n' + duplicates.join('\n')).toEqual([]);
+    });
+
+    it('gives every component a purpose, a licence and a source', () => {
+        const bad = parsed.components
+            .filter(
+                (component) =>
+                    !component.purpose.endsWith('.') ||
+                    component.licence === '' ||
+                    !/^https:\/\/\S+$/.test(component.source),
+            )
+            .map((component) => component.title);
+        expect(bad, 'component(s) with an incomplete entry:\n' + bad.join('\n')).toEqual([]);
+    });
+
+    it('reproduces a full text for every licence a component names', () => {
+        const names = parsed.licences.map((licence) => licence.name);
+        const uncovered = parsed.components
+            .filter((component) => !names.some((name) => component.licence.includes(name)))
+            .map((component) => `${component.title} (${component.licence})`);
+        expect(uncovered, 'component(s) naming a licence with no text:\n' + uncovered.join('\n')).toEqual([]);
+    });
+
+    it('reproduces the GPL and MPL texts in full', () => {
+        for (const name of ['GNU General Public License v3.0', 'Mozilla Public License 2.0']) {
+            const licence = parsed.licences.find((entry) => entry.name === name);
+            expect(licence, `no licence block for ${name}`).toBeDefined();
+            expect(licence?.text.length ?? 0, `${name} text looks truncated`).toBeGreaterThan(1000);
+        }
+    });
+
+    it('counts every licence block heading', () => {
+        const headingsWithCovers = notices
+            .split('\n')
+            .filter((line) => line.startsWith('### ') && line.includes(' — ')).length;
+        expect(parsed.licences.length).toBe(headingsWithCovers);
+    });
+
+    it('keeps only the first sentence of a wrapped purpose paragraph', () => {
+        const md = [
+            '## Libraries',
+            '',
+            '### thing 1.0.0',
+            '',
+            'Renders the shot card. It also does more,',
+            'wrapped onto a second line.',
+            '',
+            '- Licensed under the MIT License.',
+        ].join('\n');
+        expect(parseNotices(md).components[0].purpose).toBe('Renders the shot card.');
+    });
+
+    it('drops the note in brackets from a wrapped Licensed under bullet', () => {
+        const md = [
+            '## Server',
+            '',
+            '### github.com/example/mod v1.0.0',
+            '',
+            'Something.',
+            '',
+            '- Licensed under the BSD 3-Clause License (as the Eclipse Distribution',
+            '  License 1.0).',
+        ].join('\n');
+        expect(parseNotices(md).components[0].licence).toBe('BSD 3-Clause License');
+    });
+
+    it('takes the first URL of a Sources bullet', () => {
+        const md = [
+            '## Models',
+            '',
+            '### model',
+            '',
+            'Something.',
+            '',
+            '- Sources: https://example.com/a and',
+            '  https://example.com/b',
+        ].join('\n');
+        expect(parseNotices(md).components[0].source).toBe('https://example.com/a');
+    });
+
+    it('parses CRLF input the same as LF', () => {
+        const md = [
+            '## Libraries',
+            '',
+            '### thing 1.0.0',
+            '',
+            'Purpose here.',
+            '',
+            '- Licensed under the MIT License.',
+            '- Source: https://example.com/thing',
+            '',
+            '## Full licence texts',
+            '',
+            '### MIT License — thing',
+            '',
+            'Text.',
+        ].join('\n');
+        expect(parseNotices(md.replace(/\n/g, '\r\n'))).toEqual(parseNotices(md));
+    });
+
+    it('ignores ### headings under an unknown ## heading', () => {
+        const md = ['## Notes', '', '### stray', '', 'Body.'].join('\n');
+        expect(parseNotices(md)).toEqual({ components: [], licences: [] });
+    });
+
+    it('keeps the inner blank lines of a licence text', () => {
+        const md = [
+            '## Full licence texts',
+            '',
+            '### MIT License — thing',
+            '',
+            'First paragraph.',
+            '',
+            'Second paragraph.',
+        ].join('\n');
+        expect(parseNotices(md).licences[0].text).toBe('First paragraph.\n\nSecond paragraph.');
     });
 });
