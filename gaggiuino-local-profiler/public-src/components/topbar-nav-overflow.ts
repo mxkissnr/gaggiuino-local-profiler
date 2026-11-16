@@ -144,7 +144,7 @@ function renderMenu(tabs: readonly HTMLElement[]): void {
     const menu = document.getElementById('topbarNavMenu');
     if (!menu) return;
     const inMenu = tabs.filter(tab => tab.classList.contains(OVERFLOW_CLASS));
-    const byTarget = new Map(inMenu.map(tab => [tab.id, tab]));
+    const byTarget = new Map<string, HTMLElement>(inMenu.map(tab => [tab.id, tab]));
     menu.replaceChildren(...topbarMenuEntries(inMenu).flatMap(entry => {
         const tab = byTarget.get(entry.target);
         return tab ? [menuButton(tab, entry)] : [];
@@ -165,11 +165,17 @@ export function layoutTopbarNav(els: TopbarNavEls | null = queryTopbarNav()): vo
     more.classList.remove(BADGE_CLASS);
 
     const fits = (widths: readonly number[]): boolean => rowWidth(widths, gap) <= nav.clientWidth + FIT_TOLERANCE;
+    // Leaving the menu hidden must also close it, or it would pop open the
+    // next time the tabs need it. A menu that stays in use is left open and
+    // rebuilt instead.
+    const done = (): void => {
+        if (more.hidden) closeMenu(more);
+        bar.classList.add(READY_CLASS);
+    };
 
     // Phone layout: the row is display:none, so there is nothing to lay out.
     if (nav.getClientRects().length === 0) {
-        closeMenu(more);
-        bar.classList.add(READY_CLASS);
+        done();
         return;
     }
 
@@ -182,14 +188,14 @@ export function layoutTopbarNav(els: TopbarNavEls | null = queryTopbarNav()): vo
     const widths = shown.map(item => item.width);
 
     if (fits(widths)) {
-        bar.classList.add(READY_CLASS);
+        done();
         return;
     }
 
     // The status group (sync time away, Sync as its icon) gives the room first.
     bar.classList.add(COMPACT_CLASS);
     if (fits(widths)) {
-        bar.classList.add(READY_CLASS);
+        done();
         return;
     }
 
@@ -201,7 +207,7 @@ export function layoutTopbarNav(els: TopbarNavEls | null = queryTopbarNav()): vo
     for (const el of inMenu) el.classList.add(OVERFLOW_CLASS);
     if (inMenu.some(el => visibleBadge(el) !== '')) more.classList.add(BADGE_CLASS);
     if (more.open) renderMenu(inMenu);
-    bar.classList.add(READY_CLASS);
+    done();
 }
 
 function watch(target: Element | null, init: MutationObserverInit): void {
