@@ -56,6 +56,7 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 - **Coffee library** - beans, grinders, baskets, puck screens, recipes and frozen portions in one catalogue, with roaster URL import, barcode/QR scan and per-entity photos.
 - **Bean shelf** - your beans stand as bag photos with a stock bar, with search, filter and sort, and empty or archived beans tidy themselves away.
 - **Multiple beans in one shot** - log a shot with up to four beans and the grams of each; every bag is deducted by its own share, and the largest share is the shot's bean.
+- **Proven profiles per bean** - each bean lists the profiles that earned your best ratings on it, lets you pin one, and a new bean gets suggestions from similar beans (roast level, decaf, process) once your own history backs them up.
 - **Bean freshness and in-app camera** - each bean's roast level picks its own freshness window (with an optional per-bean "best for use" range and per-level overrides in Settings) next to your low-stock threshold; take photos with a camera inside the app, and re-crop a saved photo later from its uncropped original.
 - **Sticker cut-out** - cut a bean photo out as a sticker right in the app, on your own device (the models download once on first use).
 - **Analytics** - score trends, a shot calendar heatmap, a month calendar with a photo of each day's bean, a coffee world map, bean/grinder/basket rankings, machine comparison and per-bean dial-in progression.
