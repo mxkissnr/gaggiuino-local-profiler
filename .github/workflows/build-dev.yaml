@@ -136,6 +136,7 @@ jobs:
     # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
+    environment: dev-publish
     steps:
       # Checked out under its own path (not $GITHUB_WORKSPACE root) since the
       # manifest repo below is checked out there too -- both need to coexist.
