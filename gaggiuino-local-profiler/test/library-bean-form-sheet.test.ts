@@ -891,7 +891,7 @@ describe('bean sheet autosave state (#2098)', () => {
     expect(showToast).toHaveBeenCalledTimes(1);
   });
 
-  it("reopening clears the last entry's state", async () => {
+  it('reopening clears the last entry\'s state', async () => {
     const form = formWithActions();
     const bean = addBean();
     mocks.saveBean.mockResolvedValue({
