@@ -19,6 +19,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import type { Browser, Page } from 'playwright';
 import { bootServer, seed, stopServer } from '../../scripts/e2e-harness.mts';
+import { openTopbarTab } from '../../scripts/topbar-nav.mts';
 
 let browser: Browser;
 let page: Page;
@@ -66,7 +67,7 @@ interface View {
 // during that transition.
 async function gotoView({ nav, post, ready }: View): Promise<string[]> {
     const before = consoleErrors.length;
-    await page.click(nav);
+    await openTopbarTab(page, nav);
     // Analytics' #worldMapWrap only exists inside the now-visible view — it
     // must be scrolled into view AFTER the click, not before (it's not
     // "visible" per Playwright's actionability check while its view
