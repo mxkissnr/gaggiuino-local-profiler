@@ -212,7 +212,13 @@ function watch(target: Element | null, init: MutationObserverInit): void {
 /** Lay the row out now and again whenever its room or its content changes. */
 export function initTopbarNav(): void {
     const els = queryTopbarNav();
-    if (!els) return;
+    if (!els) {
+        // The row stays hidden until the first layout has run; if the markup
+        // is not the one this module expects, show it unlaid-out rather than
+        // leave it invisible.
+        document.getElementById('content-topbar')?.classList.add(READY_CLASS);
+        return;
+    }
     const { bar, nav, tabs, more } = els;
 
     layoutTopbarNav(els);
