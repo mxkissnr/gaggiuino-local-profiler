@@ -173,7 +173,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Raised at each minor release, never lowered (docs/MAINTAINING.md).
-      GO_COVERAGE_MIN: "75.0"
+      GO_COVERAGE_MIN: "77.5"
     defaults:
       run:
         working-directory: gaggiuino-local-profiler/go

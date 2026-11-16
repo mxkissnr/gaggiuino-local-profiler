@@ -78,13 +78,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         'Machine profiles can now be duplicated, and a firmware update triggered from the app is recorded in the maintenance log.',
         'Fixed: shot sync now works with more machines and firmware versions, and shots in the trash are deleted after 30 days again.',
     ] },
-    { version: '3.1.0', date: '2026-09-17', highlights: [
-        'Machines can now check for, trigger, and track Gaggiuino firmware updates right from the web app — a status badge on the machine\'s row expands into a progress bar naming the component being flashed, plus a release-channel selector in the machine\'s edit form.',
-        'Fixed: manual shot sync and the machine debug probe are now protected against a machine host that changes what it points to.',
-        'Fixed: the machine firmware update entity now actually detects available updates instead of always reporting up to date.',
-        'Fixed: the Statistics world map tooltip no longer renders bean or region names as HTML.',
-        'Fixed: the MQTT broker password can now be explicitly cleared, and is never returned in cleartext.',
-    ] },
 ];
 
 const MAX_ENTRIES = 8;
