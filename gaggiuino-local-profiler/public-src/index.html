@@ -86,7 +86,8 @@
          status dot (machines-settings.js's renderMachineSwitcher()/#325
          filtering logic is unchanged). #2056: the sync time, the power toggle
          and the Sync button from the old shot list footer sit next to the
-         machine status. The brand icon that used to sit here
+         machine status. #2079: tabs that no longer fit the row move into a
+         "More" menu at its end instead of scrolling out of reach. The brand icon that used to sit here
          was removed (#432) — redundant next to the nav tabs since the app is
          already framed by the HA ingress panel. -->
     <div id="content-topbar">
@@ -132,6 +133,13 @@
                     <span id="ordersBadge" class="maint-badge" style="display:none"></span>
                 </button>
             </div>
+            <details id="topbarNavMore" class="topbar-nav-more" hidden>
+                <summary class="topbar-nav" data-i18n-title="nav_more" title="Mehr">
+                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>
+                    <span class="rail-label" data-i18n="nav_more">Mehr</span>
+                </summary>
+                <div id="topbarNavMenu" class="lib-sheet-menu-list topbar-nav-menu"></div>
+            </details>
         </nav>
 
         <div class="topbar-sep"></div>
