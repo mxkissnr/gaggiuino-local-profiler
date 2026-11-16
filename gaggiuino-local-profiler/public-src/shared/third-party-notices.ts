@@ -33,8 +33,8 @@ export interface ParsedNotices {
 const LICENCE_SECTION = 'Full licence texts';
 const LICENCE_DASH = ' — ';
 const LICENSED_PREFIX = 'Licensed under ';
-const SINGLE_SOURCE_PREFIX = 'Source: ';
-const MULTI_SOURCE_PREFIX = 'Sources: ';
+const ARTICLE = 'the ';
+const SOURCE_PREFIXES = ['Source: ', 'Sources: '];
 const URL = /https:\/\/\S+/;
 
 function isNoticeGroup(section: string): section is NoticeGroup {
@@ -45,57 +45,65 @@ function isBlank(line: string): boolean {
     return line.trim() === '';
 }
 
+// The file is hard-wrapped: a continuation line is indented by two spaces and
+// belongs to the bullet or paragraph above it.
 function firstSentence(text: string): string {
     for (let i = 0; i < text.length; i += 1) {
-        if (text[i] === '.' && (i === text.length - 1 || /\s/.test(text[i + 1]))) {
-            return text.slice(0, i + 1);
-        }
+        if (text.charAt(i) !== '.') continue;
+        const next = text.charAt(i + 1);
+        if (next === '' || /\s/.test(next)) return text.slice(0, i + 1);
     }
     return text;
 }
 
-// Hard-wrapped bullets continue on lines indented by two spaces; every other
-// line in a component block is prose and does not belong to a bullet.
+function joinWrapped(lines: string[]): string {
+    return lines.map((line) => line.trim()).join(' ');
+}
+
 function bulletsOf(lines: string[]): string[] {
     const bullets: string[] = [];
     for (const line of lines) {
         if (line.startsWith('- ')) {
             bullets.push(line.slice(2).trim());
         } else if (line.startsWith('  ') && bullets.length > 0) {
-            bullets[bullets.length - 1] += ' ' + line.trim();
+            const last = bullets.length - 1;
+            bullets[last] = `${bullets[last] ?? ''} ${line.trim()}`;
         }
     }
     return bullets;
 }
 
 function purposeOf(lines: string[]): string {
-    const parts: string[] = [];
+    const paragraph: string[] = [];
     for (const line of lines) {
         if (line.startsWith('- ')) break;
         if (isBlank(line)) {
-            if (parts.length > 0) break;
+            if (paragraph.length > 0) break;
             continue;
         }
-        parts.push(line.trim());
+        paragraph.push(line);
     }
-    return parts.length === 0 ? '' : firstSentence(parts.join(' '));
+    return paragraph.length === 0 ? '' : firstSentence(joinWrapped(paragraph));
 }
 
 function licenceOf(bullets: string[]): string {
-    const bullet = bullets.find((text) => text.startsWith(LICENSED_PREFIX));
-    if (bullet === undefined) return '';
-    let rest = bullet.slice(LICENSED_PREFIX.length).trim();
-    if (rest.endsWith('.')) rest = rest.slice(0, -1);
-    const note = rest.indexOf(' (');
-    if (note !== -1) rest = rest.slice(0, note);
-    return rest.trim();
+    for (const bullet of bullets) {
+        if (!bullet.startsWith(LICENSED_PREFIX)) continue;
+        let rest = bullet.slice(LICENSED_PREFIX.length).trim();
+        if (rest.startsWith(ARTICLE)) rest = rest.slice(ARTICLE.length);
+        if (rest.endsWith('.')) rest = rest.slice(0, -1);
+        const note = rest.indexOf(' (');
+        if (note !== -1) rest = rest.slice(0, note);
+        return rest.trim();
+    }
+    return '';
 }
 
 function sourceOf(bullets: string[]): string {
     for (const bullet of bullets) {
-        if (!bullet.startsWith(SINGLE_SOURCE_PREFIX) && !bullet.startsWith(MULTI_SOURCE_PREFIX)) continue;
-        const url = URL.exec(bullet);
-        if (url !== null) return url[0];
+        if (!SOURCE_PREFIXES.some((prefix) => bullet.startsWith(prefix))) continue;
+        const url = URL.exec(bullet)?.[0];
+        if (url !== undefined) return url;
     }
     return '';
 }
@@ -113,13 +121,14 @@ function parseComponent(group: NoticeGroup, title: string, lines: string[]): Not
 
 function parseLicence(title: string, lines: string[]): NoticeLicence {
     const dash = title.indexOf(LICENCE_DASH);
-    const text = [...lines];
-    while (text.length > 0 && isBlank(text[0])) text.shift();
-    while (text.length > 0 && isBlank(text[text.length - 1])) text.pop();
+    let start = 0;
+    let end = lines.length;
+    while (start < end && isBlank(lines[start] ?? '')) start += 1;
+    while (end > start && isBlank(lines[end - 1] ?? '')) end -= 1;
     return {
         name: dash === -1 ? title : title.slice(0, dash),
         covers: dash === -1 ? '' : title.slice(dash + LICENCE_DASH.length),
-        text: text.join('\n'),
+        text: lines.slice(start, end).join('\n'),
     };
 }
 
@@ -131,7 +140,7 @@ export function parseNotices(md: string): ParsedNotices {
     let i = 0;
 
     while (i < lines.length) {
-        const line = lines[i];
+        const line = lines[i] ?? '';
         if (line.startsWith('## ')) {
             section = line.slice(3).trim();
             i += 1;
@@ -144,7 +153,9 @@ export function parseNotices(md: string): ParsedNotices {
 
         const title = line.slice(4).trim();
         let end = i + 1;
-        while (end < lines.length && !lines[end].startsWith('### ') && !lines[end].startsWith('## ')) {
+        while (end < lines.length) {
+            const next = lines[end] ?? '';
+            if (next.startsWith('### ') || next.startsWith('## ')) break;
             end += 1;
         }
         const body = lines.slice(i + 1, end);

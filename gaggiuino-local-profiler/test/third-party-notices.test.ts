@@ -147,7 +147,8 @@ describe('parseNotices', () => {
             '',
             '- Licensed under the MIT License.',
         ].join('\n');
-        expect(parseNotices(md).components[0].purpose).toBe('Renders the shot card.');
+        const [component] = parseNotices(md).components;
+        expect(component?.purpose).toBe('Renders the shot card.');
     });
 
     it('drops the note in brackets from a wrapped Licensed under bullet', () => {
@@ -161,7 +162,8 @@ describe('parseNotices', () => {
             '- Licensed under the BSD 3-Clause License (as the Eclipse Distribution',
             '  License 1.0).',
         ].join('\n');
-        expect(parseNotices(md).components[0].licence).toBe('BSD 3-Clause License');
+        const [component] = parseNotices(md).components;
+        expect(component?.licence).toBe('BSD 3-Clause License');
     });
 
     it('takes the first URL of a Sources bullet', () => {
@@ -175,7 +177,8 @@ describe('parseNotices', () => {
             '- Sources: https://example.com/a and',
             '  https://example.com/b',
         ].join('\n');
-        expect(parseNotices(md).components[0].source).toBe('https://example.com/a');
+        const [component] = parseNotices(md).components;
+        expect(component?.source).toBe('https://example.com/a');
     });
 
     it('parses CRLF input the same as LF', () => {
@@ -203,6 +206,19 @@ describe('parseNotices', () => {
         expect(parseNotices(md)).toEqual({ components: [], licences: [] });
     });
 
+    it('returns a component with empty fields rather than throwing', () => {
+        const md = ['## Libraries', '', '### bare 1.0.0'].join('\n');
+        const [component] = parseNotices(md).components;
+        expect(component).toEqual({ group: 'Libraries', title: 'bare 1.0.0', purpose: '', licence: '', source: '' });
+    });
+
+    it('leaves covers empty when a licence heading has no dash', () => {
+        const md = ['## Full licence texts', '', '### MIT License', '', 'Text.'].join('\n');
+        const [licence] = parseNotices(md).licences;
+        expect(licence?.name).toBe('MIT License');
+        expect(licence?.covers).toBe('');
+    });
+
     it('keeps the inner blank lines of a licence text', () => {
         const md = [
             '## Full licence texts',
@@ -213,6 +229,7 @@ describe('parseNotices', () => {
             '',
             'Second paragraph.',
         ].join('\n');
-        expect(parseNotices(md).licences[0].text).toBe('First paragraph.\n\nSecond paragraph.');
+        const [licence] = parseNotices(md).licences;
+        expect(licence?.text).toBe('First paragraph.\n\nSecond paragraph.');
     });
 });
