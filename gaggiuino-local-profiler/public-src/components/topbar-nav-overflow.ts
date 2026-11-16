@@ -144,7 +144,7 @@ function renderMenu(tabs: readonly HTMLElement[]): void {
     const menu = document.getElementById('topbarNavMenu');
     if (!menu) return;
     const inMenu = tabs.filter(tab => tab.classList.contains(OVERFLOW_CLASS));
-    const byTarget = new Map<string, HTMLElement>(inMenu.map(tab => [tab.id, tab]));
+    const byTarget = new Map<string, HTMLElement>(inMenu.map(tab => [tab.id, tab] as const));
     menu.replaceChildren(...topbarMenuEntries(inMenu).flatMap(entry => {
         const tab = byTarget.get(entry.target);
         return tab ? [menuButton(tab, entry)] : [];

@@ -18,9 +18,6 @@ const here = dirname(fileURLToPath(import.meta.url));
 const HTML = readFileSync(join(here, '../public-src/index.html'), 'utf8');
 const CSS = readFileSync(join(here, '../public-src/style.css'), 'utf8');
 
-const g = globalThis as unknown as Record<string, unknown>;
-g.document ??= { getElementById: () => null, createElement: () => null };
-
 // Realistic tab widths for the dev build's German labels, Live and Orders
 // included: Shots, Live, Library, Analytics, Dial-In, Maintenance,
 // Achievements, Orders.
