@@ -19,6 +19,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, type Browser, type Page } from 'playwright';
+import { openTopbarTab } from './topbar-nav.mts';
 
 /* eslint-disable no-undef -- the callbacks passed to Playwright's
    page.evaluate / page.waitForFunction / context.addInitScript are serialised
@@ -158,8 +159,10 @@ const PROFILES: readonly Profile[] = [
 /** Switches to `view`, clicking whichever nav surface is actually shown. */
 async function openView(page: Page, view: View): Promise<void> {
     const desktop = page.locator(view.desktop);
-    if (await desktop.isVisible()) {
-        await desktop.click();
+    // A desktop tab is either still in the row or moved into the "More" menu,
+    // which the phone profile never shows.
+    if (await desktop.isVisible() || await page.locator('#topbarNavMore > summary').isVisible()) {
+        await openTopbarTab(page, view.desktop);
     } else {
         const mobile = page.locator(view.mobile);
         // The "Mehr" sheet holds every destination outside the mobile main bar.

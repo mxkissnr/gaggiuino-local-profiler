@@ -84,7 +84,7 @@ const es: Partial<Translations> = {
     ach_card_secret:'Secreto',
     ach_not_yet:'Aún no sellado.',
     ach_secret_locked_hint:'Aún oculto — se encuentra, no se persigue.',
-    ach_verdict_of:(total)=>`de ${total} sellos`, ach_verdict_next:(name)=>`Siguiente: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Falta 1 sello' : `Faltan ${n} sellos`, ach_verdict_all:'Todos los sellos conseguidos', ach_soon:'Próximos', ach_recent:'Sellados recientemente', ach_filter_got:'Conseguidos', ach_filter_open:'Pendientes',
+    ach_verdict_of:(total)=>`de ${total} sellos`, ach_verdict_next:(name)=>`Siguiente: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Falta 1 sello' : `Faltan ${n} sellos`, ach_verdict_all:'Todos los sellos conseguidos', ach_soon:'Casi lo tienes', ach_recent:'Sellados recientemente', ach_filter_got:'Conseguidos', ach_filter_open:'Pendientes',
     ach_loading:'Cargando logros …',
     verdict_no_data:'Aún no hay datos suficientes para un veredicto.',
     verdict_bean_target_hint:'Puntuado según el objetivo de preparación propio de este café',
