@@ -1,5 +1,48 @@
 ## [Unreleased]
 
+## [3.8.0] - 2026-11-16
+
+### New
+- Tag a shot as sour, bitter, balanced or thin. The grind advice takes it into account, the score stays the same.
+- Choose a default grinder in Settings. New shots, bean selection, cloning and guided dial-in use it, with only its own grind settings.
+- Grinders can have a stepped or stepless grind scale, and grind input and advice follow it.
+- Beans carry a roast level that picks a matching freshness window, with an optional "best for use" range per bean and your own window per roast level in Settings.
+- Each bean lists the profiles that worked for it, lets you pin one as proven, and suggests profiles from similar beans when it is new.
+- Shots brewed from a frozen portion show an effective bean age: time in the freezer counts at one twentieth of normal ageing.
+- Grinder cleaning counts only that grinder's own shots, and any maintenance task can be paused while its equipment is not in use.
+- Optional popups show what an update brought and which achievements you just earned.
+- When a bean runs out, GLP offers once to take it off your active list, and only does so if you agree.
+- Settings → About lists every open-source library and font the app is built with, with their licences and source links.
+- The assistant tools list every origin country of a bean with blend shares, its flavour notes and whether it is decaf.
+
+### Changed
+- Settings is now a grouped list like Home Assistant's settings, with search, sub-pages, and forms that open in a dialog or bottom sheet.
+- The Dial-In page shows at a glance whether a bean is dialled in and lists its last shots as rows that open the shot's curve.
+- The Achievements page shows how many stamps you have and which one is next, switches categories with chips, and lists the stamps that are almost there and the ones you earned last.
+- On desktop, the shot list appears only on the Shots page and folds away once you pick a shot, so the chart gets the full width. Sync status, power switch and the Sync button sit in the top bar, and tabs that do not fit move into a "More" menu.
+- Dial-In and Achievements no longer repeat their name in a title bar.
+- Changes to an existing bean, grinder, basket, puck screen or recipe save by themselves, and the form shows whether each change was saved.
+- Grinders and beans are picked from your library everywhere, so a mistyped name can no longer split a grinder's history.
+- Questions and errors appear in the app's own dialogs and messages instead of browser pop-ups, and a failed save or delete always tells you.
+- Short lists of options are buttons you tap directly, and settings that apply at once use a switch.
+- Number fields accept a decimal comma, and the profile editor names the unit of each field.
+- Pages say when data is still loading or could not be loaded, instead of looking empty.
+- Home Assistant and the debug page now say "app" instead of "add-on".
+
+### Fixed
+- Achievements with a progress counter, such as the streak and volume badges, unlock again once earned.
+- Bean age is counted the same way everywhere, in whole days of your local time.
+- GaggiMate shots weighed with a hardware scale show the measured weight, and the end reasons "hold released" and "target ratio" have a name.
+- Shots imported from a Gaggiuino's history keep their profile name.
+- Restoring a backup keeps disabled maintenance tasks disabled, and the restore preview says how many profile changes not yet sent to your machine would be lost.
+- A failed orders refresh no longer clears the list or repeats notifications for orders you already saw.
+- Library forms tell you when a save fails, and a double tap on Save no longer creates an entry twice.
+- A quick double tap on delete no longer asks twice, pasted numbers with a decimal comma are kept, and one rejected preference no longer stops the others from syncing.
+- Choice buttons in the bean form and the delete button of a recipe step are named for screen readers.
+
+### Security
+- The app is built with Go 1.27.4, which closes a published vulnerability in the standard library that could crash the web server.
+
 ## [3.7.0] - 2026-11-08
 
 ### New

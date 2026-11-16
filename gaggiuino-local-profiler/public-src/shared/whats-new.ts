@@ -21,6 +21,14 @@ export interface WhatsNewEntry {
 }
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
+    { version: '3.8.0', date: '2026-11-16', highlights: [
+        'Settings is now a grouped list like in Home Assistant, with search and sub-pages.',
+        'Tag how a shot tasted (sour, bitter, balanced or thin) and the grind advice takes it into account.',
+        'Beans know their roast level and the profiles that worked for them, and grinders get a default and their own grind scale.',
+        'The Dial-In and Achievements pages are clearer, and the library saves your changes by itself.',
+        'Fixed: achievements with a counter unlock again, bean age is the same everywhere, and GaggiMate scale weights are shown.',
+        'Security: built with Go 1.27.4.',
+    ] },
     { version: '3.7.0', date: '2026-11-08', highlights: [
         'The maintenance page now shows what is due next, with simple lists for tasks and the log.',
         'Gaggiuino machines keep a history of their settings and profiles that you can compare and restore.',
