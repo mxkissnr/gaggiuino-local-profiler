@@ -278,6 +278,9 @@ async function useLang(lang: string): Promise<void> {
 }
 /* eslint-enable no-undef */
 
+// A width change is also what makes the row lay itself out again after the
+// reload re-added the forced-visible Live tab, which no inline-style mutation
+// announces.
 async function resizeTo(width: number, height = 900): Promise<void> {
     await page.setViewportSize({ width, height });
     await settleFrame();
