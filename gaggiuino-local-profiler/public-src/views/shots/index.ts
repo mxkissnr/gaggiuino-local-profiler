@@ -1030,8 +1030,8 @@ export async function updateView(): Promise<void> {
         plugins: [corsairPlugin, phasePlugin],
         data: { datasets },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
+          // #2097: no animation, so a container resize is applied at once instead of waiting for Chart.js's animation loop.
+          ...chartRegistry.chartBaseOptions(),
           layout: { padding: { bottom: 20 } },
           interaction: { mode: 'index', intersect: false },
           plugins: {
