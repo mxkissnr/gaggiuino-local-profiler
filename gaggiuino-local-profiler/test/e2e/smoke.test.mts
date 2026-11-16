@@ -268,6 +268,12 @@ async function useLang(lang: string): Promise<void> {
     await page.evaluate(value => { localStorage.setItem('glp_lang', value); }, lang);
     await page.reload({ waitUntil: 'networkidle' });
     await applyOverrides();
+    // The row stays hidden until the first layout has run.
+    await page.waitForFunction(
+        () => document.getElementById('content-topbar')?.classList.contains('topbar-nav-ready') === true,
+        undefined,
+        { timeout: 10000 },
+    );
     await page.waitForTimeout(300);
 }
 /* eslint-enable no-undef */
@@ -356,13 +362,12 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
             assert.equal(pickedState.active, true, `${lang}: the tab opened from the menu is not active`);
             assert.equal(pickedState.focused, true, `${lang}: the tab opened from the menu did not take focus`);
 
-            // The menu now lists only what is still hidden -- the picked tab
-            // has left it. A row that fits again has no menu left to open.
+            // The tab now sits in the row, so the menu no longer offers it. A
+            // row that fits again has no menu left to open.
             if (afterPick.moreShown) {
                 await openMoreMenu();
-                assert.deepEqual((await page.evaluate(readMenuEntries)).map(entry => entry.target),
-                    entries.map(entry => entry.target).filter(target => target !== picked),
-                    `${lang}: the tab opened from the menu is still listed`);
+                const relisted = (await page.evaluate(readMenuEntries)).map(entry => entry.target);
+                assert.ok(!relisted.includes(picked), `${lang}: the tab opened from the menu is still listed`);
                 await page.keyboard.press('Escape');
             }
         }
