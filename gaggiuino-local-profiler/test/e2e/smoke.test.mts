@@ -213,14 +213,14 @@ const readTopbar = (): TopbarReport => {
     const scrollBox = scroll.getBoundingClientRect();
     // The list clips whatever does not fit it, so it is the tighter bound on a
     // tab that is still drawn but cut.
-    const listBox = document.querySelector('.topbar-nav-list')!.getBoundingClientRect();
+    const listBox = document.querySelector<HTMLElement>('.topbar-nav-list')!.getBoundingClientRect();
     const settingsBox = document.getElementById('btnSettings')!.getBoundingClientRect();
     const moreBox = document.getElementById('topbarNavMore')!.getBoundingClientRect();
     const tabs = [...document.querySelectorAll<HTMLElement>('.topbar-nav-list > .topbar-nav')];
     return {
         tabs: tabs.map(tab => {
             const box = tab.getBoundingClientRect();
-            const label = tab.querySelector('.rail-label') as HTMLElement | null;
+            const label = tab.querySelector<HTMLElement>('.rail-label');
             return {
                 id: tab.id,
                 visible: box.width > 0 && box.height > 0,
@@ -373,16 +373,17 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
         }
         await openTopbarTab(page, '#btnShots');
 
-        if (lang !== 'en') continue;
+        // Nothing is hidden on a wide screen in the reference language.
+        if (lang === 'en') {
+            await resizeTo(1920);
+            const wide = await page.evaluate(readTopbar);
+            assert.deepEqual(wide.tabs.filter(tab => tab.overflow), [], 'en at 1920 px: a tab moved into More');
+            assert.equal(wide.moreShown, false, 'en at 1920 px: the More button is shown');
+            assert.equal(wide.syncTimeShown, true, 'en at 1920 px: the sync time is hidden');
+        }
 
-        // A wide screen hides nothing, and the phone layout is untouched by the
-        // measured row.
-        await resizeTo(1920);
-        const wide = await page.evaluate(readTopbar);
-        assert.deepEqual(wide.tabs.filter(tab => tab.overflow), [], 'en at 1920 px: a tab moved into More');
-        assert.equal(wide.moreShown, false, 'en at 1920 px: the More button is shown');
-        assert.equal(wide.syncTimeShown, true, 'en at 1920 px: the sync time is hidden');
-
+        // The phone layout keeps its bottom navigation and never renders the
+        // measured row, in every language.
         await resizeTo(390, 844);
         const phone = await page.evaluate(readTopbar);
         assert.equal(phone.scrollShown, false, 'phone: the desktop tab row is shown');
