@@ -53,8 +53,22 @@ function response(ok: boolean, body: string): Response {
     return { ok, status: ok ? 200 : 500, text: () => Promise.resolve(body) } as unknown as Response;
 }
 
+// Global fetch is typed for the real browser API; the stub records the URL
+// and answers through impl.
+const fetched: string[] = [];
+function stubFetch(impl: (url: string) => Promise<Response>): void {
+    globalThis.fetch = (input: RequestInfo | URL): Promise<Response> => {
+        const url = typeof input === 'string'
+            ? input
+            : input instanceof URL ? input.href : input.url;
+        fetched.push(url);
+        return impl(url);
+    };
+}
+
 afterEach(() => {
     sheet.openDetailSheet.mockClear();
+    fetched.length = 0;
 });
 
 describe('licensesSheetHtml()', () => {
@@ -110,14 +124,12 @@ describe('licensesSheetHtml()', () => {
 
 describe('openLicensesSheet()', () => {
     it('shows the loading body, then the rendered sheet, from the relative notices URL', async () => {
-        const fetchMock = vi.fn(() => Promise.resolve(response(true, noticesMd)));
-        globalThis.fetch = fetchMock;
+        stubFetch(() => Promise.resolve(response(true, noticesMd)));
         const { openLicensesSheet } = await loadSheet();
 
         await openLicensesSheet();
 
-        expect(fetchMock).toHaveBeenCalledTimes(1);
-        expect(fetchMock).toHaveBeenCalledWith('THIRD_PARTY_NOTICES.md');
+        expect(fetched).toEqual(['THIRD_PARTY_NOTICES.md']);
         expect(sheet.openDetailSheet).toHaveBeenCalledTimes(2);
         for (const index of [0, 1]) {
             expect(callAt(index).title).toBe(t('settings_licenses'));
@@ -130,33 +142,30 @@ describe('openLicensesSheet()', () => {
     });
 
     it('keeps the sheet on the notices file after a successful load', async () => {
-        const fetchMock = vi.fn(() => Promise.resolve(response(true, noticesMd)));
-        globalThis.fetch = fetchMock;
+        stubFetch(() => Promise.resolve(response(true, noticesMd)));
         const { openLicensesSheet } = await loadSheet();
 
         await openLicensesSheet();
         await openLicensesSheet();
 
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetched).toHaveLength(1);
         expect(sheet.openDetailSheet).toHaveBeenCalledTimes(4);
     });
 
     it('shows the error body and retries on the next open after a rejected fetch', async () => {
-        const fetchMock = vi.fn((): Promise<Response> => Promise.reject(new Error('offline')));
-        globalThis.fetch = fetchMock;
+        stubFetch(() => Promise.reject(new Error('offline')));
         const { openLicensesSheet } = await loadSheet();
 
         await openLicensesSheet();
         expect(callAt(1).body).toContain(t('licenses_error'));
 
         await openLicensesSheet();
-        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(fetched).toHaveLength(2);
         expect(callAt(3).body).toContain(t('licenses_error'));
     });
 
     it('shows the error body for a non-ok response', async () => {
-        const fetchMock = vi.fn(() => Promise.resolve(response(false, '')));
-        globalThis.fetch = fetchMock;
+        stubFetch(() => Promise.resolve(response(false, '')));
         const { openLicensesSheet } = await loadSheet();
 
         await openLicensesSheet();
@@ -167,7 +176,7 @@ describe('openLicensesSheet()', () => {
 
     it('does not repaint the sheet when it was closed before the fetch resolved', async () => {
         const pendingFetch: { resolve?: (res: Response) => void } = {};
-        globalThis.fetch = vi.fn(() => new Promise<Response>((resolve) => { pendingFetch.resolve = resolve; }));
+        stubFetch(() => new Promise<Response>((resolve) => { pendingFetch.resolve = resolve; }));
         const { openLicensesSheet } = await loadSheet();
 
         const pending = openLicensesSheet();

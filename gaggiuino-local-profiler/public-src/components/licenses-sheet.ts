@@ -70,7 +70,9 @@ let _notices: Promise<ParsedNotices> | null = null;
 
 // One fetch per page load; a rejection clears the cache so the next open retries.
 function _load(): Promise<ParsedNotices> {
-    _notices ??= (async (): Promise<ParsedNotices> => {
+    const cached = _notices;
+    if (cached) return cached;
+    const pending = (async (): Promise<ParsedNotices> => {
         const res = await fetch(NOTICES_URL);
         if (!res.ok) throw new Error(`notices: HTTP ${res.status}`);
         const parsed = parseNotices(await res.text());
@@ -80,7 +82,8 @@ function _load(): Promise<ParsedNotices> {
         _notices = null;
         throw err;
     });
-    return _notices;
+    _notices = pending;
+    return pending;
 }
 
 export async function openLicensesSheet(): Promise<void> {
@@ -95,13 +98,11 @@ export async function openLicensesSheet(): Promise<void> {
         });
     };
     show(html`<p class="licenses-state">${tHtml('licenses_loading')}</p>`);
-    let notices: ParsedNotices;
     try {
-        notices = await _load();
+        const notices = await _load();
+        if (closed) return;
+        show(licensesSheetHtml(notices));
     } catch {
         if (!closed) show(html`<p class="licenses-state">${tHtml('licenses_error')}</p>`);
-        return;
     }
-    if (closed) return;
-    show(licensesSheetHtml(notices));
 }
