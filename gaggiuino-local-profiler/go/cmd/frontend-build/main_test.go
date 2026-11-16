@@ -68,7 +68,7 @@ func TestRunBundlesRelativeHashedAssets(t *testing.T) {
 	}
 
 	// Vite's "public dir" convention is preserved: these ship unbundled.
-	for _, name := range []string{"manifest.json", "icon.png", "countries-110m.json"} {
+	for _, name := range []string{"manifest.json", "icon.png", "countries-110m.json", "THIRD_PARTY_NOTICES.md"} {
 		if _, err := os.Stat(filepath.Join(out, name)); err != nil {
 			t.Errorf("public asset %s was not copied into the output: %v", name, err)
 		}

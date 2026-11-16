@@ -1,13 +1,17 @@
 # Third-party notices
 
-The app bundles the libraries and fonts below, and the Docker image copies this
-file into the app's installation directory. The three ONNX models used for the
-on-device bean-photo cut-out are not bundled but downloaded on first use from
-the [glp-models release repository](https://github.com/mxkissnr/glp-models).
+The app bundles the libraries and fonts below, and its server is built from the
+Go modules listed under Server. The app shows this file under
+Settings → About → Open-source licenses, and the Docker image also copies it
+to `/usr/share/glp/`. The three ONNX models used for the on-device bean-photo
+cut-out are not bundled but downloaded on first use from the
+[glp-models release repository](https://github.com/mxkissnr/glp-models).
 Each component is distributed under a permissive licence, so the full licence
 texts are reproduced at the end of this file.
 
-## onnxruntime-web 1.31.1
+## Libraries
+
+### onnxruntime-web 1.31.1
 
 Runtime for the two ONNX models below, bundled into the app.
 
@@ -16,7 +20,7 @@ Runtime for the two ONNX models below, bundled into the app.
 - Source: https://github.com/microsoft/onnxruntime
 - Licence: https://github.com/microsoft/onnxruntime/blob/main/LICENSE
 
-## echarts 6.1.0
+### echarts 6.1.0
 
 Charting library that draws the Analytics world map.
 
@@ -25,7 +29,7 @@ Charting library that draws the Analytics world map.
 - Source: https://github.com/apache/echarts
 - Licence: https://github.com/apache/echarts/blob/master/LICENSE
 
-## zrender 6.1.0
+### zrender 6.1.0
 
 Canvas rendering engine that echarts draws through.
 
@@ -34,7 +38,7 @@ Canvas rendering engine that echarts draws through.
 - Source: https://github.com/ecomfe/zrender
 - Licence: https://github.com/ecomfe/zrender/blob/master/LICENSE
 
-## tslib 2.3.0
+### tslib 2.3.0
 
 TypeScript runtime helpers used by echarts and zrender.
 
@@ -43,7 +47,7 @@ TypeScript runtime helpers used by echarts and zrender.
 - Source: https://github.com/Microsoft/tslib
 - Licence: https://github.com/Microsoft/tslib/blob/main/LICENSE.txt
 
-## chart.js 4.6.1
+### chart.js 4.6.1
 
 Chart rendering for the live shot chart and the profile editor.
 
@@ -52,7 +56,7 @@ Chart rendering for the live shot chart and the profile editor.
 - Source: https://github.com/chartjs/Chart.js
 - Licence: https://github.com/chartjs/Chart.js/blob/master/LICENSE.md
 
-## qrcode 1.5.4
+### qrcode 1.5.4
 
 Draws the bean QR labels.
 
@@ -61,7 +65,7 @@ Draws the bean QR labels.
 - Source: https://github.com/soldair/node-qrcode
 - Licence: https://github.com/soldair/node-qrcode/blob/master/license
 
-## topojson-client 3.1.0
+### topojson-client 3.1.0
 
 Converts the bundled world TopoJSON into the GeoJSON the Analytics map draws.
 
@@ -70,7 +74,7 @@ Converts the bundled world TopoJSON into the GeoJSON the Analytics map draws.
 - Source: https://github.com/topojson/topojson-client
 - Licence: https://github.com/topojson/topojson-client/blob/master/LICENSE
 
-## barcode-detector 3.2.3
+### barcode-detector 3.2.3
 
 Barcode scanning ponyfill used where the browser has no native BarcodeDetector.
 
@@ -79,7 +83,7 @@ Barcode scanning ponyfill used where the browser has no native BarcodeDetector.
 - Source: https://github.com/Sec-ant/barcode-detector
 - Licence: https://github.com/Sec-ant/barcode-detector/blob/main/LICENSE
 
-## zxing-wasm 3.1.6
+### zxing-wasm 3.1.6
 
 WebAssembly barcode decoder that barcode-detector runs.
 
@@ -88,7 +92,9 @@ WebAssembly barcode decoder that barcode-detector runs.
 - Source: https://github.com/Sec-ant/zxing-wasm
 - Licence: https://github.com/Sec-ant/zxing-wasm/blob/main/LICENSE
 
-## Figtree 400, 600
+## Fonts
+
+### Figtree 400, 600
 
 The app's sans-serif UI font, bundled as WOFF2 for the 400 and 600 weights
 (latin subset) in public-src/fonts/.
@@ -98,7 +104,7 @@ The app's sans-serif UI font, bundled as WOFF2 for the 400 and 600 weights
 - Source: https://github.com/erikdkennedy/figtree
 - Licence: https://github.com/erikdkennedy/figtree/blob/master/OFL.txt
 
-## Fraunces 600
+### Fraunces 600
 
 Serif display font for bean names and the shot-card image, bundled as WOFF2
 for the 600 weight (latin subset) in public-src/fonts/.
@@ -108,7 +114,9 @@ for the 600 weight (latin subset) in public-src/fonts/.
 - Source: https://github.com/undercasetype/Fraunces
 - Licence: https://github.com/undercasetype/Fraunces/blob/master/OFL.txt
 
-## IS-Net general-use (int8)
+## Models
+
+### IS-Net general-use (int8)
 
 Foreground/alpha model used for the first cut-out pass.
 
@@ -120,7 +128,7 @@ Foreground/alpha model used for the first cut-out pass.
   https://github.com/danielgatis/rembg
 - Licence: https://github.com/xuebinqin/DIS/blob/main/LICENSE
 
-## SlimSAM-77 uniform (q8)
+### SlimSAM-77 uniform (q8)
 
 Vision encoder and prompt/decoder pair used for the interactive mask pass.
 
@@ -131,7 +139,7 @@ Vision encoder and prompt/decoder pair used for the interactive mask pass.
   https://huggingface.co/Xenova/slimsam-77-uniform
 - Licence: https://github.com/facebookresearch/segment-anything/blob/main/LICENSE
 
-## Segment Anything
+### Segment Anything
 
 The promptable-segmentation architecture SlimSAM derives from.
 
@@ -144,9 +152,289 @@ The model files themselves are not stored in this repository. They are
 published, with their SHA-256 checksums and provenance, in the
 [glp-models release repository](https://github.com/mxkissnr/glp-models).
 
+## Server
+
+The server binary is built from the Go standard library and the Go modules below; a module is listed when any of its packages is compiled in.
+
+### Go standard library 1.27.4
+
+The Go runtime and standard library compiled into the server.
+
+- Copyright 2009 The Go Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/golang/go
+- Licence: https://go.dev/LICENSE
+
+### github.com/andybalholm/cascadia v1.3.4
+
+CSS selectors for goquery.
+
+- Copyright (c) 2011 Andy Balholm.
+- Licensed under the BSD 2-Clause License.
+- Source: https://github.com/andybalholm/cascadia
+- Licence: https://pkg.go.dev/github.com/andybalholm/cascadia@v1.3.4?tab=licenses
+
+### github.com/coder/websocket v1.8.15
+
+WebSocket connection to the machines.
+
+- Copyright (c) 2025 Coder
+- Licensed under the ISC License.
+- Source: https://github.com/coder/websocket
+- Licence: https://pkg.go.dev/github.com/coder/websocket@v1.8.15?tab=licenses
+
+### github.com/dustin/go-humanize v1.1.0
+
+Number formatting used by the SQLite runtime.
+
+- Copyright (c) 2005-2008 Dustin Sallings <dustin@spy.net>
+- Licensed under the MIT License.
+- Source: https://github.com/dustin/go-humanize
+- Licence: https://pkg.go.dev/github.com/dustin/go-humanize@v1.1.0?tab=licenses
+
+### github.com/eclipse/paho.mqtt.golang v1.5.1
+
+MQTT client for the live connection.
+
+- Copyright (c) 2007, Eclipse Foundation, Inc. and its licensors; all content is the property of the respective Eclipse Paho authors.
+- Licensed under the BSD 3-Clause License (as the Eclipse Distribution License 1.0; the project is dual-licensed with the Eclipse Public License 2.0).
+- Source: https://github.com/eclipse/paho.mqtt.golang
+- Licence: https://pkg.go.dev/github.com/eclipse/paho.mqtt.golang@v1.5.1?tab=licenses
+
+### github.com/goccy/go-json v0.12.0
+
+Fast JSON encoding for shot data.
+
+- Copyright (c) 2020 Masaaki Goshima
+- Licensed under the MIT License.
+- Source: https://github.com/goccy/go-json
+- Licence: https://pkg.go.dev/github.com/goccy/go-json@v0.12.0?tab=licenses
+
+### github.com/google/jsonschema-go v0.4.3
+
+JSON schemas for the tools of the built-in MCP server.
+
+- Copyright (c) 2025 JSON Schema Go Project Authors
+- Licensed under the MIT License.
+- Source: https://github.com/google/jsonschema-go
+- Licence: https://pkg.go.dev/github.com/google/jsonschema-go@v0.4.3?tab=licenses
+
+### github.com/google/uuid v1.6.0
+
+Unique IDs used by the SQLite runtime.
+
+- Copyright (c) 2009,2014 Google Inc.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/google/uuid
+- Licence: https://pkg.go.dev/github.com/google/uuid@v1.6.0?tab=licenses
+
+### github.com/gorilla/websocket v1.5.3
+
+WebSocket transport of the MQTT client.
+
+- Copyright (c) 2013 The Gorilla WebSocket Authors.
+- Licensed under the BSD 2-Clause License.
+- Source: https://github.com/gorilla/websocket
+- Licence: https://pkg.go.dev/github.com/gorilla/websocket@v1.5.3?tab=licenses
+
+### github.com/kanrichan/resvg-go v0.0.1
+
+Renders the shareable shot card image. It embeds a WebAssembly build of resvg, usvg and usvg-text-layout 0.35.0 (Mozilla Public License 2.0), tiny-skia 0.11.1 (BSD 3-Clause License) and fontdb 0.14.1 (MIT License).
+
+- Copyright (c) the resvg-go authors.
+- Copyright (c) 2020 Yevhenii Reizner and contributors (resvg, usvg, usvg-text-layout, fontdb).
+- Copyright (c) 2011 Google Inc. (tiny-skia).
+- Copyright (c) 2020 Yevhenii Reizner (tiny-skia).
+- Licensed under the GNU General Public License v3.0.
+- Sources: https://github.com/kanrichan/resvg-go and https://crates.io/crates/resvg/0.35.0
+- Licence: https://pkg.go.dev/github.com/kanrichan/resvg-go@v0.0.1?tab=licenses
+
+### github.com/modelcontextprotocol/go-sdk v1.8.0
+
+The built-in MCP server for AI assistants.
+
+- Copyright (c) 2024-2025 Model Context Protocol a Series of LF Projects, LLC.
+- Licensed under the Apache License 2.0 and the MIT License (the project is moving from MIT to Apache 2.0).
+- Source: https://github.com/modelcontextprotocol/go-sdk
+- Licence: https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk@v1.8.0?tab=licenses
+
+### github.com/PuerkitoBio/goquery v1.13.0
+
+Reads recipe and bean pages for the importer.
+
+- Copyright (c) 2012-2021, Martin Angers & Contributors
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/PuerkitoBio/goquery
+- Licence: https://pkg.go.dev/github.com/PuerkitoBio/goquery@v1.13.0?tab=licenses
+
+### github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec
+
+Big-number multiplication used by the SQLite runtime.
+
+- Copyright (c) 2012 The Go Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/remyoudompheng/bigfft
+- Licence: https://pkg.go.dev/github.com/remyoudompheng/bigfft@v0.0.0-20230129092748-24d4a6f8daec?tab=licenses
+
+### github.com/segmentio/asm v1.1.3
+
+Optimised helpers for segmentio/encoding.
+
+- Copyright (c) 2021 Segment
+- Licensed under the MIT License.
+- Source: https://github.com/segmentio/asm
+- Licence: https://pkg.go.dev/github.com/segmentio/asm@v1.1.3?tab=licenses
+
+### github.com/segmentio/encoding v0.5.4
+
+JSON encoding inside the MCP server library.
+
+- Copyright (c) 2019 Segment.io, Inc.
+- Licensed under the MIT License.
+- Source: https://github.com/segmentio/encoding
+- Licence: https://pkg.go.dev/github.com/segmentio/encoding@v0.5.4?tab=licenses
+
+### github.com/tetratelabs/wazero v1.4.0
+
+WebAssembly runtime that runs the shot card renderer.
+
+- Copyright 2020-2023 wazero authors (from its NOTICE).
+- Licensed under the Apache License 2.0.
+- Source: https://github.com/tetratelabs/wazero
+- Licence: https://pkg.go.dev/github.com/tetratelabs/wazero@v1.4.0?tab=licenses
+
+### github.com/yosida95/uritemplate/v3 v3.0.2
+
+URI templates for the MCP server library.
+
+- Copyright (C) 2016, Kohei YOSHIDA
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/yosida95/uritemplate
+- Licence: https://pkg.go.dev/github.com/yosida95/uritemplate/v3@v3.0.2?tab=licenses
+
+### golang.org/x/crypto v0.58.0
+
+Key derivation for encrypted backups.
+
+- Copyright 2009 The Go Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/golang/crypto
+- Licence: https://pkg.go.dev/golang.org/x/crypto@v0.58.0?tab=licenses
+
+### golang.org/x/image v0.47.0
+
+Image decoding, scaling and text drawing for photos, charts and the shot card; includes the Go fonts by Bigelow & Holmes.
+
+- Copyright 2009 The Go Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/golang/image
+- Licence: https://pkg.go.dev/golang.org/x/image@v0.47.0?tab=licenses
+
+### golang.org/x/net v0.62.0
+
+HTML parsing for the bean-page importer.
+
+- Copyright 2009 The Go Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/golang/net
+- Licence: https://pkg.go.dev/golang.org/x/net@v0.62.0?tab=licenses
+
+### golang.org/x/oauth2 v0.35.0
+
+OAuth types used by the MCP server library.
+
+- Copyright 2009 The Go Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/golang/oauth2
+- Licence: https://pkg.go.dev/golang.org/x/oauth2@v0.35.0?tab=licenses
+
+### golang.org/x/sync v0.24.0
+
+Merges duplicate update and firmware checks into one request.
+
+- Copyright 2009 The Go Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/golang/sync
+- Licence: https://pkg.go.dev/golang.org/x/sync@v0.24.0?tab=licenses
+
+### golang.org/x/sys v0.49.0
+
+Operating-system calls for the SQLite runtime.
+
+- Copyright 2009 The Go Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/golang/sys
+- Licence: https://pkg.go.dev/golang.org/x/sys@v0.49.0?tab=licenses
+
+### golang.org/x/text v0.43.0
+
+Text encodings used by the font code.
+
+- Copyright 2009 The Go Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/golang/text
+- Licence: https://pkg.go.dev/golang.org/x/text@v0.43.0?tab=licenses
+
+### golang.org/x/time v0.16.0
+
+Rate limiting of the API.
+
+- Copyright 2009 The Go Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://github.com/golang/time
+- Licence: https://pkg.go.dev/golang.org/x/time@v0.16.0?tab=licenses
+
+### gopkg.in/yaml.v3 v3.0.1
+
+Reads the bundled API description.
+
+- Copyright (c) 2006-2011 Kirill Simonov (MIT part).
+- Copyright 2011-2016 Canonical Ltd. (Apache part, from its NOTICE).
+- Licensed under the MIT License and the Apache License 2.0.
+- Source: https://github.com/go-yaml/yaml
+- Licence: https://pkg.go.dev/gopkg.in/yaml.v3@v3.0.1?tab=licenses
+
+### modernc.org/libc v1.79.0
+
+C runtime for the SQLite database engine. It includes code from musl libc, go-netdb and Nixpkgs (MIT License) and from the Go project (BSD 3-Clause License).
+
+- Copyright (c) 2017 The Libc Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://gitlab.com/cznic/libc
+- Licence: https://pkg.go.dev/modernc.org/libc@v1.79.0?tab=licenses
+
+### modernc.org/mathutil v1.7.1
+
+Math helpers for the SQLite runtime.
+
+- Copyright (c) 2014 The mathutil Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://gitlab.com/cznic/mathutil
+- Licence: https://pkg.go.dev/modernc.org/mathutil@v1.7.1?tab=licenses
+
+### modernc.org/memory v1.12.1
+
+Memory allocator for the SQLite runtime.
+
+- Copyright (c) 2017 The Memory Authors.
+- Copyright (c) 2009 The Go Authors (from its LICENSE-GO).
+- Copyright (c) 2011, Evan Shaw <edsrzf@gmail.com> (from its LICENSE-MMAP-GO).
+- Licensed under the BSD 3-Clause License.
+- Source: https://gitlab.com/cznic/memory
+- Licence: https://pkg.go.dev/modernc.org/memory@v1.12.1?tab=licenses
+
+### modernc.org/sqlite v1.61.1
+
+The SQLite database that stores all app data, without CGo. It contains SQLite 3.54.1, which is in the public domain.
+
+- Copyright (c) 2017 The Sqlite Authors.
+- Licensed under the BSD 3-Clause License.
+- Source: https://gitlab.com/cznic/sqlite
+- Licence: https://pkg.go.dev/modernc.org/sqlite@v1.61.1?tab=licenses
+
 ## Full licence texts
 
-### MIT License — onnxruntime-web, chart.js, qrcode, barcode-detector, zxing-wasm
+### MIT License — onnxruntime-web, chart.js, qrcode, barcode-detector, zxing-wasm, go-humanize, goccy/go-json, jsonschema-go, segmentio/asm, segmentio/encoding, go-sdk (MIT part), yaml.v3 (MIT part), musl libc, go-netdb, Nixpkgs (via modernc.org/libc), fontdb (via resvg-go)
 
 MIT License
 
@@ -157,6 +445,28 @@ Copyright (c) 2014-2024 Chart.js Contributors (chart.js)
 Copyright (c) 2012 Ryan Day (qrcode)
 
 Copyright (c) 2023 Ze-Zheng Wu (barcode-detector, zxing-wasm)
+
+Copyright (c) 2005-2008 Dustin Sallings <dustin@spy.net> (go-humanize)
+
+Copyright (c) 2020 Masaaki Goshima (goccy/go-json)
+
+Copyright (c) 2025 JSON Schema Go Project Authors (jsonschema-go)
+
+Copyright (c) 2021 Segment (segmentio/asm)
+
+Copyright (c) 2019 Segment.io, Inc. (segmentio/encoding)
+
+Copyright (c) 2024-2025 Model Context Protocol a Series of LF Projects, LLC. (go-sdk)
+
+Copyright (c) 2006-2011 Kirill Simonov (yaml.v3)
+
+Copyright © 2005-2020 Rich Felker, et al. (musl libc, via modernc.org/libc)
+
+Copyright (c) 2012 Dominik Honnef (go-netdb, via modernc.org/libc)
+
+Copyright (c) 2003-2025 Eelco Dolstra and the Nixpkgs/NixOS contributors (Nixpkgs, via modernc.org/libc)
+
+Copyright (c) 2020 Yevhenii Reizner and contributors (fontdb, via resvg-go)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -176,9 +486,15 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-### Apache License 2.0 — IS-Net, SlimSAM, echarts
+### Apache License 2.0 — IS-Net, SlimSAM, echarts, wazero, go-sdk, yaml.v3
 
 Copyright 2017-2026 The Apache Software Foundation (echarts).
+
+Copyright 2020-2023 wazero authors (wazero, from its NOTICE).
+
+Copyright (c) 2024-2025 Model Context Protocol a Series of LF Projects, LLC. (go-sdk)
+
+Copyright 2011-2016 Canonical Ltd. (yaml.v3, from its NOTICE)
 
                                  Apache License
                            Version 2.0, January 2004
@@ -382,10 +698,36 @@ Copyright 2017-2026 The Apache Software Foundation (echarts).
    See the License for the specific language governing permissions and
    limitations under the License.
 
-### BSD 3-Clause License — zrender
+### BSD 3-Clause License — zrender, Go standard library, golang.org/x/crypto, x/image, x/net, x/oauth2, x/sync, x/sys, x/text, x/time, bigfft, goquery, google/uuid, modernc.org/libc, mathutil, memory, sqlite, uritemplate, paho.mqtt.golang (Eclipse Distribution License 1.0), tiny-skia
 
-Copyright (c) 2017, Baidu Inc.
+Copyright (c) 2017, Baidu Inc. (zrender)
 All rights reserved.
+
+Copyright 2009 The Go Authors. (Go standard library, golang.org/x/crypto, x/image, x/net, x/oauth2, x/sync, x/sys, x/text, x/time, modernc.org/memory LICENSE-GO)
+
+Copyright (c) 2012 The Go Authors. (bigfft)
+
+Copyright (c) 2012-2021, Martin Angers & Contributors (goquery)
+
+Copyright (c) 2009,2014 Google Inc. (google/uuid)
+
+Copyright (c) 2017 The Libc Authors. (modernc.org/libc)
+
+Copyright (c) 2014 The mathutil Authors. (modernc.org/mathutil)
+
+Copyright (c) 2017 The Memory Authors. (modernc.org/memory)
+
+Copyright (c) 2011, Evan Shaw <edsrzf@gmail.com> (modernc.org/memory LICENSE-MMAP-GO)
+
+Copyright (c) 2017 The Sqlite Authors. (modernc.org/sqlite)
+
+Copyright (C) 2016, Kohei YOSHIDA <https://yosida95.com/>. (uritemplate)
+
+Copyright (c) 2007, Eclipse Foundation, Inc. and its licensors; all content is the property of the respective Eclipse Paho authors. (paho.mqtt.golang, under the Eclipse Distribution License 1.0)
+
+Copyright (c) 2011 Google Inc. (tiny-skia, via resvg-go)
+
+Copyright (c) 2020 Yevhenii Reizner (tiny-skia, via resvg-go)
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
@@ -412,6 +754,33 @@ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+### BSD 2-Clause License — cascadia, gorilla/websocket
+
+Copyright (c) 2011 Andy Balholm. (cascadia)
+
+Copyright (c) 2013 The Gorilla WebSocket Authors. (gorilla/websocket)
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+  Redistributions of source code must retain the above copyright notice, this
+  list of conditions and the following disclaimer.
+
+  Redistributions in binary form must reproduce the above copyright notice,
+  this list of conditions and the following disclaimer in the documentation
+  and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 ### 0BSD License — tslib
 
 Copyright (c) Microsoft Corporation.
@@ -427,9 +796,11 @@ LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR
 OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 
-### ISC License — topojson-client
+### ISC License — topojson-client, coder/websocket
 
-Copyright 2012-2019 Michael Bostock
+Copyright 2012-2019 Michael Bostock (topojson-client)
+
+Copyright (c) 2025 Coder (coder/websocket)
 
 Permission to use, copy, modify, and/or distribute this software for any purpose
 with or without fee is hereby granted, provided that the above copyright notice
