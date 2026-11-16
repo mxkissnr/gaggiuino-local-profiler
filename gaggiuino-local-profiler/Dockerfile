@@ -139,7 +139,7 @@ RUN apk add --no-cache wget ca-certificates su-exec \
     && chown glp:glp /data
 
 COPY --from=builder /out/glp-server /usr/local/bin/glp-server
-COPY THIRD_PARTY_NOTICES.md /usr/share/glp/THIRD_PARTY_NOTICES.md
+COPY public-src/public/THIRD_PARTY_NOTICES.md /usr/share/glp/THIRD_PARTY_NOTICES.md
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
