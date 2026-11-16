@@ -109,7 +109,7 @@ const nl: Partial<Translations> = {
     ann_recipe:'Recept', ann_recipe_none:'— geen recept —',
     ann_basket:'Korf', ann_basket_none:'— geen korf —',
     ann_puckscreen:'Puck Screen', ann_puckscreen_none:'— geen puck screen —',
-    autosave_pending:'Opslaan…', autosave_saved:'Opgeslagen',
+    autosave_pending:'Opslaan…', autosave_saved:'Opgeslagen', autosave_failed:'Niet opgeslagen',
     grind_ok:'Maalgraad is goed',
     live_title:'Shot Live', live_connecting:'Verbinden …', live_brewing:'Extraheren …',
     live_machine_unavailable:'Live-weergave is nog niet beschikbaar voor deze machine.',

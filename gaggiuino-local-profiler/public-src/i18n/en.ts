@@ -109,7 +109,7 @@ const en: Translations = {
     ann_recipe:'Recipe', ann_recipe_none:'— no recipe —',
     ann_basket:'Basket', ann_basket_none:'— no basket —',
     ann_puckscreen:'Puck Screen', ann_puckscreen_none:'— no puck screen —',
-    autosave_pending:'Saving…', autosave_saved:'Saved',
+    autosave_pending:'Saving…', autosave_saved:'Saved', autosave_failed:'Not saved',
     grind_ok:'Grind setting is good',
     live_title:'Live Shot', live_connecting:'Connecting …', live_brewing:'Brewing …',
     live_machine_unavailable:'Live view is not available for this machine yet.',

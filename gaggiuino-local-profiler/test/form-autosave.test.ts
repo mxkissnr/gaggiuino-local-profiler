@@ -6,19 +6,28 @@ import { bindFormAutosave } from '../public-src/components/form-autosave.js';
 
 class FakeStatus {
   className = '';
-  textContent = '';
+  innerHTML = '';
   readonly classes = new Set<string>();
+  readonly attributes = new Map<string, string>();
 
   classList = {
     add: (c: string) => { this.classes.add(c); },
     remove: (c: string) => { this.classes.delete(c); },
+    toggle: (c: string, force?: boolean) => {
+      const on = force ?? !this.classes.has(c);
+      if (on) this.classes.add(c); else this.classes.delete(c);
+      return on;
+    },
+    contains: (c: string) => this.classes.has(c),
   };
+
+  setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
 }
 
 class FakeActions {
-  readonly prepended: FakeStatus[] = [];
+  readonly appended: FakeStatus[] = [];
 
-  prepend(el: FakeStatus): void { this.prepended.push(el); }
+  appendChild(el: FakeStatus): void { this.appended.push(el); }
 }
 
 interface FakeForm {
@@ -55,8 +64,8 @@ beforeEach(() => {
   };
 });
 
-function bind(form: FakeForm, editing: boolean, save: () => Promise<boolean>): void {
-  bindFormAutosave(form as unknown as HTMLElement, { isEditing: () => editing, save });
+function bind(form: FakeForm, editing: boolean, save: () => Promise<boolean>): () => void {
+  return bindFormAutosave(form as unknown as HTMLElement, { isEditing: () => editing, save });
 }
 
 function createdStatuses(): FakeStatus[] {
@@ -64,14 +73,16 @@ function createdStatuses(): FakeStatus[] {
 }
 
 describe('bindFormAutosave (#1962)', () => {
-  it('mounts one status element into the form actions', () => {
+  it('mounts one status element at the end of the form actions', () => {
     const form = makeForm();
     bind(form, true, () => Promise.resolve(true));
 
     const statuses = createdStatuses();
     expect(statuses).toHaveLength(1);
     expect(statuses[0]?.className).toBe('autosave-status');
-    expect(form.actions.prepended).toHaveLength(1);
+    expect(statuses[0]?.attributes.get('role')).toBe('status');
+    expect(form.actions.appended).toHaveLength(1);
+    expect(form.actions.appended[0]).toBe(statuses[0]);
   });
 
   it('does nothing for a form without an actions row', () => {
@@ -100,18 +111,102 @@ describe('bindFormAutosave (#1962)', () => {
     form.commit(INPUT);
     expect(save).toHaveBeenCalledTimes(1);
     const status = createdStatuses()[0];
-    expect(status?.textContent).toBe('Saving…');
+    expect(status?.innerHTML).toBe('Saving…');
 
     finish(true);
-    await vi.waitFor(() => expect(status?.textContent).toBe('Saved'));
+    await vi.waitFor(() => expect(status?.innerHTML).toContain('Saved'));
   });
 
-  it('clears the status when the save fails', async () => {
+  it('keeps a "Not saved" state when the save fails', async () => {
     const form = makeForm();
     bind(form, true, () => Promise.resolve(false));
 
     form.commit(INPUT);
-    await vi.waitFor(() => expect(createdStatuses()[0]?.textContent).toBe(''));
+    await vi.waitFor(() => expect(createdStatuses()[0]?.innerHTML).toBe('Not saved'));
+    const status = createdStatuses()[0];
+    expect(status?.classes.has('visible')).toBe(true);
+    expect(status?.classes.has('failed')).toBe(true);
+  });
+
+  it('the saved state does not fade', async () => {
+    vi.useFakeTimers();
+    try {
+      const form = makeForm();
+      bind(form, true, () => Promise.resolve(true));
+
+      form.commit(INPUT);
+      await vi.advanceTimersByTimeAsync(0);
+      const status = createdStatuses()[0];
+      expect(status?.innerHTML).toContain('Saved');
+      expect(status?.classes.has('visible')).toBe(true);
+
+      await vi.advanceTimersByTimeAsync(5000);
+      expect(status?.innerHTML).toContain('Saved');
+      expect(status?.classes.has('visible')).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a save that throws shows Not saved', async () => {
+    const form = makeForm();
+    bind(form, true, () => Promise.reject(new Error('offline')));
+
+    form.commit(INPUT);
+    await vi.waitFor(() => expect(createdStatuses()[0]?.innerHTML).toBe('Not saved'));
+    const status = createdStatuses()[0];
+    expect(status?.classes.has('failed')).toBe(true);
+    expect(status?.classes.has('visible')).toBe(true);
+  });
+
+  it('a later successful save drops the failed state', async () => {
+    let ok = false;
+    const form = makeForm();
+    bind(form, true, () => Promise.resolve(ok));
+
+    form.commit(INPUT);
+    await vi.waitFor(() => expect(createdStatuses()[0]?.classes.has('failed')).toBe(true));
+
+    ok = true;
+    form.commit(INPUT);
+    const status = createdStatuses()[0];
+    await vi.waitFor(() => expect(status?.innerHTML).toContain('Saved'));
+    expect(status?.classes.has('failed')).toBe(false);
+    expect(status?.classes.has('visible')).toBe(true);
+  });
+
+  it('reset clears the state', async () => {
+    const form = makeForm();
+    const reset = bind(form, true, () => Promise.resolve(true));
+
+    form.commit(INPUT);
+    const status = createdStatuses()[0];
+    await vi.waitFor(() => expect(status?.innerHTML).toContain('Saved'));
+
+    reset();
+    expect(status?.innerHTML).toBe('');
+    expect(status?.classes.has('visible')).toBe(false);
+    expect(status?.classes.has('failed')).toBe(false);
+  });
+
+  it('a save still running at reset does not label the next entry', async () => {
+    let finish: (ok: boolean) => void = () => {};
+    const form = makeForm();
+    const reset = bind(form, true, () => new Promise<boolean>(r => { finish = r; }));
+
+    form.commit(INPUT);
+    reset();
+    finish(true);
+    await vi.waitFor(() => expect(createdStatuses()[0]?.innerHTML).toBe(''));
+    expect(createdStatuses()[0]?.classes.has('visible')).toBe(false);
+  });
+
+  it('a form without an actions row returns a callable no-op', () => {
+    const form = makeForm(false);
+    const reset = bind(form, true, () => Promise.resolve(true));
+
+    expect(typeof reset).toBe('function');
+    expect(() => reset()).not.toThrow();
   });
 
   it('collapses changes during a running save into exactly one more save', async () => {

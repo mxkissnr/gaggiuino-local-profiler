@@ -109,7 +109,7 @@ const fr: Partial<Translations> = {
     ann_recipe:'Recette', ann_recipe_none:'— aucune recette —',
     ann_basket:'Panier', ann_basket_none:'— aucun panier —',
     ann_puckscreen:'Puck Screen', ann_puckscreen_none:'— aucun puck screen —',
-    autosave_pending:'Enregistrement…', autosave_saved:'Enregistré',
+    autosave_pending:'Enregistrement…', autosave_saved:'Enregistré', autosave_failed:'Non enregistré',
     grind_ok:'La mouture est bonne',
     live_title:'Shot Live', live_connecting:'Connexion …', live_brewing:'Extraction …',
     live_machine_unavailable:"La vue en direct n'est pas encore disponible pour cette machine.",
