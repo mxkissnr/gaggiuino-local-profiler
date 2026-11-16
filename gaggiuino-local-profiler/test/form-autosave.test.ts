@@ -197,7 +197,9 @@ describe('bindFormAutosave (#1962)', () => {
     form.commit(INPUT);
     reset();
     finish(true);
-    await vi.waitFor(() => expect(createdStatuses()[0]?.innerHTML).toBe(''));
+    // Let the queued save settle before asserting; it must not label the state.
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(createdStatuses()[0]?.innerHTML).toBe('');
     expect(createdStatuses()[0]?.classes.has('visible')).toBe(false);
   });
 
