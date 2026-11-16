@@ -8,7 +8,9 @@
 // Chromium through the demo in two viewports (desktop and phone): every main
 // view, one shot detail, and a shot simulated from the demo banner. Any page
 // error, console error, API request the fixtures do not cover, or HTTP >= 400
-// fails the run, so a broken build never reaches the site.
+// fails the run, so a broken build never reaches the site. The desktop pass
+// also checks that the shot chart follows its container when the list folds,
+// unfolds and the window width changes (#2097).
 //
 // Run on demand with `npm run demo:smoke`. Requires `npm run build:demo`
 // first and `npx playwright install chromium` once beforehand.
@@ -183,6 +185,39 @@ async function openShotDetail(page: Page): Promise<void> {
     await page.waitForSelector('#chart-area', { state: 'visible', timeout: 20000 });
 }
 
+/**
+ * Why the shot chart does not fit its container, or null when it does.
+ * Sub-pixel rounding (a fractional layout width) is not a problem.
+ */
+export function chartFitProblem(step: string, size: { container: number; canvas: number }): string | null {
+    if (Math.abs(size.canvas - size.container) <= 1) return null;
+    return `shot chart is ${Math.round(size.canvas)} px wide in a ${Math.round(size.container)} px container ${step}`;
+}
+
+/**
+ * Reads both widths in one evaluation and records the mismatch. Waits up to
+ * 3 s first so the container's CSS transition and the chart's own resize
+ * settle; a timeout is not itself a failure, the measured widths decide.
+ */
+async function assertShotChartFits(page: Page, problems: string[], profileName: string, step: string): Promise<void> {
+    await page.waitForFunction(() => {
+        const canvas = document.getElementById('espressoShotChart');
+        const container = document.getElementById('zeitContainer');
+        if (!canvas || !container) return false;
+        return Math.abs(canvas.getBoundingClientRect().width - container.clientWidth) <= 1;
+    }, undefined, { timeout: 3000 }).catch(() => {});
+    const size = await page.evaluate(() => {
+        const canvas = document.getElementById('espressoShotChart');
+        const container = document.getElementById('zeitContainer');
+        return {
+            canvas: canvas ? canvas.getBoundingClientRect().width : 0,
+            container: container ? container.clientWidth : 0,
+        };
+    });
+    const problem = chartFitProblem(step, size);
+    if (problem) problems.push(`[${profileName}] ${problem}`);
+}
+
 /** Reads the "MM:SS" elapsed label the Live view shows; 0 when it is blank. */
 function elapsedSeconds(label: string | null): number {
     const [minutes, seconds] = String(label).trim().split(':').map(Number);
@@ -245,6 +280,31 @@ async function runProfile(browser: Browser, baseUrl: string, profile: Profile, p
         // Shots is the default view; open a shot detail from its list first.
         await openView(page, VIEWS[0]!);
         await openShotDetail(page);
+        if (!profile.isMobile) {
+            // Picking a shot folds the desktop list away (#2056); widening the
+            // window narrows the card again. The chart must follow each time.
+            // The collapsed width is 1 px, not 0: `width: 0` cannot drop the
+            // 1 px border-right under the app's global box-sizing: border-box.
+            await page.waitForFunction(() => {
+                const sidebar = document.getElementById('sidebar');
+                return !!sidebar && sidebar.classList.contains('desktop-collapsed')
+                    && sidebar.getBoundingClientRect().width <= 1;
+            }, undefined, { timeout: 5000 });
+            await assertShotChartFits(page, problems, profile.name, 'after the list folds');
+
+            await page.setViewportSize({ width: 1100, height: 900 });
+            await assertShotChartFits(page, problems, profile.name, 'after a narrower window');
+
+            await page.setViewportSize(profile.viewport);
+            await assertShotChartFits(page, problems, profile.name, 'after a wider window');
+
+            await page.click('#expandSidebarBtn');
+            await page.waitForFunction(
+                () => (document.getElementById('sidebar')?.getBoundingClientRect().width ?? 0) >= 319,
+                undefined, { timeout: 5000 },
+            );
+            await assertShotChartFits(page, problems, profile.name, 'after the list unfolds');
+        }
         for (const view of VIEWS.slice(1)) await openView(page, view);
 
         // The banner's "Simulate a shot" replays the newest recorded shot onto
