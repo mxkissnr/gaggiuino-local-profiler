@@ -35,16 +35,20 @@ before(async () => {
     page.on('pageerror', err => consoleErrors.push(String(err)));
 
     await page.goto(baseUrl, { waitUntil: 'networkidle' });
-    // Same two overrides scripts/screenshots.mts applies, for the same
-    // reasons: the update-check banner does a real GitHub API call and
-    // overlays/intercepts clicks on the nav bar whenever the checked-out
-    // version is ahead of the latest published release; #btnLive stays
-    // display:none until a switch_entity is configured, which this
-    // throwaway instance never has.
-    await page.addStyleTag({ content: '#glpUpdateBanner{display:none!important}' });
-    await page.addStyleTag({ content: '#btnLive{display:flex!important}' });
+    await applyOverrides();
     await page.waitForTimeout(500); // let async post-load renders settle, same as screenshots.mts
 });
+
+// Same two overrides scripts/screenshots.mts applies, for the same reasons:
+// the update-check banner does a real GitHub API call and
+// overlays/intercepts clicks on the nav bar whenever the checked-out
+// version is ahead of the latest published release; #btnLive stays
+// display:none until a switch_entity is configured, which this throwaway
+// instance never has. Re-applied after every reload in the top bar test.
+async function applyOverrides(): Promise<void> {
+    await page.addStyleTag({ content: '#glpUpdateBanner{display:none!important}' });
+    await page.addStyleTag({ content: '#btnLive{display:flex!important}' });
+}
 
 after(async () => {
     await browser?.close();
@@ -169,3 +173,205 @@ for (const view of VIEWS) {
         assert.deepEqual(errors, [], `${view.name} view logged console errors: ${JSON.stringify(errors)}`);
     });
 }
+
+// ── Top bar fit at laptop widths (#2079) ─────────────────────────────────
+// The smoke run above only ever looks at 1400 px in English, which is why
+// tabs being cut off at 1280 px (and at 1144 px inside Home Assistant with
+// its sidebar open) went unnoticed. Dutch has the longest tab labels, then
+// French and Spanish; German is longer than English.
+
+interface TopbarTabReport {
+    id: string;
+    visible: boolean;
+    inside: boolean;
+    leftOfSettings: boolean;
+    truncated: boolean;
+    overflow: boolean;
+}
+
+interface TopbarReport {
+    tabs: TopbarTabReport[];
+    moreShown: boolean;
+    moreLeftOfSettings: boolean;
+    compact: boolean;
+    scrollShown: boolean;
+    bottomNavShown: boolean;
+    syncTimeShown: boolean;
+}
+
+interface TopbarMenuEntryReport {
+    target: string;
+    disabled: boolean;
+}
+
+/* eslint-disable no-undef */
+// Runs in the page: one plain report of what the row currently looks like.
+const readTopbar = (): TopbarReport => {
+    const bar = document.getElementById('content-topbar')!;
+    const scroll = document.querySelector<HTMLElement>('.topbar-nav-scroll')!;
+    const scrollBox = scroll.getBoundingClientRect();
+    const settingsBox = document.getElementById('btnSettings')!.getBoundingClientRect();
+    const moreBox = document.getElementById('topbarNavMore')!.getBoundingClientRect();
+    const tabs = [...document.querySelectorAll<HTMLElement>('.topbar-nav-list > .topbar-nav')];
+    return {
+        tabs: tabs.map(tab => {
+            const box = tab.getBoundingClientRect();
+            const label = tab.querySelector('.rail-label') as HTMLElement | null;
+            return {
+                id: tab.id,
+                visible: box.width > 0 && box.height > 0,
+                inside: box.left >= scrollBox.left - 1 && box.right <= scrollBox.right + 1,
+                leftOfSettings: box.right <= settingsBox.left + 1,
+                truncated: !!label && label.scrollWidth > label.clientWidth + 1,
+                overflow: tab.classList.contains('topbar-nav-overflow'),
+            };
+        }),
+        moreShown: moreBox.width > 0 && moreBox.height > 0,
+        moreLeftOfSettings: moreBox.right <= settingsBox.left + 1,
+        compact: bar.classList.contains('topbar-compact'),
+        scrollShown: scrollBox.width > 0,
+        bottomNavShown: (document.getElementById('bottom-nav')?.getBoundingClientRect().width ?? 0) > 0,
+        syncTimeShown: (document.getElementById('syncTime')?.getBoundingClientRect().width ?? 0) > 0,
+    };
+};
+
+// The entries the open "More" menu offers, in the order it shows them.
+const readMenuEntries = (): TopbarMenuEntryReport[] =>
+    [...document.querySelectorAll<HTMLButtonElement>('#topbarNavMenu [data-nav-target]')]
+        .map(el => ({ target: el.dataset['navTarget'] ?? '', disabled: el.disabled }));
+
+const readMenuState = (): { open: boolean; summaryFocused: boolean } => {
+    const more = document.getElementById('topbarNavMore') as HTMLDetailsElement;
+    return { open: more.open, summaryFocused: document.activeElement === more.querySelector('summary') };
+};
+/* eslint-enable no-undef */
+
+// The layout re-runs from a ResizeObserver callback, so wait two frames for
+// it to land before reading the row.
+/* eslint-disable no-undef */
+async function settleFrame(): Promise<void> {
+    await page.evaluate(() => new Promise<void>(resolve => {
+        requestAnimationFrame(() => requestAnimationFrame(() => { resolve(); }));
+    }));
+}
+/* eslint-enable no-undef */
+
+// Reloads in `lang`, re-applying the overrides the before() hook installs
+// (a reload drops them, they are per-document style tags).
+/* eslint-disable no-undef */
+async function useLang(lang: string): Promise<void> {
+    await page.evaluate(value => { localStorage.setItem('glp_lang', value); }, lang);
+    await page.reload({ waitUntil: 'networkidle' });
+    await applyOverrides();
+    await page.waitForTimeout(300);
+}
+/* eslint-enable no-undef */
+
+async function resizeTo(width: number, height = 900): Promise<void> {
+    await page.setViewportSize({ width, height });
+    await settleFrame();
+}
+
+// Every tab that is in the row is fully inside it, left of the settings gear
+// and not truncated; when tabs did move into "More", the status group
+// compacted first.
+async function assertTopbarFits(lang: string, width: number): Promise<TopbarReport> {
+    await resizeTo(width);
+    const report = await page.evaluate(readTopbar);
+    const where = `${lang} at ${width} px`;
+
+    const shown = report.tabs.filter(tab => tab.visible);
+    assert.ok(shown.length > 0, `${where}: no tab is visible`);
+    for (const tab of shown) {
+        assert.ok(tab.inside, `${where}: tab ${tab.id} sticks out of the row`);
+        assert.ok(tab.leftOfSettings, `${where}: tab ${tab.id} overlaps the settings gear`);
+        assert.ok(!tab.truncated, `${where}: tab ${tab.id} has a truncated label`);
+    }
+    if (report.moreShown) {
+        assert.ok(report.moreLeftOfSettings, `${where}: the More button overlaps the settings gear`);
+        assert.ok(report.compact, `${where}: tabs moved into More before the bar compacted`);
+    }
+    return report;
+}
+
+/* eslint-disable no-undef */
+const isFocusedAndActive = (id: string): { active: boolean; focused: boolean } => {
+    const el = document.getElementById(id);
+    return { active: el?.classList.contains('active') === true, focused: document.activeElement === el };
+};
+/* eslint-enable no-undef */
+
+void test('top bar fits at laptop widths in every language (#2079)', async () => {
+    for (const lang of ['de', 'en', 'it', 'fr', 'es', 'nl']) {
+        await useLang(lang);
+
+        for (const width of [1280, 1144, 1024]) {
+            const report = await assertTopbarFits(lang, width);
+            if (!report.moreShown) continue;
+
+            // The menu lists exactly the hidden tabs, in row order, and Escape
+            // closes it leaving focus on the toggle.
+            await page.locator('#topbarNavMore > summary').click();
+            const entries = await page.evaluate(readMenuEntries);
+            const hidden = report.tabs.filter(tab => tab.overflow).map(tab => tab.id);
+            assert.deepEqual(entries.map(entry => entry.target), hidden,
+                `${lang} at ${width} px: the More menu does not list the hidden tabs`);
+
+            await page.keyboard.press('Escape');
+            const state = await page.evaluate(readMenuState);
+            assert.equal(state.open, false, `${lang} at ${width} px: Escape did not close the More menu`);
+            assert.equal(state.summaryFocused, true, `${lang} at ${width} px: Escape left focus off the More toggle`);
+        }
+
+        // A tab picked from the menu comes into the row as the active one, so
+        // the page the user just opened is never hidden.
+        const beforePick = await assertTopbarFits(lang, 1024);
+        if (beforePick.moreShown) {
+            await page.locator('#topbarNavMore > summary').click();
+            const entries = await page.evaluate(readMenuEntries);
+            const pickable = entries.filter(entry => !entry.disabled).map(entry => entry.target);
+            const picked = pickable[pickable.length - 1];
+            assert.ok(picked, `${lang}: the More menu has no enabled entry to pick`);
+
+            await page.locator(`#topbarNavMenu [data-nav-target="${picked}"]`).click();
+            await settleFrame();
+
+            const afterPick = await page.evaluate(readTopbar);
+            assert.ok(afterPick.tabs.find(tab => tab.id === picked)?.visible,
+                `${lang}: the tab opened from the menu is not visible`);
+            const pickedState = await page.evaluate(isFocusedAndActive, picked);
+            assert.equal(pickedState.active, true, `${lang}: the tab opened from the menu is not active`);
+            assert.equal(pickedState.focused, true, `${lang}: the tab opened from the menu did not take focus`);
+
+            // The menu now lists only what is still hidden -- the picked tab
+            // has left it. A row that fits again has no menu left to open.
+            if (afterPick.moreShown) {
+                await page.locator('#topbarNavMore > summary').click();
+                assert.deepEqual((await page.evaluate(readMenuEntries)).map(entry => entry.target),
+                    entries.map(entry => entry.target).filter(target => target !== picked),
+                    `${lang}: the tab opened from the menu is still listed`);
+                await page.keyboard.press('Escape');
+            }
+        }
+        await openTopbarTab(page, '#btnShots');
+
+        if (lang !== 'en') continue;
+
+        // A wide screen hides nothing, and the phone layout is untouched by the
+        // measured row.
+        await resizeTo(1920);
+        const wide = await page.evaluate(readTopbar);
+        assert.deepEqual(wide.tabs.filter(tab => tab.overflow), [], 'en at 1920 px: a tab moved into More');
+        assert.equal(wide.moreShown, false, 'en at 1920 px: the More button is shown');
+        assert.equal(wide.syncTimeShown, true, 'en at 1920 px: the sync time is hidden');
+
+        await resizeTo(390, 844);
+        const phone = await page.evaluate(readTopbar);
+        assert.equal(phone.scrollShown, false, 'phone: the desktop tab row is shown');
+        assert.equal(phone.moreShown, false, 'phone: the More button is shown');
+        assert.equal(phone.bottomNavShown, true, 'phone: the bottom navigation is hidden');
+    }
+
+    await resizeTo(1400);
+    await useLang('en');
+});
