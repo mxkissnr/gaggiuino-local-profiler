@@ -184,6 +184,7 @@ interface TopbarTabReport {
     id: string;
     visible: boolean;
     inside: boolean;
+    insideList: boolean;
     leftOfSettings: boolean;
     truncated: boolean;
     overflow: boolean;
@@ -210,6 +211,9 @@ const readTopbar = (): TopbarReport => {
     const bar = document.getElementById('content-topbar')!;
     const scroll = document.querySelector<HTMLElement>('.topbar-nav-scroll')!;
     const scrollBox = scroll.getBoundingClientRect();
+    // The list clips whatever does not fit it, so it is the tighter bound on a
+    // tab that is still drawn but cut.
+    const listBox = document.querySelector('.topbar-nav-list')!.getBoundingClientRect();
     const settingsBox = document.getElementById('btnSettings')!.getBoundingClientRect();
     const moreBox = document.getElementById('topbarNavMore')!.getBoundingClientRect();
     const tabs = [...document.querySelectorAll<HTMLElement>('.topbar-nav-list > .topbar-nav')];
@@ -221,6 +225,7 @@ const readTopbar = (): TopbarReport => {
                 id: tab.id,
                 visible: box.width > 0 && box.height > 0,
                 inside: box.left >= scrollBox.left - 1 && box.right <= scrollBox.right + 1,
+                insideList: box.left >= listBox.left - 1 && box.right <= listBox.right + 1,
                 leftOfSettings: box.right <= settingsBox.left + 1,
                 truncated: !!label && label.scrollWidth > label.clientWidth + 1,
                 overflow: tab.classList.contains('topbar-nav-overflow'),
@@ -272,6 +277,13 @@ async function resizeTo(width: number, height = 900): Promise<void> {
     await settleFrame();
 }
 
+// The <details>/<summary> toggle event is what rebuilds the menu, and the
+// browser dispatches it after the click, so wait for the first entry.
+async function openMoreMenu(): Promise<void> {
+    await page.locator('#topbarNavMore > summary').click();
+    await page.locator('#topbarNavMenu [data-nav-target]').first().waitFor({ timeout: 5000 });
+}
+
 // Every tab that is in the row is fully inside it, left of the settings gear
 // and not truncated; when tabs did move into "More", the status group
 // compacted first.
@@ -284,6 +296,7 @@ async function assertTopbarFits(lang: string, width: number): Promise<TopbarRepo
     assert.ok(shown.length > 0, `${where}: no tab is visible`);
     for (const tab of shown) {
         assert.ok(tab.inside, `${where}: tab ${tab.id} sticks out of the row`);
+        assert.ok(tab.insideList, `${where}: tab ${tab.id} is cut off by its own row`);
         assert.ok(tab.leftOfSettings, `${where}: tab ${tab.id} overlaps the settings gear`);
         assert.ok(!tab.truncated, `${where}: tab ${tab.id} has a truncated label`);
     }
@@ -311,7 +324,7 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
 
             // The menu lists exactly the hidden tabs, in row order, and Escape
             // closes it leaving focus on the toggle.
-            await page.locator('#topbarNavMore > summary').click();
+            await openMoreMenu();
             const entries = await page.evaluate(readMenuEntries);
             const hidden = report.tabs.filter(tab => tab.overflow).map(tab => tab.id);
             assert.deepEqual(entries.map(entry => entry.target), hidden,
@@ -327,7 +340,7 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
         // the page the user just opened is never hidden.
         const beforePick = await assertTopbarFits(lang, 1024);
         if (beforePick.moreShown) {
-            await page.locator('#topbarNavMore > summary').click();
+            await openMoreMenu();
             const entries = await page.evaluate(readMenuEntries);
             const pickable = entries.filter(entry => !entry.disabled).map(entry => entry.target);
             const picked = pickable[pickable.length - 1];
@@ -346,7 +359,7 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
             // The menu now lists only what is still hidden -- the picked tab
             // has left it. A row that fits again has no menu left to open.
             if (afterPick.moreShown) {
-                await page.locator('#topbarNavMore > summary').click();
+                await openMoreMenu();
                 assert.deepEqual((await page.evaluate(readMenuEntries)).map(entry => entry.target),
                     entries.map(entry => entry.target).filter(target => target !== picked),
                     `${lang}: the tab opened from the menu is still listed`);
