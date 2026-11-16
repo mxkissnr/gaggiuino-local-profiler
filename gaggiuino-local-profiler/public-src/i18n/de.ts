@@ -84,7 +84,7 @@ const de: Partial<Translations> = {
     ach_card_secret:'Geheim',
     ach_not_yet:'Noch nicht gestempelt.',
     ach_secret_locked_hint:'Noch verborgen — man findet ihn, man jagt ihm nicht hinterher.',
-    ach_verdict_of:(total)=>`von ${total} Stempeln`, ach_verdict_next:(name)=>`Als Nächstes: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Noch 1 Stempel offen' : `Noch ${n} Stempel offen`, ach_verdict_all:'Alle Stempel gesammelt', ach_soon:'Bald fällig', ach_recent:'Zuletzt gestempelt', ach_filter_got:'Gesammelt', ach_filter_open:'Offen',
+    ach_verdict_of:(total)=>`von ${total} Stempeln`, ach_verdict_next:(name)=>`Als Nächstes: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Noch 1 Stempel offen' : `Noch ${n} Stempel offen`, ach_verdict_all:'Alle Stempel gesammelt', ach_soon:'Fast geschafft', ach_recent:'Zuletzt gestempelt', ach_filter_got:'Gesammelt', ach_filter_open:'Offen',
     ach_loading:'Erfolge werden geladen …',
     verdict_no_data:'Noch nicht genug Daten für ein Urteil.',
     verdict_bean_target_hint:'Bewertet anhand des eigenen Brew-Ziels dieser Bohne',
