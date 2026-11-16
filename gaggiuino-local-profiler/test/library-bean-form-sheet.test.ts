@@ -834,3 +834,81 @@ describe('roast level and best for use (#1977)', () => {
     expect(doc.getElementById('beanFormBestFrom')!.value).toBe('12');
   });
 });
+
+// #2098: the sheet bar carries the lasting autosave state while editing, in
+// the slot the bar's own Save leaves free.
+describe('bean sheet autosave state (#2098)', () => {
+  function formWithActions(): FakeElement {
+    const { form } = setupHome();
+    // bindFormAutosave needs the actions row it puts its status into.
+    const actions = doc.createElement();
+    actions.className = 'lib-form-actions';
+    form.appendChild(actions);
+    return form;
+  }
+
+  it('editing hides the bar Save, creating keeps it', () => {
+    setupHome();
+    const bean = addBean();
+
+    library.openBeanForm(bean);
+    expect(find('lib-sheet-save')!.style.display).toBe('none');
+
+    library.closeBeanForm();
+    library.openBeanForm();
+    expect(find('lib-sheet-save')!.style.display).toBe('');
+  });
+
+  it('a committed change shows a lasting Saved in the sheet bar', async () => {
+    const form = formWithActions();
+    const bean = addBean();
+    mocks.saveBean.mockResolvedValue({
+      id: bean.id, name: 'Renamed', roaster: bean.roaster, bags: bean.bags, flavors: [],
+    });
+
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+    form.dispatch('change', { target: { type: 'text' } });
+
+    const status = find('autosave-status')!;
+    expect(status.parentNode?.className).toBe('lib-sheet-bar-actions');
+    await vi.waitFor(() => expect(status.innerHTML).toContain('Saved'));
+    expect(status.classList.contains('visible')).toBe(true);
+  });
+
+  it('a failed autosave says Not saved in the bar', async () => {
+    const form = formWithActions();
+    mocks.saveBean.mockRejectedValue(new Error('HTTP 500'));
+
+    library.openBeanForm(addBean());
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+    form.dispatch('change', { target: { type: 'text' } });
+
+    const status = find('autosave-status')!;
+    await vi.waitFor(() => expect(status.innerHTML).toBe('Not saved'));
+    expect(status.classList.contains('visible')).toBe(true);
+    expect(status.classList.contains('failed')).toBe(true);
+    expect(showToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('reopening clears the last entry\'s state', async () => {
+    const form = formWithActions();
+    const bean = addBean();
+    mocks.saveBean.mockResolvedValue({
+      id: bean.id, name: 'Renamed', roaster: bean.roaster, bags: bean.bags, flavors: [],
+    });
+
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+    form.dispatch('change', { target: { type: 'text' } });
+    const status = find('autosave-status')!;
+    await vi.waitFor(() => expect(status.classList.contains('visible')).toBe(true));
+
+    library.closeBeanForm();
+    library.openBeanForm(bean);
+
+    expect(status.classList.contains('visible')).toBe(false);
+    expect(status.classList.contains('failed')).toBe(false);
+    expect(status.innerHTML).toBe('');
+  });
+});

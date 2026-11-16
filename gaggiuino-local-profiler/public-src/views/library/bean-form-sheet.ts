@@ -61,8 +61,10 @@ let _beanSaveInFlight = false;
 // server, whereas a create is submitted explicitly.
 let _beanSaveQueued = false;
 // The form saves itself while editing (#1962); the save button stays for
-// creating. Bound once, on the first open: the form element is persistent.
-let _autosaveBound = false;
+// creating. Bound once, on the first open (the form element is persistent);
+// the returned reset runs on every open so the last entry's state never shows
+// on the next one (#2098).
+let _resetAutosave: (() => void) | null = null;
 // The sheet bar's action row, kept so the autosave status can sit next to the
 // bar's Save button: the form's own action row is hidden while editing.
 let _formSheetHeadActions: HTMLElement | null = null;
@@ -135,9 +137,9 @@ function _beanFormSheetHost(): HTMLElement | null {
   head.appendChild(title);
   const headActions = document.createElement('div');
   headActions.className = 'lib-sheet-bar-actions';
-  // #1489: the bar's Save follows the form's mode — editing saves the bean,
-  // creating saves it and opens its new-bag form right away (#1933). The
-  // create action row keeps "save without bag" available.
+  // #1489: creating saves the bean and opens its new-bag form right away
+  // (#1933). Editing saves itself, so this button is hidden while editing
+  // (#1962, #2098). The create action row keeps "save without bag" available.
   const save = document.createElement('button');
   save.type = 'button';
   save.className = 'lib-sheet-save';
@@ -268,8 +270,11 @@ function _showBeanFormSheet(): void {
     _formSheetTitle.textContent = t(titleKey);
   }
   // #1489: hide the form's own action row only when editing; creating keeps it
-  // so both "save without / with a bag" choices stay reachable.
+  // so both "save without / with a bag" choices stay reachable. Editing saves
+  // itself, so the bar's Save is hidden too — the bar shows the saved state in
+  // its place (#2098).
   _formSheetSection?.classList?.toggle('is-editing', isEdit);
+  if (_formSheetSaveBtn) _formSheetSaveBtn.style.display = isEdit ? 'none' : '';
   _hideFormConfirm();
   const form = document.getElementById('beanAddForm');
   if (form) {
@@ -402,12 +407,12 @@ export function openBeanForm(bean?: BeanRow | null): void {
   if (saveNoBagBtn)  saveNoBagBtn.style.display  = isEdit ? 'none' : '';
   if (saveAddBagBtn) saveAddBagBtn.style.display = isEdit ? 'none' : '';
   const form = document.getElementById('beanAddForm');
-  if (form && !_autosaveBound) {
-    _autosaveBound = true;
-    bindFormAutosave(form, {
+  if (form) {
+    _resetAutosave ??= bindFormAutosave(form, {
       isEditing: () => !!S.beanEditId,
       save: async () => { const row = await _persistBean(); if (row) library.renderBeanList(); return row !== null; },
     });
+    _resetAutosave();
   }
   _el('beanAddTrigger').style.display = 'none';
   _beanFormDirty = false;

@@ -162,8 +162,10 @@ function _collectSteps(): { text: string; duration_s: number | null }[] {
 }
 
 // The form saves itself while editing (#1962); the save button stays for
-// creating. Bound once, on the first open: the form element is persistent.
-let _autosaveBound = false;
+// creating. Bound once, on the first open (the form element is persistent);
+// the returned reset runs on every open so the last entry's state never shows
+// on the next one (#2098).
+let _resetAutosave: (() => void) | null = null;
 
 export function openRecipeForm(recipe?: Recipe | null): void {
   _state().recipeEditId = recipe ? recipe.id : null;
@@ -187,13 +189,11 @@ export function openRecipeForm(recipe?: Recipe | null): void {
   // Editing saves itself, so the button would only be a second way to save.
   const saveBtn = document.getElementById('saveRecipeBtn');
   if (saveBtn) saveBtn.style.display = recipe ? 'none' : '';
-  if (!_autosaveBound) {
-    _autosaveBound = true;
-    bindFormAutosave(form, {
-      isEditing: () => !!_state().recipeEditId,
-      save: async () => { const ok = await _persistRecipe(); if (ok) renderRecipeList(); return ok; },
-    });
-  }
+  _resetAutosave ??= bindFormAutosave(form, {
+    isEditing: () => !!_state().recipeEditId,
+    save: async () => { const ok = await _persistRecipe(); if (ok) renderRecipeList(); return ok; },
+  });
+  _resetAutosave();
   form.classList.add('open');
   (document.getElementById('recipeAddTrigger') as HTMLElement).style.display = 'none';
   (document.getElementById('recipeFormName') as HTMLInputElement).focus();

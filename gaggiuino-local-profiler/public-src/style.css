@@ -1420,6 +1420,7 @@
         .ordered-by-badge { font-size: var(--fs-1); color: var(--warn); background: color-mix(in srgb, var(--amber) 12%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); display: inline-flex; align-items: center; gap: var(--sp-1); }
         .autosave-status { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-1); color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
         .autosave-status.visible { opacity: 1; }
+        .autosave-status.failed { color: var(--err); }
 
         /* ── Drink type pills ── */
         .drink-pills { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 2px; }
@@ -1783,6 +1784,10 @@
         }
         .autocomplete-item:hover, .autocomplete-item.active { background: var(--gray-800); color: var(--gray-200); }
         .lib-form-actions { display: flex; gap: var(--sp-2); justify-content: flex-end; }
+        /* #2098: the action row carries the edit form's saved state; while it
+           shows one, it stays at the bottom of the page so the state is in view
+           whichever field was changed. */
+        .lib-add-form .lib-form-actions:has(> .autosave-status.visible) { position: sticky; bottom: 0; z-index: var(--z-sticky); padding-block: var(--sp-2); background: var(--gray-800); }
         .lib-save-btn { background: var(--accent); border: none; border-radius:var(--radius); color: var(--accent-text); font-size: var(--fs-1); font-weight: 600; padding: var(--sp-2) var(--sp-4); cursor: pointer; transition: filter .15s; }
         .lib-save-btn:hover { filter: brightness(1.1); }
         @media (prefers-reduced-motion: no-preference) {
@@ -2029,10 +2034,10 @@
         /* Bean form in a sheet (#1349): the same static form, moved in. */
         .lib-form-sheet .lib-add-form { display: block; background: none; padding: 0; margin: 0; }
         .lib-form-sheet-body { min-width: 0; }
-        /* #1489: when editing, the single form Save is redundant with the bar's,
-           so hide the row. Creating keeps it visible: the two "save without /
-           with a bag" choices must stay reachable. The markup stays for other
-           callers. */
+        /* #1489: when editing, the form saves itself and shows its state in the
+           bar, so hide the row (#1962, #2098). Creating keeps it visible: the two
+           "save without / with a bag" choices must stay reachable. The markup
+           stays for other callers. */
         .lib-form-sheet.is-editing .lib-form-actions { display: none; }
         .lib-form-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); }
         .lib-form-confirm[hidden] { display: none; }

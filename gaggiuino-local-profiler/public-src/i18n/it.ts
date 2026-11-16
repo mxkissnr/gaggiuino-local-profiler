@@ -109,7 +109,7 @@ const it: Partial<Translations> = {
     ann_recipe:'Ricetta', ann_recipe_none:'— nessuna ricetta —',
     ann_basket:'Filtro', ann_basket_none:'— nessun filtro —',
     ann_puckscreen:'Puck Screen', ann_puckscreen_none:'— nessun puck screen —',
-    autosave_pending:'Salvataggio…', autosave_saved:'Salvato',
+    autosave_pending:'Salvataggio…', autosave_saved:'Salvato', autosave_failed:'Non salvato',
     grind_ok:'Macinatura corretta',
     live_title:'Shot Live', live_connecting:'Connessione …', live_brewing:'Estrazione …',
     live_machine_unavailable:'La vista Live non è ancora disponibile per questa macchina.',

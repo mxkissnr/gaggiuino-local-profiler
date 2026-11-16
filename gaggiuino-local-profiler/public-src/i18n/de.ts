@@ -109,7 +109,7 @@ const de: Partial<Translations> = {
     ann_recipe:'Rezept', ann_recipe_none:'— kein Rezept —',
     ann_basket:'Sieb', ann_basket_none:'— kein Sieb —',
     ann_puckscreen:'Puck Screen', ann_puckscreen_none:'— kein Puck Screen —',
-    autosave_pending:'Speichert…', autosave_saved:'Gespeichert',
+    autosave_pending:'Speichert…', autosave_saved:'Gespeichert', autosave_failed:'Nicht gespeichert',
     grind_ok:'Mahlgrad passt',
     live_title:'Live Shot', live_connecting:'Verbinde …', live_brewing:'Brüht …',
     live_machine_unavailable:'Live-Ansicht ist für diese Maschine noch nicht verfügbar.',
