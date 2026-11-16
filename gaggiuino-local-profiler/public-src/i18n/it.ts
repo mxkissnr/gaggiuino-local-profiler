@@ -84,7 +84,7 @@ const it: Partial<Translations> = {
     ach_card_secret:'Segreto',
     ach_not_yet:'Non ancora timbrato.',
     ach_secret_locked_hint:'Ancora nascosto — lo si trova, non lo si insegue.',
-    ach_verdict_of:(total)=>`di ${total} timbri`, ach_verdict_next:(name)=>`Prossimo: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Manca 1 timbro' : `Mancano ${n} timbri`, ach_verdict_all:'Tutti i timbri raccolti', ach_soon:'Prossimi', ach_recent:'Timbrati di recente', ach_filter_got:'Raccolti', ach_filter_open:'Da ottenere',
+    ach_verdict_of:(total)=>`di ${total} timbri`, ach_verdict_next:(name)=>`Prossimo: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Manca 1 timbro' : `Mancano ${n} timbri`, ach_verdict_all:'Tutti i timbri raccolti', ach_soon:'Quasi fatto', ach_recent:'Timbrati di recente', ach_filter_got:'Raccolti', ach_filter_open:'Da ottenere',
     ach_loading:'Caricamento obiettivi …',
     verdict_no_data:'Dati ancora insufficienti per un giudizio.',
     verdict_bean_target_hint:'Valutato in base al target di preparazione di questo caffè',

@@ -84,7 +84,7 @@ const nl: Partial<Translations> = {
     ach_card_secret:'Geheim',
     ach_not_yet:'Nog niet gestempeld.',
     ach_secret_locked_hint:'Nog verborgen — je vindt hem, je jaagt er niet op.',
-    ach_verdict_of:(total)=>`van ${total} stempels`, ach_verdict_next:(name)=>`Volgende: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Nog 1 stempel open' : `Nog ${n} stempels open`, ach_verdict_all:'Alle stempels verzameld', ach_soon:'Binnenkort', ach_recent:'Recent gestempeld', ach_filter_got:'Verzameld', ach_filter_open:'Open',
+    ach_verdict_of:(total)=>`van ${total} stempels`, ach_verdict_next:(name)=>`Volgende: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Nog 1 stempel open' : `Nog ${n} stempels open`, ach_verdict_all:'Alle stempels verzameld', ach_soon:'Bijna binnen', ach_recent:'Recent gestempeld', ach_filter_got:'Verzameld', ach_filter_open:'Open',
     ach_loading:'Prestaties laden …',
     verdict_no_data:'Nog niet genoeg gegevens voor een oordeel.',
     verdict_bean_target_hint:'Beoordeeld op basis van het eigen zettarget van deze boon',

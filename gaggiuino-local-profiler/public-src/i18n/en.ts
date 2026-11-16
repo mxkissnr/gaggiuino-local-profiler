@@ -84,7 +84,7 @@ const en: Translations = {
     ach_card_secret:'Secret',
     ach_not_yet:'Not yet stamped.',
     ach_secret_locked_hint:'Still hidden — you find these, you don’t chase them.',
-    ach_verdict_of:(total)=>`of ${total} stamps`, ach_verdict_next:(name)=>`Next up: ${name}`, ach_verdict_open:(n)=>n === 1 ? '1 stamp still open' : `${n} stamps still open`, ach_verdict_all:'Every stamp collected', ach_soon:'Coming up', ach_recent:'Recently stamped', ach_filter_got:'Collected', ach_filter_open:'Open',
+    ach_verdict_of:(total)=>`of ${total} stamps`, ach_verdict_next:(name)=>`Next up: ${name}`, ach_verdict_open:(n)=>n === 1 ? '1 stamp still open' : `${n} stamps still open`, ach_verdict_all:'Every stamp collected', ach_soon:'Almost there', ach_recent:'Recently stamped', ach_filter_got:'Collected', ach_filter_open:'Open',
     ach_loading:'Loading achievements …',
     verdict_no_data:'Not enough data yet for a verdict.',
     verdict_bean_target_hint:'Scored against this bean\'s own brew target',
