@@ -11,10 +11,10 @@
 // etc. theme tokens.
 //
 // #1465: the page follows the Home Assistant page pattern from
-// docs/DESIGN.md — the settings top app bar, the library shelf's chip control
-// for the eight categories and for All / Collected / Open, the statistics
-// verdict as the one-line answer, and the shared detail sheet for a stamp's
-// details. The card itself is unchanged.
+// docs/DESIGN.md — the library shelf's chip control for the eight categories
+// and for All / Collected / Open, the statistics verdict as the one-line
+// answer, and the shared detail sheet for a stamp's details. The card itself
+// is unchanged. No title bar: the active tab already names the page.
 import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import { getAchievements } from '../api/system.js';
@@ -335,7 +335,6 @@ export function achPageHtml(
   const sideHidden = soonHidden && recentHidden;
 
   return html`
-    <div class="settings-bar ach-bar-top"><h1 class="settings-bar-title">${tHtml('nav_achievements')}</h1></div>
     <div class="ach-filters">
       <div class="ach-chips" role="group">${cardChips}</div>
       <div class="ach-chips" role="group">${showChips}</div>

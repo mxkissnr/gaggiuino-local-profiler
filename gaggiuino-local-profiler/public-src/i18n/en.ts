@@ -531,7 +531,7 @@ const en: Translations = {
     lib_brew_espresso:'Espresso', lib_brew_aeropress:'AeroPress', lib_brew_v60:'V60 / Pour Over',
     lib_brew_french_press:'French Press', lib_brew_moka:'Moka Pot', lib_brew_cold_brew:'Cold Brew', lib_brew_other:'Other',
     lib_confirm_delete_recipe:'Delete recipe?',
-    nav_dialin:'Dial-In', dialin_title:'Dial-In',
+    nav_dialin:'Dial-In',
     nav_maintenance:'Maintenance',
     maint_descaling:'Descaling', maint_backflush:'Backflush', maint_grouphead:'Group Head Service',
     maint_gaskets:'Gaskets & Screens', maint_waterfilter:'Water Filter', maint_firmware_update:'Firmware Update',

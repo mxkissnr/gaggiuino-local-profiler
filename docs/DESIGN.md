@@ -5,7 +5,7 @@ The app runs inside Home Assistant, so every page follows Home Assistant's inter
 ## Page anatomy
 
 1. **Verdict first.** One sentence on what is going on, and one big number next to it.
-2. **Top app bar.** Menu or back, the page title, search and an overflow menu. There is no second button row: rarely used actions go into the overflow menu.
+2. **Top app bar only when it carries something.** Back navigation, search or an overflow menu. A main page shows no bare title bar: the active tab and the bottom navigation already name the page (nothing twice). There is no second button row: rarely used actions go into the overflow menu.
 3. **Filter chips** sit below the bar and filter the whole page.
 4. **Cards group list rows.** A row has an icon or avatar, a title, a subtitle, a value and a chevron, with hairlines between rows. A card may carry a small grey heading with a counter. This replaces card stacks and tile grids. Pictures still come first where they carry information: charts, bean stickers, the machine icon.
 5. **One floating action button** for the page's main action, if the page has one.
@@ -44,7 +44,7 @@ The same kind of control behaves the same way on every page.
 ## Checklist before a UI pull request
 
 - [ ] Verdict first.
-- [ ] Top app bar with title, search and overflow menu; filter chips below it if the page filters.
+- [ ] No bare title bar; a top app bar only for back, search or overflow; filter chips first if the page filters.
 - [ ] Lists are cards of rows (icon, title, subtitle, value, chevron), not card stacks or tile grids.
 - [ ] No number twice.
 - [ ] Screenshot at 390 px and at 1280 px attached.
