@@ -40,7 +40,7 @@ import { watchSystemTheme } from './theme.js';
 import { renderSidebar, updateMobileShotSidebarVisibility, selectShot } from './components/sidebar.js';
 import { updateStatus } from './components/status.js';
 import { switchMode, goToShot } from './components/mode.js';
-import { initTopbarNavFade } from './components/topbar-nav-fade.js';
+import { initTopbarNav } from './components/topbar-nav-overflow.js';
 import { showToast } from './components/toast.js';
 import { calcShotScore, loadData, trashShot, flushAutoSave, updateView } from './views/shots.js';
 import { getShotCurve, ensureCurves, getRawCurve, getCachedShotData } from './shot-curves.js';
@@ -153,10 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ── Init sequence ──────────────────────────────────────────────────────
   applyTranslations();
-  // #1516: after the labels are localized (their width decides the row's
-  // scrollWidth). initTopbarNavFade re-syncs on scroll, resize and further
-  // translation-driven label changes.
-  initTopbarNavFade();
+  // #2079: after the labels are localized — their width decides the row's
+  // layout. initTopbarNav then re-runs on resize and on any further
+  // translation-driven label change.
+  initTopbarNav();
 
   // The data boot chain (#1615: dependency-aware tasks, see boot/data.ts).
   void bootData();

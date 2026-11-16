@@ -1,7 +1,7 @@
 import { S } from '../state/index.js';
 import { setDesktopSidebarCollapsed, updateMobileShotSidebarVisibility } from './sidebar.js';
 import { applyBottomNavActiveState } from './bottom-nav.js';
-import { updateTopbarNavFade, isFullyVisibleIn } from './topbar-nav-fade.js';
+import { layoutTopbarNav } from './topbar-nav-overflow.js';
 import { shotsRenderedLang } from '../views/shots/index.js';
 
 export function goToShot(id: number): void {
@@ -99,19 +99,8 @@ export function switchMode(mode: string): void {
     if (window.stopOrdersPolling) window.stopOrdersPolling();
   }
 
-  const modeMap: Record<string, string> = {
-    shots: 'btnShots', live: 'btnLive', analytics: 'btnAnalytics',
-    dialin: 'btnDialin', library: 'btnLibrary', maintenance: 'btnMaintenance',
-    achievements: 'btnAchievements', orders: 'btnOrders', settings: 'btnSettings'
-  };
-  const btnId = modeMap[mode];
-  const activeBtn = btnId ? document.getElementById(btnId) : null;
-  // #1514: #btnSettings sits in a fixed topbar slot outside the horizontally
-  // scrolling .topbar-nav-scroll, so it has no scroller to reveal it in — only
-  // an in-row tab that is not already fully visible needs scrolling into view.
-  const scroller = activeBtn?.closest<HTMLElement>('.topbar-nav-scroll') ?? null;
-  if (activeBtn && scroller && !isFullyVisibleIn(activeBtn, scroller)) {
-    activeBtn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }
-  updateTopbarNavFade(scroller);
+  // #2079: the row is measured, not scrolled — the active tab never sits in
+  // the "More" menu, so this is also what brings a tab opened from the menu
+  // back into the row.
+  layoutTopbarNav();
 }
