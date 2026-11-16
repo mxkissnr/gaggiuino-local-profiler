@@ -33,7 +33,7 @@ export interface ParsedNotices {
 const LICENCE_SECTION = 'Full licence texts';
 const LICENCE_DASH = ' — ';
 const LICENSED_PREFIX = 'Licensed under ';
-const ARTICLE = 'the ';
+const LEADING_ARTICLE = 'the ';
 const SOURCE_PREFIXES = ['Source: ', 'Sources: '];
 const URL = /https:\/\/\S+/;
 
@@ -90,7 +90,7 @@ function licenceOf(bullets: string[]): string {
     for (const bullet of bullets) {
         if (!bullet.startsWith(LICENSED_PREFIX)) continue;
         let rest = bullet.slice(LICENSED_PREFIX.length).trim();
-        if (rest.startsWith(ARTICLE)) rest = rest.slice(ARTICLE.length);
+        if (rest.startsWith(LEADING_ARTICLE)) rest = rest.slice(LEADING_ARTICLE.length);
         if (rest.endsWith('.')) rest = rest.slice(0, -1);
         const note = rest.indexOf(' (');
         if (note !== -1) rest = rest.slice(0, note);
