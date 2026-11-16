@@ -231,6 +231,7 @@ interface FormCase {
   saveBtnId: string;
   api: SaveApi;
   open: () => void;
+  openEdit: () => void;
   save: () => Promise<void>;
   savedRow: Record<string, unknown>;
 }
@@ -246,22 +247,31 @@ function makeCase(
   saveBtnId: string,
   api: SaveApi,
   open: () => void,
+  openEdit: () => void,
   save: () => Promise<void>,
   savedRow: Record<string, unknown>,
 ): FormCase {
-  return { label, formId, fieldId, saveBtnId, api, open, save, savedRow };
+  return { label, formId, fieldId, saveBtnId, api, open, openEdit, save, savedRow };
 }
 
 function cases(): FormCase[] {
   return [
     makeCase('basket', 'basketAddForm', 'basketFormName', 'saveBasketBtn', mocks.saveBasket,
-      () => libraryApiModule.openBasketForm(null), () => libraryApiModule.saveBasket(), { id: 1, name: 'Basket' }),
+      () => libraryApiModule.openBasketForm(null),
+      () => libraryApiModule.openBasketForm({ id: 1, name: 'Basket' }),
+      () => libraryApiModule.saveBasket(), { id: 1, name: 'Basket' }),
     makeCase('puck screen', 'puckScreenAddForm', 'puckScreenFormName', 'savePuckScreenBtn', mocks.savePuckScreen,
-      () => libraryApiModule.openPuckScreenForm(null), () => libraryApiModule.savePuckScreen(), { id: 1, name: 'Screen' }),
+      () => libraryApiModule.openPuckScreenForm(null),
+      () => libraryApiModule.openPuckScreenForm({ id: 1, name: 'Screen' }),
+      () => libraryApiModule.savePuckScreen(), { id: 1, name: 'Screen' }),
     makeCase('recipe', 'recipeAddForm', 'recipeFormName', 'saveRecipeBtn', mocks.saveRecipe,
-      () => libraryApiModule.openRecipeForm(null), () => libraryApiModule.saveRecipe(), { id: 1, name: 'Recipe' }),
+      () => libraryApiModule.openRecipeForm(null),
+      () => libraryApiModule.openRecipeForm({ id: 1, name: 'Recipe' }),
+      () => libraryApiModule.saveRecipe(), { id: 1, name: 'Recipe' }),
     makeCase('grinder', 'grinderAddForm', 'grinderFormName', 'saveGrinderBtn', mocks.saveGrinder,
-      () => libraryApiModule.openGrinderForm(null), () => libraryApiModule.saveGrinder(), { id: 1, name: 'Grinder' }),
+      () => libraryApiModule.openGrinderForm(null),
+      () => libraryApiModule.openGrinderForm({ id: 1, name: 'Grinder' }),
+      () => libraryApiModule.saveGrinder(), { id: 1, name: 'Grinder' }),
   ];
 }
 
@@ -337,5 +347,15 @@ describe('a double tap on Save makes one request (#2022)', () => {
 
     expect(form.api).toHaveBeenCalledTimes(1);
     expect(doc.getElementById(form.saveBtnId).disabled).toBe(false);
+  });
+});
+
+describe('editing hides Save, creating keeps it (#2098)', () => {
+  it.each(cases())('$label', form => {
+    form.openEdit();
+    expect(doc.getElementById(form.saveBtnId).style.display).toBe('none');
+
+    form.open();
+    expect(doc.getElementById(form.saveBtnId).style.display).toBe('');
   });
 });
