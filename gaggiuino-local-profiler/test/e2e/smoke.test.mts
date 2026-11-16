@@ -442,12 +442,10 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
 
             // The tab now sits in the row, so the menu no longer offers it. A
             // row that fits again has no menu left to open.
-            if (afterPick.moreShown) {
-                if (await openMoreMenu()) {
-                    const relisted = (await page.evaluate(readMenuAndOverflow)).entries.map(entry => entry.target);
-                    assert.ok(!relisted.includes(picked), `${lang}: the tab opened from the menu is still listed`);
-                    await page.keyboard.press('Escape');
-                }
+            if (await openMoreMenu()) {
+                const relisted = (await page.evaluate(readMenuAndOverflow)).entries.map(entry => entry.target);
+                assert.ok(!relisted.includes(picked), `${lang}: the tab opened from the menu is still listed`);
+                await page.keyboard.press('Escape');
             }
         }
         await openTopbarTab(page, '#btnShots');
