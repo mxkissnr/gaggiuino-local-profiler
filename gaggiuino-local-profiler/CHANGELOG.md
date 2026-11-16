@@ -6,7 +6,7 @@
 - Tag a shot as sour, bitter, balanced or thin. The grind advice takes it into account, the score stays the same.
 - Choose a default grinder in Settings. New shots, bean selection, cloning and guided dial-in use it, with only its own grind settings.
 - Grinders can have a stepped or stepless grind scale, and grind input and advice follow it.
-- Beans carry a roast level that picks a matching freshness window, with an optional "best for use" range per bean and your own window per roast level in Settings.
+- Beans carry a roast level that picks a matching freshness window, with an optional "best for use" range per bean and your own window per roast level in Settings. Thanks @m471j4.
 - Each bean lists the profiles that worked for it, lets you pin one as proven, and suggests profiles from similar beans when it is new.
 - Shots brewed from a frozen portion show an effective bean age: time in the freezer counts at one twentieth of normal ageing.
 - Grinder cleaning counts only that grinder's own shots, and any maintenance task can be paused while its equipment is not in use.
@@ -33,7 +33,7 @@
 - Achievements with a progress counter, such as the streak and volume badges, unlock again once earned.
 - Bean age is counted the same way everywhere, in whole days of your local time.
 - GaggiMate shots weighed with a hardware scale show the measured weight, and the end reasons "hold released" and "target ratio" have a name.
-- Shots imported from a Gaggiuino's history keep their profile name.
+- Shots imported from a Gaggiuino's history keep their profile name. Thanks @zirbio.
 - Restoring a backup keeps disabled maintenance tasks disabled, and the restore preview says how many profile changes not yet sent to your machine would be lost.
 - A failed orders refresh no longer clears the list or repeats notifications for orders you already saw.
 - Library forms tell you when a save fails, and a double tap on Save no longer creates an entry twice.
