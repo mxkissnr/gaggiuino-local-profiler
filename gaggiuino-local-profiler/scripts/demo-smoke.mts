@@ -283,10 +283,12 @@ async function runProfile(browser: Browser, baseUrl: string, profile: Profile, p
         if (!profile.isMobile) {
             // Picking a shot folds the desktop list away (#2056); widening the
             // window narrows the card again. The chart must follow each time.
+            // The collapsed width is 1 px, not 0: `width: 0` cannot drop the
+            // 1 px border-right under the app's global box-sizing: border-box.
             await page.waitForFunction(() => {
                 const sidebar = document.getElementById('sidebar');
                 return !!sidebar && sidebar.classList.contains('desktop-collapsed')
-                    && sidebar.getBoundingClientRect().width === 0;
+                    && sidebar.getBoundingClientRect().width <= 1;
             }, undefined, { timeout: 5000 });
             await assertShotChartFits(page, problems, profile.name, 'after the list folds');
 
