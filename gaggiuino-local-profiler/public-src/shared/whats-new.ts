@@ -21,6 +21,14 @@ export interface WhatsNewEntry {
 }
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
+    { version: '3.8.0', date: '2026-11-16', highlights: [
+        'Settings is now a grouped list like in Home Assistant, with search and sub-pages.',
+        'Tag how a shot tasted (sour, bitter, balanced or thin) and the grind advice takes it into account.',
+        'Beans know their roast level and the profiles that worked for them, and grinders get a default and their own grind scale.',
+        'The Dial-In and Achievements pages are clearer, and the library saves your changes by itself.',
+        'Fixed: achievements with a counter unlock again, bean age is the same everywhere, and GaggiMate scale weights are shown.',
+        'Security: built with Go 1.27.4.',
+    ] },
     { version: '3.7.0', date: '2026-11-08', highlights: [
         'The maintenance page now shows what is due next, with simple lists for tasks and the log.',
         'Gaggiuino machines keep a history of their settings and profiles that you can compare and restore.',
@@ -69,13 +77,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         'Add your own maintenance tasks with an optional shots and/or days interval, and disable any task without deleting it.',
         'Machine profiles can now be duplicated, and a firmware update triggered from the app is recorded in the maintenance log.',
         'Fixed: shot sync now works with more machines and firmware versions, and shots in the trash are deleted after 30 days again.',
-    ] },
-    { version: '3.1.0', date: '2026-09-17', highlights: [
-        'Machines can now check for, trigger, and track Gaggiuino firmware updates right from the web app — a status badge on the machine\'s row expands into a progress bar naming the component being flashed, plus a release-channel selector in the machine\'s edit form.',
-        'Fixed: manual shot sync and the machine debug probe are now protected against a machine host that changes what it points to.',
-        'Fixed: the machine firmware update entity now actually detects available updates instead of always reporting up to date.',
-        'Fixed: the Statistics world map tooltip no longer renders bean or region names as HTML.',
-        'Fixed: the MQTT broker password can now be explicitly cleared, and is never returned in cleartext.',
     ] },
 ];
 

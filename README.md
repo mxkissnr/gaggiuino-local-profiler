@@ -62,6 +62,7 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 - **Analytics** - score trends, a shot calendar heatmap, a month calendar with a photo of each day's bean, a coffee world map, bean/grinder/basket rankings, machine comparison and per-bean dial-in progression.
 - **Machine profile editor** - build and edit Gaggiuino and GaggiMate profiles phase by phase with a live preview chart, then send them straight to the machine.
 - **Machine settings backups** - Gaggiuino machines keep a history of their settings and profiles, backed up daily, before firmware updates and on demand; download, upload, compare in plain words and restore any version, without GLP ever storing the Wi-Fi or MQTT passwords.
+- **Settings like Home Assistant, and an achievements page** - Settings is a grouped, searchable list with sub-pages and a list of the open-source libraries the app is built with; the Achievements page shows your stamp card, and the library saves changes to existing entries by itself.
 - **Maintenance tracking** - descaling, backflush, group-head and gasket tasks tracked per machine, with grinder cleaning and burr-wear tracking alongside.
 - **Orders & kiosk mode** - take drink orders from a tablet kiosk page with variants and notes, and watch the barista queue update on its own.
 - **Live updates across devices** - an open page picks up a change made on another device within seconds, without a reload.
