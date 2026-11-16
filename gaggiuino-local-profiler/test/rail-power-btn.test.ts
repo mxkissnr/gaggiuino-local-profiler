@@ -65,15 +65,18 @@ function deferredResponse(): { promise: Promise<FakeResponse>; resolve: (r: Fake
   return { promise, resolve };
 }
 
-function mockResponses({ switchBody, togglePending }: {
+function mockResponses({ switchBody, togglePending, status }: {
   switchBody: { configured: boolean; state: boolean } | null;
   togglePending?: Promise<FakeResponse>;
+  status?: Record<string, unknown>;
 }): void {
   g.fetch = vi.fn((url: string) => {
     if (String(url).startsWith('api/status')) {
       return Promise.resolve({
         ok: true,
-        json: () => Promise.resolve({ lastSync: '2026-01-01T00:00:00.000Z', machineHostname: 'kitchen.local' }),
+        json: () => Promise.resolve({
+          lastSync: '2026-01-01T00:00:00.000Z', machineHostname: 'kitchen.local', ...status,
+        }),
       });
     }
     if (String(url).startsWith('api/switch/toggle')) {
@@ -101,6 +104,11 @@ describe('the topbar power toggle and sync controls (#914, #2056)', () => {
     g.document = doc;
     S.primaryShotId = null;
     S.currentLang = 'en';
+    // One shot, so updateMachineBanner() stays off the path that builds a
+    // banner: its createElement/body do not exist in this fake document, and
+    // the throw would be swallowed by updateStatus()'s catch, skipping every
+    // write below it.
+    S.shots = [{ id: 1 }] as unknown as typeof S.shots;
   });
 
   it('hides the toggle when no switch is configured', async () => {
@@ -145,6 +153,27 @@ describe('the topbar power toggle and sync controls (#914, #2056)', () => {
     mockResponses({ switchBody: null });
     await updateStatus();
     expect(doc.getElementById('railStatusDot')!.className).toBe('status-dot ok');
+  });
+
+  // #2079: the top bar compacts the sync time away before it moves a tab into
+  // the "More" menu, so the dot's tooltip has to carry that time.
+  it('puts the sync time in the topbar dot title', async () => {
+    mockResponses({ switchBody: null, status: { machineReachable: true } });
+    await updateStatus();
+    const time = doc.getElementById('syncTime')!.textContent;
+    expect(time).not.toBe('');
+    const title = doc.getElementById('railStatusDot')!.title;
+    expect(title).toContain(time);
+    // Nothing else to append while the machine is reachable and no error is set.
+    expect(title).toBe(time);
+  });
+
+  it('keeps the sync time beside the unreachable text in the dot title', async () => {
+    mockResponses({ switchBody: null, status: { machineReachable: false } });
+    await updateStatus();
+    const time = doc.getElementById('syncTime')!.textContent;
+    expect(time).not.toBe('');
+    expect(doc.getElementById('railStatusDot')!.title).toBe(`${time} \u00b7 Machine unreachable`);
   });
 
   it('the markup has one toggle, in the topbar', () => {
