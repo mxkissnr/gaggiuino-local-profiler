@@ -7,6 +7,11 @@ import { esc, html, joinHtml, safeHttpUrl } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { WATER_DROP_ICON_SVG, SNOWFLAKE_ICON_SVG, LINK_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
+import { showToast } from '../../components/toast.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
+import { markFieldInvalid } from '../../components/field-error.js';
+import { bindFormAutosave } from '../../components/form-autosave.js';
+import { _renderBeanSelect } from '../shots/annotation.js';
 import type { Recipe } from '../../api/types.js';
 import type { ShotMeta } from '../../state/index.js';
 
@@ -114,9 +119,17 @@ function _stepRowHtml(i: number, text: string | undefined = '', dur: number | st
   return html`<div class="lib-step-row" id="recipeStep${esc(i)}">
     <span class="lib-step-num">${esc(i + 1)}</span>
     <input class="lib-step-text" aria-label="${tHtml('lib_recipe_step_ph')}" placeholder="${tHtml('lib_recipe_step_ph')}" value="${esc(text)}">
-    <input class="lib-step-dur" type="number" min="0" step="1" aria-label="${tHtml('lib_recipe_step_dur')}" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
-    <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${esc(i)}">${ICON_TRASH}</button>
+    <input class="lib-step-dur" type="number" min="0" max="3600" step="1" aria-label="${tHtml('lib_recipe_step_dur')}" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
+    <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${esc(i)}" aria-label="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
   </div>`;
+}
+
+// Adding, removing or moving a step touches no field, so it fires no `change`
+// of its own; while editing, say so explicitly (#1962).
+function _notifyStepChange(): void {
+  if (!_state().recipeEditId) return;
+  const form = document.getElementById('recipeAddForm');
+  if (form) form.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 export function addRecipeStep(): void {
@@ -124,6 +137,7 @@ export function addRecipeStep(): void {
   if (!list) return;
   const idx = list.children.length;
   list.insertAdjacentHTML('beforeend', _stepRowHtml(idx));
+  _notifyStepChange();
 }
 
 export function removeRecipeStep(i: number): void {
@@ -137,6 +151,7 @@ export function removeRecipeStep(i: number): void {
     delBtn.dataset.action = 'remove-recipe-step';
     delBtn.dataset.idx = String(idx);
   });
+  if (row) _notifyStepChange();
 }
 
 function _collectSteps(): { text: string; duration_s: number | null }[] {
@@ -145,6 +160,12 @@ function _collectSteps(): { text: string; duration_s: number | null }[] {
     duration_s: parseFloat(row.querySelector<HTMLInputElement>('.lib-step-dur')?.value ?? '') || null,
   })).filter(s => s.text);
 }
+
+// The form saves itself while editing (#1962); the save button stays for
+// creating. Bound once, on the first open (the form element is persistent);
+// the returned reset runs on every open so the last entry's state never shows
+// on the next one (#2098).
+let _resetAutosave: (() => void) | null = null;
 
 export function openRecipeForm(recipe?: Recipe | null): void {
   _state().recipeEditId = recipe ? recipe.id : null;
@@ -161,11 +182,19 @@ export function openRecipeForm(recipe?: Recipe | null): void {
   (document.getElementById('recipeFormSourceUrl') as HTMLInputElement).value    = recipe?.sourceUrl     || '';
   (document.getElementById('recipeFormProfile') as HTMLInputElement).value      = recipe?.profileName   || '';
   attachAutocomplete(document.getElementById('recipeFormProfile') as HTMLInputElement, () => S.machineProfiles.map(p => p.name));
-  (document.getElementById('recipeFormBean') as HTMLInputElement).value         = recipe?.beanName      || '';
-  attachAutocomplete(document.getElementById('recipeFormBean') as HTMLInputElement, () => S.coffeeLibrary.beans.map(b => b.name));
+  _renderBeanSelect(recipe?.beanName || null, null, 'recipeFormBean');
   (document.getElementById('recipeFormNotes') as HTMLInputElement).value        = recipe?.notes         || '';
   _renderStepRows(recipe?.steps || []);
-  (document.getElementById('recipeAddForm') as HTMLElement).classList.add('open');
+  const form = document.getElementById('recipeAddForm') as HTMLElement;
+  // Editing saves itself, so the button would only be a second way to save.
+  const saveBtn = document.getElementById('saveRecipeBtn');
+  if (saveBtn) saveBtn.style.display = recipe ? 'none' : '';
+  _resetAutosave ??= bindFormAutosave(form, {
+    isEditing: () => !!_state().recipeEditId,
+    save: async () => { const ok = await _persistRecipe(); if (ok) renderRecipeList(); return ok; },
+  });
+  _resetAutosave();
+  form.classList.add('open');
   (document.getElementById('recipeAddTrigger') as HTMLElement).style.display = 'none';
   (document.getElementById('recipeFormName') as HTMLInputElement).focus();
 }
@@ -181,9 +210,16 @@ export function editRecipe(id: number): void {
   if (recipe) openRecipeForm(recipe);
 }
 
-export async function saveRecipe(): Promise<void> {
+// A second Save while the first request is pending must not create the entry
+// twice (#2022); same guard as the bean form's _beanSaveInFlight.
+let _recipeSaveInFlight = false;
+
+// Reads, validates and persists the form; leaves the form open and does not
+// clear the edit id, so autosave can keep saving the same entry (#1962).
+async function _persistRecipe(): Promise<boolean> {
+  if (_recipeSaveInFlight) return false;
   const name = (document.getElementById('recipeFormName') as HTMLInputElement).value.trim();
-  if (!name) { (document.getElementById('recipeFormName') as HTMLInputElement).focus(); return; }
+  if (!name) { markFieldInvalid(document.getElementById('recipeFormName')); return false; }
   const payload = {
     name,
     brewMethod:    (document.getElementById('recipeFormBrewMethod') as HTMLInputElement).value,
@@ -201,25 +237,44 @@ export async function saveRecipe(): Promise<void> {
     notes:         (document.getElementById('recipeFormNotes') as HTMLInputElement).value.trim(),
     steps:         _collectSteps(),
   };
-  const saved = await libraryApi.saveRecipe(_state().recipeEditId ?? null, payload);
-  if (!saved) return;
-  const lib = _state().coffeeLibrary;
-  const recipes = lib.recipes ?? [];
-  lib.recipes = recipes;
-  if (_state().recipeEditId) {
-    const idx = recipes.findIndex(r => r.id === _state().recipeEditId);
-    if (idx !== -1) recipes[idx] = saved;
-  } else {
-    recipes.push(saved);
+  const editId = _state().recipeEditId ?? null;
+  _recipeSaveInFlight = true;
+  const saveBtn = document.getElementById('saveRecipeBtn') as HTMLButtonElement | null;
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await libraryApi.saveRecipe(editId, payload);
+    if (!saved) { showToast(t('gm_toast_save_error')); return false; }
+    const lib = _state().coffeeLibrary;
+    const recipes = lib.recipes ?? [];
+    lib.recipes = recipes;
+    if (editId) {
+      const idx = recipes.findIndex(r => r.id === editId);
+      if (idx !== -1) recipes[idx] = saved;
+    } else {
+      recipes.push(saved);
+    }
+    return true;
+  } catch {
+    // A request that fails outright used to leave the user with no message.
+    showToast(t('gm_toast_save_error'));
+    return false;
+  } finally {
+    _recipeSaveInFlight = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
+}
+
+export async function saveRecipe(): Promise<void> {
+  const ok = await _persistRecipe();
+  if (!ok) return;
   closeRecipeForm();
   renderRecipeList();
 }
 
 export async function deleteRecipe(id: number): Promise<void> {
-  if (!confirm(t('lib_confirm_delete_recipe'))) return;
+  if (!await confirmDialog(t('lib_confirm_delete_recipe'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await libraryApi.deleteRecipePermanently(id);
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.recipes = (_state().coffeeLibrary.recipes || []).filter(r => r.id !== id);
   renderRecipeList();
 }

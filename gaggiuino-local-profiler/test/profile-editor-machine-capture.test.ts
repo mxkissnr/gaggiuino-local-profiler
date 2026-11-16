@@ -8,7 +8,10 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
 g.window       ??= { showToast: () => {} };
-g.confirm       = () => true; // sendProfileToMachine() gates the write behind confirm()
+// #1962: sendProfileToMachine() confirms through the app dialog, not native
+// confirm(); this suite checks the transport wiring, so the dialog answers yes.
+const dialogs = vi.hoisted(() => ({ confirmDialog: vi.fn(() => Promise.resolve(true)) }));
+vi.mock('../public-src/components/confirm-dialog.js', () => ({ confirmDialog: dialogs.confirmDialog }));
 
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');

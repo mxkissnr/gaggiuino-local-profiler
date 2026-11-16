@@ -42,16 +42,19 @@ func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *librar
 	lastDate := time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
 	t["lastDate"] = lastDate
 	maint[task] = t
-	// Save only this task's lastDate; the in-memory map above already carries
-	// it for the stats computed below, and writing the one row (rather than
-	// the whole snapshot) keeps a concurrent edit to another task intact.
-	if err := repo.SaveTask(machineID, task, Task{"lastDate": lastDate}); err != nil {
+	// Save only this task's lastDate (plus the paused-time reset); the in-memory
+	// map above already carries it for the stats computed below, and writing the
+	// one row rather than the whole snapshot keeps a concurrent edit to another
+	// task intact.
+	save := Task{"lastDate": lastDate}
+	resetPausedTime(t, save)
+	if err := repo.SaveTask(machineID, task, save); err != nil {
 		return nil, err
 	}
 	if _, err := repo.AddMaintenanceLogEntry(task, notes, machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID, time.Now()); err != nil {
 		return nil, err
 	}
-	return ComputeMaintenanceStats(shotsRepo, maint, machineID)
+	return ComputeMaintenanceStats(shotsRepo, libRepo, maint, machineID)
 }
 
 // ApplyMachineServiceLog applies one machine-recorded service event (#1639) to
@@ -94,6 +97,7 @@ func ApplyMachineServiceLog(repo *Repository, shotsRepo *shots.Repository, regis
 	}
 	if marked {
 		save["lastDate"] = at.Format("2006-01-02T15:04:05.000Z")
+		resetPausedTime(t, save)
 	}
 	if err := repo.SaveTask(machineID, task, save); err != nil {
 		return false, err
@@ -112,11 +116,15 @@ func ApplyMachineServiceLog(repo *Repository, shotsRepo *shots.Repository, regis
 type Stat = map[string]any
 
 // ComputeMaintenanceStats returns per-task days/shots since last done,
-// percent-to-threshold, and a due/soon/ok/never status.
+// percent-to-threshold, and a due/soon/ok/never/paused status. A paused task
+// is always "paused", never due, and its day count excludes the paused time
+// (PausedMsSince). Shot and gram counts keep counting: a shot pulled during a
+// pause still happened.
 // descaling/backflush/grouphead/gaskets scope shot counts to the active
 // machine; waterfilter/grinder_* (shared equipment, #338) count shots
-// across every machine.
-func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task, machineID int64) (map[string]Stat, error) {
+// across every machine. A grinder_* task counts only its own grinder's
+// shots and grams once the library holds two or more grinders.
+func ComputeMaintenanceStats(shotsRepo *shots.Repository, libRepo *library.Repository, maint map[string]Task, machineID int64) (map[string]Stat, error) {
 	// Only each shot's timestamp is read below, so load just those instead
 	// of every shot with its curve blob (#1616).
 	globalShots, err := shotsRepo.TimestampsExcludingTrash()
@@ -129,26 +137,25 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 	}
 	now := time.Now().UnixMilli()
 
-	// Fetch annotated doses once if any grinder task tracks threshold_g.
-	var annotatedDoses []shots.AnnotatedDose
-	for key, task := range maint {
-		if strings.HasPrefix(key, "grinder_") {
-			if _, ok := jsPositiveInt(task["threshold_g"]); ok {
-				annotatedDoses, err = shotsRepo.GetAnnotatedDoses()
-				if err != nil {
-					return nil, err
-				}
-				break
-			}
+	// grinder_* tasks fold the per-shot grinder rows; only load them when a
+	// grinder task exists. How many grinders the library holds decides whether
+	// every shot belongs to the one grinder or only the shots naming it, so the
+	// count comes from the library rather than the number of grinder tasks.
+	var grinderUses []shots.GrinderUse
+	grinderCount := 0
+	if hasGrinderTask(maint) {
+		lib, err := libRepo.GetLibrary()
+		if err != nil {
+			return nil, err
+		}
+		grinderCount = len(lib.Grinders)
+		if grinderUses, err = shotsRepo.GrinderUses(); err != nil {
+			return nil, err
 		}
 	}
 
 	result := make(map[string]Stat, len(maint))
 	for key, task := range maint {
-		shotList := scopedShots
-		if isGlobalMaintenanceTask(key) {
-			shotList = globalShots
-		}
 		var lastTs int64
 		if lastDate, _ := task["lastDate"].(string); lastDate != "" {
 			if t, err := parseJSDate(lastDate); err == nil {
@@ -157,26 +164,31 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 		}
 		var daysSince any
 		if lastTs != 0 {
-			daysSince = jsFloorDivDays(now - lastTs)
+			elapsed := now - lastTs
+			if elapsed > 0 {
+				elapsed -= min(elapsed, PausedMsSince(task, lastTs, now))
+			}
+			daysSince = jsFloorDivDays(elapsed)
 		}
 		var shotsSince int
-		for _, ts := range shotList {
-			if ts*1000 > lastTs {
-				shotsSince++
+		var gramsSince float64
+		if strings.HasPrefix(key, "grinder_") {
+			shotsSince, gramsSince = library.GrinderUsesSince(grinderUses, lastTs, grinderMatcher(task, grinderCount))
+		} else {
+			shotList := scopedShots
+			if isGlobalMaintenanceTask(key) {
+				shotList = globalShots
+			}
+			for _, ts := range shotList {
+				if ts*1000 > lastTs {
+					shotsSince++
+				}
 			}
 		}
 
 		thresholdShots, hasShots := jsPositiveInt(task["threshold_shots"])
 		thresholdDays, hasDays := jsPositiveInt(task["threshold_days"])
 		thresholdG, hasG := jsPositiveInt(task["threshold_g"])
-		var gramsSince float64
-		if strings.HasPrefix(key, "grinder_") && annotatedDoses != nil {
-			for _, d := range annotatedDoses {
-				if d.Dose != nil && d.Timestamp*1000 > lastTs {
-					gramsSince += *d.Dose
-				}
-			}
-		}
 		var pct float64
 		switch {
 		case hasShots && hasDays:
@@ -211,6 +223,9 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 				status = "ok"
 			}
 		}
+		if _, paused := pausedAt(task); paused {
+			status = "paused"
+		}
 		if pct > 1 {
 			pct = 1
 		}
@@ -229,6 +244,31 @@ func ComputeMaintenanceStats(shotsRepo *shots.Repository, maint map[string]Task,
 		result[key] = stat
 	}
 	return result, nil
+}
+
+// hasGrinderTask reports whether maint holds at least one grinder_* task.
+func hasGrinderTask(maint map[string]Task) bool {
+	for key := range maint {
+		if strings.HasPrefix(key, "grinder_") {
+			return true
+		}
+	}
+	return false
+}
+
+// grinderMatcher decides which annotated grinder names count for a grinder_*
+// task. With one grinder in the library every shot is that grinder's, which
+// also covers the shots that name no grinder at all. With several, only a shot
+// naming this grinder counts.
+func grinderMatcher(task Task, grinderCount int) func(string) bool {
+	if grinderCount == 1 {
+		return func(string) bool { return true }
+	}
+	name, _ := task["grinderName"].(string)
+	if name == "" {
+		return func(string) bool { return false }
+	}
+	return library.GrinderNamed(name)
 }
 
 // parseJSDate parses lastDate's two string shapes: a full ISO timestamp
@@ -256,6 +296,63 @@ func jsFloorDivDays(deltaMs int64) int64 {
 		q--
 	}
 	return q
+}
+
+// PausedMsSince returns how much of the time since lastMs was paused: the
+// closed pauses plus a pause still running at nowMs. A running pause only
+// counts from lastMs on, so a task finished during a pause restarts at zero.
+func PausedMsSince(t Task, lastMs, nowMs int64) int64 {
+	paused, _ := jsPositiveInt(t["pausedMs"])
+	if paused < 0 {
+		paused = 0
+	}
+	if at, ok := pausedAt(t); ok {
+		if at < lastMs {
+			at = lastMs
+		}
+		if nowMs > at {
+			paused += nowMs - at
+		}
+	}
+	return paused
+}
+
+func pausedAt(t Task) (int64, bool) {
+	at, ok := jsPositiveInt(t["pausedAt"])
+	return at, ok && at > 0
+}
+
+// resetPausedTime clears the closed pauses when lastDate moves: they counted
+// against the old date. A running pause keeps going.
+func resetPausedTime(t, save Task) {
+	if _, ok := jsPositiveInt(t["pausedMs"]); ok {
+		delete(t, "pausedMs")
+		save["pausedMs"] = nil
+	}
+}
+
+// applyPause starts or ends a task's pause and returns the stored-row delta.
+// Asking for the state it is already in changes nothing, so a double click
+// cannot restart the clock or count the same time twice.
+func applyPause(t Task, paused bool, nowMs int64) Task {
+	_, isPaused := pausedAt(t)
+	if paused == isPaused {
+		return Task{}
+	}
+	if paused {
+		t["pausedAt"] = nowMs
+		return Task{"pausedAt": nowMs}
+	}
+	var lastMs int64
+	if lastDate, _ := t["lastDate"].(string); lastDate != "" {
+		if ms, err := parseJSDate(lastDate); err == nil {
+			lastMs = ms
+		}
+	}
+	total := PausedMsSince(t, lastMs, nowMs)
+	delete(t, "pausedAt")
+	t["pausedMs"] = total
+	return Task{"pausedAt": nil, "pausedMs": total}
 }
 
 // jsPositiveInt ports the `task.threshold_shots`/`task.threshold_days`
@@ -305,7 +402,7 @@ func ComputeAllMachinesMaintenance(repo *Repository, shotsRepo *shots.Repository
 		if err != nil {
 			return AllMachinesResult{}, err
 		}
-		stats, err := ComputeMaintenanceStats(shotsRepo, maint, m.ID)
+		stats, err := ComputeMaintenanceStats(shotsRepo, repo.libRepo, maint, m.ID)
 		if err != nil {
 			return AllMachinesResult{}, err
 		}
@@ -326,7 +423,7 @@ func ComputeAllMachinesMaintenance(repo *Repository, shotsRepo *shots.Repository
 	if err != nil {
 		return AllMachinesResult{}, err
 	}
-	referenceStats, err := ComputeMaintenanceStats(shotsRepo, referenceMaint, referenceMachineID)
+	referenceStats, err := ComputeMaintenanceStats(shotsRepo, repo.libRepo, referenceMaint, referenceMachineID)
 	if err != nil {
 		return AllMachinesResult{}, err
 	}

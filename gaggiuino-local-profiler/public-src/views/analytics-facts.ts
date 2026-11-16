@@ -1,7 +1,7 @@
 import type { ShotMeta } from '../state/index.js';
 import { TRANSLATIONS } from '../constants.js';
 import type { Translations } from '../i18n.js';
-import { localDateKey } from '../utils.js';
+import { formatDate, localDateKey } from '../utils.js';
 
 // "Did you know?" facts (#1467, slice 6a). Pure and DOM-free, like
 // analytics-summary.ts: computeFacts() takes the metadata-only shot rows and
@@ -112,21 +112,12 @@ function _formatNumber(locale: string, value: number, opts?: Intl.NumberFormatOp
   return new Intl.NumberFormat(locale, opts).format(value);
 }
 
-// Dates shown to the user follow the active locale ("Mi., 17. Juni, 21:21" for
-// a German UI); the year only appears once a shot is not from this year.
-function _dateOpts(d: Date, opts: Intl.DateTimeFormatOptions): Intl.DateTimeFormatOptions {
-  return d.getFullYear() === new Date().getFullYear() ? opts : { ...opts, year: 'numeric' };
-}
-
 function _dateStr(tsSeconds: number, locale: string): string {
-  const d = new Date(tsSeconds * 1000);
-  return d.toLocaleDateString(locale, _dateOpts(d, { day: 'numeric', month: 'long' }));
+  return formatDate(tsSeconds * 1000, locale, 'long');
 }
 
 function _dateTimeStr(tsSeconds: number, locale: string): string {
-  const d = new Date(tsSeconds * 1000);
-  const date = d.toLocaleDateString(locale, _dateOpts(d, { weekday: 'short', day: 'numeric', month: 'long' }));
-  return `${date}, ${_timeStr(tsSeconds)}`;
+  return `${formatDate(tsSeconds * 1000, locale, 'long')}, ${_timeStr(tsSeconds)}`;
 }
 
 function _hourSpan(loMin: number, hiMin: number): string {

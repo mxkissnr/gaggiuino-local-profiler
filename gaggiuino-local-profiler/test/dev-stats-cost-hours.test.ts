@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { monthsSinceStart, clusterIntoSessions, subscriptionCostSentence } from '../scripts/dev-stats.mts';
+import { monthsSinceStart, clusterIntoSessions, subscriptionCostSentence, prepaidCreditSentence } from '../scripts/dev-stats.mts';
 
 // #623: replaced the token/line-based cost estimate (scripts/dev-stats.pricing.json,
 // now deleted) with the real flat-rate Claude Pro subscription cost, and added a
@@ -39,6 +39,40 @@ describe('dev-stats subscription cost sentence (#1407)', () => {
 
     it('singularises a one-month span', () => {
         expect(subscriptionCostSentence(1, '2026-05-20', 20)).toContain('(2026-05-20), 1 month works out to');
+    });
+});
+
+// #2043: DeepSeek is billed through prepaid API credit, and the top-ups are known
+// exactly — unlike the per-commit cost, which no commit reports.
+describe('dev-stats prepaidCreditSentence (#2043)', () => {
+    it('sums four $20 top-ups and names the first date', () => {
+        const topups = [
+            { date: '2026-09-15', usd: 20 },
+            { date: '2026-10-04', usd: 20 },
+            { date: '2026-10-12', usd: 20 },
+            { date: '2026-11-13', usd: 20 },
+        ];
+        const sentence = prepaidCreditSentence(topups);
+        expect(sentence).toContain('**$80.00**');
+        expect(sentence).toContain('4 top-ups');
+        expect(sentence).toContain('since 2026-09-15');
+    });
+
+    it('names the earliest date regardless of list order', () => {
+        const topups = [
+            { date: '2026-11-13', usd: 20 },
+            { date: '2026-09-15', usd: 20 },
+            { date: '2026-10-04', usd: 20 },
+        ];
+        expect(prepaidCreditSentence(topups)).toContain('since 2026-09-15');
+    });
+
+    it('singularises a single top-up', () => {
+        expect(prepaidCreditSentence([{ date: '2026-09-15', usd: 20 }])).toContain('1 top-up since');
+    });
+
+    it('returns an empty string for no top-ups', () => {
+        expect(prepaidCreditSentence([])).toBe('');
     });
 });
 

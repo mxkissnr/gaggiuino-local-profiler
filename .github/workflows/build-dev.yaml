@@ -136,6 +136,7 @@ jobs:
     # Gitea Actions also auto-detects .github/workflows — skip there, GitHub-only.
     if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
+    environment: dev-publish
     steps:
       # Checked out under its own path (not $GITHUB_WORKSPACE root) since the
       # manifest repo below is checked out there too -- both need to coexist.
@@ -151,6 +152,8 @@ jobs:
           ref: dev
           path: main-repo
           fetch-depth: 0
+          # merge-dev-features.sh fetches from the public repository anonymously.
+          persist-credentials: false
 
       - name: Merge dev-channel features
         working-directory: main-repo
@@ -165,7 +168,7 @@ jobs:
           path: dev-app
           # GITHUB_TOKEN is scoped to this repository only, so writing to the
           # manifest repository needs a PAT with `contents: write` on it.
-          token: ${{ secrets.DEV_ADDON_REPO_TOKEN }}
+          token: ${{ secrets.DEV_ADDON_REPO_TOKEN }} # zizmor: ignore[artipacked] the credential is kept on purpose, a later step pushes to this repository
 
       # #1270: sync-dev-config is TypeScript run on Node's built-in type
       # stripping; pin Node 24 like the other workflows instead of relying

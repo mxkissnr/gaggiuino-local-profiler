@@ -55,15 +55,7 @@
             <button id="glpDemoEndBtn" data-i18n="demo_mode_end">Demo beenden</button>
         </div>
         <div class="footer-row">
-            <div style="display:flex;align-items:center;gap:5px;min-width:0;overflow:hidden">
-                <span class="status-dot unknown" id="statusDot"></span>
-                <span id="syncTime" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">kein Sync</span>
-                <span id="glpVersionBadge" style="color:var(--gray-600);font-size:.7rem;user-select:none;flex-shrink:0"></span>
-            </div>
-            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0">
-                <button id="powerBtn" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
-                <button id="syncBtn">↻ Sync</button>
-            </div>
+            <span id="glpVersionBadge" style="color:var(--gray-600);font-size:.7rem;user-select:none;flex-shrink:0"></span>
         </div>
     </div>
 </div>
@@ -92,7 +84,10 @@
          active-state toggling and status.js's live/orders visibility gating
          keep working unchanged), and the multi-machine switcher + machine
          status dot (machines-settings.js's renderMachineSwitcher()/#325
-         filtering logic is unchanged). The brand icon that used to sit here
+         filtering logic is unchanged). #2056: the sync time, the power toggle
+         and the Sync button from the old shot list footer sit next to the
+         machine status. #2079: tabs that no longer fit the row move into a
+         "More" menu at its end instead of scrolling out of reach. The brand icon that used to sit here
          was removed (#432) — redundant next to the nav tabs since the app is
          already framed by the HA ingress panel. -->
     <div id="content-topbar">
@@ -119,9 +114,9 @@
                     <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M6 20v-5M12 20V9M18 20V4"/></svg></span>
                     <span class="rail-label" data-i18n="nav_analytics">Statistiken</span>
                 </button>
-                <button class="topbar-nav" id="btnDialin" data-i18n-title="nav_dialin" title="Bezugslog">
+                <button class="topbar-nav" id="btnDialin" data-i18n-title="nav_dialin" title="Dial-In">
                     <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg></span>
-                    <span class="rail-label" data-i18n="nav_dialin">Bezugslog</span>
+                    <span class="rail-label" data-i18n="nav_dialin">Dial-In</span>
                 </button>
                 <button class="topbar-nav" id="btnMaintenance" data-i18n-title="nav_maintenance" title="Wartung">
                     <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/></svg></span>
@@ -138,6 +133,13 @@
                     <span id="ordersBadge" class="maint-badge" style="display:none"></span>
                 </button>
             </div>
+            <details id="topbarNavMore" class="topbar-nav-more" hidden>
+                <summary class="topbar-nav" data-i18n-title="nav_more" title="Mehr">
+                    <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></span>
+                    <span class="rail-label" data-i18n="nav_more">Mehr</span>
+                </summary>
+                <div id="topbarNavMenu" class="lib-sheet-menu-list topbar-nav-menu"></div>
+            </details>
         </nav>
 
         <div class="topbar-sep"></div>
@@ -149,12 +151,13 @@
             <button type="button" id="topbarMachineIcon" class="topbar-machine-icon" data-i18n-title="topbar_machine_icon_title" title="Maschinen-Status" aria-label="Maschinen-Status" data-i18n-aria-label="topbar_machine_icon_title"></button>
             <span class="status-dot unknown" id="railStatusDot"></span>
             <span id="railMachineName" class="topbar-machine-name">–</span>
-            <!-- #914: mobile-only duplicate of #powerBtn -- #sidebar (which
-                 hosts #powerBtn) is hidden entirely on mobile
-                 (updateMobileShotSidebarVisibility() in sidebar.js), so the
-                 topbar needs its own power toggle there. Desktop-hidden via
-                 the max-width:768px block in style.css. -->
-            <button id="railPowerBtn" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
+            <!-- #2056: the sync time, the power toggle and the Sync button moved here
+                 from the shot list footer, so they stay reachable on every page
+                 and layout. updatePowerButton() in the status component keeps #powerBtn
+                 hidden until a switch entity is configured. -->
+            <span id="syncTime">kein Sync</span>
+            <button id="powerBtn" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
+            <button id="syncBtn" data-i18n-title="btn_sync" title="↻ Sync">↻ Sync</button>
             <select id="machineSwitcher" class="machine-switcher" aria-label="Machine" data-i18n-aria-label="machine_switcher_title" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
         </div>
     </div>
@@ -397,15 +400,18 @@
                     </div>
                     <div class="annotation-field">
                         <label for="annGrinder" data-i18n="ann_grinder">Mühle</label>
-                        <input type="text" id="annGrinder" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" autocomplete="off">
+                        <select id="annGrinder"></select>
+                        <input type="text" id="annGrinderOther" aria-label="Grinder" data-i18n-aria-label="ann_grinder" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" autocomplete="off" style="display:none">
                     </div>
                     <div class="annotation-field">
                         <label for="annGrindSetting" data-i18n="ann_grind_setting">Mahlgrad</label>
                         <input type="text" id="annGrindSetting" data-i18n-placeholder="ann_grind_ph" placeholder="z.B. 23 Clicks">
+                        <select id="grindSelect-annGrindSetting" aria-label="Grind setting" data-i18n-aria-label="ann_grind_setting" hidden></select>
+                        <div class="bf-error" id="grindHint-annGrindSetting" role="alert" hidden></div>
                     </div>
                     <div class="annotation-field">
                         <label for="annDose" data-i18n="ann_dose">Dosis (g)</label>
-                        <input type="number" id="annDose" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0">
+                        <input type="number" id="annDose" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0" max="100">
                     </div>
                     <div class="annotation-field">
                         <div id="degassingTracker" class="degassing-bar-wrap" style="display:none">
@@ -416,6 +422,11 @@
                     <div class="annotation-field">
                         <label for="annTds">TDS % <span id="annTdsOptional" style="color:var(--gray-600);font-weight:normal" data-i18n="ann_tds_optional">(optional)</span></label>
                         <input type="number" id="annTds" data-i18n-placeholder="ann_tds_ph" placeholder="z.B. 9.2" step="0.1" min="0" max="25">
+                    </div>
+                    <div class="annotation-field full-width">
+                        <label id="annTasteTagLabel" data-i18n="profile_dialin_symptom_prompt">Wie hat der Shot geschmeckt?</label>
+                        <div class="drink-pills" id="tasteTagPillsContainer" role="group" aria-labelledby="annTasteTagLabel"></div>
+                        <input type="hidden" id="annTasteTag">
                     </div>
                     <div class="annotation-field full-width">
                         <label for="annNotes" data-i18n="ann_notes">Notizen</label>
@@ -541,6 +552,7 @@
     <!-- Library view -->
     <div id="library-view">
         <div class="lib-page">
+            <div id="libraryLoadState" class="loading-state" style="display:none"></div>
             <div class="lib-tabs tabs-scroll">
                 <button class="lib-tab active" id="libTabBeans" data-i18n="lib_beans">Bohnen</button>
                 <button class="lib-tab" id="libTabGrinders" data-i18n="lib_grinders">Mühlen</button>
@@ -583,7 +595,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="beanFormSpecies" data-i18n="bean_species_label">Spezies</label>
-                                <select id="beanFormSpecies">
+                                <select id="beanFormSpecies" data-pills>
                                     <option value="" data-i18n="species_none">– keine Angabe –</option>
                                     <option value="Arabica" data-i18n="species_arabica">Arabica</option>
                                     <option value="Robusta" data-i18n="species_robusta">Robusta</option>
@@ -593,7 +605,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="beanFormCategory" data-i18n="bean_category_label">Kategorie</label>
-                                <select id="beanFormCategory">
+                                <select id="beanFormCategory" data-pills>
                                     <option value="normal" data-i18n="category_normal">Normal</option>
                                     <option value="speciality" data-i18n="category_speciality">Speciality</option>
                                 </select>
@@ -612,12 +624,32 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="beanFormRoastType" data-i18n="bean_roast_type">Röstung</label>
-                                <select id="beanFormRoastType">
+                                <select id="beanFormRoastType" data-pills>
                                     <option value="" data-i18n="roast_type_none">– keine Angabe –</option>
                                     <option value="espresso" data-i18n="roast_type_espresso">Espresso-Röstung</option>
                                     <option value="filter" data-i18n="roast_type_filter">Filter-Röstung</option>
                                     <option value="omni" data-i18n="roast_type_omni">Omni-Röstung</option>
                                 </select>
+                            </div>
+                            <div class="lib-form-field">
+                                <label for="beanFormRoastLevel" data-i18n="bean_roast_level">Röstgrad</label>
+                                <select id="beanFormRoastLevel" data-pills>
+                                    <option value="" data-i18n="roast_level_none">– keine Angabe –</option>
+                                    <option value="light" data-i18n="roast_level_light">Hell</option>
+                                    <option value="medium-light" data-i18n="roast_level_medium_light">Hell-mittel</option>
+                                    <option value="medium" data-i18n="roast_level_medium">Mittel</option>
+                                    <option value="medium-dark" data-i18n="roast_level_medium_dark">Dunkel-mittel</option>
+                                    <option value="dark" data-i18n="roast_level_dark">Dunkel</option>
+                                </select>
+                            </div>
+                            <div class="lib-form-field lib-form-field-wide">
+                                <label for="beanFormBestFrom" data-i18n="bean_best_for">Optimal zum Verwenden (Tage seit Röstung)</label>
+                                <div class="bean-best-window">
+                                    <input type="number" id="beanFormBestFrom" step="1" min="1" max="365" inputmode="numeric" data-i18n-placeholder="bean_best_from_ph" placeholder="von">
+                                    <span aria-hidden="true">–</span>
+                                    <input type="number" id="beanFormBestUntil" step="1" min="1" max="365" inputmode="numeric" data-i18n-placeholder="bean_best_until_ph" placeholder="bis" aria-label="Optimal bis (Tag)" data-i18n-aria-label="bean_best_until_label">
+                                </div>
+                                <span class="lib-form-hint" id="beanFormBestHint" data-i18n="bean_best_hint">Leer lassen, um den Vorschlag des Röstgrads zu nutzen.</span>
                             </div>
                             <div class="lib-form-field lib-form-field-wide">
                                 <label for="beanFormFlavorInput" data-i18n="bean_flavors_label">Geschmacksnoten</label>
@@ -767,9 +799,10 @@
                                     <button type="button" class="lib-open-btn" id="grinderFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
+                            <div id="grinderFormScale"></div>
                             <div class="lib-form-field" id="grinderFormZeroPointField" style="display:none">
                                 <label for="grinderFormZeroPoint" data-i18n="lib_grinder_zero_point">Nullpunkt</label>
-                                <input type="number" step="0.1" id="grinderFormZeroPoint">
+                                <input type="number" step="0.1" id="grinderFormZeroPoint" min="-1000" max="1000">
                                 <div class="lib-form-hint" data-i18n="lib_grinder_zero_point_hint">Nach dem Reinigen: Nullpunkt hier aktualisieren, statt jedes Rezept anzupassen. Vorschläge/Vergleiche rechnen automatisch um.</div>
                                 <label for="grinderFormZeroPointSince" data-i18n="lib_grinder_zero_point_since" style="margin-top:0.5rem">Aktiv seit (leer = jetzt)</label>
                                 <input type="date" id="grinderFormZeroPointSince">
@@ -810,15 +843,15 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormDose" data-i18n="lib_recipe_dose">Dosis (g)</label>
-                                <input type="number" id="recipeFormDose" step="0.1" min="0" placeholder="11">
+                                <input type="number" id="recipeFormDose" step="0.1" min="0" max="100" placeholder="11">
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormYield" data-i18n="lib_recipe_yield">Ausbeute (g)</label>
-                                <input type="number" id="recipeFormYield" step="0.1" min="0" placeholder="200">
+                                <input type="number" id="recipeFormYield" step="0.1" min="0" max="2000" placeholder="200">
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormTime" data-i18n="lib_recipe_time">Zeit (s)</label>
-                                <input type="number" id="recipeFormTime" step="1" min="0" placeholder="150">
+                                <input type="number" id="recipeFormTime" step="1" min="0" max="3600" placeholder="150">
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormWaterTemp" data-i18n="lib_recipe_water_temp">Wassertemperatur (°C)</label>
@@ -826,11 +859,11 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormWaterG" data-i18n="lib_recipe_water_g">Wassermenge (g)</label>
-                                <input type="number" id="recipeFormWaterG" step="1" min="0" placeholder="65">
+                                <input type="number" id="recipeFormWaterG" step="1" min="0" max="5000" placeholder="65">
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormIceG" data-i18n="lib_recipe_ice_g">Eismenge (g)</label>
-                                <input type="number" id="recipeFormIceG" step="1" min="0" placeholder="85">
+                                <input type="number" id="recipeFormIceG" step="1" min="0" max="5000" placeholder="85">
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormGrind" data-i18n="lib_recipe_grind">Mahlgrad</label>
@@ -846,7 +879,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormBean" data-i18n="lib_recipe_bean">Bohne</label>
-                                <input type="text" id="recipeFormBean" placeholder="Ethiopia …">
+                                <select id="recipeFormBean"></select>
                             </div>
                             <div class="lib-form-field">
                                 <label for="recipeFormNotes" data-i18n="lib_recipe_notes">Notizen</label>
@@ -882,7 +915,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="milkFormStock" data-i18n="lib_milk_stock">Vorrat (ml)</label>
-                                <input type="number" id="milkFormStock" placeholder="1000" min="0" step="50">
+                                <input type="number" id="milkFormStock" placeholder="1000" min="0" max="20000" step="50">
                             </div>
                         </div>
                         <div class="lib-form-actions">
@@ -907,7 +940,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="basketFormWallType" data-i18n="lib_basket_wall_type">Wandtyp</label>
-                                <select id="basketFormWallType">
+                                <select id="basketFormWallType" data-pills>
                                     <option value="" data-i18n="basket_wall_type_none">– keine Angabe –</option>
                                     <option value="pressurized" data-i18n="basket_wall_type_pressurized">Pressurized</option>
                                     <option value="single-wall" data-i18n="basket_wall_type_single_wall">Single-Wall</option>
@@ -917,7 +950,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="basketFormShape" data-i18n="lib_basket_shape">Form</label>
-                                <select id="basketFormShape">
+                                <select id="basketFormShape" data-pills>
                                     <option value="" data-i18n="basket_shape_none">– keine Angabe –</option>
                                     <option value="straight" data-i18n="basket_shape_straight">Gerade</option>
                                     <option value="tapered" data-i18n="basket_shape_tapered">Konisch</option>
@@ -959,7 +992,7 @@
                             </div>
                             <div class="lib-form-field">
                                 <label for="puckScreenFormThickness" data-i18n="lib_puckscreen_thickness">Dicke</label>
-                                <select id="puckScreenFormThickness">
+                                <select id="puckScreenFormThickness" data-pills>
                                     <option value="" data-i18n="puckscreen_thickness_none">– keine Angabe –</option>
                                     <option value="very-thin" data-i18n="puckscreen_thickness_very_thin">Sehr dünn</option>
                                     <option value="thin" data-i18n="puckscreen_thickness_thin">Dünn</option>
@@ -1020,19 +1053,19 @@
                     </div>
                     <div class="lib-form-field">
                         <label for="profileFormCoffeeIn" data-i18n="profile_form_coffee_in">Dosis (g)</label>
-                        <input type="number" id="profileFormCoffeeIn" step="0.1" min="0" placeholder="18">
+                        <input type="number" id="profileFormCoffeeIn" step="0.1" min="0" max="100" placeholder="18">
                     </div>
                     <div class="lib-form-field">
                         <label for="profileFormCoffeeOut" data-i18n="profile_form_coffee_out">Ausbeute (g)</label>
-                        <input type="number" id="profileFormCoffeeOut" step="0.1" min="0" placeholder="36">
+                        <input type="number" id="profileFormCoffeeOut" step="0.1" min="0" max="2000" placeholder="36">
                     </div>
                     <div class="lib-form-field">
                         <label for="profileFormRatio" data-i18n="profile_form_ratio">Ratio</label>
-                        <input type="number" id="profileFormRatio" step="0.1" min="0" placeholder="2">
+                        <input type="number" id="profileFormRatio" step="0.1" min="0" max="30" placeholder="2">
                     </div>
                     <div class="lib-form-field">
                         <label for="profileFormWeight" data-i18n="profile_form_weight">Stopp-Gewicht (g)</label>
-                        <input type="number" id="profileFormWeight" step="0.1" min="0" placeholder="39.6">
+                        <input type="number" id="profileFormWeight" step="0.1" min="0" max="2000" placeholder="39.6">
                     </div>
                 </div>
                 <div class="lib-recipe-steps-section">
@@ -1199,7 +1232,7 @@
                         </div>
                         <div class="annotation-field">
                             <label for="lsDose" data-i18n="ann_dose">Dosis (g)</label>
-                            <input type="number" id="lsDose" step="0.1" min="0">
+                            <input type="number" id="lsDose" step="0.1" min="0" max="100">
                         </div>
                         <div class="annotation-field">
                             <label for="lsGrinder" data-i18n="ann_grinder">Mühle</label>
@@ -1209,6 +1242,8 @@
                         <div class="annotation-field">
                             <label for="lsGrindSetting" data-i18n="ann_grind_setting">Mahlgrad</label>
                             <input type="text" id="lsGrindSetting">
+                            <select id="grindSelect-lsGrindSetting" aria-label="Grind setting" data-i18n-aria-label="ann_grind_setting" hidden></select>
+                            <div class="bf-error" id="grindHint-lsGrindSetting" role="alert" hidden></div>
                         </div>
                         <div class="annotation-field">
                             <label for="lsBasket" data-i18n="ann_basket">Sieb</label>
@@ -1416,20 +1451,31 @@
         </div>
     </div><!-- #analytics-view -->
 
-    <!-- Einwähl-Modus view -->
+    <!-- Dial-In view (#1465): filter chips, verdict, one card of shot rows; a row opens its details -->
     <div id="dialin-view">
-        <div class="dialin-header">
-            <h3 style="margin:0;font-size:.95rem;color:var(--gray-200)" data-i18n="dialin_title">Einwählen</h3>
-            <div class="dialin-header-actions">
-                <button class="lib-btn-sm" id="startDialinWizardBtn" data-action="start-dialin" data-i18n="dialin_wizard_start_btn">Geführtes Einwählen starten</button>
-                <select id="dialinCount" class="dialin-count-select" aria-label="Shots" data-i18n-aria-label="nav_shots">
-                    <option value="3">3 Shots</option>
-                    <option value="5" selected>5 Shots</option>
-                    <option value="10">10 Shots</option>
-                </select>
-            </div>
+        <div class="dialin-chips">
+            <select id="dialinBeanSelect" class="analytics-bean-select" aria-label="Bohne" data-i18n-aria-label="recipe_bean"></select>
+            <select id="dialinCount" aria-label="Shots" data-i18n-aria-label="nav_shots" data-pills>
+                <option value="3">3 Shots</option>
+                <option value="5" selected>5 Shots</option>
+                <option value="10">10 Shots</option>
+            </select>
         </div>
-        <div id="dialinGrid" class="dialin-grid"></div>
+        <div class="dialin-layout">
+            <section class="analytics-verdict-card dialin-verdict" id="dialinVerdict" hidden></section>
+            <section class="dialin-shots">
+                <h2 class="analytics-section-title" data-i18n="nav_shots">Shots</h2>
+                <div id="dialinGrid" class="settings-group dialin-rows"></div>
+            </section>
+            <section class="dialin-curves" id="dialinCurves" hidden>
+                <h2 class="analytics-section-title" data-i18n="chart_pressure_unit">Druck (bar)</h2>
+                <div id="dialinCurvesChart" class="dialin-curves-chart"></div>
+            </section>
+        </div>
+        <button type="button" class="page-fab" id="startDialinWizardBtn" data-action="start-dialin">
+            <svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>
+            <span data-i18n="dialin_wizard_start_btn">Geführtes Einwählen starten</span>
+        </button>
     </div>
 
     <!-- Guided Dial-In wizard modal (#310) -->
@@ -1467,17 +1513,43 @@
 
     <!-- Settings view -->
     <div id="settings-view">
-        <!-- "What's New" in-app changelog (#610) — always visible, newest
-             release first. Entries come from shared/whats-new.ts (hand-
-             maintained, English-only, capped at 8), rendered by
-             renderWhatsNewCard() (components/whats-new.js). Only the card
-             title/description are translated; highlight text stays
-             English, same as CHANGELOG.md itself. -->
-        <div class="settings-card">
-            <h3 class="settings-card-title" data-i18n="settings_whats_new">What's New</h3>
-            <p class="settings-card-desc" data-i18n="settings_whats_new_desc">Recent GLP releases and their highlights.</p>
-            <div id="whatsNewList" class="whats-new-list"></div>
+        <div class="settings-bar" id="settingsBar">
+            <h1 class="settings-bar-title" data-i18n="nav_settings">Einstellungen</h1>
+            <input type="search" id="settingsSearch" class="lib-shelf-search settings-search" placeholder="Einstellung suchen" aria-label="Einstellung suchen" data-i18n-placeholder="settings_search_ph" data-i18n-aria-label="settings_search_ph" autocomplete="off">
+            <button type="button" id="settingsSearchBtn" class="lib-sheet-iconbtn settings-search-btn" aria-label="Einstellung suchen" data-i18n-aria-label="settings_search_ph" aria-controls="settingsSearch"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></button>
+            <details class="lib-sheet-more settings-more" id="settingsMore">
+                <summary aria-label="Weitere Aktionen" data-i18n-aria-label="lib_sheet_more">⋯</summary>
+                <div class="lib-sheet-menu-list">
+                    <button id="restartSetupWizardBtn" type="button" class="lib-sheet-menu-btn" data-i18n="settings_restart_setup_wizard">Setup-Tour neu starten</button>
+                </div>
+            </details>
         </div>
+        <div class="settings-layout">
+            <div class="settings-list">
+                <section class="analytics-verdict-card settings-verdict" id="settingsVerdict">
+                    <div class="analytics-verdict-head">
+                        <span class="settings-verdict-icon" id="settingsMachineIcon" aria-hidden="true"></span>
+                        <div class="analytics-verdict-text"><h2 class="analytics-verdict-title" id="settingsVerdictTitle"></h2></div>
+                        <div class="analytics-verdict-score">
+                            <span class="analytics-verdict-score-num serif-display" id="settingsMachineCount">–</span>
+                            <span class="analytics-verdict-score-lbl" id="settingsMachineCountLbl"></span>
+                        </div>
+                    </div>
+                </section>
+                <div id="settingsGroups" class="settings-groups"></div>
+                <div id="settingsSearchResults" class="settings-group" hidden></div>
+                <p id="settingsSearchEmpty" class="settings-card-desc settings-search-empty" data-i18n="settings_search_none" hidden>Keine Einstellung passt zur Suche.</p>
+            </div>
+            <div class="settings-pages">
+                <div class="settings-subbar">
+                    <button type="button" class="lib-sheet-close settings-back" data-settings-back aria-label="Zurück" data-i18n-aria-label="settings_back"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+                    <h2 class="settings-subbar-title" id="settingsPageTitle" data-i18n="settings_group_appearance">Darstellung</h2>
+                </div>
+                <!-- The What's New entries are filled at boot from the curated release list (components/whats-new.ts). -->
+                <section class="settings-page" data-settings-page="whats-new" hidden>
+                    <div class="settings-card"><div id="whatsNewList" class="whats-new-list"></div></div>
+                </section>
+                <section class="settings-page" data-settings-page="appearance">
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_theme">Theme</h3>
             <div class="theme-toggle-group" id="themeToggleGroup">
@@ -1510,6 +1582,21 @@
             <p class="settings-card-desc" data-i18n="settings_bottom_nav_desc">Wähle bis zu 4 Ziele für die untere Navigationsleiste auf dem Handy. Alles andere landet unter "Mehr".</p>
             <div id="bottomNavConfigList" class="bottom-nav-config-list"></div>
         </div>
+        <div class="settings-card">
+            <label for="settingsLang" class="settings-card-title" data-i18n="settings_language">Sprache</label>
+            <select id="settingsLang" class="machine-form-input">
+                <option value="de">Deutsch</option>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+                <option value="fr">Français</option>
+                <option value="it">Italiano</option>
+                <option value="nl">Nederlands</option>
+            </select>
+        </div>
+        </section>
+        <section class="settings-page" data-settings-page="notifications" hidden>
+        <!-- #1956: popup switches, rendered by boot/popups.ts -->
+        <div class="settings-card" id="popupSettingsCard" style="display:none"></div>
         <!-- Machine/library notification toggles (#614) — moved out of the
              Orders admin panel (which only exists when enable_orders: true)
              since notify_preheat_ready/notify_low_stock fire regardless of
@@ -1534,45 +1621,8 @@
                 <button class="orders-menu-save-btn" id="notifySettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
             </div>
         </div>
-        <!-- AI assistants (MCP) settings (#1288, part of #1196) — the built-in
-             MCP server's toggles. The developer-tools row is revealed by
-             loadMcpSettingsCard() only when the build offers it (GLP_DEV_BUILD). -->
-        <div class="settings-card" id="mcpSettingsCard">
-            <h3 class="settings-card-title" data-i18n="settings_mcp_title">KI-Assistenten (MCP)</h3>
-            <p class="settings-card-desc" data-i18n="settings_mcp_desc">Erlaube KI-Assistenten wie Claude, über den eingebauten MCP-Server deine Shots, Bohnen und Analysen zu lesen.</p>
-            <div class="orders-broadcast-list" id="mcpSettingsList">
-                <div class="orders-broadcast-row">
-                    <input type="checkbox" id="mcpEnabled" data-mcp-key="enabled">
-                    <label for="mcpEnabled" data-i18n="settings_mcp_enabled">MCP-Server aktivieren</label>
-                </div>
-                <div class="orders-broadcast-row">
-                    <input type="checkbox" id="mcpAllowWrite" data-mcp-key="allowWrite">
-                    <label for="mcpAllowWrite" data-i18n="settings_mcp_write">Schreib-Tools erlauben — diese verändern deine Daten</label>
-                </div>
-                <div class="orders-broadcast-row" id="mcpDevRow" style="display:none">
-                    <input type="checkbox" id="mcpAllowDeveloperTools" data-mcp-key="allowDeveloperTools">
-                    <label for="mcpAllowDeveloperTools" data-i18n="settings_mcp_dev">Entwickler-Tools erlauben — große, rohe Diagnose-Ausgaben</label>
-                </div>
-            </div>
-            <div class="orders-notify-actions">
-                <button class="orders-menu-save-btn" id="mcpSettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
-            </div>
-        </div>
-        <!-- GaggiMate machine control (#1324) — opt-in, off by default, and
-             deliberately not part of backup/restore. GaggiMate firmware v1.9.0+
-             only; the Live view's flush button and the brew-confirmation dialog
-             only appear while this is on. Saving is immediate (change event),
-             there is no Save button. -->
-        <div class="settings-card" id="machineControlSettingsCard">
-            <h3 class="settings-card-title" data-i18n="settings_machine_control_title">Maschinensteuerung</h3>
-            <p class="settings-card-desc" data-i18n="settings_machine_control_desc">Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Nur nutzen, wenn jemand an der Maschine ist.</p>
-            <div class="orders-broadcast-list">
-                <div class="orders-broadcast-row">
-                    <input type="checkbox" id="machineControlEnabled">
-                    <label for="machineControlEnabled" data-i18n="settings_machine_control_enabled">Maschinensteuerung erlauben</label>
-                </div>
-            </div>
-        </div>
+        </section>
+        <section class="settings-page" data-settings-page="coffee" hidden>
         <!-- Shot logging auto-prefill defaults (#654) — optional, per-install
              default values for a brand-new shot's annotation panel. Never
              overwrites an already-annotated shot's data (see
@@ -1593,9 +1643,10 @@
             <label for="sdPuckScreen" class="machine-form-label" data-i18n="ann_puckscreen">Puck Screen</label>
             <select id="sdPuckScreen" class="machine-form-input"></select>
             <label for="sdGrinder" class="machine-form-label" data-i18n="ann_grinder">Mühle</label>
-            <input type="text" id="sdGrinder" class="machine-form-input" data-i18n-placeholder="ann_grinder_ph" placeholder="z.B. Niche Zero" autocomplete="off">
+            <select id="sdGrinder" class="machine-form-input"></select>
+            <p class="settings-card-desc" data-i18n="sd_grinder_hint">Bohnenauswahl, „Letzten“ und geführtes Einwählen nutzen diese Mühle und nur ihre Mahlgrade für die Bohne. Leer, solange es keine gibt.</p>
             <label for="sdDose" class="machine-form-label" data-i18n="ann_dose">Dosis (g)</label>
-            <input type="number" id="sdDose" class="machine-form-input" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0">
+            <input type="number" id="sdDose" class="machine-form-input" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0" max="100">
             <div class="machine-form-actions">
                 <button id="shotDefaultsSaveBtn" type="button" class="backup-btn" data-i18n="sd_save">Speichern</button>
             </div>
@@ -1609,6 +1660,16 @@
         <div class="settings-card" id="beanFreshnessCard">
             <h3 class="settings-card-title" data-i18n="bf_title">Bohnen-Frische</h3>
             <p class="settings-card-desc" data-i18n="bf_desc">Ab welchem Alter eine Röstung als degasend, optimal oder alt gilt — und ab wie vielen Gramm eine Packung als fast leer gemeldet wird.</p>
+            <label for="bfLevel" class="machine-form-label" data-i18n="bf_level">Röstgrad</label>
+            <select id="bfLevel" class="machine-form-input">
+                <option value="" data-i18n="bf_scope_global">Alle Bohnen (Standard)</option>
+                <option value="light" data-i18n="roast_level_light">Hell</option>
+                <option value="medium-light" data-i18n="roast_level_medium_light">Hell-mittel</option>
+                <option value="medium" data-i18n="roast_level_medium">Mittel</option>
+                <option value="medium-dark" data-i18n="roast_level_medium_dark">Dunkel-mittel</option>
+                <option value="dark" data-i18n="roast_level_dark">Dunkel</option>
+            </select>
+            <p class="settings-card-desc" data-i18n="bf_level_hint">Die Tage darunter gelten für die gewählte Gruppe. Bohnen ohne Röstgrad und ohne eigene „optimal bis“-Angabe nutzen „Alle Bohnen“.</p>
             <label for="bfDegasUntil" class="machine-form-label" data-i18n="bf_degas_until">Degasen bis (Tage)</label>
             <input type="number" id="bfDegasUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
             <label for="bfPeakFrom" class="machine-form-label" data-i18n="bf_peak_from">Optimal ab (Tage)</label>
@@ -1617,14 +1678,18 @@
             <input type="number" id="bfPeakUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
             <label for="bfFadingUntil" class="machine-form-label" data-i18n="bf_fading_until">Abbauend bis (Tage)</label>
             <input type="number" id="bfFadingUntil" class="machine-form-input" step="1" min="1" max="365" inputmode="numeric">
-            <label for="bfLowStock" class="machine-form-label" data-i18n="bf_low_stock">Warnung unter (g)</label>
-            <input type="number" id="bfLowStock" class="machine-form-input" step="1" min="1" max="5000" inputmode="numeric">
+            <div id="bfLowStockRow">
+                <label for="bfLowStock" class="machine-form-label" data-i18n="bf_low_stock">Warnung unter (g)</label>
+                <input type="number" id="bfLowStock" class="machine-form-input" step="1" min="1" max="5000" inputmode="numeric">
+            </div>
             <div id="bfError" class="bf-error" role="alert" style="display:none"></div>
             <div class="machine-form-actions">
                 <button id="bfSaveBtn" type="button" class="backup-btn" data-i18n="bf_save">Speichern</button>
                 <button id="bfResetBtn" type="button" class="backup-btn" data-i18n="bf_reset">Auf Standard zurücksetzen</button>
             </div>
         </div>
+        </section>
+        <section class="settings-page" data-settings-page="machines" hidden>
         <!-- Live-data transport (#598) — self-contained card, does not touch
              the machine registry card below it. Connection fields are only
              shown once "MQTT" is picked (renderMqttSettingsCard() toggles
@@ -1642,7 +1707,7 @@
                 <label for="mqttHost" class="machine-form-label" data-i18n="settings_mqtt_host">Broker-Host</label>
                 <input type="text" id="mqttHost" class="machine-form-input" placeholder="core-mosquitto">
                 <label for="mqttPort" class="machine-form-label" data-i18n="settings_mqtt_port">Port</label>
-                <input type="number" id="mqttPort" class="machine-form-input" placeholder="1883">
+                <input type="number" id="mqttPort" class="machine-form-input" placeholder="1883" min="1" max="65535" step="1">
                 <label for="mqttUsername" class="machine-form-label" data-i18n="settings_mqtt_username">Benutzername (optional)</label>
                 <input type="text" id="mqttUsername" class="machine-form-input">
                 <label for="mqttPassword" class="machine-form-label" data-i18n="settings_mqtt_password">Passwort (optional)</label>
@@ -1663,20 +1728,20 @@
             </div>
         </div>
         <!-- Multi-machine registry (#319) -->
-        <div class="settings-card" id="machinesCard">
-            <h3 class="settings-card-title" data-i18n="settings_machines">Maschinen</h3>
-            <p class="settings-card-desc" data-i18n="settings_machines_desc">Verwalte die Espressomaschinen, die diese App überwacht.</p>
+        <div class="settings-card settings-row-card" id="machinesCard">
             <div id="machinesList" class="machines-list"></div>
-            <button id="addMachineBtn" type="button" class="backup-btn" data-i18n="settings_machines_add">+ Maschine hinzufügen</button>
-            <button id="restartSetupWizardBtn" type="button" class="lib-btn-sm" data-i18n="settings_restart_setup_wizard">Setup-Tour neu starten</button>
+            <button id="addMachineBtn" type="button" class="settings-row settings-row-add">
+                <span class="settings-row-icon" aria-hidden="true"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                <span class="settings-row-text"><span class="settings-row-title" data-i18n="settings_machines_add">Maschine hinzufügen</span></span>
+            </button>
         </div>
         <div class="settings-card" id="machineFormCard" style="display:none">
-            <h3 class="settings-card-title" id="machineFormTitle" data-i18n="settings_machines_add">+ Maschine hinzufügen</h3>
+            <h3 class="settings-card-title" id="machineFormTitle" data-i18n="settings_machines_add">Maschine hinzufügen</h3>
             <input type="hidden" id="machineFormId">
             <label for="machineFormName" class="machine-form-label" data-i18n="settings_machine_name">Name</label>
             <input type="text" id="machineFormName" class="machine-form-input">
             <label for="machineFormType" class="machine-form-label" data-i18n="settings_machine_type">Typ</label>
-            <select id="machineFormType" class="machine-form-input">
+            <select id="machineFormType" class="machine-form-input" data-pills>
                 <option value="gaggiuino">Gaggiuino</option>
                 <option value="gaggimate" data-i18n="settings_machine_type_gaggimate">GaggiMate</option>
             </select>
@@ -1692,7 +1757,7 @@
             </div>
             <div id="machineReleaseChannelRow" style="display:none">
                 <label for="machineFormReleaseChannel" class="machine-form-label" data-i18n="settings_machine_release_channel">Release-Kanal</label>
-                <select id="machineFormReleaseChannel" class="machine-form-input">
+                <select id="machineFormReleaseChannel" class="machine-form-input" data-pills>
                     <option value="0" data-i18n="settings_machine_release_channel_stable">Stable</option>
                     <option value="1" data-i18n="settings_machine_release_channel_test">Test</option>
                     <option value="2" data-i18n="settings_machine_release_channel_debug">Debug</option>
@@ -1714,21 +1779,29 @@
             <div class="machine-form-actions">
                 <button id="machineFormTestBtn" type="button" class="backup-btn" data-i18n="settings_machine_test">Verbindung testen</button>
                 <button id="machineFormSaveBtn" type="button" class="backup-btn" data-i18n="settings_machine_save">Speichern</button>
-                <button id="machineFormCancelBtn" type="button" class="backup-btn" data-i18n="settings_machine_cancel">Abbrechen</button>
             </div>
             <div id="machineFormTestResult" class="machine-form-test-result"></div>
         </div>
-        <div class="settings-card">
-            <h3 class="settings-card-title" data-i18n="settings_language">Sprache</h3>
-            <div class="settings-lang-group">
-                <button class="lang-option-btn" data-lang="de">Deutsch</button>
-                <button class="lang-option-btn" data-lang="en">English</button>
-                <button class="lang-option-btn" data-lang="it">Italiano</button>
-                <button class="lang-option-btn" data-lang="fr">Français</button>
-                <button class="lang-option-btn" data-lang="es">Español</button>
-                <button class="lang-option-btn" data-lang="nl">Nederlands</button>
+        <!-- GaggiMate machine control (#1324) — opt-in, off by default, and
+             deliberately not part of backup/restore. GaggiMate firmware v1.9.0+
+             only; the Live view's flush button and the brew-confirmation dialog
+             only appear while this is on. Saving is immediate (change event),
+             there is no Save button. -->
+        <div class="settings-card" id="machineControlSettingsCard">
+            <h3 class="settings-card-title" data-i18n="settings_machine_control_title">Maschinensteuerung</h3>
+            <p class="settings-card-desc" data-i18n="settings_machine_control_desc">Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Nur nutzen, wenn jemand an der Maschine ist.</p>
+            <div class="orders-broadcast-list">
+                <div class="orders-broadcast-row">
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="machineControlEnabled">
+                        <span class="toggle-track"></span>
+                    </label>
+                    <label for="machineControlEnabled" data-i18n="settings_machine_control_enabled">Maschinensteuerung erlauben</label>
+                </div>
             </div>
         </div>
+        </section>
+        <section class="settings-page" data-settings-page="data" hidden>
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="backup_title">Backup & Restore</h3>
             <p class="settings-card-desc" data-i18n="backup_desc">Die komplette Datenbank (Shots, Bibliothek, Wartung, Bestellungen, Maschinen, Einstellungen) als ZIP-Datei sichern oder wiederherstellen. API-Token und MQTT-Login sind nur verschlüsselt mit einem selbst gewählten Passwort enthalten.</p>
@@ -1742,6 +1815,8 @@
                 <input type="file" id="backupRestoreInput" accept=".zip,.json" style="display:none">
             </label>
         </div>
+        </section>
+        <section class="settings-page" data-settings-page="developer" hidden>
         <!-- Shown once the session holds a token (default: any caller that can
              reach the port, #533), OR when it doesn't because expose_api_port
              is off and this session isn't Ingress (#803) -- see main.ts's
@@ -1770,7 +1845,10 @@
             <select id="devScoreModel" class="machine-form-input"></select>
             <p class="settings-card-desc" data-i18n="settings_devtools_score_model_desc">Welches Modell deine Shots bewertet. Ein Wechsel lädt die App neu; Stable-Builds nutzen immer classic.</p>
             <div class="orders-broadcast-row">
-                <input type="checkbox" id="devBlindRating">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="devBlindRating">
+                    <span class="toggle-track"></span>
+                </label>
                 <label for="devBlindRating" data-i18n="settings_devtools_blind_rating">Blind bewerten — Score und Urteil eines Shots erst nach der Sternebewertung zeigen</label>
             </div>
             <button id="devExportDbBtn" type="button" class="backup-btn" data-i18n="settings_devtools_export_db">Download raw database</button>
@@ -1784,6 +1862,49 @@
                 <input type="file" id="devImportDbInput" accept=".db" style="display:none">
             </label>
         </div>
+        <!-- AI assistants (MCP) settings (#1288, part of #1196) — the built-in
+             MCP server's toggles. The developer-tools row is revealed by
+             loadMcpSettingsCard() only when the build offers it (GLP_DEV_BUILD). -->
+        <div class="settings-card" id="mcpSettingsCard">
+            <h3 class="settings-card-title" data-i18n="settings_mcp_title">KI-Assistenten (MCP)</h3>
+            <p class="settings-card-desc" data-i18n="settings_mcp_desc">Erlaube KI-Assistenten wie Claude, über den eingebauten MCP-Server deine Shots, Bohnen und Analysen zu lesen.</p>
+            <div class="orders-broadcast-list" id="mcpSettingsList">
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="mcpEnabled" data-mcp-key="enabled">
+                    <label for="mcpEnabled" data-i18n="settings_mcp_enabled">MCP-Server aktivieren</label>
+                </div>
+                <div class="orders-broadcast-row">
+                    <input type="checkbox" id="mcpAllowWrite" data-mcp-key="allowWrite">
+                    <label for="mcpAllowWrite" data-i18n="settings_mcp_write">Schreib-Tools erlauben — diese verändern deine Daten</label>
+                </div>
+                <div class="orders-broadcast-row" id="mcpDevRow" style="display:none">
+                    <input type="checkbox" id="mcpAllowDeveloperTools" data-mcp-key="allowDeveloperTools">
+                    <label for="mcpAllowDeveloperTools" data-i18n="settings_mcp_dev">Entwickler-Tools erlauben — große, rohe Diagnose-Ausgaben</label>
+                </div>
+            </div>
+            <div class="orders-notify-actions">
+                <button class="orders-menu-save-btn" id="mcpSettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
+            </div>
+        </div>
+        </section>
+                <section class="settings-page" data-settings-page="about" hidden>
+                    <div class="settings-card settings-row-card">
+                        <div class="settings-row settings-row-static">
+                            <span class="settings-row-text"><span class="settings-row-title" data-i18n="settings_about_version">Version</span></span>
+                            <span class="settings-row-value" id="settingsVersion">–</span>
+                        </div>
+                        <a class="settings-row" href="https://github.com/mxkissnr/gaggiuino-local-profiler/wiki" target="_blank" rel="noopener">
+                            <span class="settings-row-text"><span class="settings-row-title" data-i18n="onboarding_wiki_link">Einrichtungshilfe</span></span>
+                            <span class="settings-chev" aria-hidden="true"></span>
+                        </a>
+                        <button type="button" class="settings-row" data-settings-licenses>
+                            <span class="settings-row-text"><span class="settings-row-title" data-i18n="settings_licenses">Open-Source-Lizenzen</span></span>
+                            <span class="settings-chev" aria-hidden="true"></span>
+                        </button>
+                    </div>
+                </section>
+            </div><!-- /.settings-pages -->
+        </div><!-- /.settings-layout -->
     </div>
 
 </div><!-- /main -->

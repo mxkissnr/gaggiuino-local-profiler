@@ -88,8 +88,23 @@ func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.Annota
 		if _, present := body["flavors"]; present {
 			bean["flavors"] = sanitizeFlavors(body["flavors"])
 		}
+		if _, present := body["pinnedProfiles"]; present {
+			// #1963: the client sends the whole list; an empty list clears it.
+			bean["pinnedProfiles"] = sanitizePinnedProfiles(body["pinnedProfiles"])
+		}
 		if _, present := body["roastType"]; present {
 			bean["roastType"] = sanitizeRoastType(body["roastType"])
+		}
+		// #1977: the optional per-bean "best for use" window is both-or-none —
+		// sending either bound (or a clear with both empty) rewrites the pair, so
+		// one bound can never linger from an earlier edit.
+		_, fromPresent := body["bestFromDays"]
+		_, untilPresent := body["bestUntilDays"]
+		if fromPresent || untilPresent {
+			bean["bestFromDays"], bean["bestUntilDays"] = sanitizeBestForUse(body["bestFromDays"], body["bestUntilDays"])
+		}
+		if _, present := body["roastLevel"]; present {
+			bean["roastLevel"] = sanitizeRoastLevel(body["roastLevel"])
 		}
 		if _, present := body["altitude_m"]; present {
 			bean["altitude_m"] = sanitizeAltitude(body["altitude_m"])
@@ -142,6 +157,16 @@ func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.Annota
 		if _, present := body["enabled"]; present {
 			bean["enabled"] = sanitizeEnabled(body["enabled"])
 		}
+		// #1958: the newest bag the "bean is empty" offer was resolved for. It
+		// only moves forward, so a stale device cannot offer a bean again.
+		if v, present := body["emptyOfferBagId"]; present {
+			if id, ok := jsParseIntLoose(v); ok && id >= 0 {
+				current, hasCurrent := jsParseIntLoose(bean["emptyOfferBagId"])
+				if !hasCurrent || id > current {
+					bean["emptyOfferBagId"] = id
+				}
+			}
+		}
 
 		_, roastDatePresent := body["roastDate"]
 		_, stockPresent := body["stock_g"]
@@ -175,11 +200,29 @@ func UpdateBean(repo *Repository, id int64, body Entity, doseRows []shots.Annota
 	return bean, true, nil
 }
 
+// setDefaultGrinder makes grinders[idx] the library's one default, or clears
+// its flag. Only the default carries the key, so a library without a default
+// stores exactly what it always stored.
+func setDefaultGrinder(grinders []Entity, idx int, isDefault bool) {
+	if !isDefault {
+		delete(grinders[idx], "isDefault")
+		return
+	}
+	for _, g := range grinders {
+		delete(g, "isDefault")
+	}
+	grinders[idx]["isDefault"] = true
+}
+
 // UpdateGrinder applies a partial update to grinder id, mirroring
 // PUT /api/library/grinder/:id.
 func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, bool, error) {
+	scale, scalePresent, err := grinderScaleInput(body)
+	if err != nil {
+		return nil, false, err
+	}
 	var grinder Entity
-	err := repo.Update(func(lib *Library) error {
+	err = repo.Update(func(lib *Library) error {
 		idx := findEntityIndex(lib.Grinders, id)
 		if idx == -1 {
 			return ErrSkipSave
@@ -201,6 +244,17 @@ func UpdateGrinder(repo *Repository, id int64, body Entity) (Entity, bool, error
 		}
 		if v, present := trimMaxOrUndefined(body, "burrsResetAt", 10); present {
 			grinder["burrsResetAt"] = v
+		}
+		if v, present := body["isDefault"]; present {
+			isDefault, _ := v.(bool)
+			setDefaultGrinder(lib.Grinders, idx, isDefault)
+		}
+		if scalePresent {
+			if scale == nil {
+				delete(grinder, "scale")
+			} else {
+				grinder["scale"] = scale.Map()
+			}
 		}
 		lib.Grinders[idx] = grinder
 		return nil

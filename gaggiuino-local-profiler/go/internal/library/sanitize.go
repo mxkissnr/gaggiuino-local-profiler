@@ -4,6 +4,7 @@ import (
 	"math"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -76,6 +77,52 @@ func sanitizeRoastType(v any) string {
 	return ""
 }
 
+// roastLevels is the roast-degree allow-list (#1977). It is deliberately
+// separate from roastTypes above: roastType describes the brew style a roaster
+// targets (espresso/filter/omni), while roastLevel describes how far the beans
+// were taken (light…dark) and drives the freshness guidance. "" means
+// "unspecified" and keeps the user's global window.
+var roastLevels = map[string]bool{
+	"light": true, "medium-light": true, "medium": true, "medium-dark": true, "dark": true,
+}
+
+func sanitizeRoastLevel(v any) string {
+	s, ok := v.(string)
+	if ok && roastLevels[s] {
+		return s
+	}
+	return ""
+}
+
+// wholeDay accepts an integer day count as a JSON number or a numeric string.
+// Unlike jsParseIntLoose it rejects fractions outright: 4.5 days is not a day.
+func wholeDay(v any) (int64, bool) {
+	switch t := v.(type) {
+	case float64:
+		if t != t || t != math.Trunc(t) { // NaN or fraction
+			return 0, false
+		}
+		return int64(t), true
+	case string:
+		n, err := strconv.ParseInt(strings.TrimSpace(t), 10, 64)
+		return n, err == nil
+	}
+	return 0, false
+}
+
+// sanitizeBestForUse validates the optional per-bean "best for use" window
+// (#1977). Both bounds are whole days, 1..365, and the window must be strictly
+// ascending. A partial or invalid pair is dropped as a whole: keeping one bound
+// would silently change the guidance in a way the user never entered.
+func sanitizeBestForUse(from, until any) (any, any) {
+	f, okF := wholeDay(from)
+	u, okU := wholeDay(until)
+	if !okF || !okU || f < 1 || u > 365 || f >= u {
+		return nil, nil
+	}
+	return f, u
+}
+
 var speciesSet = map[string]bool{"Arabica": true, "Robusta": true, "Liberica": true, "Blend": true}
 
 func sanitizeSpecies(v any) string {
@@ -121,6 +168,52 @@ func sanitizeFlavors(v any) []any {
 		seen[key] = true
 		out = append(out, trimmed)
 		if len(out) >= 20 {
+			break
+		}
+	}
+	return out
+}
+
+// maxPinnedProfiles caps a bean's pinned-profile list (#1963).
+const maxPinnedProfiles = 20
+
+// sanitizePinnedProfiles returns the profiles the user pinned as proven for a
+// bean (#1963). A pin is identified by machine plus profile name, because the
+// same name can mean different profiles on two machines. Entries with an
+// out-of-range machine id or a blank name are dropped, and duplicates (same
+// machine, same name trimmed and case-insensitive) collapse to the first
+// occurrence — the client sends the newest pin first.
+func sanitizePinnedProfiles(v any) []any {
+	arr, ok := v.([]any)
+	if !ok {
+		return []any{}
+	}
+	seen := map[string]bool{}
+	out := []any{}
+	for _, item := range arr {
+		m, _ := item.(Entity)
+		if m == nil {
+			continue
+		}
+		machineID, ok := wholeDay(m["machineId"])
+		if !ok || machineID < 1 || machineID > 2147483647 {
+			continue
+		}
+		name, ok := m["name"].(string)
+		if !ok {
+			continue
+		}
+		name = truncateUTF8(strings.TrimSpace(name), 200)
+		if name == "" {
+			continue
+		}
+		key := strconv.FormatInt(machineID, 10) + "\x00" + strings.ToLower(name)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, Entity{"machineId": machineID, "name": name})
+		if len(out) >= maxPinnedProfiles {
 			break
 		}
 	}

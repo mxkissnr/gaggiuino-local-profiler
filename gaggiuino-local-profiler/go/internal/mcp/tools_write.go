@@ -11,6 +11,7 @@ import (
 	"github.com/google/jsonschema-go/jsonschema"
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/maintenance"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/shots"
@@ -51,6 +52,7 @@ type annotateShotInput struct {
 	Rating       *int    `json:"rating,omitempty" jsonschema:"the user's 1-5 star rating; omit to leave the stored rating unchanged"`
 	Notes        *string `json:"notes,omitempty" jsonschema:"free-text notes, up to 2000 characters; omit to leave them unchanged, pass an empty string to clear"`
 	GrindSetting *string `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting (dial/click position), up to 50 characters; omit to leave it unchanged"`
+	TasteTag     *string `json:"taste_tag,omitempty" jsonschema:"how the shot tasted: sour, bitter, balanced or thin; feeds the grind advice and never the score; omit to leave it unchanged, pass an empty string to clear"`
 }
 
 type annotateShotOutput struct {
@@ -58,6 +60,7 @@ type annotateShotOutput struct {
 	Rating       *int    `json:"rating,omitempty" jsonschema:"the shot's 1-5 star rating after the change"`
 	Notes        *string `json:"notes,omitempty" jsonschema:"the shot's notes after the change"`
 	GrindSetting *string `json:"grind_setting,omitempty" jsonschema:"the shot's grinder setting after the change"`
+	TasteTag     *string `json:"taste_tag,omitempty" jsonschema:"the shot's taste tag after the change"`
 }
 
 // ── set_known_grind ───────────────────────────────────────────────────────
@@ -94,7 +97,7 @@ func registerWriteTools(srv *mcpsdk.Server, deps Deps) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:         "annotate_shot",
 		Title:        "Annotate shot",
-		Description:  "Change one shot's annotation: its 1-5 star rating, free-text notes and free-text grinder setting (dial/click position). Only the fields you pass change; every other stored field (bean, dose, order info, ...) is preserved. The change is persisted immediately. Provide at least one field.",
+		Description:  "Change one shot's annotation: its 1-5 star rating, free-text notes, free-text grinder setting (dial/click position) and taste tag. Only the fields you pass change; every other stored field (bean, dose, order info, ...) is preserved. The change is persisted immediately. Provide at least one field.",
 		Annotations:  writeAnnotations("Annotate shot", true),
 		InputSchema:  annotateShotSchema(),
 		OutputSchema: mustSchema[annotateShotOutput](),
@@ -139,6 +142,9 @@ func annotateShotSchema() *jsonschema.Schema {
 	}
 	if p := schemaProp(s, "grind_setting"); p != nil {
 		p.MaxLength = jsonschema.Ptr(maxGrindSettingLen)
+	}
+	if p := schemaProp(s, "taste_tag"); p != nil {
+		p.Enum = stringEnum(append(shots.TasteTags(), ""))
 	}
 	return s
 }
@@ -186,12 +192,35 @@ func publishDataChanged(deps Deps, kind, id string) {
 	}
 }
 
+// fitGrindSetting applies a grinder's scale to a setting an MCP client wants to
+// save (#1961): canonical form when it fits, an error naming the valid range
+// when not. Without a scale the setting is returned as given.
+func fitGrindSetting(deps Deps, grinder, setting string) (string, error) {
+	if deps.Library == nil {
+		return setting, nil
+	}
+	lib, err := deps.Library.GetLibrary()
+	if err != nil {
+		log.Printf("mcp: reading the grinder scale: %v", err)
+		return setting, nil
+	}
+	scale := grindscale.ForGrinder(lib.Grinders, grinder)
+	if scale == nil {
+		return setting, nil
+	}
+	normalized, err := scale.Normalize(setting)
+	if err != nil {
+		return "", fmt.Errorf("grind_setting %q does not fit grinder %q: it %w", setting, grinder, err)
+	}
+	return normalized, nil
+}
+
 func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 	if deps.Shots == nil {
 		return annotateShotOutput{}, fmt.Errorf("shot history is not available")
 	}
-	if in.Rating == nil && in.Notes == nil && in.GrindSetting == nil {
-		return annotateShotOutput{}, fmt.Errorf("nothing to change: provide at least one of rating, notes or grind_setting")
+	if in.Rating == nil && in.Notes == nil && in.GrindSetting == nil && in.TasteTag == nil {
+		return annotateShotOutput{}, fmt.Errorf("nothing to change: provide at least one of rating, notes, grind_setting or taste_tag")
 	}
 	// Check existence first so an unknown id reports the same actionable error
 	// the read tools do, instead of relying on the annotations FK failure.
@@ -213,7 +242,14 @@ func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 		patch["notes"] = *in.Notes
 	}
 	if in.GrindSetting != nil {
-		patch["grindSetting"] = *in.GrindSetting
+		setting, err := fitGrindSetting(deps, annotationString(shot, "grinder"), *in.GrindSetting)
+		if err != nil {
+			return annotateShotOutput{}, err
+		}
+		patch["grindSetting"] = setting
+	}
+	if in.TasteTag != nil {
+		patch["tasteTag"] = *in.TasteTag
 	}
 	ann, err := deps.Shots.PatchAnnotation(in.ID, patch)
 	if err != nil {
@@ -237,6 +273,9 @@ func annotateShot(deps Deps, in annotateShotInput) (annotateShotOutput, error) {
 	if setting, ok := ann["grindSetting"].(string); ok {
 		out.GrindSetting = &setting
 	}
+	if tag, ok := ann["tasteTag"].(string); ok {
+		out.TasteTag = &tag
+	}
 	// The annotation itself changes the shot; its dose also drives the library's
 	// derived bag stock, so both kinds changed (#1539 slice 2).
 	publishDataChanged(deps, "shot", strconv.FormatInt(in.ID, 10))
@@ -256,8 +295,12 @@ func setKnownGrind(deps Deps, in setKnownGrindInput) (setKnownGrindOutput, error
 	if grindSetting == "" {
 		return setKnownGrindOutput{}, fmt.Errorf("grind_setting is required")
 	}
+	grindSetting, err := fitGrindSetting(deps, grinder, grindSetting)
+	if err != nil {
+		return setKnownGrindOutput{}, err
+	}
 	var bean library.Entity
-	err := deps.Library.Update(func(lib *library.Library) error {
+	err = deps.Library.Update(func(lib *library.Library) error {
 		var found bool
 		bean, found = library.UpsertKnownGrindSetting(lib, in.BeanID, grinder, grindSetting)
 		if !found {

@@ -9,14 +9,37 @@ where help is wanted.
 
 1. **Open an issue first** — describe the bug or feature before writing any code
    (no PRs without a linked issue)
-2. **Fork & branch** — `fix/…` or `feat/…`
-3. **Target the right branch** — open the PR against `dev`, or against the feature branch named
+2. **Claim the issue** — tell us you want to work on it, see
+   [Claim before you build](#claim-before-you-build) below
+3. **Fork & branch** — `fix/…` or `feat/…`
+4. **Target the right branch** — open the PR against `dev`, or against the feature branch named
    in the issue when the issue belongs to a feature, such as the score epic. See
    [Which branch?](#which-branch) below
-4. **Implement with tests**
-5. **Open the pull request** — see [Pull requests](#pull-requests) below
+5. **Implement with tests**
+6. **Open the pull request** — see [Pull requests](#pull-requests) below
 
 See [docs/MAINTAINING.md](docs/MAINTAINING.md) for release and branch maintenance.
+
+### Claim before you build
+
+So that nobody builds the same thing twice, say so before you start:
+
+- On a new issue, tick "I plan to open a pull request for this myself".
+  On an existing issue, leave a comment.
+- A maintainer assigns the issue to you. If an issue already has an assignee,
+  someone is working on it, so please ask there first. A feature may also need
+  a short agreement on the approach before you build it.
+- If there is no pull request or update for 14 days, we will ask how it is
+  going. Without a reply, the issue becomes free again. No hard feelings: you
+  can claim it again at any time.
+
+Claiming an issue reserves the work, nothing more. It gives no extra
+permissions, and your pull request goes through the same CI approval and
+review as any other.
+
+Looking for a place to start? Try issues labelled
+[`good first issue`](https://github.com/mxkissnr/gaggiuino-local-profiler/labels/good%20first%20issue)
+or [`help wanted`](https://github.com/mxkissnr/gaggiuino-local-profiler/labels/help%20wanted).
 
 ### Which branch?
 

@@ -13,6 +13,11 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
 
+// loadData() also refreshes the trash list; this fake document has no toast
+// element, and the trash page below is a failing response, so the error path
+// would otherwise build a toast and reject outside the test.
+vi.mock('../public-src/components/toast.js', () => ({ showToast: vi.fn() }));
+
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');

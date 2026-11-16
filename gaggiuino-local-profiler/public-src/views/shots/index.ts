@@ -9,11 +9,11 @@ import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPha
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
   stddev, detectPhases, detectChanneling, scoreClass, scoreColor,
-  chartColors, freshnessState, freshnessWindows, html, joinHtml
+  chartColors, freshnessSourceLabelKey, resolveFreshness, html, joinHtml
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
-import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel, shotBeanAge } from './utils.js';
+import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel, shotBeanAge, beanFreshnessContext } from './utils.js';
 import { mapShotDatapoints } from '../../utils.js';
 import { ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
@@ -25,6 +25,7 @@ import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.
 import { loadShotImageBlobUrl, invalidateShotImage }          from '../../bean-image.js';
 import { openLightbox }                                       from '../../components/lightbox.js';
 import { showToast }                                          from '../../components/toast.js';
+import { confirmDialog }                                      from '../../components/confirm-dialog.js';
 import type { Html } from '../../utils.js';
 import type { ChartConfiguration } from 'chart.js';
 import { beanLabel }                                          from '../../shared/bean-mix.js';
@@ -164,6 +165,7 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
     const page = await fetchShotsPage();
     if (token !== _loadDataReqToken) return;
     if (page.error != null) {
+      S.shotsLoadFailed = true;
       // A quiet reload is best-effort: keep the painted sidebar/list untouched
       // rather than replacing them with an error card.
       if (opts?.quiet) return;
@@ -177,12 +179,14 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
         : html`<div class="loading-state" style="color:#ef4444">HTTP ${esc(page.error)}</div>`;
       return;
     }
+    S.shotsLoadFailed = false;
     fetched = [...(page.shots || [])].reverse(); // page is newest-first; keep S.allShots oldest-first
     S.shotsPageCursor = page.hasMore ? (page.nextCursor ?? null) : null;
     S.shotsHasMore    = !!page.hasMore;
     S.allShotsLoaded  = !page.hasMore;
   } catch {
     if (token !== _loadDataReqToken) return;
+    S.shotsLoadFailed = true;
     if (opts?.quiet) return;
     shotsEl.innerHTML = joinHtml([
       // #814: was a hardcoded #ef4444 (the pre-redesign err value) and an
@@ -441,7 +445,7 @@ export async function loadTrashData(): Promise<void> {
     if (page.error != null) return;
     S.trashedShots = page.shots || [];
     renderTrash();
-  } catch { /* ignore */ }
+  } catch (e) { showToast(t('error_generic', (e as Error).message)); }
 }
 
 export function renderTrash(): void {
@@ -517,7 +521,7 @@ export async function trashShot(id: number): Promise<void> {
     }
     await loadTrashData();
   } catch (e) {
-    alert(t('error_generic', (e as Error).message));
+    showToast(t('error_generic', (e as Error).message));
   }
 }
 
@@ -558,12 +562,12 @@ export async function restoreShot(id: number): Promise<void> {
     if (!r.ok) throw new Error(await r.text());
     await loadData();
   } catch (e) {
-    alert(t('error_generic', (e as Error).message));
+    showToast(t('error_generic', (e as Error).message));
   }
 }
 
 export async function permanentDeleteShot(id: number): Promise<void> {
-  if (!confirm(t('confirm_perm_delete', id))) return;
+  if (!await confirmDialog(t('confirm_perm_delete', id), { confirmLabel: t('lib_btn_delete') })) return;
   try {
     const r = await deleteShotPermanently(id);
     if (!r.ok) throw new Error(await r.text());
@@ -571,7 +575,7 @@ export async function permanentDeleteShot(id: number): Promise<void> {
     S.trashedShots = S.trashedShots.filter(s => s.id !== id);
     renderTrash();
   } catch (e) {
-    alert(t('error_generic', (e as Error).message));
+    showToast(t('error_generic', (e as Error).message));
   }
 }
 
@@ -751,14 +755,21 @@ export async function updateView(): Promise<void> {
   const beanAge  = shotBeanAge(ann, shotA.timestamp, { relativeToNow: !shotB });
   if (beanAge != null && beanAge.days >= 0 && beanAge.days <= 365) {
     const ageAtShot = beanAge.days;
-    // #1835: the badge follows the same shared freshness windows as the
-    // annotation panel's tracker; degassing/almost/peak all read as "fresh".
-    const state = freshnessState(ageAtShot);
+    // #1835/#1977: the badge follows the same resolved windows as the
+    // annotation panel's tracker — per-bean override → roast level → global —
+    // and degassing/almost/peak all read as "fresh". The tooltip names the
+    // source so a "fading" verdict is explainable.
+    const fresh = beanFreshnessContext(ann);
+    const resolved = resolveFreshness(ageAtShot, fresh.roastLevel, fresh.override);
+    const state = resolved.state;
     const cls = state === 'fading' ? 'freshness-ok' : state === 'old' ? 'freshness-old' : 'freshness-fresh';
-    const windows = freshnessWindows();
+    const sourceKey = freshnessSourceLabelKey(resolved);
+    const sourceLabel = sourceKey ? t(sourceKey) : '';
     freshEl.className   = `freshness-badge ${cls}`;
     freshEl.textContent = beanAge.atShot ? t('bean_age_badge', ageAtShot) : t('freshness_badge', ageAtShot);
-    freshEl.title       = beanAge.atShot ? t('bean_age_at_shot', ageAtShot) : t('freshness_title', ageAtShot, windows.peakFrom, windows.peakUntil);
+    freshEl.title       = beanAge.atShot
+      ? t('bean_age_at_shot', ageAtShot) + (sourceLabel ? ` · ${sourceLabel}` : '')
+      : t('freshness_title', ageAtShot, resolved.windows.peakFrom, resolved.windows.peakUntil, sourceLabel);
     freshEl.style.display = '';
   } else { freshEl.style.display = 'none'; }
 
@@ -1019,8 +1030,8 @@ export async function updateView(): Promise<void> {
         plugins: [corsairPlugin, phasePlugin],
         data: { datasets },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
+          // #2097: no animation, so a container resize is applied at once instead of waiting for Chart.js's animation loop.
+          ...chartRegistry.chartBaseOptions(),
           layout: { padding: { bottom: 20 } },
           interaction: { mode: 'index', intersect: false },
           plugins: {

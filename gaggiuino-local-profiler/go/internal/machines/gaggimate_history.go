@@ -56,6 +56,18 @@ const (
 	gaggiMateSlogExitReasonOff = 459
 )
 
+// systemInfo scale bits, per upstream shot_log_format.h.
+const (
+	gaggiMateSIBluetoothScale = 0x0004 // SYSTEM_INFO_BLUETOOTH_SCALE_CONNECTED
+	gaggiMateSIActiveScale    = 0x0100 // SYSTEM_INFO_ACTIVE_SCALE_CONNECTED
+)
+
+// A legacy hardware-scale v6 file kept the v5 26-byte sample layout.
+const (
+	gaggiMateLegacyScaleV6Mask = 0x1FFF // fields mask of a legacy hardware-scale v6 file
+	gaggiMateLegacyScaleV6Size = 26     // the sample size it announces in the header
+)
+
 // Field slots in the slog fieldsMask — bit order matches the device's FIELD_BITS.
 // scale=0 marks special handling (tick multiplied, not divided; systemInfo bitfield).
 type gaggiMateFieldDef struct {
@@ -104,6 +116,8 @@ type gaggiMatePhaseTransition struct {
 	name        string
 }
 
+// gaggiMateSample is one decoded .slog sample. bleScaleConnected reports an
+// active scale: a Bluetooth scale, or a hardware scale from shot log v8 on.
 type gaggiMateSample struct {
 	tickMs            float64
 	tt, ct            float64
@@ -202,6 +216,16 @@ func gaggiMateParseSlog(data []byte) (*gaggiMateSlogResult, error) {
 	if fieldsMask == 0 {
 		return nil, fmt.Errorf("gaggimate: .slog header has empty fieldsMask")
 	}
+	// Mirrors upstream shotLogHasElapsedTimestamp: only a legacy hardware-scale
+	// v6 file keeps the 16-bit tick field. The scale bit follows the upstream web
+	// parser: from v8 on, and for a legacy hardware-scale v6 file, the active
+	// (healthy) scale counts; every older version reports the Bluetooth bit.
+	legacyScaleV6 := s.version == 6 && deviceSampleSize == gaggiMateLegacyScaleV6Size && fieldsMask == gaggiMateLegacyScaleV6Mask
+	elapsedTimestamp := s.version >= 6 && !legacyScaleV6
+	scaleBit := uint16(gaggiMateSIBluetoothScale)
+	if s.version >= 8 || legacyScaleV6 {
+		scaleBit = gaggiMateSIActiveScale
+	}
 	sampleCountRaw := binary.LittleEndian.Uint32(data[16:20])
 	if sampleCountRaw > gaggiMateSlogMaxSamples {
 		return nil, fmt.Errorf("gaggimate: .slog sample count %d exceeds limit %d", sampleCountRaw, gaggiMateSlogMaxSamples)
@@ -255,7 +279,7 @@ func gaggiMateParseSlog(data []byte) (*gaggiMateSlogResult, error) {
 			continue
 		}
 		width := 2
-		if bit == 0 && s.version >= 6 {
+		if bit == 0 && elapsedTimestamp {
 			width = 4
 		}
 		computedSampleSize += width
@@ -356,7 +380,7 @@ func gaggiMateParseSlog(data []byte) (*gaggiMateSlogResult, error) {
 					sm.wp = float64(binary.LittleEndian.Uint16(data[off:off+2])) / af.scale
 					sm.hasWP = true
 				case "systemInfo":
-					sm.bleScaleConnected = int16(binary.LittleEndian.Uint16(data[off:off+2]))&0x04 != 0
+					sm.bleScaleConnected = binary.LittleEndian.Uint16(data[off:off+2])&scaleBit != 0
 					sm.hasSystemInfo = true
 				}
 				off += af.width
@@ -411,8 +435,8 @@ func gaggiMateSlogToShot(slog *gaggiMateSlogResult, nativeID int64) map[string]a
 		}
 		targetTemperature[i] = int64(math.Round(tt * 10))
 
-		// shotWeight: use real BLE scale weight (v) when bleScaleConnected;
-		// fall back to volumetric estimate (ev) when no scale was connected.
+		// shotWeight: use the real active-scale weight (v) when bleScaleConnected;
+		// fall back to the volumetric estimate (ev) when no scale was connected.
 		var wt float64
 		if sm.hasSystemInfo && sm.bleScaleConnected && sm.hasV {
 			wt = sm.v
@@ -474,9 +498,10 @@ func gaggiMateSlogToShot(slog *gaggiMateSlogResult, nativeID int64) map[string]a
 		"shotWeight":        shotWeight,
 		"weightFlow":        weightFlow,
 		"pumpFlow":          pumpFlow,
-		// bleScaleConnected gates the chart label: true = real BLE scale,
-		// false = volumetric estimate (ev). Stored in datapoints so
-		// mapShotDatapoints can see it without the top-level shot context.
+		// bleScaleConnected gates the chart label: true = active scale (Bluetooth,
+		// or a hardware scale from shot log v8 on), false = volumetric estimate
+		// (ev). Stored in datapoints so mapShotDatapoints can see it without the
+		// top-level shot context.
 		"bleScaleConnected": bleScaleConnected,
 	}
 	if slog.hasPhaseData {

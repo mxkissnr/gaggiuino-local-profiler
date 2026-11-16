@@ -3,15 +3,21 @@
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
-import { esc, html, joinHtml, toIsoDateInput, localMidnightMs } from '../../utils.js';
+import { esc, html, joinHtml, toIsoDateInput, localMidnightMs, formatDate } from '../../utils.js';
+import { localeFor } from '../../constants.js';
 import type { Html } from '../../utils.js';
 import { WRENCH_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
+import { showToast } from '../../components/toast.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
 import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { loadGrinderImageBlobUrl, invalidateGrinderImage } from '../../bean-image.js';
 import { currentGrinderZeroPoint } from '../../grind-zero.js';
+import { markFieldInvalid } from '../../components/field-error.js';
+import { bindFormAutosave } from '../../components/form-autosave.js';
+import { renderGrinderScaleForm, readGrinderScaleForm } from '../shots/grind-field.js';
 import type { Grinder } from '../../api/types.js';
 import * as library from '../library.js';
 
@@ -88,7 +94,10 @@ export function renderGrinderList(): void {
     <div class="lib-item">
       ${g.image ? html`<img class="lib-grinder-thumb" data-grinder-id="${esc(g.id)}" alt="">` : html``}
       <div class="lib-item-info">
-        <div class="lib-item-name">${esc(g.name)}</div>
+        <div class="lib-item-name-row">
+          <div class="lib-item-name">${esc(g.name)}</div>
+          ${g.isDefault === true ? html`<span class="machine-row-badge">${tHtml('lib_grinder_default')}</span>` : html``}
+        </div>
         ${extra ? html`<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : html``}
         ${g.notes ? html`<div class="lib-item-sub">${esc(g.notes)}</div>` : html``}
         ${zeroPoint != null ? html`<div class="lib-item-sub">${tHtml('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</div>` : html``}
@@ -126,6 +135,12 @@ function loadGrinderThumbnails(): void {
 }
 
 // ── Grinder form ──────────────────────────────────────────────────────────
+// The form saves itself while editing (#1962); the save button stays for
+// creating. Bound once, on the first open (the form element is persistent);
+// the returned reset runs on every open so the last entry's state never shows
+// on the next one (#2098).
+let _resetAutosave: (() => void) | null = null;
+
 export function openGrinderForm(grinder?: GrinderRow | null): void {
   S.grinderEditId = grinder ? grinder.id : null;
   _input('grinderFormName').value  = grinder?.name  || '';
@@ -133,6 +148,7 @@ export function openGrinderForm(grinder?: GrinderRow | null): void {
   _input('grinderFormBurrType').value     = grinder?.burrType || '';
   attachAutocomplete(_input('grinderFormBurrType'), () => _burrTypeSuggestions());
   _input('grinderFormPurchaseDate').value = toIsoDateInput(grinder?.purchaseDate);
+  renderGrinderScaleForm(grinder?.scale);
   _el('grinderFormImageField').style.display = grinder ? '' : 'none';
   _el('grinderFormImageAdjustBtn').style.display = grinder?.image ? '' : 'none';
   // onclick, not addEventListener: reopening the form must not stack handlers.
@@ -144,6 +160,14 @@ export function openGrinderForm(grinder?: GrinderRow | null): void {
   _input('grinderFormZeroPoint').value = _zeroPointValue(grinder);
   _input('grinderFormZeroPointSince').value = '';
   renderGrinderZeroPointHistory(grinder);
+  // Editing saves itself, so the button would only be a second way to save.
+  const saveBtn = document.getElementById('saveGrinderBtn');
+  if (saveBtn) saveBtn.style.display = grinder ? 'none' : '';
+  _resetAutosave ??= bindFormAutosave(_el('grinderAddForm'), {
+    isEditing: () => !!S.grinderEditId,
+    save: async () => { const ok = await _persistGrinder(); if (ok) renderGrinderList(); return ok; },
+  });
+  _resetAutosave();
   _el('grinderAddForm').classList.add('open');
   _el('grinderAddTrigger').style.display = 'none';
   _input('grinderFormName').focus();
@@ -167,7 +191,7 @@ function renderGrinderZeroPointHistory(grinder: GrinderRow | null | undefined): 
   if (!Array.isArray(history) || !history.length) { el.innerHTML = html``; return; }
   const sorted = [...history].sort((a, b) => a.since - b.since);
   el.innerHTML = html`<div class="zp-history">${joinHtml(sorted.map(e => {
-    const date = new Date(e.since).toLocaleDateString();
+    const date = formatDate(e.since, localeFor(S.currentLang));
     return html`<div class="zp-history-entry">
       <span>${esc(String(e.zeroPoint))} &mdash; ${esc(date)}</span>
       <button type="button" class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder-zero-point" data-id="${esc(grinder?.id)}" data-since="${esc(e.since)}" title="${tHtml('lib_grinder_zero_point_delete')}">&#x2715;</button>
@@ -193,54 +217,83 @@ export async function deleteGrinderZeroPointEntry(grinderId: number, since: numb
   }
 }
 
-export async function saveGrinder(): Promise<void> {
+// A second Save while the first request is pending must not create the grinder
+// twice (#2022); same guard as the bean form's _beanSaveInFlight. The form
+// saves through more than one request, so the flag covers the whole sequence.
+let _grinderSaveInFlight = false;
+
+// Reads, validates and persists the form; leaves the form open and does not
+// clear the edit id, so autosave can keep saving the same grinder (#1962).
+async function _persistGrinder(): Promise<boolean> {
+  if (_grinderSaveInFlight) return false;
   const name         = _input('grinderFormName').value.trim();
   const notes        = _input('grinderFormNotes').value.trim();
   const burrType     = _input('grinderFormBurrType').value.trim();
   const purchaseDate = _input('grinderFormPurchaseDate').value.trim();
-  if (!name) { _input('grinderFormName').focus(); return; }
-  const first = await libraryApi.saveGrinder(S.grinderEditId, { name, notes, burrType, purchaseDate });
-  if (!first) return;
-  let saved = _asRow(first);
+  if (!name) { markFieldInvalid(_input('grinderFormName')); return false; }
+  // #1961: undefined means the scale fields are invalid and already say so.
+  const scale = readGrinderScaleForm();
+  if (scale === undefined) return false;
+  const editId = S.grinderEditId;
+  _grinderSaveInFlight = true;
+  const saveBtn = document.getElementById('saveGrinderBtn') as HTMLButtonElement | null;
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const first = await libraryApi.saveGrinder(editId, { name, notes, burrType, purchaseDate, scale });
+    if (!first) { showToast(t('gm_toast_save_error')); return false; }
+    let saved = _asRow(first);
 
-  if (S.grinderEditId) {
-    const zpRaw    = _input('grinderFormZeroPoint').value.trim();
-    const sinceRaw = _input('grinderFormZeroPointSince').value.trim();
-    if (zpRaw !== '') {
-      const zeroPoint = parseFloat(zpRaw);
-      const sinceMs   = sinceRaw ? localMidnightMs(sinceRaw) : 0;
-      // For "now" inserts (sinceMs=0) the backend deduplicates on value;
-      // for retroactive inserts we always send (dedup is on exact since+value pair).
-      const isRetroactive = sinceMs > 0;
-      if (!Number.isNaN(zeroPoint) && (isRetroactive || zeroPoint !== currentGrinderZeroPoint(saved))) {
-        const updated = await libraryApi.setGrinderZeroPoint(S.grinderEditId, zeroPoint, isRetroactive ? sinceMs : undefined);
-        if (updated) saved = _asRow(updated);
+    if (editId) {
+      const zpRaw    = _input('grinderFormZeroPoint').value.trim();
+      const sinceRaw = _input('grinderFormZeroPointSince').value.trim();
+      if (zpRaw !== '') {
+        const zeroPoint = parseFloat(zpRaw);
+        const sinceMs   = sinceRaw ? localMidnightMs(sinceRaw) : 0;
+        // For "now" inserts (sinceMs=0) the backend deduplicates on value;
+        // for retroactive inserts we always send (dedup is on exact since+value pair).
+        const isRetroactive = sinceMs > 0;
+        if (!Number.isNaN(zeroPoint) && (isRetroactive || zeroPoint !== currentGrinderZeroPoint(saved))) {
+          const updated = await libraryApi.setGrinderZeroPoint(editId, zeroPoint, isRetroactive ? sinceMs : undefined);
+          if (updated) saved = _asRow(updated);
+        }
       }
     }
-  }
 
-
-  const grinders = _grinders();
-  if (S.grinderEditId) {
-    const idx = grinders.findIndex(g => g.id === S.grinderEditId);
-    // The PUT response doesn't recompute wear stats — keep the existing ones
-    // until the next full library load rather than dropping the card.
-    if (idx !== -1) {
-      const existing = grinders[idx];
-      if (existing) grinders[idx] = { ...saved, wear: existing.wear };
+    const grinders = _grinders();
+    if (editId) {
+      const idx = grinders.findIndex(g => g.id === editId);
+      // The PUT response doesn't recompute wear stats — keep the existing ones
+      // until the next full library load rather than dropping the card.
+      if (idx !== -1) {
+        const existing = grinders[idx];
+        if (existing) grinders[idx] = { ...saved, wear: existing.wear };
+      }
+    } else {
+      grinders.push(saved);
     }
-  } else {
-    grinders.push(saved);
+    library.updateLibraryDatalist();
+    return true;
+  } catch {
+    // A throw in any of these requests left the user with no message.
+    showToast(t('gm_toast_save_error'));
+    return false;
+  } finally {
+    _grinderSaveInFlight = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
-  library.updateLibraryDatalist();
+}
+
+export async function saveGrinder(): Promise<void> {
+  const ok = await _persistGrinder();
+  if (!ok) return;
   closeGrinderForm();
   renderGrinderList();
 }
 
 export async function resetGrinderBurrs(id: number): Promise<void> {
-  if (!confirm(t('lib_grinder_confirm_reset_burrs'))) return;
+  if (!await confirmDialog(t('lib_grinder_confirm_reset_burrs'))) return;
   const saved = await libraryApi.resetGrinderBurrs(id);
-  if (!saved) return;
+  if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const grinders = _grinders();
   const idx = grinders.findIndex(g => g.id === id);
   if (idx !== -1) grinders[idx] = _asRow(saved);
@@ -277,9 +330,9 @@ async function _storeGrinderPhoto(id: number, r: Response): Promise<void> {
 }
 
 export async function deleteGrinder(id: number): Promise<void> {
-  if (!confirm(t('lib_confirm_delete_grinder'))) return;
+  if (!await confirmDialog(t('lib_confirm_delete_grinder'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await libraryApi.deleteGrinderPermanently(id);
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   S.coffeeLibrary.grinders = S.coffeeLibrary.grinders.filter(g => g.id !== id);
   library.updateLibraryDatalist();
   renderGrinderList();

@@ -44,6 +44,7 @@ import path from 'path';
 import { chromium } from 'playwright';
 import type { Page } from 'playwright';
 import { appRoot, bootServer, restoreBackup, seed, stopServer } from './e2e-harness.mts';
+import { openTopbarTab } from './topbar-nav.mts';
 
 const outDir = path.join(appRoot, 'docs', 'screenshots');
 const repoRoot = path.join(appRoot, '..');
@@ -248,6 +249,13 @@ async function main(): Promise<void> {
     if (fromBackup) {
         const result = await restoreBackup(baseUrl, path.resolve(backupPath));
         console.log(`Restored backup ${backupPath ?? ''} (${result.shots ?? 0} shots)`);
+        // A restored backup is not demo mode, so the update popup would cover the shots.
+        const { apiToken } = (await fetch(`${baseUrl}/api/token`).then(r => r.json())) as { apiToken: string };
+        await fetch(`${baseUrl}/api/ui-prefs`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'x-glp-token': apiToken },
+            body: JSON.stringify({ popups: { enabled: false } }),
+        });
     } else {
         await seed(baseUrl);
     }
@@ -296,7 +304,7 @@ async function main(): Promise<void> {
     // shot list in #sidebar is half of what this view is, and a scoped
     // #shots-view shot is #957-lazy so it also needs the curve to land.
     // Wait for the shot-detail line chart to actually paint before shooting.
-    await page.click('#btnShots');
+    await openTopbarTab(page, '#btnShots');
     await page.waitForSelector('#chart-area', { state: 'visible' });
     await waitForPaint(page, '#espressoShotChart');
     await page.waitForTimeout(150); // let the phase-band overlay settle on top of the lines
@@ -318,7 +326,7 @@ async function main(): Promise<void> {
     // clicking the view's nav tab so the top nav shows the active tab.
 
     // ── Library ────────────────────────────────────────────────────────
-    await page.click('#btnLibrary');
+    await openTopbarTab(page, '#btnLibrary');
     // The seeded library always contains the 'Yirgacheffe' demo bean; a real
     // backup has arbitrary beans, so wait for the rendered shelf instead.
     // #1330: the shelf renders .lib-shelf-tile (grid) / .lib-shelf-row (list);
@@ -386,7 +394,7 @@ async function main(): Promise<void> {
     // captures: the summary top, and the machine-comparison band lower
     // down. #797 made ECharts a dynamic import(), so the world map / trend
     // chart land seconds after the nav click — wait for each to paint.
-    await page.click('#btnAnalytics');
+    await openTopbarTab(page, '#btnAnalytics');
     await page.waitForSelector('#analytics-view', { state: 'visible' });
     await waitForPaint(page, '#trendChart');        // Chart.js score-trend
     await page.locator('#worldMapWrap').scrollIntoViewIfNeeded();
@@ -417,7 +425,7 @@ async function main(): Promise<void> {
     await page.screenshot({ path: path.join(outDir, 'analytics-machines.png') });
 
     // ── Maintenance ────────────────────────────────────────────────────
-    await page.click('#btnMaintenance');
+    await openTopbarTab(page, '#btnMaintenance');
     await page.waitForFunction(
         () => !!document.querySelector('#maintVerdict .analytics-verdict-title'),
         undefined, { timeout: 15000 },
@@ -425,7 +433,7 @@ async function main(): Promise<void> {
     await shootWindow(page, '#maintenance-view', path.join(outDir, 'maintenance.png'));
 
     // ── Dial-in ────────────────────────────────────────────────────────
-    await page.click('#btnDialin');
+    await openTopbarTab(page, '#btnDialin');
     // The dial-in grid is populated from shot/dial-in history; a real backup
     // without dial-in data leaves it empty, so don't abort the whole run there
     // — capture what's rendered and warn.
@@ -445,7 +453,7 @@ async function main(): Promise<void> {
     // Both are captured in every mode (#1809). Live shows the connecting /
     // offline state: the throwaway instance has no machine to reach, so the
     // badge wait is best-effort like dial-in's rather than aborting the run.
-    await page.click('#btnLive');
+    await openTopbarTab(page, '#btnLive');
     await page.waitForFunction(() => {
         const badge = document.getElementById('live-status-badge');
         return !!badge && !badge.classList.contains('connecting');
@@ -457,7 +465,7 @@ async function main(): Promise<void> {
     // The throwaway instance's queue is empty and a restored backup holds only
     // completed orders, so the script places demo orders of its own first.
     const placedOrders = await seedDemoOrders(baseUrl);
-    await page.click('#btnOrders');
+    await openTopbarTab(page, '#btnOrders');
     await page.waitForFunction(
         () => !!document.getElementById('ordersEnabledLabel')?.textContent,
         undefined, { timeout: 15000 },
@@ -470,7 +478,7 @@ async function main(): Promise<void> {
 
     // #1514: Settings left .topbar-nav-scroll for a fixed slot, but the
     // click target is still its unchanged id.
-    await page.click('#btnSettings');
+    await openTopbarTab(page, '#btnSettings');
     // seed() adds a second machine; a real backup may hold just one.
     await page.waitForFunction(
         (min) => document.querySelectorAll('#machinesList .machine-row').length >= min,

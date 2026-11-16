@@ -156,7 +156,7 @@ func (s *Service) GetComparativeGrindAdvice(shot Shot, lang string) (*Comparativ
 		if c.score == nil {
 			continue
 		}
-		comparable = append(comparable, comparableSibling{grind: g, score: *c.score})
+		comparable = append(comparable, comparableSibling{grind: g, score: *c.score, tasteTag: tasteTagOf(toMap(c.light["annotation"]))})
 	}
 	return m.advice(comparable, lang), nil
 }
@@ -203,17 +203,24 @@ func SetAnnotationStockHook(fn func(prev, next map[string]any) error) {
 // deleted, and keys absent from patch are kept. Server-owned keys are ignored.
 // Only the keys the patch actually sets are validated, so an older stored
 // value the current rules no longer accept (an over-long notes, an
-// out-of-range rating) cannot block an unrelated edit. The patched keys are
+// out-of-range rating) cannot block an unrelated edit. The tasteTag value is
+// checked here rather than in ValidateAnnotation, so a restore never drops an
+// annotation over a tag this version does not know. The patched keys are
 // validated before the write; an invalid patch returns
 // *AnnotationValidationError and leaves the stored annotation untouched.
 // Returns the saved annotation. The installed annotation stock hook (see
 // SetAnnotationStockHook) runs once the merge is saved, in the same locked
 // save.
+//
+// The shot's bean age is derived from the library on every patch (#2025), so
+// every client of this merge stores the same definition; an age that cannot be
+// resolved leaves the merged value exactly as the patch produced it.
 func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[string]any, error) {
 	var after func(prev, next map[string]any) error
 	if h := annotationStockHook.Load(); h != nil {
 		after = *h
 	}
+	ageOf := s.loadBeanAge(shotID)
 	return s.repo.updateAnnotation(shotID, func(ann map[string]any) error {
 		applied := make(map[string]any, len(patch))
 		for k, v := range patch {
@@ -227,8 +234,15 @@ func (s *Service) PatchAnnotation(shotID int64, patch map[string]any) (map[strin
 			ann[k] = v
 			applied[k] = v
 		}
-		if issues := ValidateAnnotation(applied); len(issues) > 0 {
+		issues := ValidateAnnotation(applied)
+		issues = append(issues, checkTasteTag(applied)...)
+		if len(issues) > 0 {
 			return &AnnotationValidationError{Issues: issues}
+		}
+		if ageOf != nil {
+			if days, ok := ageOf(ann); ok {
+				ann["beanAgeDays"] = float64(days)
+			}
 		}
 		return nil
 	}, after)

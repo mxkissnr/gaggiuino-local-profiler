@@ -196,6 +196,9 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
           updateMobileShotSidebarVisibility();
           setTimeout(() => { if (window.updateView) window.updateView(); }, 50);
         } else {
+          // #2056: a picked shot gets the full width; the expand button in the
+          // topbar opens the list again.
+          setDesktopSidebarCollapsed(true);
           if (window.updateView) window.updateView();
         }
       }
@@ -432,13 +435,18 @@ export function updateFlapCounter(count: number): void {
 }
 
 // ── Desktop sidebar collapse ──────────────────────────────────────────────
+// #2056: one state for the desktop list on the Shots page, the existing
+// `desktop-collapsed` class, never stored. switchMode() opens it on every page
+// switch (entering Shots shows the list; other pages hide #sidebar anyway, see
+// updateMobileShotSidebarVisibility()), and a picked shot folds it away.
+export function setDesktopSidebarCollapsed(collapsed: boolean): void {
+  document.getElementById('sidebar')?.classList.toggle('desktop-collapsed', collapsed);
+  document.getElementById('expandSidebarBtn')?.classList.toggle('visible', collapsed);
+}
+
 export function toggleDesktopSidebar(): void {
-  const sidebar = document.getElementById('sidebar');
-  const expandBtn = document.getElementById('expandSidebarBtn');
-  const collapseBtn = document.getElementById('collapseBtn');
-  const collapsed = (sidebar as HTMLElement).classList.toggle("desktop-collapsed");
-  if (expandBtn) expandBtn.classList.toggle('visible', collapsed);
-  if (collapseBtn) collapseBtn.textContent = collapsed ? '›' : '‹';
+  const collapsed = !document.getElementById('sidebar')?.classList.contains('desktop-collapsed');
+  setDesktopSidebarCollapsed(collapsed);
   if (!collapsed) setTimeout(() => { if (window.updateView) window.updateView(); }, 320);
 }
 
@@ -446,8 +454,8 @@ export function toggleDesktopSidebar(): void {
 // On mobile, the Shots tab always shows the shot detail (#shots-view) full
 // screen — the shot list (#sidebar) is reachable only via the burger drawer
 // overlay (#425, openShotDrawer()/closeShotDrawer() below), not as a second
-// full-screen alternate. Desktop is unaffected: it always shows both side
-// by side.
+// full-screen alternate. On desktop the list sits next to the shot detail on
+// the Shots page only and is hidden on every other page (#2056).
 export function updateMobileShotSidebarVisibility() {
   const sidebar = document.getElementById('sidebar');
   const shotsView = document.getElementById('shots-view');
@@ -466,7 +474,8 @@ export function updateMobileShotSidebarVisibility() {
     // column layout (set purely via CSS) applies again, e.g. after a
     // window resize back up past the breakpoint. #shots-view's own display
     // is switchMode()'s responsibility on desktop (mode === 'shots' or not).
-    sidebar.style.display = '';
+    // #2056: every page except Shots hides the list and gets the full width.
+    sidebar.style.display = S.currentMode === 'shots' ? '' : 'none';
     return;
   }
   const inShotsMode = S.currentMode === 'shots';

@@ -2,11 +2,14 @@ import js from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import { htmlSinkRule } from './eslint-rules/html-sink.mts';
+import { noNativeDialogRule } from './eslint-rules/no-native-dialog.mts';
 
 const localPlugin = {
   rules: {
     // #1104 L1.
     'html-sink': htmlSinkRule,
+    // #1962.
+    'no-native-dialog': noNativeDialogRule,
   },
 };
 
@@ -62,6 +65,9 @@ export default [
       // #1104 L1: every innerHTML/outerHTML write and insertAdjacentHTML call
       // must carry an Html-branded value; the rule checks the RHS type.
       'local/html-sink': 'error',
+      // #1962: a native alert()/confirm() or <datalist> cannot be styled or
+      // translated; existing uses are tracked in eslint-suppressions.json.
+      'local/no-native-dialog': 'error',
     },
   }),
   ...tseslint.config({
@@ -103,6 +109,6 @@ export default [
     // ignored above, so `eslint .` never sees its deliberate violations; the test
     // re-lints it through the ESLint API with ignore disabled.
     files: ['test/fixtures/**/*.ts'],
-    rules: { 'local/html-sink': 'error' },
+    rules: { 'local/html-sink': 'error', 'local/no-native-dialog': 'error' },
   },
 ];

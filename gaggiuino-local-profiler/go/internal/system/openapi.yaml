@@ -135,6 +135,7 @@ components:
         roastDate:    { type: string, format: date, maxLength: 10 }
         tds:          { type: number, minimum: 0.1, maximum: 30, nullable: true }
         notes:        { type: string, maxLength: 2000 }
+        tasteTag:     { type: string, enum: [sour, bitter, balanced, thin, null], nullable: true, description: "How the shot tasted. Feeds the grind advice, never the score. Send null or an empty string to clear" }
         orderedBy:
           type: object
           description: Set automatically when an order is completed for this shot.
@@ -254,8 +255,8 @@ components:
       description: >
         Field set as actually accepted by POST/PUT /api/library/bean — see
         those operations for per-field length caps and sanitizer behavior
-        (species/category/roastType/flavors/origins are allowlist-validated,
-        not just trimmed).
+        (species/category/roastType/roastLevel/flavors/origins are
+        allowlist-validated, not just trimmed).
       properties:
         id:         { type: integer, description: Unix ms timestamp used as ID }
         name:       { type: string, maxLength: 200 }
@@ -264,7 +265,8 @@ components:
         notes:      { type: string, maxLength: 1000 }
         stock_g:    { type: number, nullable: true, description: "Mirrors the active (last) bag's stock_g" }
         decaf:      { type: boolean }
-        enabled:    { type: boolean, description: "Manual override for the order card's bean picker (#578) — independent of stock" }
+        enabled:    { type: boolean, description: "False archives the bean (#578, #1958): left out of the app's bean pickers, the order card and, by default, MCP list_beans. Shots, statistics and stock are unaffected" }
+        emptyOfferBagId: { type: integer, format: int64, description: "Newest bag id the bean-is-empty offer was resolved for (#1958), 0 for a bean without bags. Only moves forward" }
         origin:     { type: string, maxLength: 2, description: "Legacy single ISO 3166-1 alpha-2 code — first entry of origins[]" }
         origins:
           type: array
@@ -280,6 +282,9 @@ components:
         process:       { type: string, maxLength: 200 }
         flavors:       { type: array, items: { type: string } }
         roastType:     { type: string, description: Allowlist-validated }
+        roastLevel:    { type: string, description: "Allowlist-validated roast degree (#1977): light / medium-light / medium / medium-dark / dark; empty or absent means unspecified" }
+        bestFromDays:  { type: integer, nullable: true, description: "Optional per-bean \"best for use\" window, first day (#1977). Whole days 1–365; stored together with bestUntilDays or not at all" }
+        bestUntilDays: { type: integer, nullable: true, description: "Optional per-bean \"best for use\" window, last day (#1977). Must be greater than bestFromDays" }
         region:        { type: string, maxLength: 200 }
         altitude_m:    { type: integer, nullable: true }
         importer:      { type: string, maxLength: 200 }
@@ -334,8 +339,28 @@ components:
             properties:
               grinder:      { type: string, maxLength: 200 }
               grindSetting: { type: string, maxLength: 50 }
+        pinnedProfiles:
+          type: array
+          maxItems: 20
+          description: "Profiles the user pinned as proven for this bean (#1963), per machine. Matched to shots by profile name, trimmed and case-insensitive. Sending the field replaces the whole list; an empty list clears it."
+          items:
+            type: object
+            required: [machineId, name]
+            properties:
+              machineId: { type: integer, minimum: 1 }
+              name:      { type: string, maxLength: 200 }
         remainingG: { type: integer, description: "Total grams left across the bean's tracked bags, computed on read (#1122); absent for an untracked (unlimited-stock) bean" }
         consumedG:  { type: integer, description: "Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean" }
+
+    GrinderScale:
+      type: object
+      required: [type, min, max, step]
+      description: "A grinder's valid grind settings (#1961). Settings are min + k * step, up to max. min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. Absent for a grinder without a scale, whose grind setting stays free text."
+      properties:
+        type: { type: string, enum: [stepped, stepless] }
+        min:  { type: number }
+        max:  { type: number }
+        step: { type: number }
 
     Grinder:
       type: object
@@ -346,6 +371,8 @@ components:
         notes:         { type: string, maxLength: 1000 }
         burrType:      { type: string, maxLength: 200 }
         purchaseDate:  { type: string, maxLength: 10 }
+        isDefault:     { type: boolean, description: "Only the single default grinder carries it; setting it clears the previous default." }
+        scale:         { $ref: '#/components/schemas/GrinderScale' }
         burrsResetAt:  { type: string, description: "ISO date/timestamp — start of the burr-wear counting window, see POST .../reset-burrs" }
         image:         { type: string, nullable: true, description: "File extension of the stored photo, if any" }
         imageCrop:     { $ref: '#/components/schemas/ImageCrop' }
@@ -462,11 +489,13 @@ components:
         label:           { type: string, description: "custom_* only: the user-defined label" }
         machineSyncedAt: { type: string, nullable: true, description: "descaling/backflush only: when the task was last auto-synced from the machine" }
         disabled:        { type: boolean, description: "grinder_* only: task hidden from the maintenance view when true" }
-        daysSince:       { type: integer, nullable: true, description: "Days since last maintenance, null when never done" }
+        pausedAt:        { type: integer, format: int64, nullable: true, description: "Unix ms the running pause started, absent when not paused" }
+        pausedMs:        { type: integer, format: int64, nullable: true, description: "Paused time since lastDate from pauses that already ended" }
+        daysSince:       { type: integer, nullable: true, description: "Days since last maintenance with paused time excluded, null when never done" }
         shotsSince:      { type: integer, description: Shots since last maintenance }
         gramsSince:      { type: integer, description: "grinder_* only: grams dosed since last maintenance" }
         pct:             { type: number, minimum: 0, maximum: 1, description: "Progress toward threshold (0–1, capped at 1)" }
-        status:          { type: string, enum: [never, ok, soon, due] }
+        status:          { type: string, enum: [never, ok, soon, due, paused] }
 
     MaintenanceStats:
       type: object
@@ -1693,7 +1722,7 @@ paths:
     post:
       tags: [Library]
       summary: Open a new bag for a bean (joins the back of the queue)
-      description: The new bag's roastDate/stock_g only become the bean's own display fields when it's also the bag SimulateBagQueue resolves as current (i.e. every other bag is already exhausted) — adding a bag while the current one still has stock does not disturb the bean-level fields.
+      description: The new bag's roastDate/stock_g only become the bean's own display fields when it's also the bag SimulateBagQueue resolves as current (i.e. every other bag is already exhausted) — adding a bag while the current one still has stock does not disturb the bean-level fields. A new bag with a stock above 0 also reactivates an archived bean (#1958).
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       requestBody:
@@ -1922,6 +1951,8 @@ paths:
                 notes:        { type: string, maxLength: 1000 }
                 burrType:     { type: string, maxLength: 200 }
                 purchaseDate: { type: string, format: date }
+                isDefault:    { type: boolean, description: "Only the single default grinder carries it; setting it clears the previous default." }
+                scale:        { $ref: '#/components/schemas/GrinderScale' }
                 burrsResetAt: { type: string, format: date, description: "Defaults to purchaseDate if omitted" }
       responses:
         "200": { description: Created grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
@@ -1948,6 +1979,11 @@ paths:
                 notes:        { type: string, maxLength: 1000 }
                 burrType:     { type: string, maxLength: 200 }
                 purchaseDate: { type: string, format: date }
+                isDefault:    { type: boolean, description: "Only the single default grinder carries it; setting it clears the previous default." }
+                scale:
+                  allOf: [{ $ref: '#/components/schemas/GrinderScale' }]
+                  nullable: true
+                  description: "Null removes the scale; omit it to leave the scale unchanged."
                 burrsResetAt: { type: string, format: date }
       responses:
         "200": { description: Updated grinder, content: { application/json: { schema: { $ref: '#/components/schemas/Grinder' } } } }
@@ -2507,6 +2543,7 @@ paths:
                 threshold_shots: { type: integer, minimum: 1, maximum: 10000, nullable: true }
                 threshold_days:  { type: integer, minimum: 1, maximum: 3650, nullable: true, description: "Static/grinder_* tasks are additionally capped at 365 server-side; custom_* tasks accept the full range." }
                 label: { type: string, maxLength: 100, description: "custom_* tasks only — renames the task's display label." }
+                paused: { type: boolean, description: "true starts a pause, false ends it; repeating the current state changes nothing." }
       responses:
         "200": { description: Updated stats, content: { application/json: { schema: { $ref: '#/components/schemas/MaintenanceStats' } } } }
         "404": { description: Unknown task, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
@@ -4302,6 +4339,7 @@ paths:
                       orders:              { type: integer }
                       ordersTotal:         { type: integer }
                       machines:            { type: integer }
+                      pendingProfileChanges: { type: integer, description: Machine profile changes not yet sent to a machine that restoring the machines section would discard }
                       settings:            { type: boolean }
                       images:              { type: integer }
                       secretsPresent:      { type: boolean }

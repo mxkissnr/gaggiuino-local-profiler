@@ -9,10 +9,12 @@
 import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import { localeFor } from '../constants.js';
-import { esc, html, joinHtml, shareOrDownloadBlob } from '../utils.js';
+import { esc, formatDate, html, joinHtml, shareOrDownloadBlob } from '../utils.js';
 import type { Html } from '../utils.js';
 import { openDetailSheet } from './detail-sheet.js';
 import { showToast } from './toast.js';
+import { confirmDialog } from './confirm-dialog.js';
+import { bindPillSelects } from './pill-select.js';
 import {
   backUpMachineNow, deleteMachineBackup, downloadMachineBackup, getMachineBackup, getMachineBackupSettings,
   listMachineBackups, restoreMachineBackup, saveMachineBackupSettings, uploadMachineBackup,
@@ -48,6 +50,7 @@ interface SheetState {
   picked?: number[]; // ids ticked for compare, at most what the user ticked
   compare?: CompareView | null; // the open compare view, null for the list
   comparing?: boolean; // the two detail reads are in flight
+  keepError: boolean; // the retention field holds an out-of-range value
 }
 
 /** The ticked ids; the field stays optional so the list renders without it. */
@@ -239,7 +242,7 @@ export function splitBackups(
 }
 
 function formatBackupDate(ms: number, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(ms);
+  return formatDate(ms, locale, 'long', true);
 }
 
 export function relativeTime(ms: number, nowMs: number, locale: string): string {
@@ -307,10 +310,9 @@ export function machineBackupsButtonHtml(): Html {
 
 /** The update did not start because the backup before it failed. True is the user's
  *  deliberate "update without a backup" (Max decision 1); slice W resends with skipBackup.
- *  A native confirm (like deleteMachine) wraps on every width; a toast with an action
- *  cannot, toast.ts pins white-space:nowrap. */
-export function confirmUpdateWithoutBackup(): boolean {
-  return confirm(`${t('mbk_preupdate_failed')}\n\n${t('mbk_preupdate_confirm')}`);
+ *  The app dialog, not a native confirm (#1962). */
+export function confirmUpdateWithoutBackup(): Promise<boolean> {
+  return confirmDialog(`${t('mbk_preupdate_failed')}\n\n${t('mbk_preupdate_confirm')}`);
 }
 
 /** Trimmed note, or undefined when the user typed nothing (then no note is sent). 200 code points. */
@@ -366,11 +368,12 @@ function renderRestore(sheet: SheetState, draft: RestoreDraft, entry: MachineBac
 }
 
 /** Schedule and retention of one machine (11-03 item 1/3). */
-function renderSettings(settings: MachineBackupSettings, open: boolean): Html {
+function renderSettings(settings: MachineBackupSettings, open: boolean, keepError = false): Html {
   const options = SCHEDULE_ORDER.map(v => optionHtml(v, tHtml(SCHEDULE_KEYS[v]), v === settings.schedule));
   return html`<details class="mbk-fold" data-fold="auto"${open ? html` open` : esc('')}><summary>${tHtml('mbk_auto_title')}</summary>
-    <label class="mbk-field"><span>${tHtml('mbk_schedule')}</span><select class="mbk-select mbk-schedule">${joinHtml(options)}</select></label>
+    <label class="mbk-field"><span>${tHtml('mbk_schedule')}</span><select class="mbk-select mbk-schedule" data-pills>${joinHtml(options)}</select></label>
     <label class="mbk-field"><span>${tHtml('mbk_keep')}</span><input class="mbk-input mbk-keep" type="number" min="1" max="100" step="1" inputmode="numeric" value="${esc(settings.keepAutomatic)}"></label>
+    ${keepError ? html`<div class="bf-error" role="alert">${tHtml('mbk_keep_range')}</div>` : esc('')}
     <p class="mbk-hint">${esc(t('mbk_keep_hint', settings.keepAutomatic))}</p>
   </details>`;
 }
@@ -433,7 +436,7 @@ export function renderSheetBody(sheet: SheetState, nowMs: number, openFolds: Rea
     parts.push(html`<details class="mbk-fold" data-fold="deleted"${open}><summary>${tHtml('mbk_deleted_machines')} <span class="mbk-fold-count">${esc(sheet.orphans.length)}</span></summary><div class="mbk-list">${joinHtml(sheet.orphans.map(b => renderRow(b, locale, esc(t('mbk_deleted_machine', b.machineId)), waiting, picked.includes(b.id))))}</div></details>`);
   }
   const settings = _settings.get(sheet.machineId);
-  if (settings !== undefined) parts.push(renderSettings(settings, openFolds.has('auto')));
+  if (settings !== undefined) parts.push(renderSettings(settings, openFolds.has('auto'), sheet.keepError === true));
   return joinHtml(parts);
 }
 
@@ -448,11 +451,13 @@ function rerender(): void {
     if (d.open && fold !== undefined) open.add(fold);
   }
   el.innerHTML = renderSheetBody(sheet, Date.now(), open);
+  bindPillSelects(el);
 }
 
 export async function openMachineBackups(machineId: number, anchor: HTMLElement | null): Promise<void> {
   const sheet: SheetState = {
     machineId, entries: null, orphans: [], failed: false, note: '', restore: null, picked: [], compare: null, comparing: false,
+    keepError: false,
   };
   _sheet = sheet;
   openDetailSheet({
@@ -685,11 +690,12 @@ function onKeepChange(sheet: SheetState, value: string): void {
   if (!current) return;
   const n = Number(value);
   if (!Number.isInteger(n) || n < 1 || n > 100) {
-    showToast(t('mbk_keep_range'));
+    sheet.keepError = true;
     rerender(); // the field snaps back to the stored value
     return;
   }
-  if (n === current.keepAutomatic) return;
+  sheet.keepError = false;
+  if (n === current.keepAutomatic) { rerender(); return; }
   void saveSettings(sheet.machineId, { machineId: sheet.machineId, schedule: current.schedule, keepAutomatic: n });
 }
 
@@ -732,7 +738,7 @@ async function backUpNow(machineId: number, note: string | undefined): Promise<v
 }
 
 async function deleteBackup(machineId: number, id: number): Promise<void> {
-  if (!confirm(t('mbk_delete_confirm'))) return;
+  if (!await confirmDialog(t('mbk_delete_confirm'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await deleteMachineBackup(id);
   if (r.ok) showToast(t('mbk_deleted'));
   else showToast(backupErrorText(r, 'delete'), 6000);
@@ -743,7 +749,7 @@ async function downloadBackup(id: number): Promise<void> {
   const r = await downloadMachineBackup(id);
   if (!r.ok) { showToast(backupErrorText(r, 'download'), 6000); return; }
   // The plain-text warning comes before anything is saved.
-  if (r.value.secrets === 'merged' && !confirm(t('mbk_download_secrets_confirm'))) return;
+  if (r.value.secrets === 'merged' && !await confirmDialog(t('mbk_download_secrets_confirm'))) return;
   await shareOrDownloadBlob(r.value.blob, r.value.filename, { title: r.value.filename });
   if (r.value.secrets === 'missing') showToast(t('mbk_download_no_secrets'), 6000);
 }

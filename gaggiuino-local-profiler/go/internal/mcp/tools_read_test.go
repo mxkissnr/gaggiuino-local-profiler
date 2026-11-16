@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	_ "time/tzdata" // Europe/Berlin must load on hosts without a tz database
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/library"
@@ -186,6 +187,188 @@ func TestListBeansFilterAndPaging(t *testing.T) {
 		t.Fatalf("Alpha remaining_g = %v, want 100", got)
 	}
 }
+
+// TestListBeansReportsOriginsAndFlavors covers #2066: list_beans used to
+// report only the scalar origin and no flavour notes, so a caller could not
+// tell a blend's countries apart or match a bean by its second origin.
+func TestListBeansReportsOriginsAndFlavors(t *testing.T) {
+	ts, libRepo, _, _ := newReadServer(t, fakePoller{})
+	lib, err := libRepo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	lib.Beans = []library.Entity{
+		{"id": int64(1), "name": "House Blend", "roaster": "Acme", "enabled": true, "origin": "BR", "origins": []any{map[string]any{"code": "BR", "percent": float64(60)}, map[string]any{"code": "ET", "percent": float64(40)}, map[string]any{"code": ""}}, "flavors": []any{"Chocolate", "Cherry", ""}},
+		{"id": int64(2), "name": "Old Single", "roaster": "Acme", "enabled": true, "origin": "CO"},
+		{"id": int64(3), "name": "Plain", "roaster": "Acme", "enabled": true},
+		{"id": int64(4), "name": "Night Owl", "roaster": "Acme", "enabled": true, "origin": "MX", "decaf": true},
+	}
+	if err := libRepo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+	session := connect(t, ts.URL+Path)
+	all := structured(t, call(t, session, "list_beans", map[string]any{}))
+	beans := objects(all, "beans")
+
+	house := findBean(beans, "House Blend")
+	if house == nil {
+		t.Fatalf("House Blend not found in bean list")
+	}
+	if got, _ := house["origin"].(string); got != "BR" {
+		t.Fatalf("House Blend origin = %q, want BR", got)
+	}
+	origins := objects(house, "origins")
+	if len(origins) != 2 {
+		t.Fatalf("House Blend origins = %v, want 2 entries (the empty code is skipped)", origins)
+	}
+	first := origins[0].(map[string]any)
+	if got, _ := first["code"].(string); got != "BR" {
+		t.Fatalf("House Blend first origin = %q, want BR", got)
+	}
+	if got := numberField(t, first, "percent"); got != 60 {
+		t.Fatalf("House Blend first origin percent = %v, want 60", got)
+	}
+	second := origins[1].(map[string]any)
+	if got, _ := second["code"].(string); got != "ET" {
+		t.Fatalf("House Blend second origin = %q, want ET", got)
+	}
+	if got := numberField(t, second, "percent"); got != 40 {
+		t.Fatalf("House Blend second origin percent = %v, want 40", got)
+	}
+	if got := stringList(house, "flavors"); strings.Join(got, ",") != "Chocolate,Cherry" {
+		t.Fatalf("House Blend flavors = %v, want [Chocolate Cherry] (the empty string is skipped)", got)
+	}
+	if _, ok := house["decaf"]; ok {
+		t.Fatalf("House Blend should not report decaf: %v", house["decaf"])
+	}
+
+	// A bean saved before blends existed only carries the scalar origin.
+	old := findBean(beans, "Old Single")
+	if old == nil {
+		t.Fatalf("Old Single not found in bean list")
+	}
+	oldOrigins := objects(old, "origins")
+	if len(oldOrigins) != 1 {
+		t.Fatalf("Old Single origins = %v, want 1 entry (legacy fallback)", oldOrigins)
+	}
+	oldOrigin := oldOrigins[0].(map[string]any)
+	if got, _ := oldOrigin["code"].(string); got != "CO" {
+		t.Fatalf("Old Single origin code = %q, want CO", got)
+	}
+	if _, ok := oldOrigin["percent"]; ok {
+		t.Fatalf("Old Single origin should have no percent: %v", oldOrigin["percent"])
+	}
+	if _, ok := old["flavors"]; ok {
+		t.Fatalf("Old Single should not report flavors: %v", old["flavors"])
+	}
+
+	// A bean without origin or flavour notes omits every new key.
+	plain := findBean(beans, "Plain")
+	if plain == nil {
+		t.Fatalf("Plain not found in bean list")
+	}
+	for _, key := range []string{"origin", "origins", "flavors", "decaf"} {
+		if _, ok := plain[key]; ok {
+			t.Fatalf("Plain should not report %q: %v", key, plain[key])
+		}
+	}
+
+	nightOwl := findBean(beans, "Night Owl")
+	if nightOwl == nil {
+		t.Fatalf("Night Owl not found in bean list")
+	}
+	if decaf, _ := nightOwl["decaf"].(bool); !decaf {
+		t.Fatalf("Night Owl decaf = %v, want true", nightOwl["decaf"])
+	}
+
+	// The query matches any origin country, not just the first one.
+	byET := objects(structured(t, call(t, session, "list_beans", map[string]any{"query": "et"})), "beans")
+	if len(byET) != 1 {
+		t.Fatalf("query=et = %d beans, want 1 (matched via House Blend's second origin)", len(byET))
+	}
+	if got, _ := byET[0].(map[string]any)["name"].(string); got != "House Blend" {
+		t.Fatalf("query=et bean = %q, want House Blend", got)
+	}
+
+	// Legacy beans still match through the scalar origin; flavours are not searched.
+	byCO := objects(structured(t, call(t, session, "list_beans", map[string]any{"query": "co"})), "beans")
+	if len(byCO) != 1 {
+		t.Fatalf("query=co = %d beans, want 1 (legacy origin only, flavours are not searched)", len(byCO))
+	}
+	if got, _ := byCO[0].(map[string]any)["name"].(string); got != "Old Single" {
+		t.Fatalf("query=co bean = %q, want Old Single", got)
+	}
+}
+
+// TestListBeansReportsRoastLevel covers #1977: roast_level used to echo the
+// legacy roastType label ("espresso"), so a caller asking for the bean's roast
+// level got a process-style value instead.
+func TestListBeansReportsRoastLevel(t *testing.T) {
+	bean := library.Entity{
+		"id": int64(1), "name": "Alpha", "enabled": true,
+		"roastType": "espresso", "roastLevel": "medium-light",
+	}
+	info := toBeanInfo(bean, []library.Entity{bean}, nil, time.Now())
+	if info.RoastLevel != "medium-light" {
+		t.Fatalf("roast_level = %q, want medium-light (the roastLevel field)", info.RoastLevel)
+	}
+
+	// A bean saved before #1977 has no roastLevel: report no level rather than
+	// falling back to the unrelated roastType.
+	legacy := library.Entity{"id": int64(2), "name": "Beta", "enabled": true, "roastType": "espresso"}
+	if got := toBeanInfo(legacy, []library.Entity{legacy}, nil, time.Now()).RoastLevel; got != "" {
+		t.Fatalf("legacy roast_level = %q, want empty (roastType must not be used)", got)
+	}
+}
+
+// TestToBeanInfoDaysSinceRoast is the #2025 slice-3 outcome: days_since_roast
+// used to parse the roast date as UTC midnight and truncate the hours, so a
+// bean roasted 2026-07-09 and first reported at 00:30 Berlin on 2026-07-19 read
+// 9 days instead of the bean card's 10. It also reported a future roast date as
+// 0 and ignored a German-format date. The field now uses the shared rule.
+func TestToBeanInfoDaysSinceRoast(t *testing.T) {
+	prev := time.Local
+	loc, err := time.LoadLocation("Europe/Berlin")
+	if err != nil {
+		t.Fatalf("LoadLocation(Europe/Berlin): %v", err)
+	}
+	time.Local = loc
+	t.Cleanup(func() { time.Local = prev })
+
+	at := func(y int, mo time.Month, d, h, mi int) time.Time {
+		return time.Date(y, mo, d, h, mi, 0, 0, loc)
+	}
+	cases := []struct {
+		name      string
+		roastDate string
+		now       time.Time
+		want      *int
+	}{
+		{"local midnight boundary", "2026-07-09", at(2026, time.July, 19, 0, 30), intPtr(10)},
+		{"german roast date", "09.07.2026", at(2026, time.July, 19, 0, 30), intPtr(10)},
+		{"future roast date", "2026-12-01", at(2026, time.November, 3, 8, 0), nil},
+		{"over two years", "2020-01-01", at(2026, time.November, 3, 8, 0), nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bean := library.Entity{"id": int64(1), "name": "Alpha", "roastDate": tc.roastDate, "enabled": true}
+			info := toBeanInfo(bean, []library.Entity{bean}, nil, tc.now)
+			if info.RoastDate != tc.roastDate {
+				t.Fatalf("roast_date = %q, want %q", info.RoastDate, tc.roastDate)
+			}
+			switch {
+			case tc.want == nil && info.DaysSinceRoast != nil:
+				t.Fatalf("days_since_roast = %d, want nil", *info.DaysSinceRoast)
+			case tc.want != nil && info.DaysSinceRoast == nil:
+				t.Fatalf("days_since_roast = nil, want %d", *tc.want)
+			case tc.want != nil && *info.DaysSinceRoast != *tc.want:
+				t.Fatalf("days_since_roast = %d, want %d", *info.DaysSinceRoast, *tc.want)
+			}
+		})
+	}
+}
+
+func intPtr(v int) *int { return &v }
 
 func findBean(beans []any, name string) map[string]any {
 	for _, raw := range beans {
@@ -372,6 +555,61 @@ func TestGetMaintenanceStatus(t *testing.T) {
 	if res := call(t, session, "get_maintenance_status", map[string]any{"machine_id": 999}); !res.IsError {
 		t.Fatalf("expected isError for unknown machine id")
 	}
+}
+
+// TestGetMaintenanceStatus_ReportsPaused: a paused task reports "paused" and
+// a pause-free day count, while the same last-done date without a pause is due.
+func TestGetMaintenanceStatus_ReportsPaused(t *testing.T) {
+	ts, _, maintRepo, registry := newReadServer(t, fakePoller{})
+	if err := registry.EnsureDefaultMachine(); err != nil {
+		t.Fatalf("EnsureDefaultMachine: %v", err)
+	}
+	last := time.Now().Add(-100 * 24 * time.Hour)
+	iso := last.UTC().Format("2006-01-02T15:04:05.000Z")
+	pausedAt := time.Now().Add(-60 * 24 * time.Hour).UnixMilli()
+	if err := maintRepo.SaveTask(1, "descaling", maintenance.Task{
+		"lastDate": iso, "threshold_days": int64(60), "pausedAt": pausedAt,
+	}); err != nil {
+		t.Fatalf("SaveTask descaling: %v", err)
+	}
+	if err := maintRepo.SaveTask(1, "grouphead", maintenance.Task{
+		"lastDate": iso, "threshold_days": int64(60),
+	}); err != nil {
+		t.Fatalf("SaveTask grouphead: %v", err)
+	}
+	session := connect(t, ts.URL+Path)
+
+	out := structured(t, call(t, session, "get_maintenance_status", map[string]any{"machine_id": 1}))
+	machines := objects(out, "machines")
+	if len(machines) != 1 {
+		t.Fatalf("machines = %d, want 1", len(machines))
+	}
+	list, _ := machines[0].(map[string]any)["tasks"].([]any)
+
+	paused := taskByName(t, list, "descaling")
+	if got, _ := paused["status"].(string); got != "paused" {
+		t.Fatalf("descaling status = %q, want paused", got)
+	}
+	if got := numberField(t, paused, "days_since"); got != 40 {
+		t.Fatalf("descaling days_since = %v, want 40", got)
+	}
+
+	unpaused := taskByName(t, list, "grouphead")
+	if got, _ := unpaused["status"].(string); got != "due" {
+		t.Fatalf("grouphead status = %q, want due", got)
+	}
+}
+
+func taskByName(t *testing.T, tasks []any, name string) map[string]any {
+	t.Helper()
+	for _, raw := range tasks {
+		m, _ := raw.(map[string]any)
+		if key, _ := m["task"].(string); key == name {
+			return m
+		}
+	}
+	t.Fatalf("task %q not found in %v", name, tasks)
+	return nil
 }
 
 func hasTask(tasks []any, name string) bool {

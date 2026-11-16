@@ -56,11 +56,13 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 - **Coffee library** - beans, grinders, baskets, puck screens, recipes and frozen portions in one catalogue, with roaster URL import, barcode/QR scan and per-entity photos.
 - **Bean shelf** - your beans stand as bag photos with a stock bar, with search, filter and sort, and empty or archived beans tidy themselves away.
 - **Multiple beans in one shot** - log a shot with up to four beans and the grams of each; every bag is deducted by its own share, and the largest share is the shot's bean.
-- **Bean freshness and in-app camera** - set your own freshness windows and low-stock threshold, take photos with a camera inside the app, and re-crop a saved photo later from its uncropped original.
+- **Proven profiles per bean** - each bean lists the profiles that earned your best ratings on it, lets you pin one, and a new bean gets suggestions from similar beans (roast level, decaf, process) once your own history backs them up.
+- **Bean freshness and in-app camera** - each bean's roast level picks its own freshness window (with an optional per-bean "best for use" range and per-level overrides in Settings) next to your low-stock threshold; take photos with a camera inside the app, and re-crop a saved photo later from its uncropped original.
 - **Sticker cut-out** - cut a bean photo out as a sticker right in the app, on your own device (the models download once on first use).
 - **Analytics** - score trends, a shot calendar heatmap, a month calendar with a photo of each day's bean, a coffee world map, bean/grinder/basket rankings, machine comparison and per-bean dial-in progression.
 - **Machine profile editor** - build and edit Gaggiuino and GaggiMate profiles phase by phase with a live preview chart, then send them straight to the machine.
 - **Machine settings backups** - Gaggiuino machines keep a history of their settings and profiles, backed up daily, before firmware updates and on demand; download, upload, compare in plain words and restore any version, without GLP ever storing the Wi-Fi or MQTT passwords.
+- **Settings like Home Assistant, and an achievements page** - Settings is a grouped, searchable list with sub-pages and a list of the open-source libraries the app is built with; the Achievements page shows your stamp card, and the library saves changes to existing entries by itself.
 - **Maintenance tracking** - descaling, backflush, group-head and gasket tasks tracked per machine, with grinder cleaning and burr-wear tracking alongside.
 - **Orders & kiosk mode** - take drink orders from a tablet kiosk page with variants and notes, and watch the barista queue update on its own.
 - **Live updates across devices** - an open page picks up a change made on another device within seconds, without a reload.

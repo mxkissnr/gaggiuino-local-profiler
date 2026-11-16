@@ -6,6 +6,8 @@ import { devBannerHeight } from './dev-banner.js';
 import { themeColor } from '../utils.js';
 import { CLOSE_ICON_SVG } from '../icons.js';
 import { safeSessionStorage } from '../storage.js';
+import { showToast } from './toast.js';
+import { confirmDialog } from './confirm-dialog.js';
 
 const DISMISS_KEY = 'glp_onboarding_banner_dismissed';
 
@@ -100,7 +102,7 @@ export async function loadDemoData(): Promise<void> {
 }
 
 export async function endDemo(): Promise<void> {
-  if (!confirm(t('demo_mode_end_confirm'))) return;
+  if (!await confirmDialog(t('demo_mode_end_confirm'))) return;
   try {
     const r = await endDemoData();
     if (r.ok) {
@@ -108,7 +110,9 @@ export async function endDemo(): Promise<void> {
       if (window.loadData) await window.loadData();
       if (window.loadLibrary) await window.loadLibrary();
     }
-  } catch { /* ignore */ }
+  } catch (e) {
+    showToast(t('error_generic', (e as Error).message));
+  }
 }
 
 // ── "Demo mode" badge ────────────────────────────────────────────────────

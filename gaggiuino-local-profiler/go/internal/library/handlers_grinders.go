@@ -42,6 +42,11 @@ func (h *Handlers) updateGrinder(w http.ResponseWriter, r *http.Request) {
 	}
 	grinder, found, err := UpdateGrinder(h.repo, id, body)
 	if err != nil {
+		var verr *ValidationError
+		if errors.As(err, &verr) {
+			writeError(w, http.StatusBadRequest, verr.Message)
+			return
+		}
 		internalError(w, err)
 		return
 	}

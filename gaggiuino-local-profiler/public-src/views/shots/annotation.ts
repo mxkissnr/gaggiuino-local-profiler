@@ -5,15 +5,19 @@ import { getMenu }                        from '../../api/orders.js';
 import { listMilks } from '../../api/library.js';
 import { annotateShot, getShotDefaults, deleteShotImage, shotImageUrl } from '../../api/shots.js';
 import type { AnnotateResult, ImageCrop, ShotDefaults } from '../../api/types.js';
-import { esc, freshnessState, freshnessWindows, germanToIso, html, joinHtml, parseRoastDate } from '../../utils.js';
+import { esc, formatDate, germanToIso, html, joinHtml, parseRoastDate, resolveFreshness, roastAgeDays } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
-import { calcBeanAgeAtShot, _roastDateFromLibrary, resolveBeanForAnnotation } from './utils.js';
-import { suggestGrindDoseForBean } from './grind.js';
+import { shotBeanAge, beanAgeForSave, _roastDateFromLibrary, resolveBeanForAnnotation, beanFreshnessContext } from './utils.js';
+import type { BeanFreshnessContext } from './utils.js';
+import { defaultGrinderName, suggestGrindDoseForBean, TASTE_TAGS, TASTE_TAG_LABELS, tasteTagOf } from './grind.js';
+import type { TasteTag } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openLightbox } from '../../components/lightbox.js';
 import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
 import { localeFor } from '../../constants.js';
+import { isBeanMix } from '../../shared/bean-mix.js';
 import type { BeanMixPartInput, BeanMixPartPayload } from '../../shared/bean-mix.js';
+import { getGrindFieldValue, renderGrindField } from './grind-field.js';
 import { initBeanMix, loadBeanMix, mixFields, mixParts, resetBeanMix } from './annotation-mix.js';
 import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { PhotoCropShape } from '../../photo-upload.js';
@@ -44,6 +48,9 @@ interface AnnotationData {
   milkType?: number | string | null;
   recipeId?: number | null;
   frozenPortionId?: number | null;
+  beanAgeDays?: number | null;
+  // #1957: one taste tag per shot; it only feeds the grind advice.
+  tasteTag?: string | null;
   // #1837: 2-4 per-bean shares of the dose; absent on a single-bean shot.
   beanMix?: readonly BeanMixPartInput[] | null;
   orderedBy?: OrderedBy | null;
@@ -80,6 +87,7 @@ interface AnnotationPayload {
   roastDate: string | null;
   tds: number | null;
   notes: string;
+  tasteTag: TasteTag | null;
   drinkType: string | null;
   milkType: number | null;
   recipeId: number | null;
@@ -127,10 +135,12 @@ export function annotationBusy(): boolean {
 }
 
 // #1411: the server books milk stock and frozen-portion counts while it
-// saves; the library only needs a reload when a field it books from changed.
+// saves; bean stock (#1958) derives from the bean, the dose and the mix, so the
+// library only needs a reload when one of those fields changed.
 export function _stockFieldsChanged(prev: AnnotationData | null | undefined, next: AnnotationData | null | undefined): boolean {
   const key = (a: AnnotationData | null | undefined): string =>
-    [a?.drinkType || '', String(a?.milkType ?? ''), String(a?.frozenPortionId ?? '')].join('|');
+    [a?.drinkType || '', String(a?.milkType ?? ''), String(a?.frozenPortionId ?? ''),
+      a?.coffee || '', String(a?.beanId ?? ''), String(a?.dose ?? ''), JSON.stringify(a?.beanMix ?? null)].join('|');
   return key(prev) !== key(next);
 }
 
@@ -161,23 +171,25 @@ function _buildAnnotationPayload(shot: AnnotationShot | undefined): AnnotationPa
   const mix         = mixFields(mixParts());
   const shotCoffee  = mix ? mix.coffee : coffee;
   const shotBeanId  = mix ? mix.beanId : beanId;
+  const frozenPortionId = parseInt((document.getElementById('annFrozenPortionId') as HTMLSelectElement | null)?.value as string, 10) || null;
   return {
     rating:       S.currentRating || null,
     coffee:       shotCoffee,
     beanId:       shotBeanId,
     basketId,
     puckScreenId,
-    grinder:      (document.getElementById('annGrinder') as HTMLInputElement).value.trim(),
-    grindSetting: (document.getElementById('annGrindSetting') as HTMLInputElement).value.trim(),
+    grinder:      getGrinderFieldValue('annGrinder', 'annGrinderOther'),
+    grindSetting: getGrindFieldValue('annGrindSetting'),
     dose:         mix ? mix.dose : parseFloat((document.getElementById('annDose') as HTMLInputElement).value) || null,
     roastDate:    germanToIso(_roastDateFromLibrary(shotCoffee, shot?.timestamp, shotBeanId) || '') || null,
     tds:          parseFloat((document.getElementById('annTds') as HTMLInputElement).value) || null,
     notes:        (document.getElementById('annNotes') as HTMLInputElement).value.trim(),
+    tasteTag:     tasteTagOf({ tasteTag: (document.getElementById('annTasteTag') as HTMLInputElement | null)?.value }),
     drinkType:    (document.getElementById('annDrinkType') as HTMLSelectElement | null)?.value || null,
     milkType:     (document.getElementById('annMilkType') as HTMLSelectElement | null)?.value ? parseInt((document.getElementById('annMilkType') as HTMLSelectElement).value) : null,
     recipeId:     parseInt((document.getElementById('annRecipe') as HTMLSelectElement | null)?.value as string) || null,
-    beanAgeDays:  calcBeanAgeAtShot(shotCoffee, shot?.timestamp, shotBeanId) ?? null,
-    frozenPortionId: parseInt((document.getElementById('annFrozenPortionId') as HTMLSelectElement | null)?.value as string, 10) || null,
+    beanAgeDays:  beanAgeForSave(shotCoffee, shot?.timestamp, shotBeanId, mix ? null : frozenPortionId, shot?.annotation?.beanAgeDays),
+    frozenPortionId,
     beanMix:      mix ? mix.beanMix : null,
   };
 }
@@ -230,6 +242,9 @@ async function _performAnnotationSave(): Promise<void> {
         }
       }
       if (_stockFieldsChanged(prev, next)) void window.loadLibrary?.();
+      // #1957: the advice is built by updateView, so a new tag must rerun it. It
+      // re-renders this panel from the saved values, so never while an edit waits.
+      if ((prev?.tasteTag ?? null) !== (next.tasteTag ?? null) && _autoSaveTimer === null) window.updateView?.();
       renderSidebar();
       updateSidebarHighlighting();
       _setAutoSaveStatus('saved');
@@ -290,6 +305,8 @@ export async function loadShotDefaults(): Promise<void> {
 // completely untouched: a configured default must never overwrite something
 // the user already recorded. Applied fields stay fully editable afterward —
 // this only changes what the form starts out showing.
+// #1954: with a default grinder a new shot opens with that grinder, the same
+// one bean selection prefills from.
 export function _applyShotDefaults(ann: AnnotationData | null | undefined): AnnotationData | null | undefined {
   if (ann && Object.keys(ann).length > 0) return ann;
   const d = S.shotDefaults as Partial<ShotDefaults> | null;
@@ -300,7 +317,7 @@ export function _applyShotDefaults(ann: AnnotationData | null | undefined): Anno
     beanId:       d.beanId       ?? null,
     basketId:     d.basketId     ?? null,
     puckScreenId: d.puckScreenId ?? null,
-    grinder:      d.grinder      || '',
+    grinder:      defaultGrinderName(S.coffeeLibrary) || d.grinder || '',
     dose:         d.dose         ?? null,
   };
 }
@@ -353,6 +370,26 @@ export function selectMilkType(id: string): void {
   scheduleAutoSave();
 }
 
+// ── Taste tag (#1957): at most one per shot, feeds the grind advice only ───
+
+export function _renderTasteTagPills(selected: string): void {
+  const container = document.getElementById('tasteTagPillsContainer');
+  const hidden    = document.getElementById('annTasteTag') as HTMLInputElement | null;
+  if (!container) return;
+  container.innerHTML = joinHtml(TASTE_TAGS.map(tag =>
+    html`<button type="button" class="drink-pill${esc(selected === tag ? ' active' : '')}" aria-pressed="${esc(String(selected === tag))}"
+      data-action="select-taste-tag" data-id="${esc(tag)}">${esc(t(TASTE_TAG_LABELS[tag]))}</button>`
+  ));
+  if (hidden) hidden.value = selected;
+}
+
+export function selectTasteTag(id: string): void {
+  const hidden = document.getElementById('annTasteTag') as HTMLInputElement | null;
+  if (!hidden) return;
+  _renderTasteTagPills(hidden.value === id ? '' : id);
+  scheduleAutoSave();
+}
+
 // ── Frozen-portion pill (which pool of this bean's stock a shot used) ──────
 
 // Bags/portions active as of a given shot's timestamp — mirrors the
@@ -382,12 +419,15 @@ export function _renderFrozenPortionPills(beanName: string | null, shotMs: numbe
   // one, so a renamed bean still offers the same frozen batches.
   const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary?.beans);
   const portions = _activeFrozenPortionsForBean(bean, shotMs ?? Date.now());
-  if (!portions.length) { field.style.display = 'none'; container.innerHTML = html``; hidden.value = ''; return; }
+  // A shot that used the last portion of a batch still holds that choice:
+  // clearing the field here would auto-save `frozenPortionId: null` on the
+  // next edit and book the portion back into stock.
+  const selected = selectedId != null ? String(selectedId) : '';
+  if (!portions.length) { field.style.display = 'none'; container.innerHTML = html``; hidden.value = selected; return; }
   field.style.display = '';
   const locale = localeFor(S.currentLang);
-  const selected = selectedId != null ? String(selectedId) : '';
   const options = [{ id: '', label: t('ann_frozen_portion_none') }, ...portions.map(p => {
-    const dateStr    = new Date(p.frozenAt).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
+    const dateStr    = formatDate(p.frozenAt, locale);
     const remaining  = Number.isFinite(p.remainingCount) ? p.remainingCount as number : p.portionCount;
     // #811: no glyph in the label -- this string is rendered as an <option>
     // text node in one place and as escaped markup in another, and an <option>
@@ -410,8 +450,13 @@ export function selectFrozenPortion(id: string | null | undefined): void {
   // so a renamed bean still resolves to the same frozen batches.
   const beanIdAttr = coffeeSelect ? coffeeSelect.selectedOptions[0]?.dataset.beanId : undefined;
   const beanId = beanIdAttr ? parseInt(beanIdAttr, 10) : null;
-  const shot     = S.primaryShotId ? S.shots.find(s => s.id === S.primaryShotId) : null;
+  const shot     = S.primaryShotId ? _shots().find(s => s.id === S.primaryShotId) : null;
   _renderFrozenPortionPills(beanName, shot ? shot.timestamp * 1000 : Date.now(), id || null, beanId);
+  // The tracker follows the newly picked portion's own effective age, so it
+  // matches the badge the shot will show once saved.
+  const mix = mixFields(mixParts());
+  const ann = { ...(shot?.annotation ?? {}), coffee: beanName, beanId, frozenPortionId: id ? parseInt(id, 10) : null, beanMix: mix ? mix.beanMix : null };
+  updateDegassing(_roastDateFromLibrary(beanName, shot?.timestamp, beanId) || '', _frozenShotAge(ann, shot?.timestamp), beanFreshnessContext(ann));
   scheduleAutoSave();
 }
 
@@ -448,26 +493,39 @@ export function _updateMilkFieldVisibility(): void {
 // so the three grinder-field helpers below and the selectId/fieldId arguments
 // on the render helpers further down live here instead.
 //
-// Same select-with-"other"-fallback grinder field as dialin-wizard.ts's
-// _renderGrinderField/dialinGrinderChange, but DOM-mutating (fills an
-// existing <select>/<input> pair by id) instead of returning an HTML
-// string, since live.ts's pre-shot setup panel's markup is static in
-// index.html rather than re-rendered from a template each time.
+// The select-with-"Other…" grinder field. It fills an existing <select>/<input>
+// pair by id, so the markup can stay static in index.html.
 export function renderGrinderField(selectId: string, otherId: string, currentValue: string): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
   const other  = document.getElementById(otherId) as HTMLInputElement | null;
   if (!select) return;
   const grinders    = S.coffeeLibrary?.grinders || [];
   const knownNames  = new Set(grinders.map(g => g.name));
-  const isOther     = !!currentValue && !knownNames.has(currentValue);
-  select.innerHTML = html`${joinHtml(grinders.map(g =>
+  // #1960: without library grinders the free-text input is the whole field.
+  const isOther     = !grinders.length || (!!currentValue && !knownNames.has(currentValue));
+  // #1960: the blank option keeps a shot without a grinder from taking the first one.
+  select.innerHTML = html`<option value=""></option>${joinHtml(grinders.map(g =>
     html`<option value="${esc(g.name as string)}"${esc(!isOther && currentValue === g.name ? ' selected' : '')}>${esc(g.name as string)}</option>`
   ))}<option value="__other__"${esc(isOther ? ' selected' : '')}>${tHtml('dialin_wizard_grinder_other')}</option>`;
+  select.value  = isOther ? '__other__' : currentValue;
+  select.hidden = !grinders.length;
   if (other) {
     other.style.display = isOther ? '' : 'none';
     other.value = isOther ? currentValue : '';
     other.setAttribute('aria-label', t('dialin_wizard_grinder_other_ph'));
   }
+}
+
+// #1960: re-fills the options after the library changed and keeps the current
+// choice. Leaves the field alone while it is being filled in: the text input has
+// focus, or "Other…" was just picked and nothing is typed yet.
+export function refreshGrinderField(selectId: string, otherId: string): void {
+  const select = document.getElementById(selectId) as HTMLSelectElement | null;
+  const other  = document.getElementById(otherId) as HTMLInputElement | null;
+  if (!select) return;
+  if (other && document.activeElement === other) return;
+  if (!select.hidden && select.value === '__other__' && !other?.value.trim()) return;
+  renderGrinderField(selectId, otherId, getGrinderFieldValue(selectId, otherId));
 }
 
 // Resolves the field's effective value: the select's own value, or the
@@ -480,8 +538,7 @@ export function getGrinderFieldValue(selectId: string, otherId: string): string 
   return select.value;
 }
 
-// Toggles the free-text fallback input's visibility on select change —
-// mirrors dialin-wizard.ts's dialinGrinderChange.
+// Toggles the free-text fallback input's visibility on select change.
 export function handleGrinderFieldChange(selectId: string, otherId: string): void {
   const select = document.getElementById(selectId) as HTMLSelectElement | null;
   const other  = document.getElementById(otherId) as HTMLInputElement | null;
@@ -512,6 +569,9 @@ export function _renderBeanSelect(selectedName: string | null, selectedBeanId: n
   const inStock: LibraryRow[] = [];
   const exhausted: LibraryRow[] = [];
   for (const b of allBeans) {
+    // #1958: an archived bean is no longer offered, unless it is the one already
+    // chosen, so an old shot, draft, recipe or default never loses its bean.
+    if (b.enabled === false && b.id !== selectedBeanId && b.name !== selectedName) continue;
     const remainingG = b.remainingG;
     (remainingG == null || remainingG > 0 ? inStock : exhausted).push(b);
   }
@@ -610,22 +670,39 @@ export function renderStars(rating: number): void {
   });
 }
 
-export function updateDegassing(val: string | null | undefined): void {
+// #1953: the degassing tracker's effective age for a shot brewed from a frozen
+// portion — undefined for plain and mixed shots, which keep the roast-date read.
+export function _frozenShotAge(ann: AnnotationData, shotTimestampSec: number | undefined): number | undefined {
+  if (!ann.frozenPortionId || isBeanMix(ann)) return undefined;
+  return shotBeanAge(ann, shotTimestampSec, { relativeToNow: false })?.days;
+}
+
+export function updateDegassing(
+  val: string | null | undefined,
+  effectiveDays?: number | null,
+  freshness?: BeanFreshnessContext | null,
+): void {
   const tracker = document.getElementById('degassingTracker') as HTMLElement;
   const fill    = document.getElementById('degassingFill') as HTMLElement;
   const label   = document.getElementById('degassingLabel') as HTMLElement;
   const date = parseRoastDate(val);
   if (!date) { tracker.style.display = 'none'; return; }
-  const days = Math.floor((Date.now() - date.getTime()) / 86400000);
-  if (days < 0 || days > 180) { tracker.style.display = 'none'; return; }
+  // #1953: a frozen shot's tracker shows the same effective age as its badge;
+  // every other shot keeps reading its plain age from the roast date relative
+  // to now. #2025: that read is roastAgeDays() like every other browser path,
+  // so the tracker cannot disagree with the badge by a day.
+  const days = effectiveDays ?? roastAgeDays(val);
+  if (days == null || days < 0 || days > 180) { tracker.style.display = 'none'; return; }
   tracker.style.display = 'block';
-  // #1835: the bands come from the shared freshness windows; the bar keeps its
-  // 42-day scale, measured from the end of the fading band so a wider window
-  // still fills the bar at the same point.
-  const w = freshnessWindows();
+  // #1835/#1977: the bands come from the same resolved windows as the badge —
+  // per-bean override → roast level → global; the bar keeps its 42-day scale,
+  // measured from the end of the fading band so a wider window still fills the
+  // bar at the same point.
+  const resolved = resolveFreshness(days, freshness?.roastLevel, freshness?.override);
+  const w = resolved.windows;
   const pct = Math.min(100, (days / (w.fadingUntil + 7)) * 100);
   fill.style.width = pct + '%';
-  const state = freshnessState(days) ?? 'old';
+  const state = resolved.state ?? 'old';
   let color: string, text: string;
   switch (state) {
     case 'degassing': color = '#52525b'; text = t('degas_too_fresh', days); break;
@@ -716,7 +793,7 @@ export async function removeShotImage(): Promise<void> {
   if (!S.primaryShotId) return;
   const id = S.primaryShotId;
   const r = await deleteShotImage(id);
-  if (!r.ok) return;
+  if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
   const idx = S.shots.findIndex(s => s.id === id);
   if (idx !== -1) {
     const entry = S.shots[idx];
@@ -738,15 +815,16 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   _renderBasketSelect(ann.basketId ?? null);
   _renderPuckScreenSelect(ann.puckScreenId ?? null);
   _renderFrozenPortionPills(ann.coffee || null, shot?.timestamp ? shot.timestamp * 1000 : Date.now(), ann.frozenPortionId ?? null, ann.beanId ?? null);
-  (document.getElementById('annGrinder') as HTMLInputElement).value      = ann.grinder      || '';
-  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(ann.grindSetting ?? '');
+  renderGrinderField('annGrinder', 'annGrinderOther', ann.grinder || '');
+  renderGrindField('annGrindSetting', ann.grinder || '', ann.grindSetting ?? '');
   (document.getElementById('annDose') as HTMLInputElement).value         = String(ann.dose        || '');
   // #1837: after the bean select and the dose it renders row 1 from — a saved
   // mix restores its rows and takes the dose over as their sum.
   loadBeanMix(ann);
-  updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '');
+  updateDegassing(_roastDateFromLibrary(ann.coffee, shot?.timestamp, ann.beanId) || '', _frozenShotAge(ann, shot?.timestamp), beanFreshnessContext(ann));
   (document.getElementById('annTds') as HTMLInputElement).value          = String(ann.tds         || '');
   (document.getElementById('annNotes') as HTMLInputElement).value        = ann.notes        || '';
+  _renderTasteTagPills(tasteTagOf(ann) ?? '');
   _renderDrinkPills(ann.drinkType || '');
   _renderMilkPills(ann.milkType ? String(ann.milkType) : '');
   _updateMilkFieldVisibility();
@@ -795,10 +873,15 @@ export function quickClone(): void {
   const suggested = beanName
     ? suggestGrindDoseForBean(beanName, S.coffeeLibrary, S.shots, { preferMostRecent: true, beanId })
     : { grinder: '', grindSetting: '', dose: '' };
-  (document.getElementById('annGrinder') as HTMLInputElement).value      = suggested.grinder      || ann.grinder      || '';
-  (document.getElementById('annGrindSetting') as HTMLInputElement).value = String(suggested.grindSetting || ann.grindSetting || '');
+  // #1954: with a default grinder, a clone always uses that grinder and only
+  // its own setting — the previous shot's value is on another scale, so an
+  // empty suggestion stays empty instead of copying ann.
+  const defaultGrinder = defaultGrinderName(S.coffeeLibrary);
+  const clonedGrinder = defaultGrinder || suggested.grinder || ann.grinder || '';
+  renderGrinderField('annGrinder', 'annGrinderOther', clonedGrinder);
+  renderGrindField('annGrindSetting', clonedGrinder, defaultGrinder ? suggested.grindSetting : (suggested.grindSetting || ann.grindSetting || ''));
   (document.getElementById('annDose') as HTMLInputElement).value         = String(suggested.dose         || ann.dose         || '');
-  updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp, beanId) || '');
+  updateDegassing(_roastDateFromLibrary(beanName, currentShot?.timestamp, beanId) || '', undefined, beanFreshnessContext({ coffee: beanName, beanId }));
   // Basket/puck screen are equipment, not per-shot state — carried over from
   // the previous shot like the grinder above, rather than reset like the
   // frozen-portion choice below.

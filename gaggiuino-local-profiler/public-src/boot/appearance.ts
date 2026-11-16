@@ -58,7 +58,6 @@ export function wireAppearance(): void {
   document.querySelectorAll<HTMLElement>('#themeToggleGroup .theme-btn').forEach(btn => {
     btn.addEventListener('click', () => setTheme(btn.dataset.themeVal!));
   });
-  document.querySelectorAll<HTMLElement>('.lang-option-btn').forEach(btn => {
-    btn.addEventListener('click', () => setLang(btn.dataset.lang!));
-  });
+  const langSelect = document.getElementById('settingsLang') as HTMLSelectElement | null;
+  if (langSelect) langSelect.addEventListener('change', () => setLang(langSelect.value));
 }

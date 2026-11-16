@@ -6,11 +6,12 @@ import {
   addCustomMaintenanceTask, deleteCustomMaintenanceTask,
 } from '../api/maintenance.js';
 import { MAINT_META, GUIDED_MAINT_STEPS, localeFor } from '../constants.js';
-import { esc, html, joinHtml, todayIsoDate } from '../utils.js';
+import { esc, formatDate, html, joinHtml, todayIsoDate } from '../utils.js';
 import type { Html } from '../utils.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
 import { COFFEE_ICON_SVG, ICON_TRASH } from '../icons.js';
 import { closeDetailSheet, openDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
+import { confirmDialog } from '../components/confirm-dialog.js';
 // Circular with maintenance-sheet.ts (it reads this module's helpers): only
 // ever touched at call time, never at module load — same as
 // library/bean-form-sheet.ts.
@@ -114,7 +115,7 @@ export function taskTitle(task: string, d: MaintTaskNames): string {
 
 export function maintStatusLabel(status: string): string {
   const labels: Record<string, string> =
-    { ok: t('maint_ok'), soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never') };
+    { ok: t('maint_ok'), soon: t('maint_soon'), due: t('maint_due'), never: t('maint_never'), paused: t('maint_paused') };
   return labels[status] || '';
 }
 
@@ -237,13 +238,14 @@ export function _maintVerdictState(active: MaintTile[]): MaintVerdictState {
   let soon: MaintTile | null = null;
   let highest: MaintTile | null = null;
   for (const tile of active) {
+    if (tile.d.status === 'paused') continue;
     if (tile.d.status === 'due' || tile.d.status === 'never') dueCount++;
     else if (tile.d.status === 'soon' && (!soon || tile.d.pct > soon.d.pct)) soon = tile;
     if (!highest || tile.d.pct > highest.d.pct) highest = tile;
   }
   if (dueCount > 0) return { kind: 'due', tile: _pickNextDueTile(active), dueCount };
   if (soon) return { kind: 'soon', tile: soon, dueCount };
-  if (active.length > 0) return { kind: 'ok', tile: highest, dueCount };
+  if (highest) return { kind: 'ok', tile: highest, dueCount };
   return { kind: 'empty', tile: null, dueCount };
 }
 
@@ -398,7 +400,7 @@ export function _maintCountText(task: string, d: MaintTaskData): string {
   const hasShots = d.threshold_shots != null;
   const hasDays  = d.threshold_days != null;
   const hasG     = task.startsWith('grinder_') && d.threshold_g != null;
-  if (d.status === 'never') return t('maint_never_done');
+  if (d.status === 'never' || (d.status === 'paused' && !d.lastDate)) return t('maint_never_done');
   if (hasShots && hasDays) {
     return `${d.shotsSince}/${d.threshold_shots} ${t('maint_by_shots')} · ${d.daysSince ?? '?'}/${d.threshold_days} ${t('maint_by_days')}`;
   }
@@ -507,7 +509,9 @@ export async function markMaintDone(task: string, machineId?: string | number | 
     _freshDone = { task, machineId: String(machineId ?? '') };
     _closeOpenTaskSheet();
     await loadMaintenanceView();
-  } catch { /* ignore */ }
+  } catch (e) {
+    window.showToast?.(t('error_generic', (e as Error).message));
+  }
 }
 
 export async function saveMaintThreshold(task: string, field: string, value: string, machineId?: string | number | null): Promise<void> {
@@ -516,7 +520,9 @@ export async function saveMaintThreshold(task: string, field: string, value: str
   try {
     const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { [field]: parsed });
     if (!r.ok) window.showToast?.(t('error_generic', r.status));
-  } catch { /* ignore */ }
+  } catch (e) {
+    window.showToast?.(t('error_generic', (e as Error).message));
+  }
 }
 
 // Reload the maintenance view while keeping an open task sheet open. Every
@@ -557,7 +563,9 @@ export async function setMaintMode(
     const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), body);
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await refreshMaintenanceView();
-  } catch { /* ignore */ }
+  } catch (e) {
+    window.showToast?.(t('error_generic', (e as Error).message));
+  }
 }
 
 export async function toggleMaintDisabled(task: string, machineId?: string | number | null, disabled?: boolean): Promise<void> {
@@ -566,7 +574,20 @@ export async function toggleMaintDisabled(task: string, machineId?: string | num
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     _closeOpenTaskSheet();
     await loadMaintenanceView();
-  } catch { /* ignore */ }
+  } catch (e) {
+    window.showToast?.(t('error_generic', (e as Error).message));
+  }
+}
+
+// Pausing keeps the task sheet open so its own button can flip in place.
+export async function toggleMaintPaused(task: string, machineId?: string | number | null, paused?: boolean): Promise<void> {
+  try {
+    const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { paused });
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    await refreshMaintenanceView();
+  } catch (e) {
+    window.showToast?.(t('error_generic', (e as Error).message));
+  }
 }
 
 export async function addCustomMaintTask(machineId?: string | number | null): Promise<void> {
@@ -584,17 +605,21 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     if (document.getElementById('customTaskLabel')) requestCloseDetailSheet();
     await loadMaintenanceView();
-  } catch { /* ignore */ }
+  } catch (e) {
+    window.showToast?.(t('error_generic', (e as Error).message));
+  }
 }
 
 export async function deleteCustomMaintTask(task: string, machineId?: string | number | null): Promise<void> {
-  if (!confirm(t('maint_confirm_delete_custom', task.replace('custom_', '')))) return;
+  if (!await confirmDialog(t('maint_confirm_delete_custom', task.replace('custom_', '')), { confirmLabel: t('lib_btn_delete') })) return;
   try {
     const r = await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     _closeOpenTaskSheet();
     await loadMaintenanceView();
-  } catch { /* ignore */ }
+  } catch (e) {
+    window.showToast?.(t('error_generic', (e as Error).message));
+  }
 }
 
 export async function renameCustomMaintTask(task: string, newLabel: string, machineId?: string | number | null): Promise<void> {
@@ -604,7 +629,9 @@ export async function renameCustomMaintTask(task: string, newLabel: string, mach
     const r = await saveMaintenanceThreshold(task, _writeMachineId(machineId), { label });
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     await refreshMaintenanceView();
-  } catch { /* ignore */ }
+  } catch (e) {
+    window.showToast?.(t('error_generic', (e as Error).message));
+  }
 }
 
 // ── Maintenance Log ───────────────────────────────────────────────────────
@@ -634,7 +661,7 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
 
   const locale = localeFor(S.currentLang);
   const rowHtml = (e: MaintLogEntry): Html => {
-    const dateStr   = new Date(e.ts * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const dateStr   = formatDate(e.ts * 1000, locale);
     const isManual  = e.shotCountAtTime === null;
     const machineTag = isGlobalTask(e.task)
       ? t('maint_shared_tag')
@@ -727,14 +754,18 @@ export async function submitMaintLogEntry(): Promise<void> {
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     closeMaintLogForm();
     void loadMaintLog();
-  } catch { /* ignore */ }
+  } catch (e) {
+    window.showToast?.(t('error_generic', (e as Error).message));
+  }
 }
 
 export async function deleteMaintLogEntry(id: number | string): Promise<void> {
-  if (!confirm(t('maint_log_confirm_delete'))) return;
+  if (!await confirmDialog(t('maint_log_confirm_delete'), { confirmLabel: t('lib_btn_delete') })) return;
   try {
     const r = await deleteMaintenanceLogEntry(id);
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
     void loadMaintLog();
-  } catch { /* ignore */ }
+  } catch (e) {
+    window.showToast?.(t('error_generic', (e as Error).message));
+  }
 }

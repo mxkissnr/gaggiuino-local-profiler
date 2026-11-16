@@ -194,7 +194,7 @@ func (h *Handlers) getMaintenance(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	stats, err := ComputeMaintenanceStats(h.shotsRepo, maint, machineID)
+	stats, err := ComputeMaintenanceStats(h.shotsRepo, h.libRepo, maint, machineID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -327,6 +327,13 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 			delta["disabled"] = b
 		}
 	}
+	if v, present := body["paused"]; present {
+		if b, ok := v.(bool); ok {
+			for k, val := range applyPause(t, b, time.Now().UnixMilli()) {
+				delta[k] = val
+			}
+		}
+	}
 	if isCustomTask(task) {
 		if v, present := body["label"]; present {
 			if s, ok := v.(string); ok {
@@ -350,7 +357,7 @@ func (h *Handlers) taskThreshold(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	stats, err := ComputeMaintenanceStats(h.shotsRepo, maint, machineID)
+	stats, err := ComputeMaintenanceStats(h.shotsRepo, h.libRepo, maint, machineID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -500,7 +507,7 @@ func (h *Handlers) customCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	maint[key] = task
-	stats, err := ComputeMaintenanceStats(h.shotsRepo, maint, machineID)
+	stats, err := ComputeMaintenanceStats(h.shotsRepo, h.libRepo, maint, machineID)
 	if err != nil {
 		internalError(w, err)
 		return
@@ -528,7 +535,7 @@ func (h *Handlers) customDelete(w http.ResponseWriter, r *http.Request) {
 		internalError(w, err)
 		return
 	}
-	stats, err := ComputeMaintenanceStats(h.shotsRepo, maint, machineID)
+	stats, err := ComputeMaintenanceStats(h.shotsRepo, h.libRepo, maint, machineID)
 	if err != nil {
 		internalError(w, err)
 		return

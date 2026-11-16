@@ -128,3 +128,67 @@ func TestShotInsertArgs_ImageCrop(t *testing.T) {
 		})
 	}
 }
+
+// TestUpsert_GaggiuinoHistoryShotKeepsProfileName is the #1989 regression: a
+// shot stored straight from the Gaggiuino REST API names its profile only in
+// profile.name. It must land in the profile_name column so the column-based
+// lookups (FindPreviousByProfile, comparative candidates, MCP) see it.
+func TestUpsert_GaggiuinoHistoryShotKeepsProfileName(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+
+	history := func(id, ts int64) Shot {
+		return Shot{
+			"id":         id,
+			"timestamp":  ts,
+			"duration":   float64(372),
+			"profile":    map[string]any{"name": "IUIUIU Classic", "phases": []any{}},
+			"datapoints": map[string]any{},
+		}
+	}
+	if err := repo.Upsert(history(10, 1000)); err != nil {
+		t.Fatalf("Upsert(10): %v", err)
+	}
+	if err := repo.Upsert(history(11, 2000)); err != nil {
+		t.Fatalf("Upsert(11): %v", err)
+	}
+
+	got, err := repo.FindByID(11)
+	if err != nil || got == nil {
+		t.Fatalf("FindByID(11) = %v, %v", got, err)
+	}
+	if got["profileName"] != "IUIUIU Classic" {
+		t.Fatalf("profileName = %#v, want %q", got["profileName"], "IUIUIU Classic")
+	}
+
+	prev, err := repo.FindPreviousByProfile(11, "IUIUIU Classic", 1)
+	if err != nil {
+		t.Fatalf("FindPreviousByProfile: %v", err)
+	}
+	if prev == nil || prev["id"] != int64(10) {
+		t.Fatalf("FindPreviousByProfile(11) = %v, want shot 10", prev)
+	}
+}
+
+// TestShotInsertArgs_ProfileNamePrecedence keeps an explicit profileName (a
+// shot recorded live) ahead of the payload's profile.name.
+func TestShotInsertArgs_ProfileNamePrecedence(t *testing.T) {
+	row, err := shotInsertArgs(Shot{
+		"id": int64(1), "timestamp": int64(1),
+		"profileName": "Live",
+		"profile":     map[string]any{"name": "Payload"},
+	})
+	if err != nil {
+		t.Fatalf("shotInsertArgs: %v", err)
+	}
+	if row.profileName != "Live" {
+		t.Fatalf("profileName = %#v, want %q", row.profileName, "Live")
+	}
+
+	row, err = shotInsertArgs(Shot{"id": int64(2), "timestamp": int64(2), "profile": map[string]any{"name": ""}})
+	if err != nil {
+		t.Fatalf("shotInsertArgs: %v", err)
+	}
+	if row.profileName != nil {
+		t.Fatalf("empty profile.name stored as %#v, want nil", row.profileName)
+	}
+}

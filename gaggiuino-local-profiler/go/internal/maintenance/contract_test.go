@@ -46,7 +46,7 @@ func requireTaskShape(t *testing.T, task map[string]any) {
 		t.Fatalf("expected status to be a string, got %T (%v)", task["status"], task["status"])
 	}
 	switch status {
-	case "never", "ok", "soon", "due":
+	case "never", "ok", "soon", "due", "paused":
 	default:
 		t.Errorf("unexpected maintenance status %q", status)
 	}

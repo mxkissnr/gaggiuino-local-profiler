@@ -4,6 +4,8 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
 )
 
 // The bean target a shot was brewed against lives in internal/library, but
@@ -78,4 +80,27 @@ func (s *Service) Scorer() func(Shot) *int {
 	return func(shot Shot) *int {
 		return detail(shot).Score
 	}
+}
+
+// grinderScaleSource resolves a grinder's scale (#1961) from internal/library,
+// which this package can't import, the same way beanSource does. cmd/server
+// installs it at startup; without one every grinder counts as having no scale.
+var grinderScaleSource atomic.Pointer[func(grinder string) *grindscale.Scale]
+
+// SetGrinderScaleSource installs the process-wide grinder-scale source; nil
+// restores the no-source behaviour.
+func SetGrinderScaleSource(fn func(grinder string) *grindscale.Scale) {
+	if fn == nil {
+		grinderScaleSource.Store(nil)
+		return
+	}
+	grinderScaleSource.Store(&fn)
+}
+
+func loadGrinderScale(grinder string) *grindscale.Scale {
+	src := grinderScaleSource.Load()
+	if src == nil {
+		return nil
+	}
+	return (*src)(grinder)
 }

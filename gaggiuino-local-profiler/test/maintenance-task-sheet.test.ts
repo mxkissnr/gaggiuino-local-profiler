@@ -391,3 +391,36 @@ describe('openGuidedMaint closes the task sheet (#1928)', () => {
     expect(nodes.modal.style.display).toBeUndefined();
   });
 });
+
+describe('pause control (#1955)', () => {
+  it('offers Pause on a running tile, bound to that tile machine', () => {
+    const out = maintTaskSheetBody(tile('backflush', { threshold_shots: 40 }, { machineId: 3 }), []);
+
+    expect(out).toContain('data-action="toggle-maint-paused"');
+    expect(out).toContain('data-paused="true"');
+    expect(out).toContain('data-machine-id="3"');
+    expect(out).toContain('>Pause</button>');
+  });
+
+  it('offers Resume on a paused tile', () => {
+    const out = maintTaskSheetBody(tile('backflush', { status: 'paused', threshold_shots: 40 }), []);
+
+    expect(out).toContain('data-action="toggle-maint-paused"');
+    expect(out).toContain('data-paused="false"');
+    expect(out).toContain('>Resume</button>');
+  });
+
+  it('keeps the delete button next to the pause control on a custom tile', () => {
+    const out = maintTaskSheetBody(tile('custom_clean', { threshold_shots: 10 }), []);
+
+    expect(out).toContain('data-action="toggle-maint-paused"');
+    expect(out).toContain('data-action="delete-custom-maint-task"');
+  });
+
+  it('keeps the disable button next to the pause control on a built-in tile', () => {
+    const out = maintTaskSheetBody(tile('backflush', { threshold_shots: 40 }), []);
+
+    expect(out).toContain('data-action="toggle-maint-paused"');
+    expect(out).toContain('data-action="toggle-maint-disabled"');
+  });
+});

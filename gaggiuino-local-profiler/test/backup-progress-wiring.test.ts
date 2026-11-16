@@ -26,6 +26,17 @@ vi.mock('../public-src/api/transport.js', async (importOriginal) => ({
   apiUpload: transport.apiUpload,
 }));
 
+// #1962: status.ts asks the shared dialog instead of native confirm() and
+// reports through the app toast instead of alert(); the transport wiring is
+// what this suite checks, so the dialog just answers yes.
+const dialogs = vi.hoisted(() => ({
+  confirm: vi.fn(() => Promise.resolve(true)),
+  toast: vi.fn<(msg: string) => void>(),
+}));
+
+vi.mock('../public-src/components/confirm-dialog.js', () => ({ confirmDialog: dialogs.confirm }));
+vi.mock('../public-src/components/toast.js', () => ({ showToast: dialogs.toast }));
+
 vi.mock('../public-src/utils.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../public-src/utils.js')>()),
   shareOrDownloadBlob: vi.fn(() => Promise.resolve()),
@@ -108,10 +119,7 @@ let doc: FakeDoc = makeDocument();
 g.document = doc;
 g.window = g;
 const showToast = vi.fn();
-const alertSpy = vi.fn();
 g.showToast = showToast;
-g.alert = alertSpy;
-g.confirm = vi.fn(() => true);
 g.location = { reload: vi.fn() };
 
 const { openBackupExportModal, openBackupRestoreModal } = await import('../public-src/components/backup-modal.js');
@@ -133,7 +141,8 @@ beforeEach(() => {
   transport.apiFetchToBlob.mockReset();
   transport.apiUpload.mockReset();
   showToast.mockReset();
-  alertSpy.mockReset();
+  dialogs.confirm.mockClear();
+  dialogs.toast.mockReset();
   freshDoc();
 });
 
@@ -242,7 +251,8 @@ describe('status.ts Dev Tools progress wiring (#960)', () => {
     await pending;
     expect(label.disabled).toBe(false);
     expect(input.disabled).toBe(false);
-    expect(alertSpy).toHaveBeenCalled();
+    expect(dialogs.confirm).toHaveBeenCalledTimes(1);
+    expect(dialogs.toast).toHaveBeenCalled();
   });
 });
 

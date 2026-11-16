@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { join, resolve } from 'node:path';
-import { contentTypeFor, resolveRequestPath } from '../scripts/demo-smoke.mts';
+import { contentTypeFor, resolveRequestPath, chartFitProblem } from '../scripts/demo-smoke.mts';
 
 // Part of #1193 (S4): the pure helpers behind scripts/demo-smoke.mts. The
 // smoke test itself serves demo-dist/ and drives Chromium, so only the two
@@ -74,5 +74,30 @@ describe('demo-smoke resolveRequestPath (#1193)', () => {
 
     it('refuses a null byte', () => {
         expect(resolveRequestPath(root, '/index%00.html')).toBeNull();
+    });
+});
+
+// #2097: the desktop smoke pass compares the shot canvas with its container.
+describe('demo-smoke chartFitProblem (#2097)', () => {
+    it('accepts a chart that matches its container', () => {
+        expect(chartFitProblem('after a wider window', { container: 945, canvas: 945 })).toBeNull();
+    });
+
+    it('accepts a sub-pixel difference', () => {
+        expect(chartFitProblem('after a wider window', { container: 945, canvas: 945.6 })).toBeNull();
+    });
+
+    it('names the step and both widths when the chart is too narrow', () => {
+        const problem = chartFitProblem('after a wider window', { container: 945, canvas: 625 });
+        expect(problem).toContain('625');
+        expect(problem).toContain('945');
+        expect(problem).toContain('after a wider window');
+    });
+
+    it('reports a chart wider than its container', () => {
+        const problem = chartFitProblem('after the list folds', { container: 1035, canvas: 1200 });
+        expect(problem).not.toBeNull();
+        expect(problem).toContain('1200');
+        expect(problem).toContain('1035');
     });
 });

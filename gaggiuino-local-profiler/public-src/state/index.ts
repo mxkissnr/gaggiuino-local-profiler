@@ -58,6 +58,7 @@ export interface ShotsSlice {
   shotsPageCursor: string | null;
   shotsHasMore: boolean;
   allShotsLoaded: boolean;
+  shotsLoadFailed: boolean;
   trashedShots: ShotMeta[];
   primaryShotId: number | null;
   compareShotId: number | null;
@@ -197,6 +198,7 @@ export const S: AppState = {
   shotsPageCursor: null,
   shotsHasMore: false,
   allShotsLoaded: false,
+  shotsLoadFailed: false,
   trashedShots: [],
   chart: null,
   primaryShotId: null,

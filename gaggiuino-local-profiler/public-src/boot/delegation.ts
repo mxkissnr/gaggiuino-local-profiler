@@ -5,17 +5,18 @@
 import { S } from '../state/index.js';
 import { toggleMonthGroup, clearBeanFilter } from '../components/sidebar.js';
 import { switchMode, goToShot } from '../components/mode.js';
-import { loadData, restoreShot, permanentDeleteShot, selectDrinkType, selectMilkType, selectFrozenPortion } from '../views/shots.js';
+import { loadData, restoreShot, permanentDeleteShot, selectDrinkType, selectMilkType, selectFrozenPortion, selectTasteTag } from '../views/shots.js';
 import { openCalendarDayDetail, setBeanShelfSort, expandBeanShelf, openBeanShelfDetail,
          setDialinProgressionBean, openFactDetail, shuffleFacts } from '../views/analytics.js';
 import { markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope, deleteMaintLogEntry,
          openGuidedMaint, closeGuidedMaint, submitGuidedMaint, updateGuidedMaintDoneState,
-         toggleMaintDisabled, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask,
+         toggleMaintDisabled, toggleMaintPaused, addCustomMaintTask, deleteCustomMaintTask, renameCustomMaintTask,
          openMaintTask, openMaintLogForm, submitMaintLogEntry,
          openMaintCustomForm } from '../views/maintenance.js';
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from '../components/flavor-wheel.js';
 import { highlightSheetFlavor } from '../components/flavor-mini-wheel.js';
 import { closeDetailSheet } from '../components/detail-sheet.js';
+import { openDialinShot } from '../views/dialin.js';
 import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrinder, deleteGrinder,
          resetGrinderBurrs, deleteGrinderZeroPointEntry, toggleBeanQR, openNewBagForm, closeNewBagForm,
          saveNewBag, deleteBag, openEditBag, closeEditBag, saveEditBag, openBagStockEdit, closeBagStockEdit,
@@ -25,6 +26,7 @@ import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrind
          removeRecipeStep, _submitManualScan, restockMilk, deleteMilk, editBasket, deleteBasket,
          editPuckScreen, deletePuckScreen } from '../views/library.js';
 import { editProfile, duplicateProfile, deleteMachineProfile, createProfileFromBean, removeProfilePhase } from '../views/library-profile-editor.js';
+import { toggleBeanProfilePin } from '../views/library/bean-profiles.js';
 import { openGaggiMateProfileEditor, duplicateGaggiMateProfile, openNewGaggiMateProfile, handleGmEditorAction } from '../views/gaggimate-profile-editor.js';
 import { openDialinWizard, startDialinFromBean, dialinGrinderChange, dialinConfirmShot, dialinAcceptNext,
          dialinOverride, dialinEnd, dialinSaveKnownGrind, dialinClose } from '../views/dialin-wizard.js';
@@ -100,6 +102,7 @@ export function wireDelegation(): void {
       case 'edit-bean':          editBean(numId()); break;
       case 'delete-bean':        void deleteBean(numId()); break;
       case 'toggle-bean-active': void toggleBeanActive(numId()); break;
+      case 'toggle-bean-profile-pin': void toggleBeanProfilePin(numId(), Number(el.dataset.machineId), el.dataset.profile ?? ''); break;
       case 'edit-grinder':       editGrinder(numId()); break;
       case 'delete-grinder':     void deleteGrinder(numId()); break;
       case 'reset-grinder-burrs': void resetGrinderBurrs(numId()); break;
@@ -133,6 +136,7 @@ export function wireDelegation(): void {
       case 'select-drink':       selectDrinkType(strId()); break;
       case 'select-milk':        selectMilkType(strId()); break;
       case 'select-frozen-portion': selectFrozenPortion(strId()); break;
+      case 'select-taste-tag':   selectTasteTag(strId()); break;
       case 'reload-data':        void loadData(); break;
       // #807: the "why is this empty" notices (in-view block and app-wide
       // banner, components/api-port-notice.ts) both link here.
@@ -141,6 +145,7 @@ export function wireDelegation(): void {
       case 'mark-maint-done':    void markMaintDone(el.dataset.task!, el.dataset.machineId); break;
       case 'open-guided-maint':  openGuidedMaint(el.dataset.task!, el.dataset.machineId!); break;
       case 'toggle-maint-disabled': void toggleMaintDisabled(el.dataset.task!, el.dataset.machineId, el.dataset.disabled === 'true'); break;
+      case 'toggle-maint-paused':   void toggleMaintPaused(el.dataset.task!, el.dataset.machineId, el.dataset.paused === 'true'); break;
       case 'add-custom-maint-task':  void addCustomMaintTask(el.dataset.machineId); break;
       case 'delete-custom-maint-task': void deleteCustomMaintTask(el.dataset.task!, el.dataset.machineId); break;
       case 'guided-maint-done':  void submitGuidedMaint(); break;
@@ -167,6 +172,8 @@ export function wireDelegation(): void {
       case 'highlight-flavor':        highlightSheetFlavor(el.dataset.flavorNode || null, el); break;
       case 'highlight-flavor-wheel':  highlightFlavorWheelNode(el.dataset.nodeId || null); break;
       case 'delete-maint-log':   void deleteMaintLogEntry(numId()); break;
+      case 'open-dialin-shot':   openDialinShot(numId(), el); break;
+      case 'dialin-goto-shot':   closeDetailSheet(); goToShot(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
       case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
       case 'start-dialin':           openDialinWizard(); break;

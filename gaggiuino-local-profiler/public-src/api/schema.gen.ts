@@ -957,7 +957,7 @@ export interface paths {
         put?: never;
         /**
          * Open a new bag for a bean (joins the back of the queue)
-         * @description The new bag's roastDate/stock_g only become the bean's own display fields when it's also the bag SimulateBagQueue resolves as current (i.e. every other bag is already exhausted) — adding a bag while the current one still has stock does not disturb the bean-level fields.
+         * @description The new bag's roastDate/stock_g only become the bean's own display fields when it's also the bag SimulateBagQueue resolves as current (i.e. every other bag is already exhausted) — adding a bag while the current one still has stock does not disturb the bean-level fields. A new bag with a stock above 0 also reactivates an archived bean (#1958).
          */
         post: {
             parameters: {
@@ -1606,6 +1606,9 @@ export interface paths {
                         burrType?: string;
                         /** Format: date */
                         purchaseDate?: string;
+                        /** @description Only the single default grinder carries it; setting it clears the previous default. */
+                        isDefault?: boolean;
+                        scale?: components["schemas"]["GrinderScale"];
                         /**
                          * Format: date
                          * @description Defaults to purchaseDate if omitted
@@ -1674,6 +1677,10 @@ export interface paths {
                         burrType?: string;
                         /** Format: date */
                         purchaseDate?: string;
+                        /** @description Only the single default grinder carries it; setting it clears the previous default. */
+                        isDefault?: boolean;
+                        /** @description Null removes the scale; omit it to leave the scale unchanged. */
+                        scale?: components["schemas"]["GrinderScale"] | null;
                         /** Format: date */
                         burrsResetAt?: string;
                     };
@@ -3243,6 +3250,8 @@ export interface paths {
                         threshold_days?: number | null;
                         /** @description custom_* tasks only — renames the task's display label. */
                         label?: string;
+                        /** @description true starts a pause, false ends it; repeating the current state changes nothing. */
+                        paused?: boolean;
                     };
                 };
             };
@@ -8077,6 +8086,8 @@ export interface paths {
                                 orders?: number;
                                 ordersTotal?: number;
                                 machines?: number;
+                                /** @description Machine profile changes not yet sent to a machine that restoring the machines section would discard */
+                                pendingProfileChanges?: number;
                                 settings?: boolean;
                                 images?: number;
                                 secretsPresent?: boolean;
@@ -8440,6 +8451,11 @@ export interface components {
             roastDate?: string;
             tds?: number | null;
             notes?: string;
+            /**
+             * @description How the shot tasted. Feeds the grind advice, never the score. Send null or an empty string to clear
+             * @enum {string|null}
+             */
+            tasteTag?: "sour" | "bitter" | "balanced" | "thin" | null;
             /** @description Set automatically when an order is completed for this shot. */
             orderedBy?: {
                 customer?: string;
@@ -8533,7 +8549,7 @@ export interface components {
             /** @description Height */
             h: number;
         };
-        /** @description Field set as actually accepted by POST/PUT /api/library/bean — see those operations for per-field length caps and sanitizer behavior (species/category/roastType/flavors/origins are allowlist-validated, not just trimmed). */
+        /** @description Field set as actually accepted by POST/PUT /api/library/bean — see those operations for per-field length caps and sanitizer behavior (species/category/roastType/roastLevel/flavors/origins are allowlist-validated, not just trimmed). */
         Bean: {
             /** @description Unix ms timestamp used as ID */
             id: number;
@@ -8548,8 +8564,13 @@ export interface components {
             /** @description Mirrors the active (last) bag's stock_g */
             stock_g?: number | null;
             decaf?: boolean;
-            /** @description Manual override for the order card's bean picker (#578) — independent of stock */
+            /** @description False archives the bean (#578, #1958): left out of the app's bean pickers, the order card and, by default, MCP list_beans. Shots, statistics and stock are unaffected */
             enabled?: boolean;
+            /**
+             * Format: int64
+             * @description Newest bag id the bean-is-empty offer was resolved for (#1958), 0 for a bean without bags. Only moves forward
+             */
+            emptyOfferBagId?: number;
             /** @description Legacy single ISO 3166-1 alpha-2 code — first entry of origins[] */
             origin?: string;
             /** @description Source of truth for origin (#singleOrBlend beans) — replaces the legacy `origin` field. */
@@ -8567,6 +8588,12 @@ export interface components {
             flavors?: string[];
             /** @description Allowlist-validated */
             roastType?: string;
+            /** @description Allowlist-validated roast degree (#1977): light / medium-light / medium / medium-dark / dark; empty or absent means unspecified */
+            roastLevel?: string;
+            /** @description Optional per-bean "best for use" window, first day (#1977). Whole days 1–365; stored together with bestUntilDays or not at all */
+            bestFromDays?: number | null;
+            /** @description Optional per-bean "best for use" window, last day (#1977). Must be greater than bestFromDays */
+            bestUntilDays?: number | null;
             region?: string;
             altitude_m?: number | null;
             importer?: string;
@@ -8626,10 +8653,23 @@ export interface components {
                 grinder?: string;
                 grindSetting?: string;
             }[];
+            /** @description Profiles the user pinned as proven for this bean (#1963), per machine. Matched to shots by profile name, trimmed and case-insensitive. Sending the field replaces the whole list; an empty list clears it. */
+            pinnedProfiles?: {
+                machineId: number;
+                name: string;
+            }[];
             /** @description Total grams left across the bean's tracked bags, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
             remainingG?: number;
             /** @description Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
             consumedG?: number;
+        };
+        /** @description A grinder's valid grind settings (#1961). Settings are min + k * step, up to max. min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. Absent for a grinder without a scale, whose grind setting stays free text. */
+        GrinderScale: {
+            /** @enum {string} */
+            type: "stepped" | "stepless";
+            min: number;
+            max: number;
+            step: number;
         };
         Grinder: {
             id: number;
@@ -8637,6 +8677,9 @@ export interface components {
             notes?: string;
             burrType?: string;
             purchaseDate?: string;
+            /** @description Only the single default grinder carries it; setting it clears the previous default. */
+            isDefault?: boolean;
+            scale?: components["schemas"]["GrinderScale"];
             /** @description ISO date/timestamp — start of the burr-wear counting window, see POST .../reset-burrs */
             burrsResetAt?: string;
             /** @description File extension of the stored photo, if any */
@@ -8739,7 +8782,17 @@ export interface components {
             machineSyncedAt?: string | null;
             /** @description grinder_* only: task hidden from the maintenance view when true */
             disabled?: boolean;
-            /** @description Days since last maintenance, null when never done */
+            /**
+             * Format: int64
+             * @description Unix ms the running pause started, absent when not paused
+             */
+            pausedAt?: number | null;
+            /**
+             * Format: int64
+             * @description Paused time since lastDate from pauses that already ended
+             */
+            pausedMs?: number | null;
+            /** @description Days since last maintenance with paused time excluded, null when never done */
             daysSince: number | null;
             /** @description Shots since last maintenance */
             shotsSince: number;
@@ -8748,7 +8801,7 @@ export interface components {
             /** @description Progress toward threshold (0–1, capped at 1) */
             pct: number;
             /** @enum {string} */
-            status: "never" | "ok" | "soon" | "due";
+            status: "never" | "ok" | "soon" | "due" | "paused";
         };
         /** @description Keys are task names: `descaling`, `backflush`, `grouphead`, `gaskets`, `waterfilter`, `grinder_{id}`. */
         MaintenanceStats: {

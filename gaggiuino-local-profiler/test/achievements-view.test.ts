@@ -4,7 +4,12 @@
 // without any visible error: a secret badge leaking its copy before it is
 // unlocked, a stamp angle that re-jitters on every paint, a timestamp read in
 // the wrong unit, and a category name that only exists in German.
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // state/index.ts reads localStorage/navigator at module-load time, so the stubs have
 // to exist before its import is evaluated — vi.hoisted() runs ahead of the
@@ -16,6 +21,7 @@ vi.hoisted(() => {
   // vitest's node environment has no browser globals; stub localStorage
   // through a loose view of globalThis (the same bridge
   // test/helpers/fake-option-dom.ts uses for the DOM).
+
   const g = globalThis as unknown as Record<string, unknown>;
   const store = new Map<string, string>();
   g.localStorage = {
@@ -25,6 +31,11 @@ vi.hoisted(() => {
   };
 });
 
+// The view's only API call; hoisted so the mock is in place before
+// views/achievements.ts is evaluated, like the localStorage stub above.
+const api = vi.hoisted(() => ({ getAchievements: vi.fn<(lang: string) => Promise<Response>>() }));
+vi.mock('../public-src/api/system.js', () => ({ getAchievements: api.getAchievements }));
+
 import de from '../public-src/i18n/de.js';
 import en from '../public-src/i18n/en.js';
 import itLang from '../public-src/i18n/it.js';
@@ -33,11 +44,13 @@ import es from '../public-src/i18n/es.js';
 import nl from '../public-src/i18n/nl.js';
 
 import { S } from '../public-src/state/index.js';
-import { askewDeg, formatStampedOn, isCardFull, fieldHtml } from '../public-src/views/achievements.js';
-
-// views/achievements.ts's Achievement interface isn't exported; derive it from
-// the functions under test so the fixtures stay shape-checked against it.
-type Achievement = Parameters<typeof fieldHtml>[0];
+import { localeFor } from '../public-src/constants.js';
+import { formatDate } from '../public-src/utils.js';
+import {
+  achDetail, achPageHtml, achRecent, achRowHtml, achUpcoming, achVerdictHtml, askewDeg, fieldHtml,
+  formatStampedOn, isCardFull, isWetInk, loadAchievementsView, openAchievement, setAchFilter,
+} from '../public-src/views/achievements.js';
+import type { Achievement } from '../public-src/views/achievements.js';
 
 const LANGS = { de, en, it: itLang, fr, es, nl };
 
@@ -50,8 +63,23 @@ const CARD_NAME_KEYS = [
   'ach_card_moments', 'ach_card_care', 'ach_card_house', 'ach_card_secret',
 ];
 const CHROME_KEYS = [
-  'nav_achievements', 'ach_card_of', 'ach_full', 'ach_stamped_on',
+  'nav_achievements', 'ach_full', 'ach_stamped_on',
   'ach_progress', 'ach_not_yet', 'ach_secret_locked_hint',
+  'ach_verdict_of', 'ach_verdict_next', 'ach_verdict_open', 'ach_verdict_all',
+  'ach_soon', 'ach_recent', 'ach_filter_got', 'ach_filter_open',
+];
+
+// A full English fixture: one unlocked of six, three with a started counter, a
+// locked secret badge and one counter still at zero. streak_7 leads (5/7 beats
+// 294/500), so it is the stamp the verdict names.
+const STAMP = { stamp: 'gear' };
+const FIXTURE: Achievement[] = [
+  { id: 'shots_10', card: 'basics', ...STAMP, progress: { current: 3, target: 10 } },
+  { id: 'streak_7', card: 'endurance', ...STAMP, progress: { current: 5, target: 7 } },
+  { id: 'shots_500', card: 'craft', ...STAMP, progress: { current: 294, target: 500 } },
+  { id: 'shots_100', card: 'craft', ...STAMP, progress: { current: 0, target: 100 } },
+  { id: 'secret_night_owl', card: 'secret', secret: true, ...STAMP },
+  { id: 'countries_10', card: 'beans', unlocked: true, unlockedAt: 1_772_000_000, ...STAMP },
 ];
 
 describe('achievements view — i18n completeness', () => {
@@ -70,6 +98,16 @@ describe('achievements view — i18n completeness', () => {
       }
     }
   });
+
+  it('no longer carries the strings of the removed arrows, dots and detail box', () => {
+    for (const [lang, dict] of Object.entries(LANGS)) {
+      for (const key of ['ach_card_of', 'ach_prev', 'ach_next', 'ach_tap_hint']) {
+        expect(dict[key], `${lang} still defines ${key}`).toBeUndefined();
+      }
+      // One argument now: the date and the time come as one formatted string.
+      expect((dict.ach_stamped_on as (when: string) => string).length, `${lang}:ach_stamped_on arity`).toBe(1);
+    }
+  });
 });
 
 describe('achievements view — a locked secret badge leaks nothing', () => {
@@ -78,9 +116,9 @@ describe('achievements view — a locked secret badge leaks nothing', () => {
     // stale cache or a future refactor could. Feed them in deliberately: the
     // view must not render them either way.
     const html = fieldHtml({
-      id: 'secret_night_owl', card: 'secret', secret: true, unlocked: false,
+      id: 'secret_night_owl', card: 'secret', stamp: 'moon', secret: true, unlocked: false,
       name: 'Night Owl', description: 'Pulled a shot after 2 a.m.',
-    } as Achievement);
+    });
     expect(html).not.toContain('Night Owl');
     expect(html).not.toContain('2 a.m.');
     expect(html, 'a locked secret field should carry the "?" placeholder').toContain('ach-qm');
@@ -127,11 +165,23 @@ describe('achievements view — unlockedAt is Unix seconds', () => {
     expect(out, 'timestamp was read as milliseconds').toContain('2026');
     expect(out).not.toContain('1970');
   });
+
+  it('takes the date and the time from the shared date helper', () => {
+    const seconds = Math.floor(Date.UTC(2026, 2, 12, 8, 14, 0) / 1000);
+    expect(formatStampedOn(seconds, 'de'))
+      .toBe((de.ach_stamped_on as (when: string) => string)(formatDate(seconds * 1000, localeFor('de'), 'short', true)));
+  });
+
+  it('has no date formatter of its own left in the view', () => {
+    const source = readFileSync(join(__dirname, '../public-src/views/achievements.ts'), 'utf8');
+    expect(source).not.toContain('toLocaleTimeString');
+    expect(source).not.toContain('toLocaleDateString');
+  });
 });
 
 describe('achievements view — the "Full" overprint', () => {
   const badge = (id: string, unlocked: boolean): Achievement =>
-    ({ id, card: 'basics', secret: false, unlocked } as Achievement);
+    ({ id, card: 'basics', stamp: 'gear', secret: false, unlocked });
 
   it('treats a card whose badges are all unlocked as full', () => {
     expect(isCardFull([badge('a', true), badge('b', true)])).toBe(true);
@@ -143,5 +193,357 @@ describe('achievements view — the "Full" overprint', () => {
 
   it('does not treat an empty card as full', () => {
     expect(isCardFull([])).toBe(false);
+  });
+});
+
+describe('achievements view — what comes next', () => {
+  it('orders the started counters by share, then by the fewest left', () => {
+    const order = achUpcoming(FIXTURE).map(b => b.id);
+    // 5/7 beats 294/500 beats 3/10; 0/100 has not started and never appears.
+    expect(order).toEqual(['streak_7', 'shots_500', 'shots_10']);
+  });
+
+  it('prefers the one with fewer left when the shares are equal', () => {
+    const badges: Achievement[] = [
+      { id: 'long', card: 'basics', stamp: 'gear', progress: { current: 50, target: 100 } },
+      { id: 'short', card: 'basics', stamp: 'gear', progress: { current: 5, target: 10 } },
+    ];
+    expect(achUpcoming(badges).map(b => b.id)).toEqual(['short', 'long']);
+  });
+});
+
+describe('achievements view — the verdict', () => {
+  beforeEach(() => { S.currentLang = 'en'; });
+
+  it('shows the collected count as the big number and names the next stamp', () => {
+    const out = achVerdictHtml(FIXTURE);
+    expect(out).toContain('analytics-verdict-score-num serif-display');
+    expect(out).toContain('>1</span>');
+    expect(out).toContain('of 6 stamps');
+    expect(out).toContain('Next up: Streak');
+    expect(out).toContain('5 of 7');
+  });
+
+  it('says how many stamps are still open when none has a started counter', () => {
+    const badges: Achievement[] = [
+      { id: 'a', card: 'basics', stamp: 'gear', unlocked: true },
+      { id: 'b', card: 'basics', stamp: 'gear', unlocked: true },
+      { id: 'c', card: 'basics', stamp: 'gear' },
+      { id: 'd', card: 'basics', stamp: 'gear' },
+      { id: 'e', card: 'basics', stamp: 'gear' },
+    ];
+    expect(achVerdictHtml(badges)).toContain('3 stamps still open');
+  });
+
+  it('says every stamp is collected when the card is complete', () => {
+    const badges = FIXTURE.map(b => ({ ...b, unlocked: true, progress: null }));
+    expect(achVerdictHtml(badges)).toContain('Every stamp collected');
+  });
+});
+
+describe('achievements view — the details in the sheet', () => {
+  beforeEach(() => { S.currentLang = 'en'; });
+
+  it('names the stamp, its category, its description and when it was stamped', () => {
+    const d = achDetail({
+      id: 'countries_10', card: 'beans', stamp: 'globe', unlocked: true,
+      unlockedAt: 1_772_000_000,
+    });
+    expect(d.title).toBe('Globetrotter');
+    expect(d.sub).toBe(en.ach_card_beans);
+    expect(d.body).toContain('Beans from ten different countries.');
+    expect(d.body).toContain('Stamped on');
+  });
+
+  it('draws a progress bar for a locked stamp with a started counter', () => {
+    const d = achDetail({ id: 'streak_7', card: 'endurance', stamp: 'flame', progress: { current: 5, target: 7 } });
+    expect(d.body).toContain('ach-bar');
+    expect(d.body).toContain('width:71%');
+  });
+
+  it('says nothing about a locked secret stamp, even when the record carries its copy', () => {
+    const d = achDetail({
+      id: 'secret_night_owl', card: 'secret', stamp: 'moon', secret: true, unlocked: false,
+      name: 'Night Owl', description: 'Pulled a shot after 2 a.m.',
+    });
+    expect(d.title).toBe('Secret');
+    expect(d.sub).toBe('');
+    expect(d.body).not.toContain('Night Owl');
+    expect(d.body).not.toContain('2 a.m.');
+  });
+});
+
+describe('achievements view — the page shell', () => {
+  beforeEach(() => { S.currentLang = 'en'; });
+
+  it('offers eight category chips with exactly one of them pressed', () => {
+    const markup = achPageHtml(FIXTURE, 'craft', 'all');
+    expect([...markup.matchAll(/data-ach-card="/g)]).toHaveLength(8);
+    const pressed = [...markup.matchAll(/data-ach-card="([a-z]+)" aria-pressed="true"/g)].map(m => m[1]);
+    expect(pressed).toEqual(['craft']);
+  });
+
+  it('shows only the chosen category page', () => {
+    const markup = achPageHtml(FIXTURE, 'craft', 'all');
+    const pages = [...markup.matchAll(/data-ach-page="([a-z]+)"( hidden)?/g)];
+    expect(pages).toHaveLength(8);
+    expect(pages.filter(p => !p[2]).map(p => p[1])).toEqual(['craft']);
+  });
+
+  it('carries the filter on the layout and presses only the matching chip', () => {
+    const markup = achPageHtml(FIXTURE, 'basics', 'open');
+    expect(markup).toContain('data-ach-filter="open"');
+    const chips = [...markup.matchAll(/data-ach-show="([a-z]+)" aria-pressed="(true|false)"/g)]
+      .filter(m => m[2] === 'true')
+      .map(m => m[1]);
+    expect(chips).toEqual(['open']);
+  });
+
+  it('renders no title bar: the chips come first and the tab names the page', () => {
+    const markup = achPageHtml(FIXTURE, 'basics', 'all');
+    expect(markup).not.toContain('settings-bar-title');
+    expect(markup).not.toContain('settings-bar');
+  });
+
+  it('has no trace of the removed arrows, dots, card line or detail box', () => {
+    const markup = achPageHtml(FIXTURE, 'basics', 'all');
+    for (const gone of ['ach-pdot', 'ach-pg', 'achFine', 'achDetail']) {
+      expect(markup, `${gone} is still in the markup`).not.toContain(gone);
+    }
+  });
+
+  it('never prints a locked secret stamp name or description', () => {
+    const badges: Achievement[] = [{
+      id: 'secret_night_owl', card: 'secret', stamp: 'moon', secret: true, unlocked: false,
+      name: 'Night Owl', description: 'Pulled a shot after 2 a.m.',
+    }];
+    const markup = achPageHtml(badges, 'secret', 'all');
+    expect(markup).not.toContain('Night Owl');
+    expect(markup).not.toContain('2 a.m.');
+  });
+});
+
+interface FakeEl {
+  innerHTML: string;
+  dataset: Record<string, string>;
+  classList: { add: () => void; remove: () => void; contains: () => boolean };
+  querySelector: () => null;
+  addEventListener: (type: string, fn: unknown) => void;
+}
+
+function makeEl(): FakeEl {
+  return {
+    innerHTML: '',
+    dataset: {},
+    classList: { add: () => {}, remove: () => {}, contains: () => false },
+    querySelector: () => null,
+    addEventListener: () => {},
+  };
+}
+
+describe('achievements view — opening a stamp from the loaded page', () => {
+  const g = globalThis as unknown as Record<string, unknown>;
+
+  function installDom(container: FakeEl, host: FakeEl): void {
+    g.window = { matchMedia: () => ({ matches: true }), innerWidth: 390, innerHeight: 844 };
+    g.document = {
+      getElementById: (id: string) => (id === 'achievements-view' ? container : id === 'detailSheet' ? host : null),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      body: { classList: { add: () => {}, remove: () => {}, contains: () => false } },
+      activeElement: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      contains: () => true,
+    };
+  }
+
+  afterEach(() => {
+    delete g.document;
+    delete g.window;
+    api.getAchievements.mockReset();
+  });
+
+  it('fills the shared sheet with the stamp it was clicked for', async () => {
+    S.currentLang = 'en';
+    const container = makeEl();
+    const host = makeEl();
+    installDom(container, host);
+    api.getAchievements.mockResolvedValue({ json: () => Promise.resolve({ badges: FIXTURE }) } as unknown as Response);
+
+    await loadAchievementsView();
+    expect(container.innerHTML).toContain('data-ach-card="basics"');
+
+    openAchievement('countries_10');
+    expect(host.innerHTML).toContain('detailSheetTitle');
+    expect(host.innerHTML).toContain('Globetrotter');
+  });
+
+  it('leaves the sheet alone for an unknown id', async () => {
+    S.currentLang = 'en';
+    const container = makeEl();
+    const host = makeEl();
+    installDom(container, host);
+    api.getAchievements.mockResolvedValue({ json: () => Promise.resolve({ badges: FIXTURE }) } as unknown as Response);
+
+    await loadAchievementsView();
+    host.innerHTML = 'untouched';
+    openAchievement('nope');
+    expect(host.innerHTML).toBe('untouched');
+  });
+});
+
+// Four more started counters so "Coming up" has rows after the verdict's own
+// stamp, plus two more earned stamps for the newest-first order.
+const SIDE_FIXTURE: Achievement[] = [
+  ...FIXTURE,
+  { id: 'litres_10', card: 'endurance', ...STAMP, progress: { current: 9, target: 10 } },
+  { id: 'maint_30', card: 'care', ...STAMP, progress: { current: 26, target: 30 } },
+  { id: 'streak_30', card: 'endurance', ...STAMP, progress: { current: 12, target: 30 } },
+  { id: 'shots_1000', card: 'craft', ...STAMP, progress: { current: 410, target: 1000 } },
+  { id: 'first_shot', card: 'basics', ...STAMP, unlocked: true, unlockedAt: 1_772_500_000 },
+  { id: 'first_bean', card: 'beans', ...STAMP, unlocked: true, unlockedAt: 1_772_300_000 },
+];
+
+// The card's own fields carry the same ids and names as the rows, so each
+// list is checked on its own slice of the markup.
+function listSlice(markup: string, from: string, to: string | null): string {
+  const start = markup.indexOf(from);
+  expect(start, `${from} is missing`).toBeGreaterThanOrEqual(0);
+  if (to === null) return markup.slice(start);
+  const end = markup.indexOf(to, start);
+  expect(end, `${to} is missing`).toBeGreaterThan(start);
+  return markup.slice(start, end);
+}
+
+describe('Coming up, Recently stamped and wet ink (#1465)', () => {
+  beforeEach(() => { S.currentLang = 'en'; });
+
+  it('lists the recently stamped badges newest first and honours the limit', () => {
+    const badges: Achievement[] = [
+      { id: 'a', card: 'basics', stamp: 'gear', unlocked: true, unlockedAt: 100 },
+      { id: 'b', card: 'basics', stamp: 'gear', unlocked: true, unlockedAt: 300 },
+      { id: 'c', card: 'basics', stamp: 'gear', unlocked: true, unlockedAt: 200 },
+      { id: 'd', card: 'basics', stamp: 'gear' },
+    ];
+    expect(achRecent(badges).map(b => b.id)).toEqual(['b', 'c', 'a']);
+    expect(achRecent(badges, 2).map(b => b.id)).toEqual(['b', 'c']);
+  });
+
+  it('builds a settings row with the stamp, the names and the value', () => {
+    const row = achRowHtml(
+      { id: 'streak_7', card: 'endurance', stamp: 'flame', progress: { current: 5, target: 7 } },
+      '5 of 7',
+      71,
+    );
+    expect(row).toContain('class="settings-row ach-row" data-ach-id="streak_7"');
+    expect(row).toContain('settings-row-icon ach-row-icon"');
+    expect(row).toContain(en.ach_streak_7_n as string);
+    expect(row).toContain(en.ach_card_endurance as string);
+    expect(row).toContain('5 of 7');
+    expect(row).toContain('ach-bar');
+    expect(row).toContain('width:71%');
+  });
+
+  it('leaves the progress bar out when there is no percentage', () => {
+    const row = achRowHtml(
+      { id: 'countries_10', card: 'beans', stamp: 'globe', unlocked: true, unlockedAt: 1_772_000_000 },
+      '12.03.2026',
+      null,
+    );
+    expect(row).not.toContain('ach-bar');
+    expect(row).toContain('ach-row-got');
+    expect(row).toContain('12.03.2026');
+  });
+
+  it('shows three coming-up rows, without the stamp the verdict names', () => {
+    const soon = listSlice(achPageHtml(SIDE_FIXTURE, 'basics', 'all'), 'ach-soon-sec', 'ach-recent-sec');
+    expect([...soon.matchAll(/class="settings-row ach-row"/g)]).toHaveLength(3);
+    // litres_10 (9/10) leads the list, so the verdict already names it.
+    expect(achUpcoming(SIDE_FIXTURE)[0]?.id).toBe('litres_10');
+    expect(soon).not.toContain('data-ach-id="litres_10"');
+    expect(soon).toContain('ach-bar');
+  });
+
+  it('shows the unlocked stamps newest first in Recently stamped', () => {
+    const recent = listSlice(achPageHtml(SIDE_FIXTURE, 'basics', 'all'), 'ach-recent-sec', null);
+    const ids = [...recent.matchAll(/data-ach-id="([a-z0-9_]+)"/g)].map(m => m[1]);
+    expect(ids).toEqual(['first_shot', 'first_bean', 'countries_10']);
+    expect(recent).toContain(formatDate(1_772_500_000 * 1000, localeFor('en')));
+    expect(recent).not.toContain('ach-bar');
+  });
+
+  it('never lets a locked secret stamp into either list', () => {
+    const markup = achPageHtml(SIDE_FIXTURE, 'secret', 'all');
+    for (const slice of [listSlice(markup, 'ach-soon-sec', 'ach-recent-sec'), listSlice(markup, 'ach-recent-sec', null)]) {
+      expect(slice).not.toContain('secret_night_owl');
+    }
+  });
+
+  it('hides the coming-up list under "Collected" and the recent one under "Open"', () => {
+    const got = achPageHtml(SIDE_FIXTURE, 'basics', 'got');
+    expect(got).toContain('class="ach-soon-sec" hidden');
+    expect(got).not.toContain('class="ach-recent-sec" hidden');
+
+    const open = achPageHtml(SIDE_FIXTURE, 'basics', 'open');
+    expect(open).not.toContain('class="ach-soon-sec" hidden');
+    expect(open).toContain('class="ach-recent-sec" hidden');
+  });
+
+  it('hides the whole side column when neither list has a row', () => {
+    const badges: Achievement[] = [
+      { id: 'shots_100', card: 'craft', ...STAMP, progress: { current: 0, target: 100 } },
+      { id: 'secret_night_owl', card: 'secret', secret: true, ...STAMP },
+    ];
+    const markup = achPageHtml(badges, 'craft', 'all');
+    expect(markup).toContain('class="ach-side" hidden');
+    expect(markup).toContain('class="ach-soon-sec" hidden');
+    expect(markup).toContain('class="ach-recent-sec" hidden');
+  });
+
+  it('treats only the last seven days as wet ink', () => {
+    const now = 1_772_000_000;
+    const base = { id: 'a', card: 'basics', stamp: 'gear', unlocked: true };
+    expect(isWetInk({ ...base, unlockedAt: now - 6 * 86400 }, now)).toBe(true);
+    expect(isWetInk({ ...base, unlockedAt: now - 8 * 86400 }, now)).toBe(false);
+    expect(isWetInk({ ...base, unlocked: false, unlockedAt: now - 86400 }, now)).toBe(false);
+    expect(isWetInk({ ...base }, now)).toBe(false);
+  });
+
+  it('marks a field as wet exactly when isWetInk says so', () => {
+    const now = 1_772_000_000;
+    const wet = { id: 'a', card: 'basics', stamp: 'gear', unlocked: true, unlockedAt: now - 86400 };
+    const dry = { id: 'a', card: 'basics', stamp: 'gear', unlocked: true, unlockedAt: now - 8 * 86400 };
+    expect(fieldHtml(wet, now)).toContain('ach-wet');
+    expect(fieldHtml(dry, now)).not.toContain('ach-wet');
+    expect(isWetInk(wet, now)).toBe(true);
+    expect(isWetInk(dry, now)).toBe(false);
+  });
+
+  it('toggles the two lists when the filter changes after the first render', () => {
+    const g = globalThis as unknown as Record<string, unknown>;
+    const el = (rows: number) => ({
+      hidden: false,
+      querySelector: () => (rows > 0 ? { found: true } : null),
+    });
+    const soon = el(2);
+    const recent = el(2);
+    const side = el(2);
+    const hadDocument = Object.prototype.hasOwnProperty.call(g, 'document');
+    const previous = g.document;
+    g.document = {
+      querySelector: (sel: string) => (sel === '.ach-soon-sec' ? soon : sel === '.ach-recent-sec' ? recent : sel === '.ach-side' ? side : null),
+      querySelectorAll: () => [],
+    };
+    try {
+      setAchFilter('got');
+      expect(soon.hidden).toBe(true);
+      expect(recent.hidden).toBe(false);
+      expect(side.hidden).toBe(false);
+    } finally {
+      setAchFilter('all');
+      if (hadDocument) g.document = previous;
+      else delete g.document;
+    }
   });
 });

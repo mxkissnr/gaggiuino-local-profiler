@@ -21,6 +21,7 @@ import type { Html } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
 import type { ShotLike } from './shots/utils.js';
 import { _miniShotChart } from './shots/grind.js';
+import { markFieldInvalid } from '../components/field-error.js';
 import { suggestPhaseAdjustment, applyPhaseAdjustment, isProfileDialinConverged, profileDialinConvergenceReason }
   from '../profile-dialin-convergence.js';
 import type { ProfileSuggestion } from '../profile-dialin-convergence.js';
@@ -222,7 +223,7 @@ export async function profileDialinOverride(): Promise<void> {
   if (!s || !s.reviewRound || !s.reviewRound.suggestion || s.reviewRound.suggestion.type !== 'adjust') return;
   const input = document.getElementById('pdwOverrideInput') as HTMLInputElement | null;
   const val = parseFloat(input?.value as string);
-  if (!Number.isFinite(val)) { input?.focus(); return; }
+  if (!Number.isFinite(val)) { markFieldInvalid(input); return; }
 
   const sug = { ...s.reviewRound.suggestion, newValue: val, delta: Math.round((val - (s.reviewRound.suggestion.oldValue as number)) * 1000) / 1000 };
   const round = { symptom: sug.symptom, score: s.reviewRound.score, shotId: s.reviewRound.shotId,
@@ -324,7 +325,7 @@ function _renderRound(s: ProfileDialinSession): Html {
           <div class="dw-actions">
             <button class="lib-save-btn" data-action="profile-dialin-accept-next">${tHtml('profile_dialin_accept_next')}</button>
             <div class="dw-override-row">
-              <input type="number" step="0.1" id="pdwOverrideInput" aria-label="${esc(t('dialin_wizard_override'))}" placeholder="${esc(sug.newValue)}">
+              <input type="number" step="0.1" min="0" max="2000" id="pdwOverrideInput" aria-label="${esc(t('dialin_wizard_override'))}" placeholder="${esc(sug.newValue)}">
               <button class="lib-btn-sm" data-action="profile-dialin-override">${tHtml('dialin_wizard_override')}</button>
             </div>
           </div>`;

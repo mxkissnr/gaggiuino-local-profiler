@@ -1,5 +1,6 @@
 import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
+import { showToast } from '../../components/toast.js';
 import * as libraryApi from '../../api/library.js';
 import { invalidateBeanImage } from '../../bean-image.js';
 import { apiFetch } from '../../api/transport.js';
@@ -171,7 +172,7 @@ export async function cutOutBeanSticker(): Promise<void> {
       const r = await apiFetch(url);
       if (!r.ok) {
         const err = (await r.json().catch(() => ({}))) as { error?: string };
-        alert(t('error_generic', err.error || r.statusText));
+        showToast(t('error_generic', err.error || r.statusText));
         return;
       }
       photo = await r.blob();

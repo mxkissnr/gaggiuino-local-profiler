@@ -53,7 +53,7 @@ jobs:
 
       - name: Install head dependencies
         working-directory: head/gaggiuino-local-profiler
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Generate dataset
         working-directory: head/gaggiuino-local-profiler

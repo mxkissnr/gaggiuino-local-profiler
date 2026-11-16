@@ -443,6 +443,20 @@ func (r *ProfilesRepository) PruneStaleSynced(machineID int64, currentRemoteIDs 
 	return nil
 }
 
+// CountPending counts rows that exist only in the app — pending create,
+// dirty or pending delete — across every machine. Restoring the machines
+// section clears machine_profiles wholesale (a restored machine id may name
+// a different physical machine, so a pending row must never be pushed to
+// it), so this is the number of local-only edits such a restore discards.
+func (r *ProfilesRepository) CountPending() (int, error) {
+	var n int
+	if err := r.db.QueryRow(`SELECT COUNT(*) FROM machine_profiles WHERE sync_status != ?`,
+		ProfileSyncSynced).Scan(&n); err != nil {
+		return 0, fmt.Errorf("machines: counting pending profiles: %w", err)
+	}
+	return n, nil
+}
+
 // DirtyRows returns every row for machineID still waiting on a push —
 // PushDirtyProfiles' (internal/system/profile_sync.go) work queue.
 func (r *ProfilesRepository) DirtyRows(machineID int64) ([]ProfileRow, error) {

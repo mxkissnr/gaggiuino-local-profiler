@@ -106,6 +106,44 @@ beforeEach(() => {
   doc.checkboxes.push(cb);
 });
 
+// #2023 slice 2: the dry-run preview reports machine profile changes that
+// exist only in the app; restoring the machines section discards them, so the
+// preview must say so before the user confirms.
+async function previewWithMachines(
+  preview: Record<string, unknown>,
+  machinesChecked: boolean,
+): Promise<string> {
+  const machinesCb = doc.createElement();
+  machinesCb.value = 'machines';
+  machinesCb.checked = machinesChecked;
+  doc.checkboxes.push(machinesCb);
+  const input = { files: [jsonFile({ glp_backup: true, machines: [{ id: 1 }] })], value: '' };
+  await openBackupRestoreModal(input as unknown as HTMLInputElement);
+  expect(resolvers.length).toBe(1);
+  resolvers[0]!(jsonResponse({ preview }));
+  await flushPromises();
+  return doc.getElementById('backupPreview').innerHTML;
+}
+
+describe('restore preview pending machine profile changes (#2023 slice 2)', () => {
+  it('warns that pending profile changes will be lost', async () => {
+    const markup = await previewWithMachines({ machines: 1, pendingProfileChanges: 3 }, true);
+    expect(markup).toContain('machines');
+    expect(markup).toContain('3 profile changes not yet sent to the machine will be lost');
+  });
+
+  it('does not warn when there is nothing pending', async () => {
+    const markup = await previewWithMachines({ machines: 1, pendingProfileChanges: 0 }, true);
+    expect(markup).toContain('machines');
+    expect(markup).not.toContain('profile change');
+  });
+
+  it('does not warn when the machines section is not restored', async () => {
+    const markup = await previewWithMachines({ machines: 1, pendingProfileChanges: 3 }, false);
+    expect(markup).not.toContain('profile change');
+  });
+});
+
 describe('restore preview sequencing (#1614 slice 4)', () => {
   it('a slower earlier dry-run does not overwrite a newer preview', async () => {
     const input = { files: [jsonFile({ glp_backup: true, shots: [1] })], value: '' };

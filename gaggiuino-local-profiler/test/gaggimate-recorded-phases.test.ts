@@ -50,13 +50,15 @@ describe('buildRecordedGmPhaseRanges', () => {
 });
 
 describe('exitReasonKey', () => {
-    it('maps integer codes 1..7 to exit_reason_ keys', () => {
+    it('maps integer codes 1..9 to exit_reason_ keys', () => {
         expect(exitReasonKey(1)).toBe('exit_reason_1');
         expect(exitReasonKey(7)).toBe('exit_reason_7');
+        expect(exitReasonKey(8)).toBe('exit_reason_8');
+        expect(exitReasonKey(9)).toBe('exit_reason_9');
     });
 
-    it('returns null outside 1..7 and for non-integers', () => {
-        for (const bad of [0, 8, null, undefined, 2.5, '3']) {
+    it('returns null outside 1..9 and for non-integers', () => {
+        for (const bad of [0, 10, null, undefined, 2.5, '3']) {
             expect(exitReasonKey(bad)).toBeNull();
         }
     });
@@ -72,7 +74,7 @@ describe('recorded-phase i18n keys', () => {
 
     it('every language defines the exit-reason and machine-warning keys', () => {
         for (const [name, dict] of Object.entries(LANGS)) {
-            for (let code = 1; code <= 7; code++) {
+            for (let code = 1; code <= 9; code++) {
                 const key = `exit_reason_${code}`;
                 expect(typeof dict[key], `${name}.js ${key}`).toBe('string');
                 expect((dict[key] as string).length, `${name}.js ${key}`).toBeGreaterThan(0);

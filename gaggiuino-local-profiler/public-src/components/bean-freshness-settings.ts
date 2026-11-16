@@ -1,11 +1,20 @@
-// Settings → "Bean freshness" card (#1835, part B): the days that separate the
-// freshness bands and the grams below which a bag counts as running low. The
-// values live in the server-synced ui-prefs store under `bean_freshness` and
-// `bean_low_stock_g`, the same keys utils.ts's freshnessWindows() and the Go
-// low-stock check already read — this module only edits them.
+// Settings → "Bean freshness" card (#1835, part B; per-roast-level scopes
+// #1977): the days that separate the freshness bands and the grams below which
+// a bag counts as running low. The global set lives under `bean_freshness`, each
+// roast level's override under `bean_freshness_<level>` — the same keys
+// utils.ts's freshnessWindows()/resolveFreshnessWindows() and the Go low-stock
+// check already read. This module only edits them.
 import { setUiPref, getUiPref } from '../ui-prefs.js';
 import { t, tHtml } from '../i18n.js';
-import { DEFAULT_FRESHNESS_WINDOWS, freshnessWindows, html } from '../utils.js';
+import {
+  DEFAULT_FRESHNESS_WINDOWS,
+  DEFAULT_LEVEL_FRESHNESS_WINDOWS,
+  LEVEL_FRESHNESS_PREF,
+  ROAST_LEVELS,
+  freshnessWindows,
+  html,
+} from '../utils.js';
+import type { RoastLevel } from '../utils.js';
 import { CHECK_ICON_SVG } from '../icons.js';
 
 /** Mirror of the Go backend's library.DefaultLowStockThresholdG. */
@@ -13,6 +22,8 @@ export const DEFAULT_LOW_STOCK_G = 100;
 
 const MAX_DAY = 365;
 const MAX_GRAMS = 5000;
+
+export type FreshnessScope = '' | RoastLevel;
 
 export interface BeanFreshnessInputs {
   degasUntil: number;
@@ -33,8 +44,9 @@ export interface BeanFreshnessParse {
   orderError: boolean;
 }
 
-export function defaultBeanFreshness(): BeanFreshnessInputs {
-  return { ...DEFAULT_FRESHNESS_WINDOWS, lowStockG: DEFAULT_LOW_STOCK_G };
+export function defaultBeanFreshness(scope: FreshnessScope = ''): BeanFreshnessInputs {
+  const windows = scope ? DEFAULT_LEVEL_FRESHNESS_WINDOWS[scope] : DEFAULT_FRESHNESS_WINDOWS;
+  return { ...windows, lowStockG: DEFAULT_LOW_STOCK_G };
 }
 
 /** A usable low-stock threshold, mirroring the Go side's 1..5000 whole grams. */
@@ -43,9 +55,9 @@ function _validGrams(v: unknown): v is number {
 }
 
 /** The configured set as the app actually applies it (defaults when unusable). */
-export function currentBeanFreshness(): BeanFreshnessInputs {
+export function currentBeanFreshness(scope: FreshnessScope = ''): BeanFreshnessInputs {
   const grams = getUiPref<unknown>('bean_low_stock_g');
-  return { ...freshnessWindows(), lowStockG: _validGrams(grams) ? grams : DEFAULT_LOW_STOCK_G };
+  return { ...freshnessWindows(scope), lowStockG: _validGrams(grams) ? grams : DEFAULT_LOW_STOCK_G };
 }
 
 function _wholeNumber(raw: string): number | null {
@@ -88,6 +100,18 @@ function _inputValue(id: string): string {
   return (document.getElementById(id) as HTMLInputElement | null)?.value.trim() ?? '';
 }
 
+/** Which window set the card is editing; anything unknown means the global set. */
+function _selectedScope(): FreshnessScope {
+  const el = document.getElementById('bfLevel') as HTMLSelectElement | null;
+  const value = el?.value ?? '';
+  return (ROAST_LEVELS as readonly string[]).includes(value) ? value as RoastLevel : '';
+}
+
+/** The ui-prefs key holding a scope's window set. */
+export function freshnessPrefKey(scope: FreshnessScope): string {
+  return scope ? LEVEL_FRESHNESS_PREF[scope] : 'bean_freshness';
+}
+
 function _readForm(): BeanFreshnessForm {
   return {
     degasUntil: _inputValue('bfDegasUntil'),
@@ -110,6 +134,15 @@ function _fillForm(values: BeanFreshnessInputs): void {
   set('bfLowStock', values.lowStockG);
 }
 
+// The low-stock grams are one global threshold, not part of a level's window
+// set (#1977): a level scope edits only the four days, so the grams row is
+// hidden there instead of pretending to belong to the scope. Saving or
+// resetting a level must never rewrite the user's global grams.
+function _syncLowStockRow(scope: FreshnessScope): void {
+  const row = document.getElementById('bfLowStockRow');
+  if (row) row.style.display = scope ? 'none' : '';
+}
+
 function _renderErrors(errors: BeanFreshnessFieldErrors, orderError: boolean): void {
   const messages = Object.values(errors).filter((key): key is string => Boolean(key)).map(key => t(key));
   if (orderError) messages.push(t('bf_err_order'));
@@ -122,17 +155,27 @@ function _renderErrors(errors: BeanFreshnessFieldErrors, orderError: boolean): v
 /** Fills the card from the current stored set; no-op when the card is absent. */
 export function renderBeanFreshnessSettings(): void {
   if (!document.getElementById('beanFreshnessCard')) return;
-  _fillForm(currentBeanFreshness());
+  _fillForm(currentBeanFreshness(_selectedScope()));
+  _syncLowStockRow(_selectedScope());
+  _renderErrors({}, false);
+}
+
+/** Refills the day fields after the scope picker changed (global ↔ a level). */
+export function refreshBeanFreshnessScope(): void {
+  if (!document.getElementById('beanFreshnessCard')) return;
+  _fillForm(currentBeanFreshness(_selectedScope()));
+  _syncLowStockRow(_selectedScope());
   _renderErrors({}, false);
 }
 
 export function saveBeanFreshnessSettings(): void {
+  const scope = _selectedScope();
   const parse = parseBeanFreshnessForm(_readForm());
   _renderErrors(parse.fieldErrors, parse.orderError);
   if (!parse.values) return;
   const { degasUntil, peakFrom, peakUntil, fadingUntil, lowStockG } = parse.values;
-  setUiPref('bean_freshness', { degasUntil, peakFrom, peakUntil, fadingUntil });
-  setUiPref('bean_low_stock_g', lowStockG);
+  setUiPref(freshnessPrefKey(scope), { degasUntil, peakFrom, peakUntil, fadingUntil });
+  if (!scope) setUiPref('bean_low_stock_g', lowStockG);
   _fillForm(parse.values);
   // Bean cards render their freshness badge off the windows; the shot list and
   // the annotation tracker pick the new bands up on their next render.
@@ -144,8 +187,12 @@ export function saveBeanFreshnessSettings(): void {
   }
 }
 
-/** Restores the built-in windows and threshold and saves them right away. */
+/** Restores the built-in windows for the selected scope and saves right away. */
 export function resetBeanFreshnessSettings(): void {
-  _fillForm(defaultBeanFreshness());
+  const scope = _selectedScope();
+  const defaults = defaultBeanFreshness(scope);
+  // A level reset restores only that level's four days; the global low-stock
+  // grams stay whatever the user set them to.
+  _fillForm(scope ? { ...defaults, lowStockG: currentBeanFreshness('').lowStockG } : defaults);
   saveBeanFreshnessSettings();
 }

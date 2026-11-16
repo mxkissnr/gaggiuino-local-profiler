@@ -144,6 +144,50 @@ describe('profiles live refresh (#1539 slice 5)', () => {
   });
 });
 
+// A shot-list change re-fetches the whole list; the caller's follow-up (the
+// achievement check, #1956) must run after that refetch resolved, not before.
+describe('shots live refresh (#1539 slice 5, #1956)', () => {
+  it('runs onShotsChanged after refreshShots resolved', async () => {
+    const { createLiveSyncHandlers, S, live } = await loadRuntime();
+    const order: string[] = [];
+    const releases: Array<() => void> = [];
+    loaders.refreshShots.mockImplementationOnce(() => new Promise<void>((resolve) => {
+      order.push('refreshShots');
+      releases.push(() => { order.push('refreshShots done'); resolve(); });
+    }));
+    loaders.annotationBusy.mockReturnValue(false);
+    loaders.shotsLoadInProgress.mockReturnValue(false);
+    const onShotsChanged = vi.fn<() => void>(() => { order.push('onShotsChanged'); });
+    live.initLiveSync(createLiveSyncHandlers({ ...mkDeps(), onShotsChanged }));
+    S.currentMode = 'shots';
+
+    live.handleDataChanged({ kind: 'shots', rev: 1 });
+    await vi.advanceTimersByTimeAsync(400);
+    expect(order).toEqual(['refreshShots']);
+    expect(onShotsChanged).not.toHaveBeenCalled();
+
+    releases[0]?.();
+    await vi.advanceTimersByTimeAsync(1);
+    for (let i = 0; i < 3; i++) await Promise.resolve();
+    expect(order).toEqual(['refreshShots', 'refreshShots done', 'onShotsChanged']);
+  });
+
+  it('completes the run without the dep', async () => {
+    const { createLiveSyncHandlers, S, live } = await loadRuntime();
+    loaders.refreshShots.mockResolvedValue(undefined);
+    loaders.annotationBusy.mockReturnValue(false);
+    loaders.shotsLoadInProgress.mockReturnValue(false);
+    live.initLiveSync(createLiveSyncHandlers(mkDeps()));
+    S.currentMode = 'shots';
+
+    live.handleDataChanged({ kind: 'shots', rev: 1 });
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(loaders.refreshShots).toHaveBeenCalledTimes(1);
+    expect(loaders.refreshShots).toHaveBeenCalledWith(null);
+  });
+});
+
 // The kinds live-sync will dispatch are its REGISTERED_KINDS list. Driving the
 // real settings/profiles handlers through handleDataChanged proves those two are
 // registered; an event for a kind that is not in the list must stay inert.

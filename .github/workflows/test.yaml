@@ -23,16 +23,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7 # zizmor: ignore[cache-poisoning] CI only, publishes no artifacts
         with:
           node-version: 26
           cache: 'npm'
           cache-dependency-path: gaggiuino-local-profiler/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Lint
         run: npm run lint
@@ -73,9 +75,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7 # zizmor: ignore[cache-poisoning] CI only, publishes no artifacts
         with:
           node-version: 26
           cache: 'npm'
@@ -85,13 +89,13 @@ jobs:
       # glp-server Go binary as the backend under test — the Node backend it
       # used to require() in-process is gone (3.0.0, #1028).
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7 # zizmor: ignore[cache-poisoning] CI only, publishes no artifacts
         with:
           go-version-file: gaggiuino-local-profiler/go/go.mod
           cache-dependency-path: gaggiuino-local-profiler/go/go.sum
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       # Own job (not a step in `test` above) so a Chromium download never
       # slows the unit test job — see #798.
@@ -105,11 +109,17 @@ jobs:
         # survives and holds the dpkg lock, so every retry failed (#1821).
         run: |
           printf 'Acquire::Retries "3";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' | sudo tee /etc/apt/apt.conf.d/80-ci-retries >/dev/null
+          # Attempts 2 and 3 skip --with-deps: when the runner cannot reach the
+          # Ubuntu mirror at all, apt fails every time, while the browser itself
+          # comes from the Playwright CDN and the runner image already ships its
+          # libraries (#2002).
+          deps=--with-deps
           for attempt in 1 2 3; do
-            if timeout 300 npx playwright install --with-deps chromium; then
+            if timeout 300 npx playwright install $deps chromium; then
               exit 0
             fi
             echo "Playwright install attempt $attempt/3 failed or timed out, retrying..."
+            deps=
             sudo pkill -x apt-get || true
             while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; do sleep 2; done
             sudo dpkg --configure -a || true
@@ -163,7 +173,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Raised at each minor release, never lowered (docs/MAINTAINING.md).
-      GO_COVERAGE_MIN: "75.0"
+      GO_COVERAGE_MIN: "77.5"
     defaults:
       run:
         working-directory: gaggiuino-local-profiler/go
@@ -171,9 +181,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7 # zizmor: ignore[cache-poisoning] CI only, publishes no artifacts
         with:
           go-version-file: gaggiuino-local-profiler/go/go.mod
           cache-dependency-path: gaggiuino-local-profiler/go/go.sum
@@ -187,7 +199,7 @@ jobs:
       # Dependencies only: the Vite build go/cmd/frontend-build replaced is
       # not needed, and neither is Chromium (that's the e2e job).
       - name: Set up Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7 # zizmor: ignore[cache-poisoning] CI only, publishes no artifacts
         with:
           node-version: 26
           cache: 'npm'
@@ -195,7 +207,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: gaggiuino-local-profiler
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: gofmt
         run: |
@@ -301,6 +313,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       # Runtime-stage package install only (apk add/adduser under
       # emulation), not the Go compile itself — see the job comment above.
@@ -375,6 +389,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          persist-credentials: false
           fetch-depth: 2
 
       - name: Check if config.yaml changed

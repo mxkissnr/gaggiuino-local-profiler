@@ -11,7 +11,7 @@ name: Track red dev
 # is a legitimate real result on dev, so it is included too.
 
 on:
-  workflow_run:
+  workflow_run: # zizmor: ignore[dangerous-triggers] reads run metadata via the API only, no checkout or artifact download
     workflows: ["Test and build", "Build dev channel image"]
     types: [completed]
     branches: [dev]

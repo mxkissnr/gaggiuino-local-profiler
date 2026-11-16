@@ -127,10 +127,9 @@ export function applyTranslations(): void {
     const current = stEl.textContent;
     if (current !== null && allNoSync.includes(current)) stEl.textContent = t('no_sync');
   }
-  // Active language button in settings view
-  document.querySelectorAll<HTMLElement>('.lang-option-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.lang === S.currentLang);
-  });
+  // Keep the settings language dropdown in step with the active language
+  const langSelect = document.getElementById('settingsLang') as HTMLSelectElement | null;
+  if (langSelect) langSelect.value = S.currentLang;
   // data-i18n elements
   document.querySelectorAll<HTMLElement>('[data-i18n]').forEach(el => {
     const key = el.dataset.i18n;

@@ -517,6 +517,12 @@ func shotInsertArgs(shot Shot) (shotInsertRow, error) {
 		row.profileName = pn
 	} else if pn, ok := shot["profile_name"].(string); ok && pn != "" {
 		row.profileName = pn
+	} else if profile, ok := shot["profile"].(map[string]any); ok {
+		// A Gaggiuino history shot (GET /api/shots/{id}, stored as-is by the
+		// sync) names its profile only in profile.name (#1989).
+		if pn, ok := profile["name"].(string); ok && pn != "" {
+			row.profileName = pn
+		}
 	}
 	row.machineID = int64(1)
 	if v, ok := jsonInt(shot["machineId"]); ok {

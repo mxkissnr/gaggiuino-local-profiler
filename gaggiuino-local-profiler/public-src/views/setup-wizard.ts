@@ -130,13 +130,8 @@ function _enterConnectStep(): void {
   // here used to POST a brand new machine on save/test, leaving the user with
   // both the empty-host default and the one they just configured.
   const defaultMachine = (S.machines || []).find(m => m.isDefault) || null;
-  openMachineForm(defaultMachine);
+  openMachineForm(defaultMachine, { inline: true });
   slot.appendChild(card);
-  // Cancel only makes sense inside the Settings card it normally lives in —
-  // here it's replaced by the wizard's own close (X) / demo-data escape
-  // hatches, which (unlike closeMachineForm()) close the whole wizard.
-  const cancelBtn = document.getElementById('machineFormCancelBtn');
-  if (cancelBtn) cancelBtn.style.display = 'none';
 }
 
 function _leaveConnectStep(): void {
@@ -144,8 +139,6 @@ function _leaveConnectStep(): void {
   const origParent = _formOrigParent;
   if (!card || !origParent || card.parentNode === origParent) return;
   card.style.display = 'none';
-  const cancelBtn = document.getElementById('machineFormCancelBtn');
-  if (cancelBtn) cancelBtn.style.display = '';
   origParent.insertBefore(card, _formOrigNextSibling);
 }
 

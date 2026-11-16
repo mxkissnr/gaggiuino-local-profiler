@@ -1,6 +1,6 @@
 import { S }                    from '../../state/index.js';
-import { mapShotDatapoints, parseRoastDate, resolveBeanForAnnotation as _resolveBeanForAnnotation } from '../../utils.js';
-import type { ShotDatapoints, ShotSeries } from '../../utils.js';
+import { mapShotDatapoints, roastAgeDays, frozenPortionAgeDays, resolveBeanForAnnotation as _resolveBeanForAnnotation, freshnessOverrideFrom, normalizeRoastLevel } from '../../utils.js';
+import type { ShotDatapoints, ShotSeries, FreshnessOverride, RoastLevel } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
 import type { PressureNote } from '../../shared/score.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
@@ -32,12 +32,16 @@ export interface ShotLike {
 interface BeanBag {
   openedAt?: number | null;
   roastDate?: string | null;
+  frozenPortions?: { id: number; frozenAt: number; thawedAt?: number }[];
 }
 
 type BeanRecord = {
   id: number;
   name?: string | null;
   roastDate?: string | null;
+  roastLevel?: string | null;
+  bestFromDays?: number | null;
+  bestUntilDays?: number | null;
   bags?: BeanBag[];
 };
 
@@ -55,6 +59,27 @@ export function resolveBeanForAnnotation(annotation: unknown, beans?: unknown): 
   return _resolveBeanForAnnotation(annotation, list) as BeanRecord | null;
 }
 
+// #1977: which freshness window this shot should be judged by. A mixed shot
+// names several beans, so no single bean's level/override can describe it and
+// it stays on the global window. Otherwise the shot's library bean supplies its
+// roast level and optional "best for use" override.
+export interface BeanFreshnessContext {
+  roastLevel: RoastLevel | null;
+  override: FreshnessOverride | null;
+}
+
+export function beanFreshnessContext(
+  annotation: { beanId?: number | null; coffee?: string | null; beanMix?: readonly BeanMixPartInput[] | null } | null | undefined,
+): BeanFreshnessContext {
+  if (!S.coffeeLibrary || isBeanMix(annotation)) return { roastLevel: null, override: null };
+  const bean = resolveBeanForAnnotation(annotation);
+  if (!bean) return { roastLevel: null, override: null };
+  return {
+    roastLevel: normalizeRoastLevel(bean.roastLevel),
+    override: freshnessOverrideFrom(bean),
+  };
+}
+
 export function _roastDateFromLibrary(
   beanName: string | null | undefined,
   shotTimestampSec: number | null | undefined,
@@ -69,7 +94,7 @@ export function _roastDateFromLibrary(
   if (bags.length) {
     const activeBag = bags
       .filter(b => (b.openedAt || 0) <= shotMs)
-      .sort((a, b) => (b.openedAt as number) - (a.openedAt as number))[0];
+      .sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0))[0];
     if (activeBag?.roastDate) roastDateStr = activeBag.roastDate;
   }
   return roastDateStr || null;
@@ -79,28 +104,46 @@ export function calcBeanAgeAtShot(
   beanName: string | null | undefined,
   shotTimestampSec: number | null | undefined,
   beanId?: number | null,
+  frozenPortionId?: number | null,
 ): number | null {
   if (!shotTimestampSec || !S.coffeeLibrary) return null;
   const bean = resolveBeanForAnnotation({ coffee: beanName, beanId }, S.coffeeLibrary.beans);
   if (!bean) return null;
   const shotMs = shotTimestampSec * 1000;
   const bags   = Array.isArray(bean.bags) ? bean.bags : [];
-  let roastDateStr = bean.roastDate;
-  if (bags.length) {
-    const activeBag = bags
-      .filter(b => (b.openedAt || 0) <= shotMs)
-      .sort((a, b) => (b.openedAt as number) - (a.openedAt as number))[0];
-    if (activeBag?.roastDate) roastDateStr = activeBag.roastDate;
+  // #1953: a shot brewed from a frozen portion carries that portion's own
+  // effective age; the portion is looked up across every bag of the bean (like
+  // the Go side's findFrozenPortion), and a shot before the freeze date simply
+  // gets its plain calendar age at that time.
+  if (frozenPortionId) {
+    for (const bag of bags) {
+      const portions = Array.isArray(bag.frozenPortions) ? bag.frozenPortions : [];
+      const portion = portions.find(p => Number(p.id) === Number(frozenPortionId));
+      if (portion) return frozenPortionAgeDays(bag.roastDate || bean.roastDate, portion, shotMs);
+    }
+    return null;
   }
-  const roastDate = parseRoastDate(roastDateStr);
-  if (!roastDate) return null;
-  const days = Math.round((shotMs - roastDate.getTime()) / 86400000);
-  return days >= 0 && days <= 730 ? days : null;
+  // #2025: the same plain-age rule as the bean card, so the shot badge and the
+  // bag badge can never disagree by a day.
+  return roastAgeDays(_roastDateFromLibrary(beanName, shotTimestampSec, beanId), shotMs);
 }
 
 export interface ShotBeanAge {
   days: number;
   atShot: boolean;
+}
+
+// What a save writes to beanAgeDays. A portion that left the library gives no
+// live age, and writing null would destroy the fallback shotBeanAge relies on.
+export function beanAgeForSave(
+  beanName: string | null | undefined,
+  shotTimestampSec: number | null | undefined,
+  beanId: number | null | undefined,
+  frozenPortionId: number | null,
+  storedBeanAgeDays: number | null | undefined,
+): number | null {
+  const age = calcBeanAgeAtShot(beanName, shotTimestampSec, beanId, frozenPortionId);
+  return age ?? (frozenPortionId ? storedBeanAgeDays ?? null : null);
 }
 
 export interface ShotBeanAgeOptions {
@@ -115,19 +158,26 @@ export interface ShotBeanAgeOptions {
 // the fallback for a bean that has left the library; relative-to-now is the
 // last resort when neither is available.
 export function shotBeanAge(
-  annotation: { beanId?: number | null; coffee?: string | null; beanAgeDays?: number | null; roastDate?: string | null } | null | undefined,
+  annotation: {
+    beanId?: number | null;
+    coffee?: string | null;
+    beanAgeDays?: number | null;
+    roastDate?: string | null;
+    frozenPortionId?: number | null;
+    beanMix?: readonly BeanMixPartInput[] | null;
+  } | null | undefined,
   shotTimestampSec: number | null | undefined,
   opts: ShotBeanAgeOptions = {},
 ): ShotBeanAge | null {
   const ann = annotation || {};
-  const live = calcBeanAgeAtShot(ann.coffee, shotTimestampSec, ann.beanId);
+  // #1953: one age cannot describe several beans, and the portion need not
+  // belong to the mix's top-level bean — a mixed shot keeps calendar age.
+  const live = calcBeanAgeAtShot(ann.coffee, shotTimestampSec, ann.beanId, isBeanMix(ann) ? null : ann.frozenPortionId);
   if (live != null) return { days: live, atShot: true };
   if (ann.beanAgeDays != null) return { days: ann.beanAgeDays, atShot: true };
   if (!(opts.relativeToNow ?? true) || !ann.roastDate) return null;
-  const roastDate = parseRoastDate(ann.roastDate);
-  if (!roastDate) return null;
-  const days = Math.round(((opts.nowMs ?? Date.now()) - roastDate.getTime()) / 86400000);
-  return days >= 0 ? { days, atShot: false } : null;
+  const days = roastAgeDays(ann.roastDate, opts.nowMs ?? Date.now());
+  return days != null ? { days, atShot: false } : null;
 }
 
 // ── Shot data ─────────────────────────────────────────────────────────────

@@ -2,10 +2,11 @@ import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
 import { getShotCard } from '../../api/shots.js';
 import { localeFor } from '../../constants.js';
-import { avg, avgActive, max, shareOrDownloadBlob, mapShotDatapoints } from '../../utils.js';
+import { avg, avgActive, max, shareOrDownloadBlob, mapShotDatapoints, formatDate } from '../../utils.js';
 import { getShotCurve, ensureCurves, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import type { ShotSeries } from '../../utils.js';
 import { beanLabel } from '../../shared/bean-mix.js';
+import { showToast } from '../../components/toast.js';
 import { _equipmentName, _libCollection, _shots } from './shared.js';
 import type { ShotRow } from './shared.js';
 
@@ -36,7 +37,7 @@ function shotToCSVRow(shot: ShotRow, d: ShotSeries): string {
   const avgT   = avg(d.temp.map(p => p.y));
   const secs   = ((shot.duration || 0) / 10).toFixed(1);
   const ratio  = (ann.dose && finalW) ? `1:${(finalW / ann.dose).toFixed(1)}` : '';
-  const date   = new Date(shot.timestamp * 1000).toLocaleString(localeFor(S.currentLang));
+  const date   = formatDate(shot.timestamp * 1000, localeFor(S.currentLang), 'short', true);
   return [
     shot.id, date,
     neutraliseCsvText(shot.profile?.name || shot.profileName || ''),
@@ -155,7 +156,7 @@ export async function exportProfile(): Promise<void> {
   const rawTP = d.targetPressure || [];
 
   if (rawT.length === 0 || rawTP.length === 0) {
-    alert(t('profile_export_no_data'));
+    showToast(t('profile_export_no_data'));
     return;
   }
 
@@ -242,7 +243,7 @@ export async function shareCard(format = 'square'): Promise<void> {
     const filename = `glp-shot-${shotId}-${format}.png`;
     await shareOrDownloadBlob(blob, filename, { title: t('share_card_title'), fallbackOnError: false });
   } catch (e) {
-    if ((e as Error).name !== 'AbortError') alert(t('error_generic', (e as Error).message));
+    if ((e as Error).name !== 'AbortError') showToast(t('error_generic', (e as Error).message));
   }
 }
 

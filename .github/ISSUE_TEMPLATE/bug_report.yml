@@ -69,3 +69,10 @@ body:
       label: Relevant logs
       description: "The app's own log (Home Assistant → Settings → Apps → Gaggiuino Local Profiler → Log), Home Assistant's log, or the browser console."
       render: text
+  - type: checkboxes
+    id: contribution
+    attributes:
+      label: Contribution
+      options:
+        - label: I plan to open a pull request for this myself
+          required: false

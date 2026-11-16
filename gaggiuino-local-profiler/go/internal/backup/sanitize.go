@@ -41,6 +41,12 @@ func sanitizeMaintenanceRow(r map[string]any) (map[string]any, bool) {
 		if len([]rune(k)) > 50 {
 			continue
 		}
+		if k == "disabled" {
+			if b, ok := v.(bool); ok {
+				data[k] = b
+			}
+			continue
+		}
 		switch t := v.(type) {
 		case nil:
 			data[k] = nil
@@ -49,8 +55,8 @@ func sanitizeMaintenanceRow(r map[string]any) (map[string]any, bool) {
 		case string:
 			data[k] = truncateRunes(t, 500)
 		}
-		// booleans/objects/arrays aren't part of any known maintenance
-		// task's shape — dropped.
+		// apart from "disabled", booleans/objects/arrays aren't part of
+		// any known maintenance task's shape — dropped.
 	}
 	return map[string]any{"machineId": machineID, "key": truncateRunes(key, 100), "data": data}, true
 }

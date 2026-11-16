@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
 )
 
 // This file computes the comparative grind advice: "which grind setting
@@ -79,12 +81,17 @@ type comparativeMatch struct {
 	hasDose         bool
 	currentGrind    float64
 	hasCurrentGrind bool
+	tasteTag        string
+	// scale is the grinder's scale, nil for a grinder without one (#1961).
+	scale *grindscale.Scale
 }
 
-// comparableSibling is one comparable sibling's grind setting and score.
+// comparableSibling is one comparable sibling's grind setting, score and
+// taste tag (a sour/bitter sibling does not rank, see rankableSiblings).
 type comparableSibling struct {
-	grind float64
-	score int
+	grind    float64
+	score    int
+	tasteTag string
 }
 
 // newComparativeMatch returns shot's comparison key, or nil when shot has
@@ -101,10 +108,12 @@ func newComparativeMatch(shot Shot) *comparativeMatch {
 		return nil
 	}
 	m := &comparativeMatch{
-		shotID:  shot.id(),
-		ann:     ann,
-		grinder: grinder,
-		profile: strings.ToLower(strings.TrimSpace(shot.profileName())),
+		shotID:   shot.id(),
+		ann:      ann,
+		grinder:  grinder,
+		profile:  strings.ToLower(strings.TrimSpace(shot.profileName())),
+		tasteTag: tasteTagOf(ann),
+		scale:    loadGrinderScale(grinder),
 	}
 	m.dose, m.hasDose = toFloat(ann["dose"])
 	m.currentGrind, m.hasCurrentGrind = parseGrindNum(annotationStr(ann, "grindSetting"))
@@ -145,10 +154,15 @@ func (m *comparativeMatch) advice(comparable []comparableSibling, lang string) *
 	if len(comparable) < 1 {
 		return nil
 	}
+	comparable = rankableSiblings(comparable)
+	comparable = m.onScale(comparable)
+	if len(comparable) == 0 {
+		return nil
+	}
 
 	byGrind := map[float64][]int{}
 	for _, c := range comparable {
-		key := roundToHalf(c.grind)
+		key := m.bucket(c.grind)
 		byGrind[key] = append(byGrind[key], c.score)
 	}
 
@@ -198,7 +212,10 @@ func (m *comparativeMatch) advice(comparable []comparableSibling, lang string) *
 		}
 	}
 	diff := m.currentGrind - bestSetting
-	if abs(diff) < 0.6 {
+	if outcome := tasteOutcome(m.tasteTag, m.direction(diff)); outcome != "" {
+		return tasteAdvice(outcome, lang, n, bestSetting, bestScore)
+	}
+	if m.direction(diff) == "" {
 		return &ComparativeGrindAdvice{
 			Type: "ok", Icon: "📊",
 			Text:        cardTextf(lang, "compare_ok", n, bestScore),
@@ -216,6 +233,43 @@ func (m *comparativeMatch) advice(comparable []comparableSibling, lang string) *
 		Type: "coarser", Icon: "📊",
 		Text:        cardTextf(lang, "compare_coarser", n, bestSetting, bestScore),
 		SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
+	}
+}
+
+// onScale drops siblings outside the grinder's range: their score says nothing
+// about a setting the grinder can reach.
+func (m *comparativeMatch) onScale(all []comparableSibling) []comparableSibling {
+	if m.scale == nil {
+		return all
+	}
+	kept := make([]comparableSibling, 0, len(all))
+	for _, c := range all {
+		if m.scale.InRange(c.grind) {
+			kept = append(kept, c)
+		}
+	}
+	return kept
+}
+
+func (m *comparativeMatch) bucket(grind float64) float64 {
+	if m.scale == nil {
+		return roundToHalf(grind)
+	}
+	return m.scale.Snap(grind)
+}
+
+// direction is grindDirection on the grinder's own scale.
+func (m *comparativeMatch) direction(diff float64) string {
+	if m.scale == nil {
+		return grindDirection(diff)
+	}
+	switch {
+	case m.scale.OnTarget(diff):
+		return ""
+	case diff > 0:
+		return "finer"
+	default:
+		return "coarser"
 	}
 }
 

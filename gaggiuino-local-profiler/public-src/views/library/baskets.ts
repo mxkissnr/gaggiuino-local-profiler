@@ -9,6 +9,10 @@ import type { Html } from '../../utils.js';
 import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
+import { showToast } from '../../components/toast.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
+import { markFieldInvalid } from '../../components/field-error.js';
+import { bindFormAutosave } from '../../components/form-autosave.js';
 import { loadBasketImageBlobUrl, invalidateBasketImage } from '../../bean-image.js';
 import type { Basket } from '../../api/types.js';
 
@@ -74,6 +78,12 @@ function loadBasketThumbnails(): void {
   });
 }
 
+// The form saves itself while editing (#1962); the save button stays for
+// creating. Bound once, on the first open (the form element is persistent);
+// the returned reset runs on every open so the last entry's state never shows
+// on the next one (#2098).
+let _resetAutosave: (() => void) | null = null;
+
 export function openBasketForm(basket?: Basket | null): void {
   S.basketEditId = basket ? basket.id : null;
   (document.getElementById('basketFormName') as HTMLInputElement).value         = basket?.name         || '';
@@ -87,7 +97,16 @@ export function openBasketForm(basket?: Basket | null): void {
   adjustBtn.style.display = basket?.image ? '' : 'none';
   // onclick, not addEventListener: reopening the form must not stack handlers.
   adjustBtn.onclick = () => { if (S.basketEditId) void _adjustBasketImage(S.basketEditId); };
-  (document.getElementById('basketAddForm') as HTMLElement).classList.add('open');
+  const form = document.getElementById('basketAddForm') as HTMLElement;
+  // Editing saves itself, so the button would only be a second way to save.
+  const saveBtn = document.getElementById('saveBasketBtn');
+  if (saveBtn) saveBtn.style.display = basket ? 'none' : '';
+  _resetAutosave ??= bindFormAutosave(form, {
+    isEditing: () => !!S.basketEditId,
+    save: async () => { const ok = await _persistBasket(); if (ok) renderBasketList(); return ok; },
+  });
+  _resetAutosave();
+  form.classList.add('open');
   (document.getElementById('basketAddTrigger') as HTMLElement).style.display = 'none';
   (document.getElementById('basketFormName') as HTMLInputElement).focus();
 }
@@ -103,25 +122,51 @@ export function editBasket(id: number): void {
   if (b) openBasketForm(b);
 }
 
-export async function saveBasket(): Promise<void> {
+// A second Save while the first request is pending must not create the entry
+// twice (#2022); same guard as the bean form's _beanSaveInFlight.
+let _basketSaveInFlight = false;
+
+// Reads, validates and persists the form; leaves the form open and does not
+// clear the edit id, so autosave can keep saving the same entry (#1962).
+async function _persistBasket(): Promise<boolean> {
+  if (_basketSaveInFlight) return false;
   const name         = (document.getElementById('basketFormName') as HTMLInputElement).value.trim();
   const doseCapacity = (document.getElementById('basketFormDoseCapacity') as HTMLInputElement).value.trim();
   const wallType     = (document.getElementById('basketFormWallType') as HTMLInputElement).value;
   const shape        = (document.getElementById('basketFormShape') as HTMLInputElement).value;
   const holeCount    = (document.getElementById('basketFormHoleCount') as HTMLInputElement).value.trim();
   const notes        = (document.getElementById('basketFormNotes') as HTMLInputElement).value.trim();
-  if (!name) { (document.getElementById('basketFormName') as HTMLInputElement).focus(); return; }
-  const saved = await libraryApi.saveBasket(S.basketEditId, { name, doseCapacity, wallType, shape, holeCount, notes });
-  if (!saved) return;
-  const lib = _state().coffeeLibrary;
-  const baskets = lib.baskets ?? [];
-  lib.baskets = baskets;
-  if (S.basketEditId) {
-    const idx = baskets.findIndex(b => b.id === S.basketEditId);
-    if (idx !== -1) baskets[idx] = saved;
-  } else {
-    baskets.push(saved);
+  if (!name) { markFieldInvalid(document.getElementById('basketFormName')); return false; }
+  const editId = S.basketEditId;
+  _basketSaveInFlight = true;
+  const saveBtn = document.getElementById('saveBasketBtn') as HTMLButtonElement | null;
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await libraryApi.saveBasket(editId, { name, doseCapacity, wallType, shape, holeCount, notes });
+    if (!saved) { showToast(t('gm_toast_save_error')); return false; }
+    const lib = _state().coffeeLibrary;
+    const baskets = lib.baskets ?? [];
+    lib.baskets = baskets;
+    if (editId) {
+      const idx = baskets.findIndex(b => b.id === editId);
+      if (idx !== -1) baskets[idx] = saved;
+    } else {
+      baskets.push(saved);
+    }
+    return true;
+  } catch {
+    // A request that fails outright used to leave the user with no message.
+    showToast(t('gm_toast_save_error'));
+    return false;
+  } finally {
+    _basketSaveInFlight = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
+}
+
+export async function saveBasket(): Promise<void> {
+  const ok = await _persistBasket();
+  if (!ok) return;
   closeBasketForm();
   renderBasketList();
 }
@@ -156,9 +201,9 @@ async function _storeBasketPhoto(id: number, r: Response): Promise<void> {
 }
 
 export async function deleteBasket(id: number): Promise<void> {
-  if (!confirm(t('lib_confirm_delete_basket'))) return;
+  if (!await confirmDialog(t('lib_confirm_delete_basket'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await libraryApi.deleteBasketById(id);
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.baskets = (_state().coffeeLibrary.baskets || []).filter(b => b.id !== id);
   renderBasketList();
 }

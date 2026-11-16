@@ -30,8 +30,9 @@ function makeBean(portions: FrozenPortionFixture[]) {
 
 // #1411: the server books milk stock and frozen-portion counts itself while
 // it saves; the client reloads the library only when a field the server books
-// from (drink, milk or frozen portion) actually changed.
-describe('_stockFieldsChanged (#1411)', () => {
+// from (drink, milk or frozen portion) actually changed. #1958: bean stock
+// derives from the bean, the dose and the mix, so those count too.
+describe('_stockFieldsChanged (#1411, #1958)', () => {
     it('is true when a drink+milk is newly assigned to a shot with no prior annotation', () => {
         expect(_stockFieldsChanged(undefined, { drinkType: 'latte', milkType: 1 })).toBe(true);
     });
@@ -57,6 +58,40 @@ describe('_stockFieldsChanged (#1411)', () => {
 
     it('is false when neither annotation touches a stock field', () => {
         expect(_stockFieldsChanged({}, { rating: 4 })).toBe(false);
+    });
+
+    it('is true when the bean name changed', () => {
+        expect(_stockFieldsChanged({ coffee: 'Bean A', beanId: 1 }, { coffee: 'Bean B', beanId: 2 })).toBe(true);
+    });
+
+    it('is true when only the bean id changed, keeping the name', () => {
+        expect(_stockFieldsChanged({ coffee: 'Bean A', beanId: 1 }, { coffee: 'Bean A', beanId: 2 })).toBe(true);
+    });
+
+    it('is true when the dose changed', () => {
+        expect(_stockFieldsChanged({ dose: 18 }, { dose: 20 })).toBe(true);
+    });
+
+    it('is true when the bean mix changed', () => {
+        expect(_stockFieldsChanged(
+            { beanMix: [{ beanId: 1, coffee: 'Bean A', grams: 18 }] },
+            { beanMix: [
+                { beanId: 1, coffee: 'Bean A', grams: 11 },
+                { beanId: 2, coffee: 'Bean B', grams: 7 },
+            ] },
+        )).toBe(true);
+    });
+
+    it('is false when the bean, dose and mix are unchanged', () => {
+        const mix = [{ beanId: 1, coffee: 'Bean A', grams: 18 }];
+        expect(_stockFieldsChanged(
+            { coffee: 'Bean A', beanId: 1, dose: 18, beanMix: mix },
+            { coffee: 'Bean A', beanId: 1, dose: 18, beanMix: [{ beanId: 1, coffee: 'Bean A', grams: 18 }] },
+        )).toBe(false);
+    });
+
+    it('is false when only the rating changed on a bean-carrying shot', () => {
+        expect(_stockFieldsChanged({ coffee: 'Bean A', beanId: 1, dose: 18 }, { coffee: 'Bean A', beanId: 1, dose: 18, rating: 5 })).toBe(false);
     });
 });
 

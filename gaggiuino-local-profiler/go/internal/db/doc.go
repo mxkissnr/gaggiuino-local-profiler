@@ -3,7 +3,7 @@
 // the real /data/glp.db) to the current schema and runs the additive
 // migrations needed on every start: InitSchema, FixSchema,
 // MigrateMachineColumns, MigrateMachineTheme, MigrateMachineWaterSensor,
-// EnsureInstallID. The legacy
+// BackfillShotProfileNames, EnsureInstallID. The legacy
 // flat-JSON-to-SQLite migration is deliberately NOT implemented — every
 // install this binary can run against is already on SQLite.
 //

@@ -15,8 +15,7 @@ const el = {
   querySelector: (): null => null, querySelectorAll: (): [] => [],
 };
 g.document = { getElementById: (id: string) => (id === 'mbkSheet' ? el : null) };
-const confirmMock = vi.fn<(msg: string) => boolean>();
-g.confirm = confirmMock;
+const confirmMock = vi.fn<(msg: string, opts?: { confirmLabel?: string }) => Promise<boolean>>();
 
 type Api = typeof import('../public-src/api/machine-backups.js');
 type Result = Awaited<ReturnType<Api['backUpMachineNow']>>;
@@ -24,6 +23,7 @@ const api = vi.hoisted(() => ({
   list: vi.fn<Api['listMachineBackups']>(), backup: vi.fn<Api['backUpMachineNow']>(),
   del: vi.fn<Api['deleteMachineBackup']>(), download: vi.fn<Api['downloadMachineBackup']>(),
   upload: vi.fn<Api['uploadMachineBackup']>(),
+  getSettings: vi.fn<Api['getMachineBackupSettings']>(), saveSettings: vi.fn<Api['saveMachineBackupSettings']>(),
 }));
 const sheetMock = vi.hoisted(() => ({ open: vi.fn<(opts: DetailSheetOptions) => void>() }));
 const toast = vi.hoisted(() => ({ show: vi.fn<(msg: string, opts?: unknown) => void>() }));
@@ -32,11 +32,13 @@ const share = vi.hoisted(() => ({ fn: vi.fn<(blob: Blob, name: string, opts?: un
 vi.mock('../public-src/api/machine-backups.js', async (orig) => ({
   ...(await orig<Api>()), listMachineBackups: api.list, backUpMachineNow: api.backup,
   deleteMachineBackup: api.del, downloadMachineBackup: api.download, uploadMachineBackup: api.upload,
+  getMachineBackupSettings: api.getSettings, saveMachineBackupSettings: api.saveSettings,
 }));
 vi.mock('../public-src/components/detail-sheet.js', async (orig) => ({
   ...(await orig<typeof import('../public-src/components/detail-sheet.js')>()), openDetailSheet: sheetMock.open,
 }));
 vi.mock('../public-src/components/toast.js', () => ({ showToast: toast.show }));
+vi.mock('../public-src/components/confirm-dialog.js', () => ({ confirmDialog: confirmMock }));
 vi.mock('../public-src/utils.js', async (orig) => ({
   ...(await orig<typeof import('../public-src/utils.js')>()), shareOrDownloadBlob: share.fn,
 }));
@@ -79,6 +81,9 @@ const pick = (files: Blob[], value = 'C:\\fakepath\\x.json') => {
   handlers.change?.({ target });
   return target;
 };
+const change = (cls: string, value: string): void => {
+  handlers.change?.({ target: { classList: { contains: (c: string) => c === cls }, value } });
+};
 const typeNote = (value: string): void => {
   handlers.input?.({ target: { classList: { contains: (c: string) => c === 'mbk-note-input' }, value } });
 };
@@ -93,13 +98,15 @@ beforeEach(() => {
   S.machines = [...MACHINES];
   el.innerHTML = '';
   el.dataset.machineId = '1';
-  confirmMock.mockReturnValue(true);
+  confirmMock.mockResolvedValue(true);
   api.list.mockResolvedValue({ ok: true, value: [] });
   api.backup.mockResolvedValue({ ok: true, value: entry() });
   api.del.mockResolvedValue({ ok: true, value: { ok: true } });
   api.upload.mockResolvedValue({ ok: true, value: entry({ kind: 'uploaded' }) });
   const blob = new Blob(['{}']);
   api.download.mockResolvedValue({ ok: true, value: { blob, filename: 'gaggiuino-backup.json', secrets: 'merged' } });
+  api.getSettings.mockResolvedValue({ ok: true, value: { machineId: 1, schedule: 'daily', keepAutomatic: 10 } });
+  api.saveSettings.mockImplementation(s => Promise.resolve({ ok: true, value: s }));
 });
 
 describe('machine backups sheet (#1878)', () => {
@@ -194,11 +201,11 @@ describe('machine backups sheet (#1878)', () => {
   });
   it('deletes only after the confirmation', async () => {
     await open();
-    confirmMock.mockReturnValue(false);
+    confirmMock.mockResolvedValue(false);
     click('delete', 5);
     await flush();
     expect(api.del).not.toHaveBeenCalled();
-    confirmMock.mockReturnValue(true);
+    confirmMock.mockResolvedValue(true);
     click('delete', 5);
     await flush();
     expect(api.del).toHaveBeenCalledWith(5);
@@ -214,12 +221,12 @@ describe('machine backups sheet (#1878)', () => {
     const blob = new Blob(['{}']), filename = 'gaggiuino-backup-m1-2026-11-06_0900.json';
     api.download.mockResolvedValue({ ok: true, value: { blob, filename, secrets: 'merged' } });
     await open();
-    confirmMock.mockReturnValue(false);
+    confirmMock.mockResolvedValue(false);
     click('download', 5);
     await flush();
     expect(share.fn).not.toHaveBeenCalled();
     expect(confirmMock).toHaveBeenLastCalledWith('This file contains the machine\'s Wi-Fi password and MQTT login in plain text. Keep it somewhere private. Save it now?');
-    confirmMock.mockReturnValue(true);
+    confirmMock.mockResolvedValue(true);
     click('download', 5);
     await flush();
     expect(share.fn).toHaveBeenCalledWith(blob, filename, { title: filename });
@@ -267,14 +274,14 @@ describe('machine backups sheet (#1878)', () => {
       [-47 * 3600000, '47 hours ago'], [-3 * 86400000, '3 days ago']];
     for (const [ms, text] of cases) expect(relativeTime(ms, 0, 'en-US')).toBe(text);
   });
-  it('offers the row action and the firmware override', () => {
+  it('offers the row action and the firmware override', async () => {
     expect(machineBackupsButtonHtml()).toBe('<button type="button" class="machine-backups-btn">Backups</button>');
     const message = 'The backup before the update failed, so the update did not start.\n\nUpdate the firmware without a backup now?';
-    confirmMock.mockReturnValue(true);
-    expect(confirmUpdateWithoutBackup()).toBe(true);
+    confirmMock.mockResolvedValue(true);
+    await expect(confirmUpdateWithoutBackup()).resolves.toBe(true);
     expect(confirmMock).toHaveBeenLastCalledWith(message);
-    confirmMock.mockReturnValue(false);
-    expect(confirmUpdateWithoutBackup()).toBe(false);
+    confirmMock.mockResolvedValue(false);
+    await expect(confirmUpdateWithoutBackup()).resolves.toBe(false);
     expect(toast.show).not.toHaveBeenCalled();
   });
   it('sends an optional, trimmed note with Back up now', async () => {
@@ -323,8 +330,23 @@ describe('machine backups sheet (#1878)', () => {
     }
     expect(formatter(de.mbk_verdict)(1, 'vor 3 Stunden')).toBe('1 Backup · neuestes vor 3 Stunden');
   });
+  it('shows an out-of-range retention value at the field, not as a toast', async () => {
+    api.getSettings.mockResolvedValue({ ok: true, value: { machineId: 1, schedule: 'daily', keepAutomatic: 10 } });
+    api.list.mockResolvedValue({ ok: true, value: [entry()] });
+    await open();
+    expect(el.innerHTML).not.toContain('Enter a number from 1 to 100.');
+    change('mbk-keep', '101');
+    await flush();
+    expect(el.innerHTML).toContain('<div class="bf-error" role="alert">Enter a number from 1 to 100.</div>');
+    expect(toast.show).not.toHaveBeenCalledWith('Enter a number from 1 to 100.');
+    change('mbk-keep', '5');
+    await flush();
+    expect(el.innerHTML).not.toContain('Enter a number from 1 to 100.');
+  });
   it('renders the note value escaped and keeps an opened fold open', () => {
-    const state = { machineId: 1, entries: [], orphans: [entry({ id: 30, machineId: 7 })], failed: false, note: '"x' };
+    const state = {
+      machineId: 1, entries: [], orphans: [entry({ id: 30, machineId: 7 })], failed: false, note: '"x', keepError: false,
+    };
     const body = renderSheetBody(state, 0, new Set(['deleted']));
     expect(body).toContain('value="&quot;x"');
     expect(body).toContain('<details class="mbk-fold" data-fold="deleted" open>');

@@ -441,6 +441,15 @@ const REPOS: RepoSpec[] = [
 // or its price changes — every cost figure in DEVELOPMENT.md derives from it.
 const CLAUDE_PRO_MONTHLY_USD = 20;
 
+// #2043: prepaid DeepSeek API credit, one entry per top-up. Add new top-ups here
+// by hand. This is credit bought, not measured usage.
+export const DEEPSEEK_TOPUPS: readonly { date: string; usd: number }[] = [
+    { date: '2026-09-15', usd: 20 },
+    { date: '2026-10-04', usd: 20 },
+    { date: '2026-10-12', usd: 20 },
+    { date: '2026-11-13', usd: 20 },
+];
+
 // #1769: only co-author names that look like a known AI model count toward the
 // AI model breakdown and aiCommits/aiLines. The old exclude-list treated every
 // unrecognized name as AI, so human co-authors missing from it (e.g. m471j4)
@@ -642,6 +651,14 @@ export function subscriptionCostSentence(monthsCount: number, firstDate: string 
     return `The maintainer pays a flat **$${CLAUDE_PRO_MONTHLY_USD}/month** for Claude Pro, regardless of usage volume — this is the actual subscription cost, not a token-usage estimate. Counting every calendar month touched since the first commit (${fmtDate(firstDate)}), ${monthsCount} month${monthsCount === 1 ? '' : 's'} works out to **$${costUsd.toFixed(2)}** for every Claude-model commit combined, regardless of which Claude model did the work.`;
 }
 
+export function prepaidCreditSentence(topups: readonly { date: string; usd: number }[]): string {
+    if (!topups.length) return '';
+    const total = topups.reduce((s, t) => s + t.usd, 0);
+    const count = topups.length;
+    const first = topups.map(t => t.date).sort()[0]!;
+    return `DeepSeek API credit topped up so far: **$${total.toFixed(2)}** (${count} top-up${count === 1 ? '' : 's'} since ${first}). This is prepaid credit, not measured usage, so it is an upper bound for what the DeepSeek commits above cost.`;
+}
+
 function main(): void {
     const results = REPOS.map(statsForRepo).filter((r): r is RepoStats => r !== null);
     if (!results.length) {
@@ -744,6 +761,11 @@ function main(): void {
             ? `API-billed models cost **$${trackedCostUsd.toFixed(2)}** tracked so far — this is not a flat rate like Claude Pro, so it only covers commits that carried a \`Co-Authored-Cost-Usd\` trailer.`
             : 'These models are billed per API usage, not a flat subscription, so no dollar figure is derivable from git history alone — no commit yet reports its own cost via a `Co-Authored-Cost-Usd` trailer.');
         lines.push('');
+        const prepaidSentence = prepaidCreditSentence(DEEPSEEK_TOPUPS);
+        if (prepaidSentence) {
+            lines.push(prepaidSentence);
+            lines.push('');
+        }
     }
     lines.push('---');
     lines.push('*This file is generated. Do not hand-edit — re-run `node scripts/dev-stats.mts` instead.*');

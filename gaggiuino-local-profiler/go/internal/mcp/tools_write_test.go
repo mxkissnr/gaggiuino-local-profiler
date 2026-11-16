@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -266,6 +267,100 @@ func TestAnnotateShotRunsStockHook(t *testing.T) {
 	}
 }
 
+func TestAnnotateShotTasteTag(t *testing.T) {
+	ts, sqlDB, _, _, _ := newWriteServer(t, true)
+	insertShot(t, sqlDB, 24, 1000, nil, map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+
+	res := call(t, session, "annotate_shot", map[string]any{"id": 24, "taste_tag": "sour"})
+	if res.IsError {
+		t.Fatalf("annotate_shot failed: %s", errorText(t, res))
+	}
+	if tag, _ := structured(t, res)["taste_tag"].(string); tag != "sour" {
+		t.Fatalf("output taste_tag = %v, want sour", structured(t, res)["taste_tag"])
+	}
+	ann, err := shots.NewRepository(sqlDB).GetAnnotation(24)
+	if err != nil {
+		t.Fatalf("GetAnnotation: %v", err)
+	}
+	if tag, _ := ann["tasteTag"].(string); tag != "sour" {
+		t.Fatalf("stored tasteTag = %v, want sour", ann["tasteTag"])
+	}
+	if coffee, _ := ann["coffee"].(string); coffee != "Alpha" {
+		t.Fatalf("stored coffee = %v, want Alpha", ann["coffee"])
+	}
+
+	// An empty string clears the key, as it does for notes.
+	res = call(t, session, "annotate_shot", map[string]any{"id": 24, "taste_tag": ""})
+	if res.IsError {
+		t.Fatalf("clearing annotate_shot failed: %s", errorText(t, res))
+	}
+	if _, ok := structured(t, res)["taste_tag"]; ok {
+		t.Fatalf("output still carries taste_tag after clearing: %v", structured(t, res))
+	}
+	ann, err = shots.NewRepository(sqlDB).GetAnnotation(24)
+	if err != nil {
+		t.Fatalf("GetAnnotation: %v", err)
+	}
+	if _, ok := ann["tasteTag"]; ok {
+		t.Fatalf("tasteTag not cleared: %v", ann["tasteTag"])
+	}
+	if coffee, _ := ann["coffee"].(string); coffee != "Alpha" {
+		t.Fatalf("coffee lost while clearing the tag: %v", ann["coffee"])
+	}
+}
+
+func TestAnnotateShotRejectsUnknownTasteTag(t *testing.T) {
+	ts, sqlDB, _, _, _ := newWriteServer(t, true)
+	insertShot(t, sqlDB, 25, 1000, nil, map[string]any{"coffee": "Alpha", "tasteTag": "sour"})
+	session := connect(t, ts.URL+Path)
+
+	res := call(t, session, "annotate_shot", map[string]any{"id": 25, "taste_tag": "astringent"})
+	if !res.IsError {
+		t.Fatalf("expected isError for an unknown taste tag")
+	}
+	ann, err := shots.NewRepository(sqlDB).GetAnnotation(25)
+	if err != nil {
+		t.Fatalf("GetAnnotation: %v", err)
+	}
+	if tag, _ := ann["tasteTag"].(string); tag != "sour" {
+		t.Fatalf("stored tasteTag = %v, want the unchanged sour", ann["tasteTag"])
+	}
+}
+
+func TestAnnotateShotSchemaListsTasteTags(t *testing.T) {
+	ts, _, _, _, _ := newWriteServer(t, true)
+	session := connect(t, ts.URL+Path)
+	tool := listToolsByName(t, session)["annotate_shot"]
+	if tool == nil {
+		t.Fatalf("annotate_shot is missing from tools/list")
+	}
+	tag := schemaProperty(t, tool.InputSchema, "taste_tag")
+	got := strings.Join(stringList(tag, "enum"), ",")
+	if want := "sour,bitter,balanced,thin,"; got != want {
+		t.Fatalf("annotate_shot taste_tag enum = %q, want %q", got, want)
+	}
+}
+
+func TestGetShotReturnsTasteTag(t *testing.T) {
+	ts, sqlDB, _, _, _ := newWriteServer(t, true)
+	insertShot(t, sqlDB, 26, 1000, nil, map[string]any{"coffee": "Alpha", "tasteTag": "bitter"})
+	session := connect(t, ts.URL+Path)
+
+	res := call(t, session, "get_shot", map[string]any{"id": 26})
+	if res.IsError {
+		t.Fatalf("get_shot failed: %s", errorText(t, res))
+	}
+	out := structured(t, res)
+	ann := object(out, "annotation")
+	if ann == nil {
+		t.Fatalf("get_shot returned no annotation: %v", out)
+	}
+	if tag, _ := ann["tasteTag"].(string); tag != "bitter" {
+		t.Fatalf("annotation.tasteTag = %v, want bitter", ann["tasteTag"])
+	}
+}
+
 func TestSetKnownGrindUpsert(t *testing.T) {
 	ts, _, libRepo, _, _ := newWriteServer(t, true)
 	lib, err := libRepo.GetLibrary()
@@ -432,5 +527,70 @@ func TestWriteToolsDoNotPublishOnError(t *testing.T) {
 
 	if got := rec.snapshot(); len(got) != 0 {
 		t.Fatalf("published %v on failed writes, want none", got)
+	}
+}
+
+// TestAnnotateShotStoresBeanAge is the #2025 slice-2 outcome: a shot annotated
+// through the MCP tool (what Home Assistant's assistant uses) stores the same
+// beanAgeDays the browser would compute, so get_shot reports it too. The age
+// source is installed exactly as cmd/server does.
+//
+// The expectation is the shared rule's own answer rather than a literal 10: the
+// rule counts whole LOCAL calendar days, and this test cannot pin time.Local --
+// writing that global while the httptest server below is live is a data race
+// against net/http's own time.Now reads (-race caught exactly that).
+func TestAnnotateShotStoresBeanAge(t *testing.T) {
+	ts, sqlDB, libRepo, _, _ := newWriteServer(t, true)
+
+	lib, err := libRepo.GetLibrary()
+	if err != nil {
+		t.Fatalf("GetLibrary: %v", err)
+	}
+	lib.Beans = []library.Entity{{"id": int64(1), "name": "Alpha", "roastDate": "2026-07-09", "enabled": true}}
+	if err := libRepo.SaveLibrary(lib); err != nil {
+		t.Fatalf("SaveLibrary: %v", err)
+	}
+	shots.SetBeanAgeSource(func() (func(map[string]any, int64) (int, bool), error) {
+		loaded, err := libRepo.GetLibrary()
+		if err != nil {
+			return nil, err
+		}
+		beans := loaded.Beans
+		return func(ann map[string]any, shotSec int64) (int, bool) {
+			return library.BeanAgeForAnnotation(beans, ann, shotSec)
+		}, nil
+	})
+	t.Cleanup(func() { shots.SetBeanAgeSource(nil) })
+
+	shotSec := time.Date(2026, 7, 19, 12, 0, 0, 0, time.UTC).Unix()
+	want, ok := library.RoastAgeDays("2026-07-09", time.Unix(shotSec, 0))
+	if !ok {
+		t.Fatal("the shared rule resolved no age for the fixture bean")
+	}
+	insertShot(t, sqlDB, 31, shotSec, nil, map[string]any{
+		"beanId": float64(1),
+		"coffee": "Alpha",
+	})
+	session := connect(t, ts.URL+Path)
+
+	if res := call(t, session, "annotate_shot", map[string]any{"id": 31, "rating": 4}); res.IsError {
+		t.Fatalf("annotate_shot failed: %s", errorText(t, res))
+	}
+
+	ann, err := shots.NewRepository(sqlDB).GetAnnotation(31)
+	if err != nil {
+		t.Fatalf("GetAnnotation: %v", err)
+	}
+	if ann["beanAgeDays"] != float64(want) {
+		t.Fatalf("stored beanAgeDays = %v, want %d", ann["beanAgeDays"], want)
+	}
+
+	res := call(t, session, "get_shot", map[string]any{"id": 31})
+	if res.IsError {
+		t.Fatalf("get_shot failed: %s", errorText(t, res))
+	}
+	out := structured(t, res)
+	if got := numberField(t, object(out, "annotation"), "beanAgeDays"); got != float64(want) {
+		t.Fatalf("get_shot annotation.beanAgeDays = %v, want %d", got, want)
 	}
 }

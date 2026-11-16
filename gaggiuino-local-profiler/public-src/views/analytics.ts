@@ -3,7 +3,7 @@ import { S } from '../state/index.js';
 import * as chartRegistry from '../state/charts.js';
 import { t, tHtml } from '../i18n.js';
 import { localeFor } from '../constants.js';
-import { esc, html, joinHtml, scoreClass, chartColors, themeColor } from '../utils.js';
+import { esc, formatDate, html, joinHtml, scoreClass, chartColors, themeColor } from '../utils.js';
 import type { Html } from '../utils.js';
 import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
@@ -149,7 +149,16 @@ export function initAnalytics() {
 export function rebuildAnalyticsPage(): void {
   const empty = _pageShots().length === 0;
   const emptyEl = document.getElementById('analyticsFilterEmpty');
-  if (emptyEl) emptyEl.style.display = empty ? '' : 'none';
+  if (emptyEl) {
+    emptyEl.style.display = empty ? '' : 'none';
+    // #1962: "no shots" has three different reasons — the load failed, it is
+    // still running, or the filter really matches nothing. The markup's own
+    // data-i18n key is the third text, so it comes back after a reload.
+    const ownKey = emptyEl.dataset.i18n ?? 'analytics_filter_empty';
+    emptyEl.textContent = empty && S.shotsLoadFailed ? t('error_load')
+      : empty && !S.allShotsLoaded ? t('loading')
+      : t(ownKey);
+  }
   document.querySelectorAll<HTMLElement>('[data-analytics-period]').forEach(el => {
     el.style.display = empty ? 'none' : '';
   });
@@ -544,7 +553,7 @@ function _openTrendShotDetail(shot: ShotRow, anchor: HTMLElement | DetailAnchorP
   // field is omitted, not rendered as a "—" placeholder — while the open-shot
   // shortcut stays.
   openDetailSheet({
-    title: new Date(shot.timestamp * 1000).toLocaleString(locale, { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    title: formatDate(shot.timestamp * 1000, locale, 'long', true),
     sub: shot.annotation?.coffee || profile,
     body: html`<div class="detail-rows">
       ${sc !== null ? row(t('sort_score'), scHtml) : esc('')}
@@ -635,7 +644,7 @@ export function buildTrendChart() {
             callbacks: { title: (items) => {
               const i = items[0]?.dataIndex;
               const dayKey = i != null ? band.keys[i] : undefined;
-              return dayKey ? _dateFromKey(dayKey).toLocaleDateString(locale, { day: 'numeric', month: 'long' }) : '';
+              return dayKey ? formatDate(_dateFromKey(dayKey), locale, 'long') : '';
             } },
           },
         },

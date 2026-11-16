@@ -36,6 +36,24 @@ const (
 // '.', '_' or '-'.
 var keyRe = regexp.MustCompile(`^[a-z][a-zA-Z0-9._-]{0,63}$`)
 
+// seenMarkerKeys only ever move forward (#1956). A popup is due when its marker
+// is behind, so a stale device's late PUT must not lower one: the popup would
+// show again. Restores go through Repository.Save and may lower them on purpose.
+var seenMarkerKeys = map[string]bool{
+	"popups.whats_new_seen":    true,
+	"popups.achievements_seen": true,
+}
+
+// seenMarkerBehind reports whether incoming would move a seen marker backwards.
+func seenMarkerBehind(key string, stored, incoming any) bool {
+	if !seenMarkerKeys[key] {
+		return false
+	}
+	s, storedOK := stored.(float64)
+	i, incomingOK := incoming.(float64)
+	return storedOK && incomingOK && i < s
+}
+
 // Repository is the kv-backed ui-prefs store.
 type Repository struct{ db *sql.DB }
 
@@ -209,6 +227,9 @@ func (h *Handlers) put(w http.ResponseWriter, r *http.Request) {
 	for k, v := range body {
 		if v == nil {
 			delete(merged, k)
+			continue
+		}
+		if seenMarkerBehind(k, merged[k], v) {
 			continue
 		}
 		merged[k] = v

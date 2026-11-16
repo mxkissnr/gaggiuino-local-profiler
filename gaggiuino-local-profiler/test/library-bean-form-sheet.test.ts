@@ -9,11 +9,12 @@ g.localStorage ??= { getItem: () => null, setItem: () => {} };
 
 // saveBeanAddBag() drives saveBeanInternal, which calls into the library API;
 // mocking it keeps the test off the network and lets it return a canned bean.
-const mocks = vi.hoisted(() => ({ saveBean: vi.fn() }));
+const mocks = vi.hoisted(() => ({ saveBean: vi.fn(), updateBeanBag: vi.fn(), toast: vi.fn() }));
 vi.mock('../public-src/api/library.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../public-src/api/library.js')>();
-  return { ...actual, saveBean: mocks.saveBean };
+  return { ...actual, saveBean: mocks.saveBean, updateBeanBag: mocks.updateBeanBag };
 });
+vi.mock('../public-src/components/toast.js', () => ({ showToast: mocks.toast }));
 
 type Listener = (event: FakeEvent) => void;
 interface FakeEvent { target?: unknown; key?: string; preventDefault?: () => void }
@@ -95,6 +96,10 @@ class FakeElement {
     this.children.push(child);
     this.docRef.register(child);
     return child;
+  }
+
+  prepend(node: FakeElement): void {
+    this.insertBefore(node, this.firstChild);
   }
 
   insertBefore(node: FakeElement, ref: FakeElement | null): FakeElement {
@@ -264,6 +269,9 @@ interface Bean {
   bags: unknown[];
   flavors: string[];
   roastDate?: string;
+  roastLevel?: string;
+  bestFromDays?: number;
+  bestUntilDays?: number;
 }
 
 interface StateLike {
@@ -284,6 +292,8 @@ beforeEach(async () => {
   g.document = doc;
   g.window = { matchMedia: () => ({ matches: false }), showToast };
   mocks.saveBean.mockReset();
+  mocks.updateBeanBag.mockReset();
+  mocks.toast.mockReset();
   vi.resetModules();
   ({ S } = (await import('../public-src/state/index.js')) as unknown as { S: StateLike });
   library = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
@@ -533,6 +543,87 @@ describe('bean roast date follows the current bag (#1606)', () => {
   });
 });
 
+describe('bean autosave leaves the bag alone (#2018)', () => {
+  const bagWithPrice = (price: number | null): unknown[] => [
+    { id: 1, stock_g: 250, consumedG: 0, remainingG: 250, current: true, roastDate: '2026-01-01', price_eur: price },
+  ];
+
+  it('an edit save with an unchanged price makes no bag update call', async () => {
+    setupHome();
+    const bean = addBean();
+    bean.bags = bagWithPrice(12.5);
+    mocks.saveBean.mockResolvedValue({
+      id: 1, name: 'Renamed', roaster: 'Kaffee Braun', bags: bagWithPrice(12.5), flavors: [],
+    });
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+
+    await library.saveBean();
+
+    expect(mocks.saveBean).toHaveBeenCalledTimes(1);
+    expect(mocks.updateBeanBag).not.toHaveBeenCalled();
+  });
+
+  it('an edit save with a changed price updates the current bag once', async () => {
+    setupHome();
+    const bean = addBean();
+    bean.bags = bagWithPrice(12.5);
+    mocks.saveBean.mockResolvedValue({
+      id: 1, name: 'Yirgacheffe Chelelektu', roaster: 'Kaffee Braun', bags: bagWithPrice(12.5), flavors: [],
+    });
+    mocks.updateBeanBag.mockResolvedValue({
+      id: 1, name: 'Yirgacheffe Chelelektu', roaster: 'Kaffee Braun', bags: bagWithPrice(13), flavors: [],
+    });
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormPrice')!.value = '13';
+
+    await library.saveBean();
+
+    expect(mocks.updateBeanBag).toHaveBeenCalledTimes(1);
+    const call = mocks.updateBeanBag.mock.calls[0] as unknown as [number, number, Record<string, unknown>];
+    expect(call[0]).toBe(1);
+    expect(call[1]).toBe(1);
+    expect(call[2]?.price_eur).toBe(13);
+  });
+});
+
+describe('a failed bag price update keeps the form unsaved (#2022)', () => {
+  const bagWithPrice = (price: number | null): unknown[] => [
+    { id: 1, stock_g: 250, consumedG: 0, remainingG: 250, current: true, roastDate: '2026-01-01', price_eur: price },
+  ];
+
+  it('shows the save error, returns no row and retries the bag update next time', async () => {
+    const { home, form } = setupHome();
+    const bean = addBean();
+    bean.bags = bagWithPrice(12.5);
+    mocks.saveBean.mockResolvedValue({
+      id: 1, name: 'Yirgacheffe Chelelektu', roaster: 'Kaffee Braun', bags: bagWithPrice(12.5), flavors: [],
+    });
+    // The bean itself saves; only the follow-up bag update fails.
+    mocks.updateBeanBag
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 1, name: 'Yirgacheffe Chelelektu', roaster: 'Kaffee Braun', bags: bagWithPrice(13), flavors: [],
+      });
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormPrice')!.value = '13';
+
+    await library.saveBean();
+
+    // The sheet's own toast, not the window one the rejected save uses.
+    expect(mocks.toast).toHaveBeenCalledWith('Error saving');
+    expect(mocks.updateBeanBag).toHaveBeenCalledTimes(1);
+    // The bean row the first request stored stays; the form counts as unsaved.
+    expect(S.coffeeLibrary.beans).toHaveLength(1);
+    expect(form.parentNode).not.toBe(home);
+
+    await library.saveBean();
+
+    expect(mocks.updateBeanBag).toHaveBeenCalledTimes(2);
+    expect(form.parentNode).toBe(home);
+  });
+});
+
 describe('double save guard (#1614 slice 4)', () => {
   it('ignores a second save while the first POST is still pending', async () => {
     setupHome();
@@ -551,6 +642,45 @@ describe('double save guard (#1614 slice 4)', () => {
     await second;
 
     expect(mocks.saveBean).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('edit autosave catch-up (#2016)', () => {
+  it('saves once more after the in-flight save and still closes the form', async () => {
+    const { home, form } = setupHome();
+    // bindFormAutosave needs the actions row it puts its status into.
+    const actions = doc.createElement();
+    actions.className = 'lib-form-actions';
+    form.appendChild(actions);
+    const bean = addBean();
+    const row = (name: string): Bean => ({ id: 1, name, roaster: 'Kaffee Braun', bags: bean.bags, flavors: [] });
+    const releases: ((bean: Bean) => void)[] = [];
+    mocks.saveBean.mockImplementation(() => new Promise<Bean>(res => { releases.push(res); }));
+
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+
+    // The user clicks Save, then types. The autosave finds the save in flight
+    // and must queue one catch-up save instead of dropping the keystroke.
+    const buttonSave = library.saveBean();
+    form.dispatch('change', { target: { type: 'text' } });
+    expect(mocks.saveBean).toHaveBeenCalledTimes(1);
+
+    releases[0]!(row('Renamed'));
+    await buttonSave;
+
+    // Both requests are still open here, which is exactly when a catch-up save
+    // that shares the row with the button path would strand the form: the
+    // button save has to close it on its own result, not on shared state.
+    await vi.waitFor(() => expect(form.parentNode).toBe(home));
+    expect(S.coffeeLibrary.beans[0]?.name).toBe('Renamed');
+
+    await vi.waitFor(() => expect(mocks.saveBean).toHaveBeenCalledTimes(2));
+    releases[1]!(row('Renamed'));
+    await vi.waitFor(() => expect(releases).toHaveLength(2));
+    // The late catch-up must not reopen the form or start a third save.
+    expect(form.parentNode).toBe(home);
+    expect(mocks.saveBean).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -599,5 +729,186 @@ describe('rejected save shows an error (#1761)', () => {
     expect(S.coffeeLibrary.beans).toHaveLength(1);
     expect(S.coffeeLibrary.beans[0]?.name).toBe('Yirgacheffe Chelelektu');
     expectSaveButtonsEnabled();
+  });
+});
+
+// #1977: the bean form carries the roast level and the optional "best for use"
+// window. The window is both-or-none and ascending; the hint shows what the
+// chosen level will do when the window is left empty.
+describe('roast level and best for use (#1977)', () => {
+  it('prefills the level and the optional window, and hints with the level suggestion', () => {
+    setupHome();
+    const bean = addBean();
+    bean.roastLevel = 'light';
+    bean.bestFromDays = 8;
+    bean.bestUntilDays = 12;
+    library.openBeanForm(bean);
+
+    expect(doc.getElementById('beanFormRoastLevel')!.value).toBe('light');
+    expect(doc.getElementById('beanFormBestFrom')!.value).toBe('8');
+    expect(doc.getElementById('beanFormBestUntil')!.value).toBe('12');
+    // Light's built-in peak window (21–45) is what leaving the fields empty means.
+    const hint = doc.getElementById('beanFormBestHint')!.textContent;
+    expect(hint).toContain('21');
+    expect(hint).toContain('45');
+  });
+
+  it('sends the level and both bounds with the payload', async () => {
+    setupHome();
+    const bean = addBean();
+    mocks.saveBean.mockResolvedValue({
+      id: 1, name: bean.name, roaster: bean.roaster, bags: bean.bags, flavors: [],
+    });
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormRoastLevel')!.value = 'dark';
+    doc.getElementById('beanFormBestFrom')!.value = '4';
+    doc.getElementById('beanFormBestUntil')!.value = '10';
+
+    await library.saveBean();
+
+    const payload = mocks.saveBean.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(payload.roastLevel).toBe('dark');
+    expect(payload.bestFromDays).toBe(4);
+    expect(payload.bestUntilDays).toBe(10);
+  });
+
+  it('updates the hint when the roast level changes in the form', () => {
+    const { form } = setupHome();
+    library.openBeanForm(addBean());
+    doc.getElementById('beanFormRoastLevel')!.value = 'dark';
+
+    form.dispatch('change', { target: { id: 'beanFormRoastLevel' } });
+
+    // Dark's built-in peak window, read from the Settings card's current set.
+    const hint = doc.getElementById('beanFormBestHint')!.textContent;
+    expect(hint).toContain('8');
+    expect(hint).toContain('18');
+  });
+
+  it('stays quiet while only one bound is typed, so autosave does not scold mid-entry', () => {
+    const { form } = setupHome();
+    // bindFormAutosave only binds a form that has the action row it writes into.
+    const actions = doc.createElement();
+    actions.className = 'lib-form-actions';
+    form.appendChild(actions);
+    library.openBeanForm(addBean());
+    doc.getElementById('beanFormBestFrom')!.value = '8';
+
+    form.dispatch('change', { target: { type: 'number' } });
+
+    // Nothing is saved or flagged yet; the empty second bound is still on its way.
+    expect(mocks.saveBean).not.toHaveBeenCalled();
+    expect(showToast).not.toHaveBeenCalled();
+    expect(doc.getElementById('beanFormBestFrom')!.getAttribute('aria-invalid')).toBeNull();
+    expect(doc.getElementById('beanFormBestUntil')!.getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('points at the empty bound when the create Save is clicked', async () => {
+    setupHome();
+    library.openBeanForm();
+    doc.getElementById('beanFormName')!.value = 'New Bean';
+    doc.getElementById('beanFormBestFrom')!.value = '8';
+
+    await library.saveBean();
+
+    expect(mocks.saveBean).not.toHaveBeenCalled();
+    expect(doc.getElementById('beanFormBestUntil')!.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('refuses a lone or inverted bound at the field, without calling the API', async () => {
+    setupHome();
+    const bean = addBean();
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormBestFrom')!.value = '12';
+    doc.getElementById('beanFormBestUntil')!.value = '8';
+
+    await library.saveBean();
+
+    expect(mocks.saveBean).not.toHaveBeenCalled();
+    // A field error, not a toast autosave would repeat on every change (#1962).
+    expect(showToast).not.toHaveBeenCalled();
+    expect(doc.getElementById('beanFormBestFrom')!.getAttribute('aria-invalid')).toBe('true');
+    expect(doc.getElementById('beanFormBestUntil')!.getAttribute('aria-invalid')).toBe('true');
+    // The form stays open with the user's input intact.
+    expect(doc.body.querySelector('#beanFormSheet')?.classList.contains('open')).toBe(true);
+    expect(doc.getElementById('beanFormBestFrom')!.value).toBe('12');
+  });
+});
+
+// #2098: the sheet bar carries the lasting autosave state while editing, in
+// the slot the bar's own Save leaves free.
+describe('bean sheet autosave state (#2098)', () => {
+  function formWithActions(): FakeElement {
+    const { form } = setupHome();
+    // bindFormAutosave needs the actions row it puts its status into.
+    const actions = doc.createElement();
+    actions.className = 'lib-form-actions';
+    form.appendChild(actions);
+    return form;
+  }
+
+  it('editing hides the bar Save, creating keeps it', () => {
+    setupHome();
+    const bean = addBean();
+
+    library.openBeanForm(bean);
+    expect(find('lib-sheet-save')!.style.display).toBe('none');
+
+    library.closeBeanForm();
+    library.openBeanForm();
+    expect(find('lib-sheet-save')!.style.display).toBe('');
+  });
+
+  it('a committed change shows a lasting Saved in the sheet bar', async () => {
+    const form = formWithActions();
+    const bean = addBean();
+    mocks.saveBean.mockResolvedValue({
+      id: bean.id, name: 'Renamed', roaster: bean.roaster, bags: bean.bags, flavors: [],
+    });
+
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+    form.dispatch('change', { target: { type: 'text' } });
+
+    const status = find('autosave-status')!;
+    expect(status.parentNode?.className).toBe('lib-sheet-bar-actions');
+    await vi.waitFor(() => expect(status.innerHTML).toContain('Saved'));
+    expect(status.classList.contains('visible')).toBe(true);
+  });
+
+  it('a failed autosave says Not saved in the bar', async () => {
+    const form = formWithActions();
+    mocks.saveBean.mockRejectedValue(new Error('HTTP 500'));
+
+    library.openBeanForm(addBean());
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+    form.dispatch('change', { target: { type: 'text' } });
+
+    const status = find('autosave-status')!;
+    await vi.waitFor(() => expect(status.innerHTML).toBe('Not saved'));
+    expect(status.classList.contains('visible')).toBe(true);
+    expect(status.classList.contains('failed')).toBe(true);
+    expect(showToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('reopening clears the last entry\'s state', async () => {
+    const form = formWithActions();
+    const bean = addBean();
+    mocks.saveBean.mockResolvedValue({
+      id: bean.id, name: 'Renamed', roaster: bean.roaster, bags: bean.bags, flavors: [],
+    });
+
+    library.openBeanForm(bean);
+    doc.getElementById('beanFormName')!.value = 'Renamed';
+    form.dispatch('change', { target: { type: 'text' } });
+    const status = find('autosave-status')!;
+    await vi.waitFor(() => expect(status.classList.contains('visible')).toBe(true));
+
+    library.closeBeanForm();
+    library.openBeanForm(bean);
+
+    expect(status.classList.contains('visible')).toBe(false);
+    expect(status.classList.contains('failed')).toBe(false);
+    expect(status.innerHTML).toBe('');
   });
 });

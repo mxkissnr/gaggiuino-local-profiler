@@ -48,6 +48,14 @@ const NEW_KEYS = [
     // #1923: the maintenance page's own wording — the all-good verdict
     // sentence and the tasks section heading.
     'maint_verdict_ok', 'maint_tasks_title',
+    // #1955: the task sheet's pause/resume toggle and the paused row label.
+    'maint_paused', 'maint_pause_btn', 'maint_resume_btn',
+    // #1957: the annotation panel's taste-tag chips. Three labels are shared
+    // with the Profile Dial-In wizard; the panel reuses that prompt as its
+    // label and needs one label of its own.
+    'profile_dialin_symptom_prompt', 'profile_dialin_symptom_sour',
+    'profile_dialin_symptom_bitter', 'profile_dialin_symptom_balanced',
+    'taste_tag_thin',
 ];
 
 describe('i18n language files', () => {

@@ -3,6 +3,7 @@ package library
 import (
 	"strings"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
@@ -43,6 +44,7 @@ func beanFields(body Entity) Entity {
 			origin, _ = m["code"].(string)
 		}
 	}
+	bestFrom, bestUntil := sanitizeBestForUse(body["bestFromDays"], body["bestUntilDays"])
 	return Entity{
 		"name":          trimMax(body["name"], 200),
 		"roaster":       trimMax(body["roaster"], 200),
@@ -56,6 +58,9 @@ func beanFields(body Entity) Entity {
 		"process":       trimMax(body["process"], 200),
 		"flavors":       sanitizeFlavors(body["flavors"]),
 		"roastType":     sanitizeRoastType(body["roastType"]),
+		"roastLevel":    sanitizeRoastLevel(body["roastLevel"]),
+		"bestFromDays":  bestFrom,
+		"bestUntilDays": bestUntil,
 		"region":        trimMax(body["region"], 200),
 		"altitude_m":    sanitizeAltitude(body["altitude_m"]),
 		"importer":      trimMax(body["importer"], 200),
@@ -134,11 +139,30 @@ func CreateBean(repo *Repository, imageDir string, body Entity) (Entity, error) 
 	return bean, nil
 }
 
+// grinderScaleInput reads the optional scale of a grinder body (#1961). present
+// is false when the body has no scale key; a JSON null is present with a nil
+// scale, which an update takes as "remove the scale".
+func grinderScaleInput(body Entity) (scale *grindscale.Scale, present bool, err error) {
+	raw, present := body["scale"]
+	if !present || raw == nil {
+		return nil, present, nil
+	}
+	scale = grindscale.Parse(raw)
+	if scale == nil {
+		return nil, true, &ValidationError{Message: "invalid grind scale"}
+	}
+	return scale, true, nil
+}
+
 // CreateGrinder builds POST /api/library/grinder's entity-construction
 // body (handlers_grinders.go's createGrinder).
 func CreateGrinder(repo *Repository, body Entity) (Entity, error) {
 	if trimMax(body["name"], 200) == "" {
 		return nil, &ValidationError{Message: "name required"}
+	}
+	scale, _, err := grinderScaleInput(body)
+	if err != nil {
+		return nil, err
 	}
 	purchaseDate := trimMax(body["purchaseDate"], 10)
 	burrsResetAt := trimMax(body["burrsResetAt"], 10)
@@ -150,8 +174,14 @@ func CreateGrinder(repo *Repository, body Entity) (Entity, error) {
 		"burrType": trimMax(body["burrType"], 200), "purchaseDate": purchaseDate,
 		"burrsResetAt": burrsResetAt,
 	}
+	if scale != nil {
+		grinder["scale"] = scale.Map()
+	}
 	if err := repo.Update(func(lib *Library) error {
 		lib.Grinders = append(lib.Grinders, grinder)
+		if isDefault, _ := body["isDefault"].(bool); isDefault {
+			setDefaultGrinder(lib.Grinders, len(lib.Grinders)-1, true)
+		}
 		return nil
 	}); err != nil {
 		return nil, err

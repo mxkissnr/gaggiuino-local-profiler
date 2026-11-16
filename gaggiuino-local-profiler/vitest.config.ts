@@ -18,10 +18,10 @@ export default defineConfig({
                 autoUpdate: process.env.COVERAGE_RATCHET
                     ? (measured: number, previous: number) => Math.max(previous, Math.floor(measured) - 1)
                     : false,
-                statements: 50,
-                branches: 42,
-                functions: 36,
-                lines: 53,
+                statements: 64,
+                branches: 58,
+                functions: 50,
+                lines: 68,
             },
         },
     },

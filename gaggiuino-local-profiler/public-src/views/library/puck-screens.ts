@@ -9,6 +9,10 @@ import type { Html } from '../../utils.js';
 import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
+import { showToast } from '../../components/toast.js';
+import { confirmDialog } from '../../components/confirm-dialog.js';
+import { markFieldInvalid } from '../../components/field-error.js';
+import { bindFormAutosave } from '../../components/form-autosave.js';
 import { loadPuckScreenImageBlobUrl, invalidatePuckScreenImage } from '../../bean-image.js';
 import type { PuckScreen } from '../../api/types.js';
 
@@ -67,6 +71,12 @@ function loadPuckScreenThumbnails(): void {
   });
 }
 
+// The form saves itself while editing (#1962); the save button stays for
+// creating. Bound once, on the first open (the form element is persistent);
+// the returned reset runs on every open so the last entry's state never shows
+// on the next one (#2098).
+let _resetAutosave: (() => void) | null = null;
+
 export function openPuckScreenForm(puckScreen?: PuckScreen | null): void {
   S.puckScreenEditId = puckScreen ? puckScreen.id : null;
   (document.getElementById('puckScreenFormName') as HTMLInputElement).value      = puckScreen?.name      || '';
@@ -78,7 +88,16 @@ export function openPuckScreenForm(puckScreen?: PuckScreen | null): void {
   adjustBtn.style.display = puckScreen?.image ? '' : 'none';
   // onclick, not addEventListener: reopening the form must not stack handlers.
   adjustBtn.onclick = () => { if (S.puckScreenEditId) void _adjustPuckScreenImage(S.puckScreenEditId); };
-  (document.getElementById('puckScreenAddForm') as HTMLElement).classList.add('open');
+  const form = document.getElementById('puckScreenAddForm') as HTMLElement;
+  // Editing saves itself, so the button would only be a second way to save.
+  const saveBtn = document.getElementById('savePuckScreenBtn');
+  if (saveBtn) saveBtn.style.display = puckScreen ? 'none' : '';
+  _resetAutosave ??= bindFormAutosave(form, {
+    isEditing: () => !!S.puckScreenEditId,
+    save: async () => { const ok = await _persistPuckScreen(); if (ok) renderPuckScreenList(); return ok; },
+  });
+  _resetAutosave();
+  form.classList.add('open');
   (document.getElementById('puckScreenAddTrigger') as HTMLElement).style.display = 'none';
   (document.getElementById('puckScreenFormName') as HTMLInputElement).focus();
 }
@@ -94,23 +113,49 @@ export function editPuckScreen(id: number): void {
   if (p) openPuckScreenForm(p);
 }
 
-export async function savePuckScreen(): Promise<void> {
+// A second Save while the first request is pending must not create the entry
+// twice (#2022); same guard as the bean form's _beanSaveInFlight.
+let _puckScreenSaveInFlight = false;
+
+// Reads, validates and persists the form; leaves the form open and does not
+// clear the edit id, so autosave can keep saving the same entry (#1962).
+async function _persistPuckScreen(): Promise<boolean> {
+  if (_puckScreenSaveInFlight) return false;
   const name      = (document.getElementById('puckScreenFormName') as HTMLInputElement).value.trim();
   const thickness = (document.getElementById('puckScreenFormThickness') as HTMLInputElement).value;
   const material  = (document.getElementById('puckScreenFormMaterial') as HTMLInputElement).value.trim();
   const notes     = (document.getElementById('puckScreenFormNotes') as HTMLInputElement).value.trim();
-  if (!name) { (document.getElementById('puckScreenFormName') as HTMLInputElement).focus(); return; }
-  const saved = await libraryApi.savePuckScreen(S.puckScreenEditId, { name, thickness, material, notes });
-  if (!saved) return;
-  const lib = _state().coffeeLibrary;
-  const puckScreens = lib.puckScreens ?? [];
-  lib.puckScreens = puckScreens;
-  if (S.puckScreenEditId) {
-    const idx = puckScreens.findIndex(p => p.id === S.puckScreenEditId);
-    if (idx !== -1) puckScreens[idx] = saved;
-  } else {
-    puckScreens.push(saved);
+  if (!name) { markFieldInvalid(document.getElementById('puckScreenFormName')); return false; }
+  const editId = S.puckScreenEditId;
+  _puckScreenSaveInFlight = true;
+  const saveBtn = document.getElementById('savePuckScreenBtn') as HTMLButtonElement | null;
+  if (saveBtn) saveBtn.disabled = true;
+  try {
+    const saved = await libraryApi.savePuckScreen(editId, { name, thickness, material, notes });
+    if (!saved) { showToast(t('gm_toast_save_error')); return false; }
+    const lib = _state().coffeeLibrary;
+    const puckScreens = lib.puckScreens ?? [];
+    lib.puckScreens = puckScreens;
+    if (editId) {
+      const idx = puckScreens.findIndex(p => p.id === editId);
+      if (idx !== -1) puckScreens[idx] = saved;
+    } else {
+      puckScreens.push(saved);
+    }
+    return true;
+  } catch {
+    // A request that fails outright used to leave the user with no message.
+    showToast(t('gm_toast_save_error'));
+    return false;
+  } finally {
+    _puckScreenSaveInFlight = false;
+    if (saveBtn) saveBtn.disabled = false;
   }
+}
+
+export async function savePuckScreen(): Promise<void> {
+  const ok = await _persistPuckScreen();
+  if (!ok) return;
   closePuckScreenForm();
   renderPuckScreenList();
 }
@@ -145,9 +190,9 @@ async function _storePuckScreenPhoto(id: number, r: Response): Promise<void> {
 }
 
 export async function deletePuckScreen(id: number): Promise<void> {
-  if (!confirm(t('lib_confirm_delete_puckscreen'))) return;
+  if (!await confirmDialog(t('lib_confirm_delete_puckscreen'), { confirmLabel: t('lib_btn_delete') })) return;
   const r = await libraryApi.deletePuckScreenById(id);
-  if (!r.ok) return;
+  if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.puckScreens = (_state().coffeeLibrary.puckScreens || []).filter(p => p.id !== id);
   renderPuckScreenList();
 }

@@ -1,5 +1,7 @@
 package library
 
+import "github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
+
 // This file holds the whole-entity sanitizers
 // (sanitizeBeanFields/sanitizeGrinderFields/sanitizeRecipeFields/
 // sanitizeMilkFields/sanitizeBasketFields/sanitizePuckScreenFields) —
@@ -26,6 +28,11 @@ func SanitizeBeanFields(bean Entity) Entity {
 	}
 	for k, v := range beanFields(bean) {
 		out[k] = v
+	}
+	// #1963: pins run through the same sanitiser, so a crafted backup cannot
+	// store oversized or malformed entries.
+	if raw, ok := bean["pinnedProfiles"]; ok {
+		out["pinnedProfiles"] = sanitizePinnedProfiles(raw)
 	}
 	// The `s(x, n) || x` idiom: an empty trimmed name falls back to the raw
 	// value rather than clobbering it with "".
@@ -67,6 +74,19 @@ func SanitizeGrinderFields(grinder Entity) Entity {
 	out["notes"] = trimMax(grinder["notes"], 1000)
 	out["burrType"] = trimMax(grinder["burrType"], 200)
 	out["purchaseDate"] = trimMax(grinder["purchaseDate"], 10)
+	// isDefault is a plain bool or nothing: the copy loop above would otherwise
+	// let a crafted backup carry an arbitrary truthy value.
+	delete(out, "isDefault")
+	if isDefault, ok := grinder["isDefault"].(bool); ok && isDefault {
+		out["isDefault"] = true
+	}
+	// scale is a valid scale or nothing: a crafted backup must not reach the
+	// browser's dropdowns, and a grinder with a broken scale keeps working as a
+	// grinder without one.
+	delete(out, "scale")
+	if scale := grindscale.Parse(grinder["scale"]); scale != nil {
+		out["scale"] = scale.Map()
+	}
 	return out
 }
 
@@ -221,6 +241,19 @@ func SanitizeLibraryForRestore(lib Library) Library {
 		out.Grinders = make([]Entity, len(lib.Grinders))
 		for i, g := range lib.Grinders {
 			out.Grinders[i] = SanitizeGrinderFields(g)
+		}
+		// A backup can never restore two defaults: only the first flagged
+		// grinder keeps the flag.
+		seenDefault := false
+		for _, g := range out.Grinders {
+			if _, ok := g["isDefault"]; !ok {
+				continue
+			}
+			if seenDefault {
+				delete(g, "isDefault")
+				continue
+			}
+			seenDefault = true
 		}
 	}
 	if lib.Recipes != nil {

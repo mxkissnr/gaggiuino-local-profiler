@@ -39,6 +39,10 @@ beforeEach(() => {
     annMilkType:         { value: '', innerHTML: '', style: {} },
     drinkPillsContainer: { value: '', innerHTML: '', style: {} },
     milkPillsContainer:  { value: '', innerHTML: '', style: {} },
+    // #1957: mirror the panel's taste-tag field so the fixture still covers
+    // every node the annotation module reads; empty leaves the save unchanged.
+    annTasteTag:            { value: '', innerHTML: '', style: {} },
+    tasteTagPillsContainer: { value: '', innerHTML: '', style: {} },
   };
   g.document = { getElementById: (id: string) => els[id] ?? null };
   S.drinkMenu = [
