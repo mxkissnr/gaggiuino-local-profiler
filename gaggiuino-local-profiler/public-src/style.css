@@ -3845,7 +3845,8 @@
            theme tokens. Every class is prefixed .ach- — this round already
            hit two class-collision bugs from unprefixed names (.sec, .dot),
            see PLAN.md's "Fallen" list. */
-        #achievements-view { display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding: var(--sp-5); gap: var(--sp-4); }
+        #achievements-view { --settings-pad: var(--sp-5); display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding: var(--settings-pad); gap: var(--sp-4); }
+        @media (max-width: 480px) { #achievements-view { --settings-pad: var(--sp-3); } }
         .ach-cardwrap { display:flex; justify-content:center; }
         .ach-card {
             --ach-paper: #ece2d0;
@@ -3880,7 +3881,6 @@
         .ach-stamp { width:100%; height:100%; display:block; opacity:.88; }
         .ach-field:focus-visible { outline:2px solid var(--ach-stamp-ink); outline-offset:4px; border-radius:50%; }
         .ach-field:hover .ach-ring { border-color:color-mix(in srgb, var(--ach-ink) 62%, transparent); }
-        .ach-field[aria-current="true"] .ach-ring { border-color:var(--ach-stamp-ink); border-width:2px; }
 
         .ach-overprint {
             position:absolute; top:52%; left:50%; transform:translate(-50%,-50%) rotate(-14deg);
@@ -3892,27 +3892,39 @@
         }
         .ach-overprint-date { font-family:'Figtree', sans-serif; font-size:.8125rem; letter-spacing:.04em; }
 
-        .ach-foot { display:flex; align-items:center; justify-content:center; gap:14px; padding-top:16px; }
-        .ach-pg {
-            width:28px; height:28px; border-radius:50%; background:none; cursor:pointer;
-            border:1.4px solid color-mix(in srgb, var(--ach-ink) 45%, var(--ach-paper));
-            color:color-mix(in srgb, var(--ach-ink) 80%, var(--ach-paper)); font-size:1rem; line-height:1;
-            display:flex; align-items:center; justify-content:center;
+        /* #1465: Home Assistant page pattern (docs/DESIGN.md) around the card:
+           the settings top app bar, category chips, All / Collected / Open,
+           the statistics verdict; details open in the shared detail sheet. */
+        .ach-filters { display:flex; flex-direction:column; gap: var(--sp-2); min-width:0; }
+        .ach-chips { display:flex; gap: var(--sp-2); overflow-x:auto; scrollbar-width:none; overscroll-behavior-x: contain; }
+        .ach-chips::-webkit-scrollbar { display:none; }
+        .ach-chips .lib-shelf-chip { flex:none; min-height:44px; white-space:nowrap; }
+        .ach-layout { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }
+        .ach-layout[data-ach-filter="got"] .ach-field:not(.ach-got),
+        .ach-layout[data-ach-filter="open"] .ach-field.ach-got { opacity:.28; filter:saturate(.3); transition:opacity .15s; }
+        @media (prefers-reduced-motion: reduce) { .ach-layout .ach-field { transition:none; } }
+        .ach-bar { display:block; height:4px; margin-top: var(--sp-2); border-radius:2px; background: var(--gray-800); overflow:hidden; }
+        .ach-bar i { display:block; height:100%; border-radius:2px; background: var(--accent); }
+        .ach-sheet-desc { margin:0; color: var(--gray-200); }
+        .ach-sheet-meta { margin: var(--sp-2) 0 0; font-size: var(--fs-1); color: var(--gray-500); font-variant-numeric: tabular-nums; }
+        .ach-side { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }
+        .ach-side[hidden], .ach-side > section[hidden] { display:none; }
+        .ach-row-icon { --settings-tint: var(--gray-500); }
+        .ach-row-icon.ach-row-got { --settings-tint: var(--accent-ink); }
+        .ach-row-icon .ach-stamp { width:30px; height:30px; }
+        .ach-row .ach-bar { margin-top: var(--sp-1); }
+        .ach-row .settings-row-value { flex:0 0 auto; }
+        /* A stamp earned in the last seven days still has wet ink. */
+        .ach-field.ach-wet .ach-stamp { opacity:1; filter: saturate(1.3) drop-shadow(0 0 1.5px var(--ach-stamp-ink)); }
+        @media (prefers-reduced-motion: no-preference) {
+            .ach-field.ach-wet .ach-ink { animation: ach-wet-ink 2.4s ease-out 1; }
+            @keyframes ach-wet-ink { from { filter: blur(.6px) saturate(1.6); } }
         }
-        .ach-pg:hover { border-color:var(--ach-ink); color:var(--ach-ink); }
-        .ach-pg:focus-visible { outline:2px solid var(--ach-stamp-ink); outline-offset:3px; }
-        .ach-dots { display:flex; gap:7px; }
-        .ach-pdot { width:9px; height:9px; border-radius:50%; padding:0; cursor:pointer; background:none; border:1.3px solid color-mix(in srgb, var(--ach-ink) 50%, var(--ach-paper)); }
-        .ach-pdot.ach-on { background:var(--ach-stamp-ink); border-color:var(--ach-stamp-ink); }
-        .ach-pdot:focus-visible { outline:2px solid var(--ach-stamp-ink); outline-offset:3px; }
-
-        .ach-fineline { display:flex; justify-content:center; padding-top:12px; font-size:.6875rem; color:color-mix(in srgb, var(--ach-ink) 70%, var(--ach-paper)); font-variant-numeric:tabular-nums; }
-
-        /* Detail pane below the card — this one DOES use the app's own
-           theme tokens, unlike the card itself: it's chrome around the
-           depicted object, not part of the object. */
-        .ach-detail { border-radius:var(--radius); border:1px solid var(--gray-700); background:var(--gray-900); padding:var(--sp-4); min-height:64px; max-width:660px; margin:0 auto; width:100%; }
-        .ach-detail-hint { color:var(--gray-600); font-size:var(--fs-1); }
-        .ach-detail-n { font-size:var(--fs-3); font-weight:600; color:var(--gray-200); }
-        .ach-detail-d { font-size:var(--fs-2); color:var(--gray-500); margin-top:2px; }
-        .ach-detail-m { font-size:var(--fs-1); color:var(--gray-600); margin-top:6px; font-variant-numeric:tabular-nums; }
+        /* Desktop (#1465): verdict across the top, card left, lists right;
+           without lists the card takes the whole width. */
+        @media (min-width: 900px) {
+            .ach-layout { display:grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); grid-template-areas: "verdict verdict" "card side"; column-gap: var(--sp-6); row-gap: var(--sp-5); align-items:start; }
+            .ach-layout:has(> .ach-side[hidden]) { grid-template-areas: "verdict verdict" "card card"; }
+            .ach-cardwrap { grid-area: card; min-width:0; }
+            .ach-side:not([hidden]) { grid-area: side; }
+        }
