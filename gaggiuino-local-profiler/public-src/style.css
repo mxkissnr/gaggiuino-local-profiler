@@ -280,33 +280,23 @@
            itself replaced the old horizontal #mode-bar) with a horizontal
            tab row inside #content-topbar, resurrecting the pre-#411
            #mode-bar/.mode-btn visual language: raised gray-800 active
-           surface, no underline, hidden-scrollbar horizontal overflow for
-           narrow desktop widths via the -scroll wrapper. Mobile hides the
-           whole row (see the max-width:768px block) and uses #bottom-nav
-           instead. ── */
+           surface, no underline. The row no longer scrolls (#2079): a tab is
+           either fully visible or in the "More" menu at the row's end, so no
+           tab can be clipped and nothing has to be scrolled sideways. The
+           -scroll class name stays so existing selectors and tests keep
+           working. Mobile hides the whole row (see the max-width:768px block)
+           and uses #bottom-nav instead. ── */
         .topbar-nav-scroll {
             flex: 1;
             min-width: 0;
-            overflow-x: auto;
-            scrollbar-width: none;
-            -webkit-overflow-scrolling: touch;
+            display: flex;
+            align-items: center;
+            gap: 2px;
         }
-        .topbar-nav-scroll::-webkit-scrollbar { display: none; }
-        /* #1516: fade the edge where more tabs are hidden, so a clipped tab
-           reads as scrollable instead of truncated. 32 px, transparent at the
-           hidden edge; both classes together fade both edges. No class, no
-           fade — a row whose tabs all fit stays clean. Applied by
-           topbar-nav-fade.js from the row's scroll metrics. */
-        .topbar-nav-scroll.fade-left {
-            mask-image: linear-gradient(to right, transparent 0, var(--scrim) 32px);
-        }
-        .topbar-nav-scroll.fade-right {
-            mask-image: linear-gradient(to left, transparent 0, var(--scrim) 32px);
-        }
-        .topbar-nav-scroll.fade-left.fade-right {
-            mask-image: linear-gradient(to right, transparent 0, var(--scrim) 32px, var(--scrim) calc(100% - 32px), transparent 100%);
-        }
-        .topbar-nav-list { display: flex; align-items: center; gap: 2px; }
+        /* #2079: last-resort guard — when not even the active tab and "More"
+           fit, the tab is cut by its own row rather than drawn over the
+           settings gear. */
+        .topbar-nav-list { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: clip; }
 
         .topbar-nav {
             display: flex; align-items: center; gap: var(--sp-2); flex-shrink: 0;
@@ -330,6 +320,30 @@
            theme/accent (theme-contrast.test.js), so it clears 3:1 too. */
         .topbar-nav.active { color: var(--gray-200); border-bottom-color: var(--accent-ink); }
         .topbar-nav:disabled { opacity: .38; cursor: not-allowed; }
+        /* #2079: a tab the layout moved into the "More" menu. `!important`
+           and an id-level selector are both needed because the Playwright
+           scripts force `#btnLive`/`#btnOrders` visible with `!important`
+           (display:flex!important); the app itself only ever sets an inline
+           `display: none` or ''. */
+        #content-topbar .topbar-nav.topbar-nav-overflow { display: none !important; }
+        /* #2079: the "More" toggle sits at the end of the tab row. */
+        .topbar-nav-more { position: relative; flex-shrink: 0; }
+        .topbar-nav-more[hidden] { display: none; }
+        .topbar-nav-more > summary { list-style: none; }
+        .topbar-nav-more > summary::-webkit-details-marker { display: none; }
+        .topbar-nav-more[open] > summary { color: var(--gray-200); background: color-mix(in srgb, var(--paper) 4%, transparent); }
+        /* A badge on a tab inside the menu must still be visible from the
+           closed row: a dot at the icon's top right, in the .maint-badge
+           background colour (that rule paints it with var(--err) too). */
+        .topbar-nav-more.has-badge .rail-icon-slot::after {
+            content: "";
+            position: absolute; top: -1px; right: -1px;
+            width: 6px; height: 6px; border-radius: 50%;
+            background: var(--err);
+        }
+        /* The menu opens under its own toggle at the row's end; the panel
+           itself comes from .lib-sheet-menu-list. */
+        .topbar-nav-more .topbar-nav-menu { left: 0; right: auto; z-index: var(--z-menu); }
         .rail-icon-slot { position: relative; display: flex; flex-shrink: 0; }
         .rail-icon { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
         .rail-icon.sm { width: 15px; height: 15px; }
@@ -367,6 +381,13 @@
             #syncBtn { font-size: 0; padding: var(--sp-1) var(--sp-2); }
             #syncBtn::before { content: "\21BB" / ""; font-size: var(--fs-2); }
         }
+        /* #2079: the measured twin of the fixed breakpoint above.
+           topbar-nav-overflow.ts sets this class when the tabs need the room,
+           before any tab moves into "More" — so the status group compacts
+           first and the tabs keep their labels for as long as possible. */
+        #content-topbar.topbar-compact #syncTime { display: none; }
+        #content-topbar.topbar-compact #syncBtn { font-size: 0; padding: var(--sp-1) var(--sp-2); }
+        #content-topbar.topbar-compact #syncBtn::before { content: "\21BB" / ""; font-size: var(--fs-2); }
 
         /* Topbar ambient machine icon (#837) — the full animated
            "Instrument" SVG (machine-icon.js), sized into a ~44px square
@@ -415,6 +436,9 @@
             flex-shrink: 0;
             position: sticky; top: 0; z-index: var(--z-topbar);
         }
+        /* #2079: the first layout runs on boot, before the browser paints;
+           keep the row invisible until it has so no tab is seen jumping. */
+        #content-topbar:not(.topbar-nav-ready) .topbar-nav-scroll { visibility: hidden; }
 
         /* Multi-machine switcher (#325) — only shown once >1 machine is registered.
            Resting state is transparent, no border/box — border/background only
