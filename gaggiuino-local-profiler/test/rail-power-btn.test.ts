@@ -104,6 +104,11 @@ describe('the topbar power toggle and sync controls (#914, #2056)', () => {
     g.document = doc;
     S.primaryShotId = null;
     S.currentLang = 'en';
+    // One shot, so updateMachineBanner() stays off the path that builds a
+    // banner: its createElement/body do not exist in this fake document, and
+    // the throw would be swallowed by updateStatus()'s catch, skipping every
+    // write below it.
+    S.shots = [{ id: 1 }] as unknown as typeof S.shots;
   });
 
   it('hides the toggle when no switch is configured', async () => {
