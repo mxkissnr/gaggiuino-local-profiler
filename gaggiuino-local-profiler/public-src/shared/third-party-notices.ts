@@ -35,7 +35,7 @@ const LICENCE_DASH = ' — ';
 const LICENSED_PREFIX = 'Licensed under ';
 const LEADING_ARTICLE = 'the ';
 const SOURCE_PREFIXES = ['Source: ', 'Sources: '];
-const URL = /https:\/\/\S+/;
+const URL_PATTERN = /https:\/\/\S+/;
 
 function isNoticeGroup(section: string): section is NoticeGroup {
     return (NOTICE_GROUPS as readonly string[]).includes(section);
@@ -102,7 +102,7 @@ function licenceOf(bullets: string[]): string {
 function sourceOf(bullets: string[]): string {
     for (const bullet of bullets) {
         if (!SOURCE_PREFIXES.some((prefix) => bullet.startsWith(prefix))) continue;
-        const url = URL.exec(bullet)?.[0];
+        const url = URL_PATTERN.exec(bullet)?.[0];
         if (url !== undefined) return url;
     }
     return '';
