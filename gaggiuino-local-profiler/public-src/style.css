@@ -840,6 +840,17 @@
         .settings-row-sub { font-size: var(--fs-1); color: var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .settings-row-value { flex:0 0 auto; font-size: var(--fs-1); color: var(--gray-400); font-variant-numeric: tabular-nums; }
         .settings-chev { flex:0 0 auto; width:8px; height:8px; border-right:2px solid var(--gray-500); border-bottom:2px solid var(--gray-500); transform: rotate(-45deg); }
+        /* #2080: open-source licenses sheet */
+        .licenses-heading { display:flex; gap: var(--sp-2); margin: var(--sp-4) 0 var(--sp-2); font-size: var(--fs-1); font-weight:600; color: var(--gray-500); }
+        .licenses-count { font-weight:400; font-variant-numeric: tabular-nums; }
+        .licenses-row .settings-row-title, .licenses-row .settings-row-sub, .licenses-text .settings-row-sub { white-space: normal; overflow-wrap: anywhere; }
+        .licenses-licence { font-size: var(--fs-1); color: var(--gray-400); }
+        .licenses-text + .licenses-text { border-top: 1px solid var(--gray-800); }
+        .licenses-text > summary { display:flex; align-items:center; min-height:44px; padding: var(--sp-2) var(--sp-4); cursor:pointer; list-style:none; }
+        .licenses-text > summary::-webkit-details-marker { display:none; }
+        .licenses-text > summary:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: -2px; }
+        .licenses-text pre { margin:0; padding: 0 var(--sp-4) var(--sp-4); font: inherit; font-size: var(--fs-1); line-height:1.5; color: var(--gray-300); white-space: pre-wrap; overflow-wrap: anywhere; }
+        .licenses-state { margin:0; font-size: var(--fs-2); color: var(--gray-400); }
         /* #2052: .settings-card further down would win at equal specificity and
            put its padding and gap back around the rows. The rows sit flush with
            the card's text column, like the row-styled buttons in other cards. */

@@ -18,6 +18,7 @@ import { renderBeanFreshnessSettings } from '../components/bean-freshness-settin
 import { loadNotifySettingsCard } from '../components/notify-settings.js';
 import { loadMcpSettingsCard } from '../components/mcp-settings.js';
 import { openDetailSheet } from '../components/detail-sheet.js';
+import { openLicensesSheet } from '../components/licenses-sheet.js';
 
 export interface SettingsGroup {
   id: string;
@@ -375,6 +376,10 @@ export function wireSettingsPage(): void {
     if (dialogOpen?.dataset.settingsDialog) {
       const row = SETTINGS_DIALOG_ROWS.find(r => r.id === dialogOpen.dataset.settingsDialog);
       if (row) _openDialogRow(row);
+      return;
+    }
+    if (target?.closest('[data-settings-licenses]')) {
+      void openLicensesSheet();
       return;
     }
     if (target?.closest('[data-settings-back]')) {
