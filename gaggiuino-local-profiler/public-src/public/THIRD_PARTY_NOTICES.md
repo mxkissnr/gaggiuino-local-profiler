@@ -96,8 +96,8 @@ WebAssembly barcode decoder that barcode-detector runs.
 
 ### Figtree 400, 600
 
-The app's sans-serif UI font, bundled as WOFF2 for the 400 and 600 weights
-(latin subset) in public-src/fonts/.
+The app's sans-serif UI font, bundled with the app as WOFF2 for the 400 and
+600 weights (latin subset).
 
 - Copyright 2022 The Figtree Project Authors (https://github.com/erikdkennedy/figtree)
 - Licensed under the SIL Open Font License 1.1.
@@ -106,8 +106,8 @@ The app's sans-serif UI font, bundled as WOFF2 for the 400 and 600 weights
 
 ### Fraunces 600
 
-Serif display font for bean names and the shot-card image, bundled as WOFF2
-for the 600 weight (latin subset) in public-src/fonts/.
+Serif display font for bean names and the shot-card image, bundled with
+the app as WOFF2 for the 600 weight (latin subset).
 
 - Copyright 2018 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces)
 - Licensed under the SIL Open Font License 1.1.
