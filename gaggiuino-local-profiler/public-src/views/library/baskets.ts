@@ -79,8 +79,10 @@ function loadBasketThumbnails(): void {
 }
 
 // The form saves itself while editing (#1962); the save button stays for
-// creating. Bound once, on the first open: the form element is persistent.
-let _autosaveBound = false;
+// creating. Bound once, on the first open (the form element is persistent);
+// the returned reset runs on every open so the last entry's state never shows
+// on the next one (#2098).
+let _resetAutosave: (() => void) | null = null;
 
 export function openBasketForm(basket?: Basket | null): void {
   S.basketEditId = basket ? basket.id : null;
@@ -99,13 +101,11 @@ export function openBasketForm(basket?: Basket | null): void {
   // Editing saves itself, so the button would only be a second way to save.
   const saveBtn = document.getElementById('saveBasketBtn');
   if (saveBtn) saveBtn.style.display = basket ? 'none' : '';
-  if (!_autosaveBound) {
-    _autosaveBound = true;
-    bindFormAutosave(form, {
-      isEditing: () => !!S.basketEditId,
-      save: async () => { const ok = await _persistBasket(); if (ok) renderBasketList(); return ok; },
-    });
-  }
+  _resetAutosave ??= bindFormAutosave(form, {
+    isEditing: () => !!S.basketEditId,
+    save: async () => { const ok = await _persistBasket(); if (ok) renderBasketList(); return ok; },
+  });
+  _resetAutosave();
   form.classList.add('open');
   (document.getElementById('basketAddTrigger') as HTMLElement).style.display = 'none';
   (document.getElementById('basketFormName') as HTMLInputElement).focus();

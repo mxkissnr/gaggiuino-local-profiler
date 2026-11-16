@@ -72,8 +72,10 @@ function loadPuckScreenThumbnails(): void {
 }
 
 // The form saves itself while editing (#1962); the save button stays for
-// creating. Bound once, on the first open: the form element is persistent.
-let _autosaveBound = false;
+// creating. Bound once, on the first open (the form element is persistent);
+// the returned reset runs on every open so the last entry's state never shows
+// on the next one (#2098).
+let _resetAutosave: (() => void) | null = null;
 
 export function openPuckScreenForm(puckScreen?: PuckScreen | null): void {
   S.puckScreenEditId = puckScreen ? puckScreen.id : null;
@@ -90,13 +92,11 @@ export function openPuckScreenForm(puckScreen?: PuckScreen | null): void {
   // Editing saves itself, so the button would only be a second way to save.
   const saveBtn = document.getElementById('savePuckScreenBtn');
   if (saveBtn) saveBtn.style.display = puckScreen ? 'none' : '';
-  if (!_autosaveBound) {
-    _autosaveBound = true;
-    bindFormAutosave(form, {
-      isEditing: () => !!S.puckScreenEditId,
-      save: async () => { const ok = await _persistPuckScreen(); if (ok) renderPuckScreenList(); return ok; },
-    });
-  }
+  _resetAutosave ??= bindFormAutosave(form, {
+    isEditing: () => !!S.puckScreenEditId,
+    save: async () => { const ok = await _persistPuckScreen(); if (ok) renderPuckScreenList(); return ok; },
+  });
+  _resetAutosave();
   form.classList.add('open');
   (document.getElementById('puckScreenAddTrigger') as HTMLElement).style.display = 'none';
   (document.getElementById('puckScreenFormName') as HTMLInputElement).focus();

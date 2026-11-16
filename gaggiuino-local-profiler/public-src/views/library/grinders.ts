@@ -136,8 +136,10 @@ function loadGrinderThumbnails(): void {
 
 // ── Grinder form ──────────────────────────────────────────────────────────
 // The form saves itself while editing (#1962); the save button stays for
-// creating. Bound once, on the first open: the form element is persistent.
-let _autosaveBound = false;
+// creating. Bound once, on the first open (the form element is persistent);
+// the returned reset runs on every open so the last entry's state never shows
+// on the next one (#2098).
+let _resetAutosave: (() => void) | null = null;
 
 export function openGrinderForm(grinder?: GrinderRow | null): void {
   S.grinderEditId = grinder ? grinder.id : null;
@@ -161,13 +163,11 @@ export function openGrinderForm(grinder?: GrinderRow | null): void {
   // Editing saves itself, so the button would only be a second way to save.
   const saveBtn = document.getElementById('saveGrinderBtn');
   if (saveBtn) saveBtn.style.display = grinder ? 'none' : '';
-  if (!_autosaveBound) {
-    _autosaveBound = true;
-    bindFormAutosave(_el('grinderAddForm'), {
-      isEditing: () => !!S.grinderEditId,
-      save: async () => { const ok = await _persistGrinder(); if (ok) renderGrinderList(); return ok; },
-    });
-  }
+  _resetAutosave ??= bindFormAutosave(_el('grinderAddForm'), {
+    isEditing: () => !!S.grinderEditId,
+    save: async () => { const ok = await _persistGrinder(); if (ok) renderGrinderList(); return ok; },
+  });
+  _resetAutosave();
   _el('grinderAddForm').classList.add('open');
   _el('grinderAddTrigger').style.display = 'none';
   _input('grinderFormName').focus();
