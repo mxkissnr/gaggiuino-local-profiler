@@ -531,7 +531,7 @@ const es: Partial<Translations> = {
     lib_brew_espresso:'Espresso', lib_brew_aeropress:'AeroPress', lib_brew_v60:'V60 / Pour Over',
     lib_brew_french_press:'French Press', lib_brew_moka:'Moka Pot', lib_brew_cold_brew:'Cold Brew', lib_brew_other:'Otro',
     lib_confirm_delete_recipe:'¿Eliminar la receta?',
-    nav_dialin:'Dial-In', dialin_title:'Dial-In',
+    nav_dialin:'Dial-In',
     nav_maintenance:'Mantenimiento',
     maint_descaling:'Descalcificación', maint_backflush:'Backflush', maint_grouphead:'Servicio grupo',
     maint_gaskets:'Juntas & Filtros', maint_waterfilter:'Filtro agua', maint_firmware_update:'Actualización de firmware',

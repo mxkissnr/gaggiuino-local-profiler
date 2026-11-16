@@ -299,6 +299,12 @@ describe('achievements view — the page shell', () => {
     expect(chips).toEqual(['open']);
   });
 
+  it('renders no title bar: the chips come first and the tab names the page', () => {
+    const markup = achPageHtml(FIXTURE, 'basics', 'all');
+    expect(markup).not.toContain('settings-bar-title');
+    expect(markup).not.toContain('settings-bar');
+  });
+
   it('has no trace of the removed arrows, dots, card line or detail box', () => {
     const markup = achPageHtml(FIXTURE, 'basics', 'all');
     for (const gone of ['ach-pdot', 'ach-pg', 'achFine', 'achDetail']) {

@@ -11,10 +11,10 @@
 // etc. theme tokens.
 //
 // #1465: the page follows the Home Assistant page pattern from
-// docs/DESIGN.md — the settings top app bar, the library shelf's chip control
-// for the eight categories and for All / Collected / Open, the statistics
-// verdict as the one-line answer, and the shared detail sheet for a stamp's
-// details. The card itself is unchanged.
+// docs/DESIGN.md — the library shelf's chip control for the eight categories
+// and for All / Collected / Open, the statistics verdict as the one-line
+// answer, and the shared detail sheet for a stamp's details. The card itself
+// is unchanged. No title bar: the active tab already names the page.
 import { S } from '../state/index.js';
 import { t, tHtml } from '../i18n.js';
 import { getAchievements } from '../api/system.js';
@@ -291,10 +291,10 @@ function pageHtml(cardBadges: Achievement[], key: string, chosen: string, nowSec
   </div>`;
 }
 
-// The whole page: the settings top app bar, the two chip rows, then the
-// verdict and the card. The category chips replace the old arrows/dots/"Card
-// n of 8" line — eight categories are pages of one depicted card, which is
-// what the chips say. The filter is pure CSS: the layout carries
+// The whole page: the two chip rows, then the verdict and the card — no title
+// bar, the active tab already names the page. The category chips replace the
+// old arrows/dots/"Card n of 8" line — eight categories are pages of one
+// depicted card, which is what the chips say. The filter is pure CSS: the layout carries
 // data-ach-filter and the stylesheet dims the stamps that do not match, so
 // the card stays one object and nothing is hidden or reflowed.
 export function achPageHtml(
@@ -335,7 +335,6 @@ export function achPageHtml(
   const sideHidden = soonHidden && recentHidden;
 
   return html`
-    <div class="settings-bar ach-bar-top"><h1 class="settings-bar-title">${tHtml('nav_achievements')}</h1></div>
     <div class="ach-filters">
       <div class="ach-chips" role="group">${cardChips}</div>
       <div class="ach-chips" role="group">${showChips}</div>

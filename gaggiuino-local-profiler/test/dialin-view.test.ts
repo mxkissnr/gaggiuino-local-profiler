@@ -76,11 +76,19 @@ afterEach(() => {
 });
 
 describe('Dial-In naming (#1465)', () => {
-  it('uses "Dial-In" for the nav entry and the page title in every language', () => {
+  it('uses "Dial-In" for the nav entry in every language', () => {
     for (const [name, dict] of Object.entries({ en, de, es, fr, it: itLang, nl })) {
       expect(dict.nav_dialin, `${name} nav_dialin`).toBe('Dial-In');
-      expect(dict.dialin_title, `${name} dialin_title`).toBe('Dial-In');
     }
+  });
+
+  it('renders no title bar above the Dial-In filter chips', () => {
+    const markup = readFileSync(join(REPO_DIR, 'public-src/index.html'), 'utf8');
+    const start = markup.indexOf('id="dialin-view"');
+    expect(start).toBeGreaterThan(-1);
+    const view = markup.slice(start, markup.indexOf('<!--', start));
+    expect(view).not.toContain('settings-bar');
+    expect(view).toContain('class="dialin-chips"');
   });
 
   it('labels the bottom-nav dialin entry "Dial-In"', () => {
