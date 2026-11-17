@@ -946,27 +946,14 @@
         .settings-card { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); display:flex; flex-direction:column; gap: var(--sp-3); }
         .settings-card-title { margin: 0; font-size: var(--fs-3); font-weight:600; color:var(--gray-200); }
         .settings-card-desc { margin: 0; font-size: var(--fs-1); color:var(--gray-500); line-height:1.5; }
-        .backup-btn { background:var(--gray-800); border:1px solid var(--gray-700); color:var(--gray-200); padding: var(--sp-3) var(--sp-4); border-radius:var(--radius); cursor:pointer; font-size: var(--fs-2); text-align:left; transition:background .15s; text-decoration:none; display:block; }
-        .backup-btn:hover { background:var(--gray-700); }
+        /* A lone button in a card keeps its own width instead of stretching. */
+        .settings-card > .btn { align-self: flex-start; }
         /* #2038: inside a sub-page the remaining inline controls read as list
            rows -- text left, switch or chevron right, hairlines between. CSS
            only, so the markup and every id stay untouched. */
         #settings-view .settings-card .orders-broadcast-row { flex-direction: row-reverse; justify-content: space-between; min-height: 44px; }
         #settings-view .settings-card .orders-broadcast-row > label:not(.toggle-switch) { flex: 1; }
         #settings-view .settings-card .orders-broadcast-list:last-child { margin-bottom: 0; }
-        /* The firmware update button sits in a machine row's accent banner and
-           keeps its button look there. */
-        #settings-view .backup-btn:not(#apiTokenCopyBtn):not(.machine-firmware-update-btn) {
-            display:flex; align-items:center; justify-content:space-between; gap: var(--sp-3);
-            width:100%; min-height:52px; padding: var(--sp-2) 0;
-            border:0; border-top:1px solid var(--gray-800); border-radius:0; background:none;
-        }
-        #settings-view .backup-btn:not(#apiTokenCopyBtn):not(.machine-firmware-update-btn):hover { background: var(--raised); }
-        #settings-view .backup-btn:not(#apiTokenCopyBtn):not(.machine-firmware-update-btn)::after {
-            content:''; flex:0 0 auto; width:8px; height:8px;
-            border-right:2px solid var(--gray-500); border-bottom:2px solid var(--gray-500);
-            transform: rotate(-45deg);
-        }
         .api-token-row { display:flex; align-items:center; gap: var(--sp-2); flex-wrap:wrap; }
         .api-token-value { flex:1; min-width:0; background:var(--gray-800); border-radius:var(--radius); padding: var(--sp-3) var(--sp-4); font-size: var(--fs-1); color:var(--gray-200); word-break:break-all; }
 
@@ -1050,7 +1037,6 @@
         .machine-form-label { font-size: var(--fs-1); color:var(--gray-500); margin-bottom: -6px; }
         .machine-form-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-2); color:var(--gray-200); }
         .machine-form-actions { display:flex; gap: var(--sp-2); flex-wrap:wrap; }
-        .machine-form-actions .backup-btn { display:inline-block; }
         .machine-form-test-result { font-size: var(--fs-1); color:var(--gray-400); min-height:1em; }
         .bf-error { font-size: var(--fs-1); color:var(--err); margin-top: var(--sp-1); }
 
