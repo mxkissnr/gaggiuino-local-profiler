@@ -101,8 +101,8 @@ export function renderRecipeList(): void {
         ${sourceHref ? html`<div class="lib-item-source"><a href="${esc(sourceHref)}" target="_blank" rel="noopener">${LINK_ICON_SVG} ${tHtml('lib_recipe_source_link')}</a></div>` : html``}
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button type="button" class="btn btn--quiet btn--icon" data-action="edit-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button type="button" class="btn btn--danger btn--icon" data-action="delete-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`;
   }));
@@ -120,7 +120,7 @@ function _stepRowHtml(i: number, text: string | undefined = '', dur: number | st
     <span class="lib-step-num">${esc(i + 1)}</span>
     <input class="lib-step-text" aria-label="${tHtml('lib_recipe_step_ph')}" placeholder="${tHtml('lib_recipe_step_ph')}" value="${esc(text)}">
     <input class="lib-step-dur" type="number" min="0" max="3600" step="1" aria-label="${tHtml('lib_recipe_step_dur')}" placeholder="${tHtml('lib_recipe_step_dur')}" value="${esc(dur ?? '')}">
-    <button class="lib-btn-sm del lib-btn-icon" data-action="remove-recipe-step" data-idx="${esc(i)}" aria-label="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
+    <button type="button" class="btn btn--danger btn--icon" data-action="remove-recipe-step" data-idx="${esc(i)}" aria-label="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
   </div>`;
 }
 
@@ -147,7 +147,7 @@ export function removeRecipeStep(i: number): void {
   document.querySelectorAll('#recipeStepsList .lib-step-row').forEach((row, idx) => {
     row.id = `recipeStep${idx}`;
     (row.querySelector('.lib-step-num') as HTMLElement).textContent = String(idx + 1);
-    const delBtn = row.querySelector('.lib-btn-sm.del') as HTMLElement;
+    const delBtn = row.querySelector('.btn--danger') as HTMLElement;
     delBtn.dataset.action = 'remove-recipe-step';
     delBtn.dataset.idx = String(idx);
   });
