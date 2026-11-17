@@ -12,6 +12,12 @@ import type { Root, Rule } from 'postcss';
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC = join(here, '..', 'public-src');
 
+// test/node-builtins.d.ts types readdirSync for the one-argument call only.
+const readdirRecursive = readdirSync as unknown as (
+  path: string,
+  options: { recursive: true; encoding: 'utf8' },
+) => string[];
+
 function read(rel: string): string {
   return readFileSync(join(SRC, rel), 'utf8');
 }
@@ -73,7 +79,7 @@ describe('shared filter chips (#2093)', () => {
   });
 
   it('leaves no rule, markup or code using a retired chip class', () => {
-    const files = readdirSync(SRC, { recursive: true, encoding: 'utf8' })
+    const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
       .filter(name => name.endsWith('.ts') || name.endsWith('.html') || name.endsWith('.css'));
 
     const hits: string[] = [];
