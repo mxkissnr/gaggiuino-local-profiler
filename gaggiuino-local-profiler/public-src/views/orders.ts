@@ -257,7 +257,7 @@ export function renderMilkStock(milks: MilkStock[]): void {
   el.style.display = '';
   el.innerHTML = html`<p class="orders-milk-title">${MILK_ICON_SVG} ${tHtml('orders_milk_title')}</p>${joinHtml(
     milks.map(m => {
-      const cls = (m.stockMl as number) <= 0 ? 'empty' : m.remaining < 300 ? 'low' : 'ok';
+      const cls = (m.stockMl as number) <= 0 ? 'badge badge--err' : m.remaining < 300 ? 'badge badge--warn' : 'badge badge--ok';
       const label = (m.stockMl as number) <= 0 ? tHtml('lib_milk_empty')
         : m.remaining < 300 ? html`${esc(m.remaining)} ml`
         : html`${esc(m.remaining)} ml`;
@@ -265,7 +265,7 @@ export function renderMilkStock(milks: MilkStock[]): void {
         <span class="orders-milk-emoji">${m.emoji ? esc(m.emoji) : MILK_ICON_SVG}</span>
         <span class="orders-milk-name">${esc(m.name)}</span>
         ${m.demand > 0 ? html`<span style="font-size:.72rem;color:var(--gray-500)">${tHtml('lib_milk_demand', m.demand)}</span>` : html``}
-        <span class="orders-milk-badge ${esc(cls)}">${label}</span>
+        <span class="${esc(cls)}">${label}</span>
       </div>`;
     }))}`;
 }
@@ -362,7 +362,7 @@ export function renderOrderCard(o: Order, ctx: string): Html {
       : html``;
     return html`<div class="order-card status-pending">
       <div class="order-card-top">
-        <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : html``}${isNew ? html`<span class="orders-new-badge">${tHtml('orders_new_badge')}</span>` : html``}</span>
+        <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant">· ${esc(o.variant)}</span>` : html``}${isNew ? html`<span class="badge badge--err">${tHtml('orders_new_badge')}</span>` : html``}</span>
         <span class="order-meta">${_orderTimeAgo(o.createdAt)}${queueHint}</span>
       </div>
       <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
@@ -388,8 +388,8 @@ export function renderOrderCard(o: Order, ctx: string): Html {
     const declineOpen = S._ordersDeclineOpen[_idKey(String(o.id))];
     return html`<div class="order-card status-accepted">
       <div class="order-card-top">
-        <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : html``}</span>
-        <span class="order-eta-tag">${tHtml('orders_eta_in', minsLeft)}</span>
+        <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant">· ${esc(o.variant)}</span>` : html``}</span>
+        <span class="badge badge--ok">${tHtml('orders_eta_in', minsLeft)}</span>
       </div>
       <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
       <div class="order-actions">
@@ -407,13 +407,13 @@ export function renderOrderCard(o: Order, ctx: string): Html {
   const statusLabel = o.status === 'done' ? tHtml('orders_done') : tHtml('orders_declined');
   return html`<div class="order-card status-${esc(o.status)}">
     <div class="order-card-top">
-      <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : html``}</span>
+      <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant">· ${esc(o.variant)}</span>` : html``}</span>
       <span class="order-history-right">
         <span class="order-meta">${statusLabel} · ${_orderTimeAgo(o.completedAt || o.createdAt)}</span>
         <button class="order-hist-del" data-order-delete="${esc(o.id)}" title="${tHtml('orders_delete_entry')}"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
       </span>
     </div>
-    <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? html` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : html``}${o.shotId != null ? html` <button type="button" class="order-shot-link" data-action="goto-shot" data-id="${esc(o.shotId)}">${esc(t('orders_shot_link', o.shotId))}</button>` : html``}</div>
+    <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? html` · <span class="order-decline-reason">${esc(o.declineReason)}</span>` : html``}${o.shotId != null ? html` <button type="button" class="order-shot-link" data-action="goto-shot" data-id="${esc(o.shotId)}">${esc(t('orders_shot_link', o.shotId))}</button>` : html``}</div>
   </div>`;
 }
 

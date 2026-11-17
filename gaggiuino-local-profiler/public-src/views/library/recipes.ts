@@ -58,7 +58,7 @@ export function renderRecipeList(): void {
   el.innerHTML = joinHtml(recipes.map(r => {
     const brewMethodLabel = r.brewMethod ? BREW_METHOD_LABELS[r.brewMethod] : undefined;
     const brewLabel = brewMethodLabel
-      ? html`<span class="lib-brew-badge">${tHtml(brewMethodLabel)}</span>`
+      ? html`<span class="badge badge--info">${tHtml(brewMethodLabel)}</span>`
       : html``;
     const metaParts = [r.drinkType, r.beanName, r.profileName].filter(Boolean).map(esc);
     const meta = metaParts.length ? joinHtml(metaParts.map((p, i) => (i ? html` · ${p}` : p))) : null;
