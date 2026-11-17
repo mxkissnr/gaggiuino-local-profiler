@@ -35,12 +35,12 @@ function fakeChip(id: string): FakeChip {
   };
 }
 
-function fakeDocument(): Record<string, FakeChip> {
-  const chips: Record<string, FakeChip> = {};
-  for (const id of SORT_IDS) chips[id] = fakeChip(id);
+function fakeDocument(): Map<string, FakeChip> {
+  const chips = new Map<string, FakeChip>();
+  for (const id of SORT_IDS) chips.set(id, fakeChip(id));
   const shots = { innerHTML: '', appendChild() {} };
   g.document = {
-    getElementById: (id: string): unknown => chips[id] ?? (id === 'shots' ? shots : null),
+    getElementById: (id: string): unknown => chips.get(id) ?? (id === 'shots' ? shots : null),
     querySelectorAll: (): unknown[] => [],
     querySelector: (): null => null,
   };
@@ -48,7 +48,13 @@ function fakeDocument(): Record<string, FakeChip> {
 }
 
 describe('#2093 shot list sort chips', () => {
-  let chips: Record<string, FakeChip>;
+  let chips: Map<string, FakeChip>;
+
+  const chip = (id: string): FakeChip => {
+    const found = chips.get(id);
+    if (!found) throw new Error(`no sort chip ${id}`);
+    return found;
+  };
 
   beforeEach(() => {
     S.shots = [];
@@ -59,24 +65,24 @@ describe('#2093 shot list sort chips', () => {
 
   it('presses only the chosen sort chip', () => {
     setSortMode('score');
-    expect(chips.sortScore?.getAttribute('aria-pressed')).toBe('true');
-    expect(chips.sortNewest?.getAttribute('aria-pressed')).toBe('false');
-    expect(chips.sortRating?.getAttribute('aria-pressed')).toBe('false');
-    expect(chips.sortDur?.getAttribute('aria-pressed')).toBe('false');
-    expect(chips.sortScore?.innerHTML.endsWith('↓')).toBe(true);
+    expect(chip('sortScore').getAttribute('aria-pressed')).toBe('true');
+    expect(chip('sortNewest').getAttribute('aria-pressed')).toBe('false');
+    expect(chip('sortRating').getAttribute('aria-pressed')).toBe('false');
+    expect(chip('sortDur').getAttribute('aria-pressed')).toBe('false');
+    expect(chip('sortScore').innerHTML.endsWith('↓')).toBe(true);
   });
 
   it('keeps the chip pressed and flips the arrow when the same sort is picked again', () => {
     setSortMode('score');
     setSortMode('score');
-    expect(chips.sortScore?.getAttribute('aria-pressed')).toBe('true');
-    expect(chips.sortScore?.innerHTML.endsWith('↑')).toBe(true);
+    expect(chip('sortScore').getAttribute('aria-pressed')).toBe('true');
+    expect(chip('sortScore').innerHTML.endsWith('↑')).toBe(true);
   });
 
   it('moves the pressed state to another sort', () => {
     setSortMode('score');
     setSortMode('duration');
-    expect(chips.sortDur?.getAttribute('aria-pressed')).toBe('true');
-    expect(chips.sortScore?.getAttribute('aria-pressed')).toBe('false');
+    expect(chip('sortDur').getAttribute('aria-pressed')).toBe('true');
+    expect(chip('sortScore').getAttribute('aria-pressed')).toBe('false');
   });
 });
