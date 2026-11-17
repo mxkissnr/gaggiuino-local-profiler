@@ -8,6 +8,7 @@ package machines
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -545,6 +546,11 @@ func gaggiMateSlogToShot(slog *gaggiMateSlogResult, nativeID int64) map[string]a
 	}
 }
 
+// ErrGaggiMateBadSlog tags a fully received HTTP 200 .slog response that
+// cannot be parsed (#2076), e.g. the firmware's web UI HTML served instead
+// of a missing shot file. The sync skips such a shot instead of aborting.
+var ErrGaggiMateBadSlog = errors.New("gaggimate: unreadable .slog")
+
 // FetchGaggiMateIndex fetches /api/history/index.bin and returns the highest shot ID.
 func FetchGaggiMateIndex(ctx context.Context, baseURL string) (int64, error) {
 	data, err := httpGetBytesCapped(ctx, baseURL+"/api/history/index.bin", gaggiMateReqTimeout, gaggiMateIndexMaxBytes)
@@ -581,7 +587,7 @@ func FetchGaggiMateShot(ctx context.Context, baseURL string, nativeID int64) (ma
 	}
 	slog, err := gaggiMateParseSlog(data)
 	if err != nil {
-		return nil, resp.StatusCode, err
+		return nil, resp.StatusCode, fmt.Errorf("%w: %w", ErrGaggiMateBadSlog, err)
 	}
 	return gaggiMateSlogToShot(slog, nativeID), resp.StatusCode, nil
 }
