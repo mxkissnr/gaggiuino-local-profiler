@@ -248,10 +248,10 @@ describe('the shipped docs, styles and changelog (#1878)', () => {
     expect(read('../../README.md')).toContain('- **Machine settings backups** - ');
   });
 
-  it('styles the sheet with 44 px targets and theme tokens', () => {
+  it('styles the sheet with the shared buttons and a 44 px pick target', () => {
     const css = read('../public-src/style.css');
     expect(css).toContain('.mbk-sheet {');
-    expect(css).toContain('.mbk-btn { min-height:44px;');
+    expect(read('../public-src/components/machine-backups.ts')).toContain('class="btn btn--primary" data-mbk-action="backup"');
     const pickWrap = css.slice(css.indexOf('.mbk-pick-wrap {'));
     expect(pickWrap.slice(0, pickWrap.indexOf('}'))).toContain('min-height:44px');
   });
