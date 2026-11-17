@@ -78,6 +78,8 @@ export type BackupContext = 'backup' | 'upload' | 'download' | 'delete' | 'resto
 const KIND_KEYS: Record<MachineBackupKind, string> = {
   manual: 'mbk_kind_manual', scheduled: 'mbk_kind_scheduled', pre_update: 'mbk_kind_pre_update', uploaded: 'mbk_kind_uploaded',
 };
+// #2094: the backup kind as a status badge; scheduled and uploaded stay neutral.
+const KIND_BADGE: Partial<Record<MachineBackupKind, string>> = { manual: 'badge badge--accent', pre_update: 'badge badge--warn' };
 const ERROR_KEYS: Record<MachineBackupErrorCode, string> = {
   unsupported_machine: 'mbk_err_unsupported_machine', unsupported_firmware: 'mbk_err_unsupported_firmware',
   machine_unreachable: 'mbk_err_unreachable', invalid_backup: 'mbk_err_invalid_backup',
@@ -329,7 +331,7 @@ function renderRow(b: MachineBackup, locale: string, owner: Html | null, restore
   const noRestore = restoreDisabled ? html` disabled` : esc('');
   return html`<div class="mbk-row">
     ${owner === null ? esc('') : html`<div class="mbk-owner">${owner}</div>`}
-    <div class="mbk-row-head"><label class="mbk-pick-wrap"><input type="checkbox" class="mbk-pick" data-id="${esc(b.id)}" aria-label="${esc(t('mbk_pick', date))}"${picked ? html` checked` : esc('')}></label><span class="mbk-date">${esc(date)}</span><span class="mbk-chip mbk-chip-${esc(b.kind)}">${esc(t(KIND_KEYS[b.kind]))}</span></div>
+    <div class="mbk-row-head"><label class="mbk-pick-wrap"><input type="checkbox" class="mbk-pick" data-id="${esc(b.id)}" aria-label="${esc(t('mbk_pick', date))}"${picked ? html` checked` : esc('')}></label><span class="mbk-date">${esc(date)}</span><span class="${esc(KIND_BADGE[b.kind] ?? 'badge')}">${esc(t(KIND_KEYS[b.kind]))}</span></div>
     <div class="mbk-meta">${esc(meta.join(' · '))}</div>
     ${b.note === '' ? esc('') : html`<div class="mbk-note">${esc(b.note)}</div>`}
     <div class="mbk-row-actions">

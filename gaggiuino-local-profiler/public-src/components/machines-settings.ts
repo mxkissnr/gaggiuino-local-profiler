@@ -415,10 +415,10 @@ export function renderMachinesList(): void {
           <span class="machine-row-sub">${m.type === 'gaggimate' ? html`GaggiMate` : html`Gaggiuino`}${m.isDefault ? html` · ${tHtml('settings_machine_default')}` : html``} · ${tHtml('settings_machine_shot_count', shotCount)}</span>
         </span>
       </button>
-      ${isGaggiuino ? html`<span class="machine-row-firmware-badge machine-row-firmware-badge-muted">${escapeHtml(t('settings_machine_firmware_checking'))}</span>` : html``}`;
+      ${isGaggiuino ? html`<span class="badge machine-row-firmware-status">${escapeHtml(t('settings_machine_firmware_checking'))}</span><button type="button" class="btn btn--tonal machine-row-firmware-update" aria-expanded="false" style="display:none"></button>` : html``}`;
     row.querySelector('.machine-row-main')?.addEventListener('click', () => openMachineForm(m));
     if (isGaggiuino) {
-      (row.querySelector('.machine-row-firmware-badge') as HTMLElement).addEventListener('click', () => toggleMachineFirmwarePanel(row));
+      row.querySelector<HTMLElement>('.machine-row-firmware-update')?.addEventListener('click', () => toggleMachineFirmwarePanel(row));
       void loadFirmwareStatus(m.id, row);
     }
     list.appendChild(row);
@@ -726,27 +726,29 @@ async function loadFirmwareStatus(machineId: number, row: HTMLElement): Promise<
   }
 }
 
-// Updates the row's compact firmware badge in place and, only once an
-// update is actually available, lazily inserts the expand panel (update
-// banner + trigger button + progress bar) right after it -- most rows never
-// need that markup at all, since most machines are already up to date.
+// Updates the row's firmware status in place: a neutral badge while checking,
+// when the version is unknown or up to date, and the update button (with the
+// expand panel lazily inserted right after it) only once an update is actually
+// available -- most rows never need that markup at all.
 export function renderFirmwareRow(machineId: number, row: HTMLElement, data: FirmwareVersion | null): void {
-  const badge = row.querySelector<HTMLElement>('.machine-row-firmware-badge');
-  if (!badge) return; // row was already replaced by a later renderMachinesList() call
+  const status = row.querySelector<HTMLElement>('.machine-row-firmware-status');
+  const update = row.querySelector<HTMLElement>('.machine-row-firmware-update');
+  if (!status || !update) return; // row was already replaced by a later renderMachinesList() call
   let panel = row.querySelector<HTMLElement>('.machine-row-firmware-panel');
   if (!data || !data.installed) {
-    badge.textContent = data ? t('settings_machine_firmware_unknown') : t('settings_machine_firmware_check_failed');
-    badge.className = 'machine-row-firmware-badge machine-row-firmware-badge-muted';
-    badge.removeAttribute('title');
+    showFirmwareStatus(status, update, data ? t('settings_machine_firmware_unknown') : t('settings_machine_firmware_check_failed'));
+    status.removeAttribute('title');
     panel?.remove();
     return;
   }
   if (data.updateAvailable && data.latest) {
-    badge.textContent = t('settings_machine_firmware_badge_update', data.latest);
-    badge.title = t('settings_machine_firmware_update_available', data.latest);
-    badge.className = 'machine-row-firmware-badge machine-row-firmware-badge-update';
+    update.textContent = t('settings_machine_firmware_badge_update', data.latest);
+    update.title = t('settings_machine_firmware_update_available', data.latest);
+    status.style.display = 'none';
+    update.style.display = '';
     if (!panel) {
-      badge.insertAdjacentHTML('afterend', renderFirmwarePanelHtml());
+      update.insertAdjacentHTML('afterend', renderFirmwarePanelHtml());
+      update.setAttribute('aria-expanded', 'false');
       panel = row.querySelector<HTMLElement>('.machine-row-firmware-panel');
       if (!panel) return;
       (panel.querySelector('.machine-firmware-update-btn') as HTMLElement).addEventListener('click', () => void triggerMachineFirmwareUpdate(machineId, row));
@@ -756,11 +758,19 @@ export function renderFirmwareRow(machineId: number, row: HTMLElement, data: Fir
     if (msgEl) msgEl.textContent = t('settings_machine_firmware_update_available', data.latest);
     if (linkEl) linkEl.href = safeHttpUrl(data.releaseUrl) ?? '#';
   } else {
-    badge.textContent = t('settings_machine_firmware_badge_current', data.installed);
-    badge.title = t('settings_machine_firmware_installed', data.installed);
-    badge.className = 'machine-row-firmware-badge';
+    showFirmwareStatus(status, update, t('settings_machine_firmware_badge_current', data.installed), true);
+    status.title = t('settings_machine_firmware_installed', data.installed);
     panel?.remove();
   }
+}
+
+// #2094: checking, unknown or up to date is a status badge (green only
+// when up to date); only an available update shows the button.
+function showFirmwareStatus(status: HTMLElement, update: HTMLElement, text: string, upToDate = false): void {
+  status.textContent = text;
+  status.className = upToDate ? 'badge badge--ok machine-row-firmware-status' : 'badge machine-row-firmware-status';
+  status.style.display = '';
+  update.style.display = 'none';
 }
 
 function renderFirmwarePanelHtml(): Html {
@@ -778,15 +788,15 @@ function renderFirmwarePanelHtml(): Html {
   </span>`;
 }
 
-// Wired to every Gaggiuino row's firmware badge -- a no-op unless an update
-// is actually available (the only state that ever grows a panel to expand).
+// Wired to the row's update button, which only shows once an update is
+// available (the only state that ever grows a panel to expand).
 function toggleMachineFirmwarePanel(row: HTMLElement): void {
   const panel = row.querySelector<HTMLElement>('.machine-row-firmware-panel');
   if (!panel) return;
-  const badge = row.querySelector<HTMLElement>('.machine-row-firmware-badge');
+  const update = row.querySelector<HTMLElement>('.machine-row-firmware-update');
   const show = panel.style.display === 'none';
   panel.style.display = show ? '' : 'none';
-  badge?.setAttribute('aria-expanded', String(show));
+  update?.setAttribute('aria-expanded', String(show));
 }
 
 // skipBackup is only ever true on the resend after the user confirmed updating
@@ -875,11 +885,11 @@ function finishFirmwarePolling(
   if (result === 'success') {
     if (window.showToast) window.showToast(t('settings_machine_firmware_update_success_toast'));
     row.querySelector<HTMLElement>('.machine-row-firmware-panel')?.remove();
-    const badge = row.querySelector<HTMLElement>('.machine-row-firmware-badge');
-    if (badge) {
-      badge.textContent = t('settings_machine_firmware_checking');
-      badge.className = 'machine-row-firmware-badge machine-row-firmware-badge-muted';
-      badge.removeAttribute('title');
+    const status = row.querySelector<HTMLElement>('.machine-row-firmware-status');
+    const update = row.querySelector<HTMLElement>('.machine-row-firmware-update');
+    if (status && update) {
+      showFirmwareStatus(status, update, t('settings_machine_firmware_checking'));
+      status.removeAttribute('title');
     }
     // The banner stays gone until the status reload says an update is
     // available again, so it can never offer a second start in between.

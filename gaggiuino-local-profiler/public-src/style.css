@@ -1027,17 +1027,12 @@
         .machine-row-name { font-size: var(--fs-2); color:var(--gray-100); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .machine-row-sub { font-size: var(--fs-1); color:var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .machine-row-badge { font-size: var(--fs-1); color:var(--err); background:color-mix(in srgb, var(--err) 15%, transparent); border-radius:var(--radius); padding: 2px var(--sp-2); }
-        /* #1046: firmware status badge, moved here from #machineFormCard
-           (#1044) so update-available is visible on the row without opening
-           Edit. .machine-row-firmware-panel is a plain flex sibling of the
-           badge (not nested inside it), so its own flex-basis:100% can force
-           the expand panel onto its own line within .machine-row's existing
-           flex-wrap without any extra wrapper. Only the -update variant gets
-           a pointer cursor -- the plain/muted badges never grow a panel to
-           expand, see toggleMachineFirmwarePanel() in machines-settings.js. */
-        .machine-row-firmware-badge { font-size: var(--fs-1); color:var(--gray-300); background:var(--gray-900); border-radius:var(--radius); padding: 2px var(--sp-2); }
-        .machine-row-firmware-badge-muted { color:var(--gray-600); }
-        .machine-row-firmware-badge-update { color:var(--accent-text); background:var(--accent); cursor:pointer; }
+        /* #1046: firmware status on the row, so update-available is visible
+           without opening Edit. Up to date or unknown is a status badge; an
+           available update is a button that opens the update panel (#2094).
+           .machine-row-firmware-panel is a plain flex sibling, so its
+           flex-basis:100% puts the panel on its own line within .machine-row's
+           flex-wrap without any extra wrapper. */
         .machine-row-firmware-panel { display:flex; flex-direction:column; gap: var(--sp-2); flex-basis:100%; }
         /* #2038: the "+ Add machine" row at the end of the list. */
         .settings-row-add .settings-row-title { color: var(--accent-ink); }
@@ -1070,9 +1065,6 @@
         .mbk-pick-wrap { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; }
         .mbk-pick { width:20px; height:20px; accent-color:var(--accent); }
         .mbk-date { font-size: var(--fs-2); color:var(--gray-200); font-variant-numeric:tabular-nums; }
-        .mbk-chip { font-size: var(--fs-1); padding: 2px var(--sp-2); border-radius:var(--radius-sm); background:var(--gray-800); color:var(--gray-300); }
-        .mbk-chip-manual { background:color-mix(in srgb, var(--accent) 15%, transparent); color:var(--accent-ink); }
-        .mbk-chip-pre_update { background:color-mix(in srgb, var(--warn) 15%, transparent); color:var(--warn); }
         .mbk-meta, .mbk-owner { font-size: var(--fs-1); color:var(--gray-400); font-variant-numeric:tabular-nums; }
         .mbk-note { font-size: var(--fs-1); color:var(--gray-300); overflow-wrap:anywhere; }
         .mbk-row-actions .mbk-btn { background:none; color:var(--accent-ink); padding: 0 var(--sp-2); }
