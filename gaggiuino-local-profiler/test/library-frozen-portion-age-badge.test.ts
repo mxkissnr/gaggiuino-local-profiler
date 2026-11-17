@@ -49,7 +49,7 @@ const NOW_MS = NOW.getTime();
 // #856: a frozen portion's own paused age (frozenPortionAgeDays) was only
 // ever surfaced as a tooltip — nothing on screen distinguished it from a
 // portion that kept aging at the bag's normal rate. Now it also renders as
-// a visible badge, reusing the bag-level fresh-badge classes/color tiers.
+// a visible badge, reusing the bag-level freshness badge variants.
 describe('renderBeanList (#856 frozen-portion age badge)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -87,10 +87,10 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
     beanListUI.innerHTML = renderBeanCard(S.coffeeLibrary.beans[0], S.coffeeLibrary.beans);
 
     const html = beanListUI.innerHTML;
-    expect(html).toContain('lib-frozen-badge');
+    expect(html).toContain('class="badge badge--info lib-frozen"');
     // the portion's own paused age (5d, held flat since freezing) rendered
-    // as its own lib-fresh-badge, distinct from the bag-level badge
-    expect(html).toMatch(/lib-fresh-badge fresh-\w+"[^>]*>5d<\/span>/);
+    // as its own freshness badge, distinct from the bag-level badge
+    expect(html).toMatch(/<span class="badge[^"]*" title="[^"]*">5d<\/span>/);
   });
 
   it('renders the age badge for an already-thawed portion too', () => {
@@ -120,8 +120,8 @@ describe('renderBeanList (#856 frozen-portion age badge)', () => {
     beanListUI.innerHTML = renderBeanCard(S.coffeeLibrary.beans[0], S.coffeeLibrary.beans);
 
     const html = beanListUI.innerHTML;
-    expect(html).toContain('lib-frozen-badge thawed');
+    expect(html).toContain('class="badge lib-frozen"');
     // age at freeze (5d) + 2 days since thaw = 7d
-    expect(html).toMatch(/lib-fresh-badge fresh-\w+"[^>]*>7d<\/span>/);
+    expect(html).toMatch(/<span class="badge[^"]*" title="[^"]*">7d<\/span>/);
   });
 });
