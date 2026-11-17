@@ -5,14 +5,20 @@
             color-scheme: dark;
 
             /* ── Radius ── #811: a short scale, not eight values.
-               --radius-sm is for controls (inputs, chips, small
-               buttons), --radius for containers. #1618 adds the third
-               step those always implied: --radius-lg, for sheets and
-               popovers that sit above a container. A value off this
-               scale is a regression, not a nuance. */
+               #2091: the role decides the radius (docs/DESIGN.md, "Shapes
+               and components"): --radius-ctl for everything interactive,
+               --radius for cards and containers, --radius-lg for sheets
+               and dialogs, --radius-full only for non-interactive status
+               badges, avatars and dots. --radius-sm is the old control
+               radius and goes once its last user has moved to
+               --radius-ctl. Radii do not change with the theme, so they
+               live here only and the light block inherits them. A value
+               off this scale is a regression, not a nuance. */
             --radius: 10px;
             --radius-sm: 4px;
             --radius-lg: 16px;
+            --radius-ctl: 8px;
+            --radius-full: 999px;
 
             /* ── z-index scale ── #1618: named layers instead of magic
                numbers scattered through style.css. The numbers keep the
