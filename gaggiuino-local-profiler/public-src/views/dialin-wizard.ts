@@ -457,7 +457,7 @@ function _renderSetup(s: DialinSession): Html {
     </div>
   </div>
   <div class="lib-form-actions">
-    <button class="lib-save-btn" data-action="dialin-accept-next">${tHtml('dialin_wizard_setup_start_btn')}</button>
+    <button type="button" class="btn btn--primary" data-action="dialin-accept-next">${tHtml('dialin_wizard_setup_start_btn')}</button>
   </div>`;
 }
 
@@ -479,14 +479,14 @@ function _renderRound(s: DialinSession): Html {
       </div>
       <div class="dw-suggestion">${esc(sugText)}</div>
       <div class="dw-actions">
-        <button class="lib-save-btn" data-action="dialin-accept-next">${tHtml('dialin_wizard_accept_next')}</button>
+        <button type="button" class="btn btn--primary" data-action="dialin-accept-next">${tHtml('dialin_wizard_accept_next')}</button>
         <div class="dw-override-row">
           <input type="text" id="dwOverrideInput" aria-label="${esc(t('dialin_wizard_override'))}" placeholder="${tHtml('dialin_wizard_override')}">
           <select id="grindSelect-dwOverrideInput" class="machine-form-input" style="flex:1 1 auto" aria-label="${esc(t('dialin_wizard_override'))}" hidden></select>
-          <button class="lib-btn-sm" data-action="dialin-override">${tHtml('dialin_wizard_override')}</button>
+          <button type="button" class="btn btn--quiet" data-action="dialin-override">${tHtml('dialin_wizard_override')}</button>
         </div>
         <div class="bf-error" id="grindHint-dwOverrideInput" role="alert" hidden></div>
-        <button class="lib-btn-sm del" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
+        <button type="button" class="btn btn--danger" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
       </div>
       ${chips}
     </div>`;
@@ -502,11 +502,11 @@ function _renderRound(s: DialinSession): Html {
         <div class="dw-candidate-title">${tHtml('dialin_wizard_candidate_title')}</div>
         ${_miniShotChart(candidate)}
         <div class="dw-candidate-actions">
-          <button class="lib-save-btn" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="1">${tHtml('dialin_wizard_candidate_confirm')}</button>
-          <button class="lib-btn-sm" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="0">${tHtml('dialin_wizard_candidate_reject')}</button>
+          <button type="button" class="btn btn--primary" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="1">${tHtml('dialin_wizard_candidate_confirm')}</button>
+          <button type="button" class="btn btn--quiet" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="0">${tHtml('dialin_wizard_candidate_reject')}</button>
         </div>
       </div>` : html`<div class="dw-waiting">${tHtml('dialin_wizard_waiting')}</div>`}
-    <button class="lib-btn-sm del" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
+    <button type="button" class="btn btn--danger" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
     ${chips}
   </div>`;
 }
@@ -524,9 +524,9 @@ function _renderSummary(s: DialinSession): Html {
       <div>${tHtml('dialin_wizard_summary_best')}: ${esc(String(best.grindSetting))} · ${esc(best.seconds.toFixed(0))} s</div>
     </div>` : html``}
     <div class="dw-actions">
-      ${best ? html`<button class="lib-save-btn" data-action="dialin-save-known-grind">${tHtml('dialin_wizard_save_known')}</button>` : html``}
-      ${best ? html`<button class="lib-btn-sm" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
-      <button class="lib-btn-sm" data-action="dialin-close">${tHtml('dialin_wizard_continue')}</button>
+      ${best ? html`<button type="button" class="btn btn--primary" data-action="dialin-save-known-grind">${tHtml('dialin_wizard_save_known')}</button>` : html``}
+      ${best ? html`<button type="button" class="btn btn--quiet" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
+      <button type="button" class="btn btn--quiet" data-action="dialin-close">${tHtml('dialin_wizard_continue')}</button>
     </div>
     ${renderChips(s.rounds, r => esc(String(r.grindSetting)))}
   </div>`;

@@ -323,15 +323,15 @@ function _renderRound(s: ProfileDialinSession): Html {
         const text = t(sug.reason, sug.phaseName || t('profile_dialin_generic_field'), sug.oldValue, sug.newValue, sug.unit || '');
         suggestionBlock = html`<div class="dw-suggestion">${esc(text)}</div>
           <div class="dw-actions">
-            <button class="lib-save-btn" data-action="profile-dialin-accept-next">${tHtml('profile_dialin_accept_next')}</button>
+            <button type="button" class="btn btn--primary" data-action="profile-dialin-accept-next">${tHtml('profile_dialin_accept_next')}</button>
             <div class="dw-override-row">
               <input type="number" step="0.1" min="0" max="2000" id="pdwOverrideInput" aria-label="${esc(t('dialin_wizard_override'))}" placeholder="${esc(sug.newValue)}">
-              <button class="lib-btn-sm" data-action="profile-dialin-override">${tHtml('dialin_wizard_override')}</button>
+              <button type="button" class="btn btn--quiet" data-action="profile-dialin-override">${tHtml('dialin_wizard_override')}</button>
             </div>
           </div>`;
       } else {
         suggestionBlock = html`<div class="dw-suggestion">${esc(t(sug.reason))}</div>
-          <div class="dw-actions"><button class="lib-save-btn" data-action="profile-dialin-accept-next">${tHtml('profile_dialin_accept_next')}</button></div>`;
+          <div class="dw-actions"><button type="button" class="btn btn--primary" data-action="profile-dialin-accept-next">${tHtml('profile_dialin_accept_next')}</button></div>`;
       }
     }
 
@@ -343,7 +343,7 @@ function _renderRound(s: ProfileDialinSession): Html {
       <div class="pdw-symptom-label">${tHtml('profile_dialin_symptom_prompt')}</div>
       <div class="pdw-symptom-row">${symptomButtons}</div>
       ${suggestionBlock}
-      <button class="lib-btn-sm del" data-action="profile-dialin-end">${tHtml('dialin_wizard_end')}</button>
+      <button type="button" class="btn btn--danger" data-action="profile-dialin-end">${tHtml('dialin_wizard_end')}</button>
       ${chips}
     </div>`;
   }
@@ -358,11 +358,11 @@ function _renderRound(s: ProfileDialinSession): Html {
         <div class="dw-candidate-title">${tHtml('dialin_wizard_candidate_title')}</div>
         ${_miniShotChart(candidate)}
         <div class="dw-candidate-actions">
-          <button class="lib-save-btn" data-action="profile-dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="1">${tHtml('dialin_wizard_candidate_confirm')}</button>
-          <button class="lib-btn-sm" data-action="profile-dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="0">${tHtml('dialin_wizard_candidate_reject')}</button>
+          <button type="button" class="btn btn--primary" data-action="profile-dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="1">${tHtml('dialin_wizard_candidate_confirm')}</button>
+          <button type="button" class="btn btn--quiet" data-action="profile-dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="0">${tHtml('dialin_wizard_candidate_reject')}</button>
         </div>
       </div>` : html`<div class="dw-waiting">${tHtml('dialin_wizard_waiting')}</div>`}
-    <button class="lib-btn-sm del" data-action="profile-dialin-end">${tHtml('dialin_wizard_end')}</button>
+    <button type="button" class="btn btn--danger" data-action="profile-dialin-end">${tHtml('dialin_wizard_end')}</button>
     ${chips}
   </div>`;
 }
@@ -379,8 +379,8 @@ function _renderSummary(s: ProfileDialinSession): Html {
       <div>${tHtml('profile_dialin_summary_best')}</div>
     </div>` : html``}
     <div class="dw-actions">
-      ${best ? html`<button class="lib-btn-sm" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
-      <button class="lib-btn-sm" data-action="profile-dialin-close">${tHtml('dialin_wizard_continue')}</button>
+      ${best ? html`<button type="button" class="btn btn--quiet" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
+      <button type="button" class="btn btn--quiet" data-action="profile-dialin-close">${tHtml('dialin_wizard_continue')}</button>
     </div>
     ${renderChips(s.rounds, r => tHtml('profile_dialin_symptom_' + String(r.symptom)))}
   </div>`;
