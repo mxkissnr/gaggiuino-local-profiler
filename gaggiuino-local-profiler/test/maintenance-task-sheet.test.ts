@@ -187,7 +187,7 @@ describe('maintTaskSheetBody guide button (#1928)', () => {
     for (const task of ['backflush', 'descaling']) {
       const out = maintTaskSheetBody(tile(task, { threshold_shots: 40 }, { machineId: 7 }), []);
 
-      expect(out).toContain('class="analytics-filter-btn maint-guide-btn"');
+      expect(out).toContain('class="btn btn--tonal maint-guide"');
       expect(out).toContain('data-action="open-guided-maint"');
       expect(out).toContain(`data-task="${task}"`);
       expect(out).toContain('data-machine-id="7"');
@@ -198,7 +198,7 @@ describe('maintTaskSheetBody guide button (#1928)', () => {
     for (const task of ['grouphead', 'grinder_7', 'custom_clean']) {
       const out = maintTaskSheetBody(tile(task, { threshold_shots: 40 }, { machineId: 7 }), []);
 
-      expect(out).not.toContain('maint-guide-btn');
+      expect(out).not.toContain('maint-guide"');
       expect(out).not.toContain('data-action="open-guided-maint"');
     }
   });

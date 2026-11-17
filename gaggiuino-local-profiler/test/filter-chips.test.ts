@@ -45,6 +45,16 @@ const RETIRED_BADGES = [
   'dw-score-chip', 'dw-chip',
 ] as const;
 
+// Button classes retired by #2095: every action button outside the navigation
+// is a .btn with one variant (docs/DESIGN.md, "Shapes and components"). No
+// rule, markup or code may use them again. Each slice of #2095 adds the
+// classes it retires.
+const RETIRED_BUTTONS = [
+  'analytics-filter-btn', 'maint-banner-btn', 'maint-done-btn', 'maint-pause-btn',
+  'maint-disable-btn', 'maint-delete-btn', 'maint-reenable-btn',
+  'maint-log-cancel-btn', 'maint-log-del-btn', 'maint-guide-btn',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -98,14 +108,14 @@ describe('shared filter chips (#2093)', () => {
     expect(search).toContain('border-radius: var(--radius-ctl)');
   });
 
-  it('leaves no rule, markup or code using a retired chip or badge class', () => {
+  it('leaves no rule, markup or code using a retired chip, badge or button class', () => {
     const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
       .filter(name => name.endsWith('.ts') || name.endsWith('.html') || name.endsWith('.css'));
 
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -159,5 +169,18 @@ describe('status badges (#2094)', () => {
     const shots = read('views/shots/index.ts');
     expect(shots).toContain("'badge shot-delta'");
     expect(shots).toContain('badge shot-delta badge--');
+  });
+});
+
+describe('shared buttons (#2095)', () => {
+  it('gives the maintenance and analytics actions a shared button variant', () => {
+    const index = read('index.html');
+    expect(index).toContain('<button type="button" class="btn btn--tonal" data-action="open-maint-log-form"');
+    expect(index).toContain('<button type="button" class="btn btn--tonal" data-action="open-maint-custom-form"');
+    expect(index).toContain('<button type="button" class="btn btn--quiet" data-action="analytics-facts-shuffle"');
+    expect(index).toContain('<button class="btn btn--primary" id="guidedMaintDoneBtn"');
+    const maint = read('views/maintenance.ts');
+    expect(maint).toContain('class="btn btn--primary" data-action="mark-maint-done"');
+    expect(maint).toContain('class="btn btn--tonal" data-action="toggle-maint-disabled"');
   });
 });
