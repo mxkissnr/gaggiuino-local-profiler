@@ -335,9 +335,9 @@ function renderRow(b: MachineBackup, locale: string, owner: Html | null, restore
     <div class="mbk-meta">${esc(meta.join(' · '))}</div>
     ${b.note === '' ? esc('') : html`<div class="mbk-note">${esc(b.note)}</div>`}
     <div class="mbk-row-actions">
-      <button type="button" class="mbk-btn" data-mbk-action="download" data-id="${esc(b.id)}">${tHtml('mbk_download')}</button>
-      <button type="button" class="mbk-btn" data-mbk-action="restore" data-id="${esc(b.id)}"${noRestore}>${tHtml('mbk_restore')}</button>
-      <button type="button" class="mbk-btn" data-mbk-action="delete" data-id="${esc(b.id)}">${tHtml('mbk_delete')}</button>
+      <button type="button" class="btn btn--quiet" data-mbk-action="download" data-id="${esc(b.id)}">${tHtml('mbk_download')}</button>
+      <button type="button" class="btn btn--quiet" data-mbk-action="restore" data-id="${esc(b.id)}"${noRestore}>${tHtml('mbk_restore')}</button>
+      <button type="button" class="btn btn--danger" data-mbk-action="delete" data-id="${esc(b.id)}">${tHtml('mbk_delete')}</button>
     </div>
   </div>`;
 }
@@ -362,8 +362,8 @@ function renderRestore(sheet: SheetState, draft: RestoreDraft, entry: MachineBac
     parts.push(html`<label class="mbk-field"><span>${tHtml('mbk_restore_target')}</span><select class="mbk-select mbk-target">${joinHtml(options)}</select></label>`);
   }
   parts.push(html`<div class="mbk-actions">
-      <button type="button" class="mbk-btn" data-mbk-action="restore-cancel">${tHtml('settings_machine_cancel')}</button>
-      <button type="button" class="mbk-btn mbk-btn-danger" data-mbk-action="restore-confirm"${noConfirm}>${tHtml('mbk_restore_confirm')}</button>
+      <button type="button" class="btn btn--quiet" data-mbk-action="restore-cancel">${tHtml('settings_machine_cancel')}</button>
+      <button type="button" class="btn btn--danger" data-mbk-action="restore-confirm"${noConfirm}>${tHtml('mbk_restore_confirm')}</button>
     </div>
   </section>`);
   return joinHtml(parts);
@@ -384,7 +384,7 @@ function renderSettings(settings: MachineBackupSettings, open: boolean, keepErro
 function renderCompare(view: CompareView, locale: string): Html {
   const n = view.changes.length;
   const parts: Html[] = [html`<section class="mbk-cmp">
-    <div class="mbk-actions"><button type="button" class="mbk-btn" data-mbk-action="cmp-back">${tHtml('mbk_cmp_back')}</button></div>
+    <div class="mbk-actions"><button type="button" class="btn btn--quiet" data-mbk-action="cmp-back">${tHtml('mbk_cmp_back')}</button></div>
     <p class="mbk-verdict">${esc(`${formatBackupDate(view.from.createdAt, locale)} → ${formatBackupDate(view.to.createdAt, locale)}`)}${n > 0 ? esc(` · ${t('mbk_cmp_count', n)}`) : esc('')}</p>`];
   if (n > 0) {
     parts.push(html`<ul class="mbk-cmp-list">${joinHtml(view.changes.map(c => html`<li>${esc(describeChange(c))}</li>`))}</ul>`);
@@ -415,9 +415,9 @@ export function renderSheetBody(sheet: SheetState, nowMs: number, openFolds: Rea
   const compareDisabled = picked.length === 2 && !sheet.comparing ? esc('') : html` disabled`;
   const parts: Html[] = [html`<div class="mbk-toolbar">
     <label class="mbk-field mbk-note-field"><span>${tHtml('mbk_note_label')}</span><input type="text" class="mbk-input mbk-note-input" maxlength="200" autocomplete="off" placeholder="${esc(t('mbk_note_placeholder'))}" value="${esc(sheet.note)}"></label>
-    <button type="button" class="mbk-btn mbk-btn-primary" data-mbk-action="backup"${busy}>${tHtml('mbk_backup_now')}</button>
-    <button type="button" class="mbk-btn" data-mbk-action="upload"${busy}>${tHtml('mbk_upload')}</button>
-    ${comparable ? html`<button type="button" class="mbk-btn" data-mbk-action="compare"${compareDisabled}>${tHtml('mbk_compare')}</button>` : esc('')}
+    <button type="button" class="btn btn--primary" data-mbk-action="backup"${busy}>${tHtml('mbk_backup_now')}</button>
+    <button type="button" class="btn btn--quiet" data-mbk-action="upload"${busy}>${tHtml('mbk_upload')}</button>
+    ${comparable ? html`<button type="button" class="btn btn--quiet" data-mbk-action="compare"${compareDisabled}>${tHtml('mbk_compare')}</button>` : esc('')}
     <input type="file" class="mbk-file" accept=".json,application/json" hidden>
   </div>`];
   if (picked.length > 0 && picked.length !== 2) parts.push(html`<p class="mbk-hint">${tHtml('mbk_compare_hint')}</p>`);
