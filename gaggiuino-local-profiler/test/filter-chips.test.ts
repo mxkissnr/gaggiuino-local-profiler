@@ -7,7 +7,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import postcss from 'postcss';
-import type { ChildNode, Container, Declaration, Rule } from 'postcss';
+import type { Root, Rule } from 'postcss';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC = join(here, '..', 'public-src');
@@ -20,12 +20,16 @@ function read(rel: string): string {
 const RETIRED = ['lib-shelf-chip', 'lib-shelf-view-btn'] as const;
 
 function declsOf(rules: Rule[]): string[] {
-  return rules.flatMap(rule => rule.nodes
-    .filter((node): node is Declaration => node.type === 'decl')
-    .map(decl => `${decl.prop}: ${decl.value}`));
+  const out: string[] = [];
+  for (const rule of rules) {
+    for (const node of rule.nodes ?? []) {
+      if (node.type === 'decl') out.push(`${node.prop}: ${node.value}`);
+    }
+  }
+  return out;
 }
 
-function rulesWith(root: Container<ChildNode>, selector: string): Rule[] {
+function rulesWith(root: Root, selector: string): Rule[] {
   const found: Rule[] = [];
   root.walkRules(rule => {
     if (rule.selector === selector) found.push(rule);
