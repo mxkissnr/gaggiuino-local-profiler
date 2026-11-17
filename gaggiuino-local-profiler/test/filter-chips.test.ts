@@ -39,6 +39,9 @@ const RETIRED_BADGES = [
   'lib-shelf-sealed-badge', 'lib-shelf-open-badge', 'lib-shelf-archived-tag',
   'machine-row-firmware-badge', 'machine-row-firmware-badge-muted',
   'machine-row-firmware-badge-update', 'mbk-chip',
+  'machine-row-badge', 'lib-utility-badge', 'lib-brew-badge',
+  'orders-milk-badge', 'order-eta-tag', 'order-decline-tag',
+  'order-variant-badge', 'orders-new-badge',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
