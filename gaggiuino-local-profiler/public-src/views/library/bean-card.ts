@@ -105,8 +105,8 @@ function lastUsedGrindForBean(bean: BeanListRow, shots: BeanShotRow[]): { grinde
 
 // #2094: the freshness band as a status badge; degassing stays neutral.
 const FRESH_BADGE: Record<string, string> = { almost: 'badge badge--warn', peak: 'badge badge--ok', fading: 'badge badge--warn', old: 'badge badge--err' };
-function freshBadgeClass(state: string): string {
-  return FRESH_BADGE[state] ?? 'badge';
+function freshBadgeClass(state: string | null): string {
+  return (state != null ? FRESH_BADGE[state] : undefined) ?? 'badge';
 }
 
 // The bag's real calendar age badge, shown in the detail sheet's head.
