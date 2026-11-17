@@ -151,7 +151,7 @@ func TestSyncDefaultMachineShots_GaggiMateSkipsUnreadableSlog(t *testing.T) {
 	repo := shots.NewRepository(sqlDB)
 	p.SetShotsRepo(repo)
 
-	withGaggiMateSyncSeams(t, 3, func(_ context.Context, _ string, nativeID int64) (map[string]any, int, error) {
+	calls := withGaggiMateSyncSeams(t, 3, func(_ context.Context, _ string, nativeID int64) (map[string]any, int, error) {
 		switch nativeID {
 		case 2, 3:
 			return map[string]any{"id": nativeID, "timestamp": nativeID * 1000, "datapoints": []any{}}, http.StatusOK, nil
@@ -165,6 +165,10 @@ func TestSyncDefaultMachineShots_GaggiMateSkipsUnreadableSlog(t *testing.T) {
 
 	if err := p.syncDefaultMachineShots(context.Background()); err != nil {
 		t.Fatalf("syncDefaultMachineShots: %v", err)
+	}
+	// The run reached the newest shot instead of aborting at shot 1.
+	if *calls != 3 {
+		t.Fatalf("shot fetches = %d, want 3 (ids 1, 2 and 3)", *calls)
 	}
 
 	for _, native := range []int64{2, 3} {
