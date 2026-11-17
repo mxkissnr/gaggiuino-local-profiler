@@ -1536,19 +1536,10 @@
            its colour rather than the earlier --gray-600. */
         .lib-inv-total { color: var(--gray-700); }
         .lib-item-disabled { opacity: .55; }
-        /* Frozen portions (#freeze): an info badge that wraps on a narrow card
-           and holds the thaw and edit buttons. */
-        .lib-frozen-row { margin-top: var(--sp-1); display: flex; flex-wrap: wrap; gap: var(--sp-1); }
+        /* Frozen portions (#freeze): an info badge that wraps on a narrow card,
+           with the thaw and edit buttons next to it (a badge is never clickable). */
+        .lib-frozen-row { margin-top: var(--sp-1); display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
         .lib-frozen { flex-wrap: wrap; white-space: normal; }
-        .lib-frozen-thaw-btn {
-            background: none; border: none; color: inherit; cursor: pointer;
-            font-size: var(--fs-1); font-weight: 700; text-decoration: underline; padding: 0;
-        }
-        .lib-frozen-edit-btn {
-            background: none; border: none; color: inherit; cursor: pointer;
-            font-size: var(--fs-1); padding: 0; opacity: .75;
-        }
-        .lib-frozen-edit-btn:hover { opacity: 1; }
         /* Flavor chips (form input + static display) */
         .lib-form-field-wide { grid-column: 1 / -1; }
         .lib-form-hint { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; margin-bottom: var(--sp-2); }
@@ -1669,17 +1660,6 @@
         .lib-bag-drag-list { display: flex; flex-direction: column; gap: var(--sp-2); }
         .lib-bag-card-actions-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
         .lib-bag-card-actions { margin-left: auto; display: flex; gap: var(--sp-1); }
-        /* Icon buttons get a proper circular state layer on hover (Material
-           "standard icon button") instead of just a color change on the
-           glyph itself. */
-        .lib-bag-edit-btn, .lib-bag-del { background: none; border: none; color: var(--gray-600); cursor: pointer; width: 32px; height: 32px; border-radius: 999px; transition: background .15s, color .15s; display: flex; align-items: center; justify-content: center; }
-        .lib-bag-edit-btn:hover { background: color-mix(in srgb, var(--paper) 8%, transparent); color: var(--gray-200); }
-        /* #1618: this used to sit in the legacy block after the shared
-           Material icon-button rule and won on source order. The button is
-           still rendered (views/library/bags.ts), so its effective values
-           live here instead of being deleted with the dead siblings. */
-        .lib-bag-del { color: var(--gray-700); font-size: var(--fs-1); padding: 0 2px; line-height: 1; transition: color .15s; margin-left: auto; }
-        .lib-bag-del:hover { background: color-mix(in srgb, var(--err) 14%, transparent); color: var(--err); }
         .lib-bag-card-details { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font-size: var(--fs-1); }
         .lib-bag-detail { display: flex; flex-direction: column; gap: 1px; }
         .lib-bag-detail-label { font-size: var(--fs-1); color: var(--gray-600); font-weight: 600; }
