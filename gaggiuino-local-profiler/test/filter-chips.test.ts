@@ -28,7 +28,12 @@ const RETIRED = ['lib-shelf-chip', 'lib-shelf-view-btn', 'sort-btn', 'theme-btn'
 // Status badge classes retired by #2094: every status label is a .badge
 // (docs/DESIGN.md, "Shapes and components"). No rule, markup or code may
 // use them again. Each slice of #2094 adds the classes it retires.
-const RETIRED_BADGES = ['maint-chip', 'maint-auto-synced', 'maint-log-manual-badge'] as const;
+const RETIRED_BADGES = [
+  'maint-chip', 'maint-auto-synced', 'maint-log-manual-badge',
+  'delta-chip', 'freshness-badge', 'freshness-fresh', 'freshness-ok', 'freshness-old',
+  'ordered-by-badge', 'meta-badge', 'channeling-warn', 'sidebar-grind-badge',
+  'shot-machine-badge', 'shot-frozen-badge',
+] as const;
 
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
@@ -125,5 +130,24 @@ describe('analytics chips (#2093)', () => {
     expect(map).toContain('class="chip" data-code=');
     expect(map).toContain("querySelectorAll<HTMLElement>('.chip')");
     expect(map).not.toContain('analytics-filter-btn');
+  });
+});
+
+describe('status badges (#2094)', () => {
+  it('renders the shot detail status labels as shared badges', () => {
+    const index = read('index.html');
+    for (const id of ['verdictDeltaChip', 'pressureDeltaChip', 'flowDeltaChip', 'tempDeltaChip']) {
+      expect(index, id).toContain(`<span class="badge shot-delta" id="${id}"`);
+    }
+    expect(index).toContain('<span id="channelingWarning" class="badge badge--err"');
+    expect(index).toContain('<span id="freshnessBadge" class="badge"');
+    expect(index).toContain('<div id="orderedByBadge" class="badge badge--warn"');
+    expect(index).toContain('<span class="badge badge--err" id="trash-count">');
+  });
+
+  it('colours score deltas through the score-scale badge variants', () => {
+    const shots = read('views/shots/index.ts');
+    expect(shots).toContain("'badge shot-delta'");
+    expect(shots).toContain('badge shot-delta badge--');
   });
 });
