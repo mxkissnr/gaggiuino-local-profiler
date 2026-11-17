@@ -52,8 +52,8 @@ export function renderPuckScreenList(): void {
         ${p.notes ? html`<div class="lib-item-sub">${esc(p.notes)}</div>` : html``}
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-puckscreen" data-id="${esc(p.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-puckscreen" data-id="${esc(p.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button type="button" class="btn btn--quiet btn--icon" data-action="edit-puckscreen" data-id="${esc(p.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button type="button" class="btn btn--danger btn--icon" data-action="delete-puckscreen" data-id="${esc(p.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`;
   }));
