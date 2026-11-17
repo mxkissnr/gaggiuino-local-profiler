@@ -57,7 +57,7 @@ function fakeButton(themeVal: string | undefined): FakeButton {
     dataset: { themeVal },
     attrs,
     setAttribute(name, value) { attrs[name] = value; },
-    getAttribute: name => (name in attrs ? attrs[name] : null),
+    getAttribute: name => attrs[name] ?? null,
     classList: {
       toggle: () => { throw new Error('classList.toggle must not be used'); },
     },

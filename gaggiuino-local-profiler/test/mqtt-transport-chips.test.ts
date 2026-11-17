@@ -17,18 +17,16 @@ interface FakeChip {
 }
 
 function fakeChip(mqttTransport: string): FakeChip {
+  const attrs: Record<string, string> = {};
   return {
     dataset: { mqttTransport },
-    attrs: {},
-    setAttribute(name, value) { this.attrs[name] = value; },
+    attrs,
+    setAttribute(name, value) { attrs[name] = value; },
     classList: {
       toggle: () => { throw new Error('classList.toggle must not be used'); },
     },
   };
 }
-
-const { S } = await import('../public-src/state/index.js');
-const { setMqttTransport } = await import('../public-src/components/mqtt-settings.js');
 
 let ws: FakeChip;
 let mqtt: FakeChip;
@@ -41,6 +39,9 @@ g.document = {
     : null),
   querySelectorAll: (sel: string) => (sel === '#mqttTransportToggle [data-mqtt-transport]' ? [ws, mqtt] : []),
 };
+
+const { S } = await import('../public-src/state/index.js');
+const { setMqttTransport } = await import('../public-src/components/mqtt-settings.js');
 
 beforeEach(() => {
   S.machines = [];
