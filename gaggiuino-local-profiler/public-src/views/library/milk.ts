@@ -48,7 +48,7 @@ export function renderMilkList(): void {
       </div>
       <div class="lib-milk-restock-row">
         <input class="lib-milk-restock-input" type="number" aria-label="${tHtml('lib_milk_restock')} (ml)" id="milkRestock_${esc(m.id)}" placeholder="ml" min="0" max="20000" step="50">
-        <button class="lib-btn-sm" data-action="restock-milk" data-id="${esc(m.id)}">${tHtml('lib_milk_restock')}</button>
+        <button type="button" class="btn btn--tonal" data-action="restock-milk" data-id="${esc(m.id)}">${tHtml('lib_milk_restock')}</button>
       </div>
     </div>`;
   }));
