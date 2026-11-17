@@ -58,7 +58,8 @@ const RETIRED_BUTTONS = [
   'lib-open-btn', 'mbk-btn', 'mbk-btn-primary', 'mbk-btn-danger', 'bottom-nav-reorder-btn',
   'backup-btn', 'lib-btn-icon', 'lib-grinder-reset-burrs',
   'lib-frozen-thaw-btn', 'lib-frozen-edit-btn', 'lib-bag-edit-btn', 'lib-bag-del',
-  'sticker-mode-btn',
+  'sticker-mode-btn', 'lib-save-btn', 'lib-btn-sm', 'lib-url-btn', 'scan-close-btn',
+  'scan-photo-btn',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -236,6 +237,15 @@ describe('shared buttons (#2095)', () => {
     expect(read('components/confirm-dialog.ts')).toContain("accept.className = 'btn btn--primary';");
     expect(read('components/image-crop.ts')).toContain('class="btn btn--primary crop-editor-apply"');
     expect(read('views/library/bean-form-sheet.ts')).toContain("discard.className = 'btn btn--danger';");
+  });
+
+  it('gives the library forms one primary each and the new bean form one of its two saves', () => {
+    const index = read('index.html');
+    for (const id of ['saveGrinderBtn', 'saveRecipeBtn', 'saveMilkBtn', 'saveBasketBtn', 'savePuckScreenBtn', 'saveBeanAddBagBtn']) {
+      expect(index, id).toContain(`<button type="button" class="btn btn--primary" id="${id}"`);
+    }
+    expect(index).toContain('<button type="button" class="btn btn--tonal" id="saveBeanNoBagBtn"');
+    expect(index).not.toMatch(/class="[^"]*\b(?:lib-save-btn|lib-btn-sm)\b/);
   });
 
   it('gives the wizards and the profile editor one primary per step', () => {

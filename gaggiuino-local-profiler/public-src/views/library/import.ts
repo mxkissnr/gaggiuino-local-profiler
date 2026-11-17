@@ -193,7 +193,7 @@ function _fillFromImport(data: UrlImportData, sourceUrl: string | null): void {
 
 export async function importFromUrl(): Promise<void> {
   const input = _field('urlImportInput');
-  const btn   = document.querySelector<HTMLButtonElement>('#urlImportRow .lib-url-btn')!;
+  const btn   = document.querySelector<HTMLButtonElement>('#urlImportRow .btn')!;
   const url   = input.value.trim();
   if (!url) return;
   _hidePastePanel();
