@@ -246,8 +246,8 @@ function _buildEditor(
         <span class="crop-editor-zoom-icon">+</span>
       </div>
       <div class="crop-editor-actions">
-        <button type="button" class="lib-btn-sm crop-editor-cancel">${esc(t('lib_cancel'))}</button>
-        <button type="button" class="lib-save-btn crop-editor-apply">${esc(t('crop_editor_apply'))}</button>
+        <button type="button" class="btn btn--quiet crop-editor-cancel">${esc(t('lib_cancel'))}</button>
+        <button type="button" class="btn btn--primary crop-editor-apply">${esc(t('crop_editor_apply'))}</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
