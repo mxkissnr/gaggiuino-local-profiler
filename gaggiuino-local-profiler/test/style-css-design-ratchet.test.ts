@@ -16,10 +16,10 @@ const TOKENS_PATH = join(here, '..', 'public-src', 'tokens.css');
 
 // Measured on dev when #2092 landed. Only ever lower these.
 const PINNED = {
-  literalRadius: 41,
-  literalPadding: 30,
+  literalRadius: 40,
+  literalPadding: 29,
   transitionAll: 6,
-  pageLookClasses: 22,
+  pageLookClasses: 21,
 } as const;
 
 type Debt = Record<keyof typeof PINNED, string[]>;

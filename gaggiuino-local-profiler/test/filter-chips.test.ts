@@ -58,6 +58,7 @@ const RETIRED_BUTTONS = [
   'lib-open-btn', 'mbk-btn', 'mbk-btn-primary', 'mbk-btn-danger', 'bottom-nav-reorder-btn',
   'backup-btn', 'lib-btn-icon', 'lib-grinder-reset-burrs',
   'lib-frozen-thaw-btn', 'lib-frozen-edit-btn', 'lib-bag-edit-btn', 'lib-bag-del',
+  'sticker-mode-btn',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -225,6 +226,16 @@ describe('shared buttons (#2095)', () => {
     const bags = read('views/library/bags.ts');
     expect(bags).toContain('class="btn btn--quiet btn--icon" data-action="open-edit-bag"');
     expect(bags).toContain('class="btn btn--danger btn--icon" data-action="delete-bag"');
+  });
+
+  it('gives the dialogs shared buttons and the sticker toggles shared chips', () => {
+    const sticker = read('components/sticker/editor.ts');
+    expect(sticker).toContain("themedButton('chip sticker-mode-add',");
+    expect(sticker).toContain("themedButton('chip sticker-original',");
+    expect(sticker).toContain("themedButton('btn btn--primary crop-editor-apply sticker-apply',");
+    expect(read('components/confirm-dialog.ts')).toContain("accept.className = 'btn btn--primary';");
+    expect(read('components/image-crop.ts')).toContain('class="btn btn--primary crop-editor-apply"');
+    expect(read('views/library/bean-form-sheet.ts')).toContain("discard.className = 'btn btn--danger';");
   });
 
   it('gives the wizards and the profile editor one primary per step', () => {
