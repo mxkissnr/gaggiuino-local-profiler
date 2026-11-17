@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -59,6 +60,11 @@ func TestFetchGaggiMateShot_HTMLBodyIsBadSlog(t *testing.T) {
 		}
 		if !errors.Is(err, ErrGaggiMateBadSlog) {
 			t.Fatalf("error %v does not wrap ErrGaggiMateBadSlog", err)
+		}
+		// The parser's own diagnostic must survive the wrapping: it is what
+		// names the bad magic in the sync log.
+		if !strings.Contains(err.Error(), "bad magic") {
+			t.Fatalf("error %v lost the parser's bad-magic detail", err)
 		}
 		if shot != nil {
 			t.Fatalf("shot = %v, want nil", shot)
