@@ -164,7 +164,9 @@ describe('style.css design ratchet (#2091)', () => {
       const found: string[] = [];
       root.walkRules((rule) => {
         if (rule.selector !== selector) return;
-        rule.walkDecls((decl) => found.push(`${decl.prop}: ${decl.value}`));
+        rule.walkDecls((decl) => {
+          found.push(`${decl.prop}: ${decl.value}`);
+        });
       });
       return found;
     };
