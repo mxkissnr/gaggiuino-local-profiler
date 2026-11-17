@@ -49,8 +49,10 @@ Chips, buttons, and the search fields and dropdowns that share a row with chips 
 |---|---|---|---|
 | Filter chip, single-choice pills | `.chip` | none | `aria-pressed="true"`: accent tint and accent border; never an `.active` class |
 | Button | `.btn` | neutral (no modifier), `.btn--primary`, `.btn--tonal`, `.btn--quiet`, `.btn--danger` | none; a control that stays on is a chip |
-| Status badge | `.badge` | neutral (no modifier), `.badge--ok`, `.badge--warn`, `.badge--err`, `.badge--info`, `.badge--accent` | none; a badge is never clickable |
+| Status badge | `.badge` | neutral (no modifier), `.badge--ok`, `.badge--warn`, `.badge--err`, `.badge--info`, `.badge--accent`; the score scale `.badge--score-great`, `.badge--score-good`, `.badge--score-ok`, `.badge--score-low`, `.badge--score-bad` | none; a badge is never clickable, a clickable status is a `.btn` or a `.chip` |
 | Section title | `.section-title` | optional counter in `.section-title__count` | none |
+
+Every status label is a `.badge`. A page class next to it only places it (margin, grid area, position); a badge never has a border or its own tint.
 
 A guard test counts literal radii, literal px paddings, `transition: all` and page classes named `*-chip`, `*-badge`, `*-pill`, `*-tag` or `*-btn` that still set colour, background, border or radius. The counts may only go down.
 
