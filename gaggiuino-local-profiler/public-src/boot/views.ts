@@ -29,7 +29,6 @@ export function wireViews(): void {
   const syncAnalyticsRangeChips = (days: number): void => {
     analyticsRangeChips.forEach(chip => {
       const on = Number(chip.dataset.days) === days;
-      chip.classList.toggle('active', on);
       chip.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
   };

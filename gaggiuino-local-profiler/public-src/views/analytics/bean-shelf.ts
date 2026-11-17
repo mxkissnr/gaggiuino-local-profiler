@@ -213,7 +213,6 @@ export function setBeanShelfSort(key: 'score' | 'shots'): void {
   _beanShelfSort = key;
   document.querySelectorAll<HTMLElement>('[data-action="set-bean-shelf-sort"]').forEach(chip => {
     const on = chip.dataset.sort === key;
-    chip.classList.toggle('active', on);
     chip.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
   buildBeanShelf();
