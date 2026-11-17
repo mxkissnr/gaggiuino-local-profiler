@@ -23,6 +23,8 @@ const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch').mockResolvedValue({ ok: false } as Response);
 const {
+  _renderDrinkPills,
+  _renderMilkPills,
   _renderTasteTagPills,
   selectTasteTag,
   scheduleAutoSave,
@@ -51,6 +53,10 @@ function fakeAnnotationDom(hiddenTag?: string): void {
     autoSaveStatus:         { value: '', innerHTML: '', style: {}, classList: { add: () => {}, remove: () => {} } },
     tasteTagPillsContainer: { value: '', innerHTML: '', style: {} },
     annTasteTag:            { value: hiddenTag ?? '', innerHTML: '', style: {} },
+    drinkPillsContainer:    { value: '', innerHTML: '', style: {} },
+    annDrinkType:           { value: '', innerHTML: '', style: {} },
+    milkPillsContainer:     { value: '', innerHTML: '', style: {} },
+    annMilkType:            { value: '', innerHTML: '', style: {} },
     annCoffee:              { value: '', innerHTML: '', style: {} },
     annGrinder:             { value: '', innerHTML: '', style: {} },
     annGrindSetting:        { value: '', innerHTML: '', style: {} },
@@ -100,8 +106,9 @@ describe('taste-tag chips (#1957)', () => {
     _renderTasteTagPills('bitter');
     const markup = el('tasteTagPillsContainer').innerHTML ?? '';
     expect(markup.match(/data-action="select-taste-tag"/g)).toHaveLength(4);
-    expect(markup.match(/class="drink-pill active"/g)).toHaveLength(1);
+    expect(markup.match(/class="chip" aria-pressed="true"/g)).toHaveLength(1);
     expect(markup.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(markup).not.toMatch(/drink-pill|class="[^"]*\bactive\b/);
     expect(markup).toContain('data-id="bitter"');
     expect(el('annTasteTag').value).toBe('bitter');
   });
@@ -117,6 +124,47 @@ describe('taste-tag chips (#1957)', () => {
     // Selecting schedules a save; flush it so the debounce does not outlive the
     // test and leak into the next one's `_autoSaveTimer` check.
     flushAutoSave();
+  });
+});
+
+describe('drink and milk chips (#2093)', () => {
+  const DRINKS = [
+    { id: 'latte', name: 'Latte', emoji: 'L', milkMl: 150 },
+    { id: 'flat',  name: 'Flat White', emoji: 'F', milkMl: 0 },
+  ] as unknown as typeof S.drinkMenu;
+  const MILKS = [
+    { id: 1, name: 'Whole' },
+    { id: 2, name: 'Oat' },
+  ] as unknown as typeof S.milkTypes;
+
+  function withMenu(fn: () => void): void {
+    const prevDrinks = S.drinkMenu;
+    const prevMilks  = S.milkTypes;
+    S.drinkMenu = DRINKS;
+    S.milkTypes = MILKS;
+    try { fn(); } finally { S.drinkMenu = prevDrinks; S.milkTypes = prevMilks; }
+  }
+
+  it('renders one chip per drink and presses only the selected one', () => {
+    withMenu(() => {
+      _renderDrinkPills('flat');
+      const markup = el('drinkPillsContainer').innerHTML ?? '';
+      expect(markup.match(/class="chip"/g)).toHaveLength(2);
+      expect(markup.match(/aria-pressed="true"/g)).toHaveLength(1);
+      expect(markup).toMatch(/class="chip" aria-pressed="true"\s+data-action="select-drink" data-id="flat"/);
+      expect(markup).not.toMatch(/class="[^"]*\bactive\b/);
+    });
+  });
+
+  it('renders one chip per milk and presses only the selected one', () => {
+    withMenu(() => {
+      _renderMilkPills('2');
+      const markup = el('milkPillsContainer').innerHTML ?? '';
+      expect(markup.match(/class="chip"/g)).toHaveLength(2);
+      expect(markup.match(/aria-pressed="true"/g)).toHaveLength(1);
+      expect(markup).toMatch(/class="chip" aria-pressed="true"\s+data-action="select-milk" data-id="2"/);
+      expect(markup).not.toMatch(/class="[^"]*\bactive\b/);
+    });
   });
 });
 
@@ -204,7 +252,9 @@ describe('taste tag wiring sources (#1957)', () => {
     expect(read('../public-src/views/shots.ts')).toContain("export * from './shots/annotation.js'");
   });
 
-  it('keeps the 44 px touch target on mobile', () => {
-    expect(read('../public-src/style.css')).toMatch(/\.drink-pill\s*\{\s*min-height: 44px/);
+  it('takes its touch height from the shared chip', () => {
+    const css = read('../public-src/style.css');
+    expect(css).not.toMatch(/\.drink-pill(?![\w-])/);
+    expect(css).toMatch(/\.chip\s*\{[^}]*min-height: var\(--ctl-height\)/);
   });
 });

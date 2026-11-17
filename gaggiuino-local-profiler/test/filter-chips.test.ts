@@ -23,7 +23,7 @@ function read(rel: string): string {
 }
 
 // Chip classes retired by #2093. No rule, markup or code may use them again.
-const RETIRED = ['lib-shelf-chip', 'lib-shelf-view-btn', 'sort-btn'] as const;
+const RETIRED = ['lib-shelf-chip', 'lib-shelf-view-btn', 'sort-btn', 'theme-btn', 'drink-pill'] as const;
 
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
