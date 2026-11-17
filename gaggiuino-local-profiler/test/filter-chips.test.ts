@@ -226,4 +226,12 @@ describe('shared buttons (#2095)', () => {
     expect(bags).toContain('class="btn btn--quiet btn--icon" data-action="open-edit-bag"');
     expect(bags).toContain('class="btn btn--danger btn--icon" data-action="delete-bag"');
   });
+
+  it('gives the wizards and the profile editor one primary per step', () => {
+    for (const file of ['views/dialin-wizard.ts', 'views/profile-dialin-wizard.ts', 'views/setup-wizard.ts', 'views/gaggimate-profile-editor.ts', 'views/shots/annotation-mix.ts']) {
+      const text = read(file);
+      expect(text, file).not.toMatch(/lib-save-btn|lib-btn-sm/);
+      expect(text, file).toContain('class="btn btn--');
+    }
+  });
 });

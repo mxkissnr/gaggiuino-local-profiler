@@ -226,7 +226,7 @@ export function renderBeanMix(): void {
       aria-label="${esc(t('ann_dose'))}" placeholder="${esc(t('ann_dose_ph'))}">
     ${i === 0
       ? html`<span class="ann-mix-row-spacer"></span>`
-      : html`<button type="button" class="lib-btn-sm del" data-mix-remove="${esc(String(i))}"
+      : html`<button type="button" class="btn btn--danger btn--icon" data-mix-remove="${esc(String(i))}"
           aria-label="${esc(t('ann_remove_bean'))}" title="${esc(t('ann_remove_bean'))}">✕</button>`}
   </div>`));
 
