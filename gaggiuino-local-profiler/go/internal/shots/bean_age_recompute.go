@@ -57,7 +57,7 @@ func (r *Repository) RecomputeStoredBeanAges(age func(ann map[string]any, shotSe
 			timestamp int64
 		)
 		if err := rows.Scan(&shotID, &raw, &timestamp); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return 0, fmt.Errorf("shots: recomputing stored bean ages: %w", err)
 		}
 		var ann map[string]any
@@ -79,7 +79,7 @@ func (r *Repository) RecomputeStoredBeanAges(age func(ann map[string]any, shotSe
 		pending = append(pending, update{shotID: shotID, days: days})
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
+		_ = rows.Close()
 		return 0, fmt.Errorf("shots: recomputing stored bean ages: %w", err)
 	}
 	if err := rows.Close(); err != nil {
@@ -95,20 +95,20 @@ func (r *Repository) RecomputeStoredBeanAges(age func(ann map[string]any, shotSe
 	}
 	stmt, err := tx.Prepare(`UPDATE annotations SET data = json_set(data, '$.beanAgeDays', ?) WHERE shot_id = ?`)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return 0, fmt.Errorf("shots: recomputing stored bean ages: %w", err)
 	}
 	changed := 0
 	for _, u := range pending {
 		if _, err := stmt.Exec(u.days, u.shotID); err != nil {
-			stmt.Close()
-			tx.Rollback()
+			_ = stmt.Close()
+			_ = tx.Rollback()
 			return 0, fmt.Errorf("shots: recomputing stored bean ages: %w", err)
 		}
 		changed++
 	}
 	if err := stmt.Close(); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return 0, fmt.Errorf("shots: recomputing stored bean ages: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
