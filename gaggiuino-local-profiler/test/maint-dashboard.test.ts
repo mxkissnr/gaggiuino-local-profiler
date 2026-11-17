@@ -289,20 +289,21 @@ describe('_maintRowHtml (#1923)', () => {
   it('marks a due row with status-due', () => {
     const due = rowTile({ d: task('due', { threshold_shots: 20, shotsSince: 40 }) });
     expect(_maintRowHtml(due)).toContain('class="maint-row status-due"');
+    expect(_maintRowHtml(due)).toContain('class="badge badge--err maint-row-status"');
   });
 
   it('shows the machine badge only when showMachineTag is set', () => {
     const hidden = rowTile({ machineName: 'Linea', showMachineTag: false });
-    expect(_maintRowHtml(hidden)).not.toContain('shot-machine-badge');
+    expect(_maintRowHtml(hidden)).not.toContain('<span class="badge">');
     const shown = rowTile({ machineName: 'Linea', showMachineTag: true });
     const html = _maintRowHtml(shown);
-    expect(html).toContain('shot-machine-badge');
+    expect(html).toContain('<span class="badge">Linea</span>');
     expect(html).toContain('Linea');
   });
 
   it('shows the shared tag for a global tile', () => {
     const html = _maintRowHtml(rowTile({ task: 'waterfilter', isGlobal: true }));
-    expect(html).toContain('shot-machine-badge');
+    expect(html).toContain('<span class="badge">');
     expect(html).toContain('shared');
   });
 
@@ -311,8 +312,8 @@ describe('_maintRowHtml (#1923)', () => {
     const synced = rowTile({
       d: task('ok', { machineSyncedAt: Date.parse(at), lastDate: at }),
     });
-    expect(_maintRowHtml(synced)).toContain('maint-auto-synced');
-    expect(_maintRowHtml(rowTile())).not.toContain('maint-auto-synced');
+    expect(_maintRowHtml(synced)).toContain('badge badge--info');
+    expect(_maintRowHtml(rowTile())).not.toContain('badge badge--info');
   });
 
   it('escapes a custom label containing markup', () => {
@@ -328,7 +329,7 @@ describe('_maintRowHtml (#1923)', () => {
     const paused = rowTile({ d: task('paused', { threshold_shots: 20, shotsSince: 5, lastDate: '2026-01-01T00:00:00.000Z' }) });
     const html = _maintRowHtml(paused);
     expect(html).toContain('class="maint-row status-paused"');
-    expect(html).toContain('maint-chip paused');
+    expect(html).toContain('class="badge maint-row-status"');
     expect(html).toContain('>Paused</span>');
   });
 

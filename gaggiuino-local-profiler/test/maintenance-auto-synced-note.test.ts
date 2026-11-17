@@ -39,19 +39,19 @@ describe('maintenance log auto-synced note — #1763', () => {
 
   it('renders the translated badge instead of the backend marker text', () => {
     renderMaintLog([entry(AUTO_SYNCED_NOTE)]);
-    expect(log.innerHTML).toContain('class="maint-auto-synced"');
+    expect(log.innerHTML).toContain('class="badge badge--info"');
     expect(log.innerHTML).not.toContain(AUTO_SYNCED_NOTE);
   });
 
   it('renders a user note unchanged and escaped', () => {
     renderMaintLog([entry('Replaced <gasket> & cleaned')]);
     expect(log.innerHTML).toContain('Replaced &lt;gasket&gt; &amp; cleaned');
-    expect(log.innerHTML).not.toContain('maint-auto-synced');
+    expect(log.innerHTML).not.toContain('badge--info');
   });
 
   it('renders nothing for an empty note', () => {
     renderMaintLog([entry('')]);
-    expect(log.innerHTML).not.toContain('maint-auto-synced');
+    expect(log.innerHTML).not.toContain('badge--info');
     expect(log.innerHTML).not.toContain(AUTO_SYNCED_NOTE);
   });
 });

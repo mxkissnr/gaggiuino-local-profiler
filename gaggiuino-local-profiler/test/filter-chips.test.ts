@@ -25,6 +25,11 @@ function read(rel: string): string {
 // Chip classes retired by #2093. No rule, markup or code may use them again.
 const RETIRED = ['lib-shelf-chip', 'lib-shelf-view-btn', 'sort-btn', 'theme-btn', 'drink-pill', 'pdw-symptom-btn', 'orders-menu-use-beans', 'orders-menu-use-milks', 'orders-menu-trend'] as const;
 
+// Status badge classes retired by #2094: every status label is a .badge
+// (docs/DESIGN.md, "Shapes and components"). No rule, markup or code may
+// use them again. Each slice of #2094 adds the classes it retires.
+const RETIRED_BADGES = ['maint-chip', 'maint-auto-synced', 'maint-log-manual-badge'] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -78,14 +83,14 @@ describe('shared filter chips (#2093)', () => {
     expect(search).toContain('border-radius: var(--radius-ctl)');
   });
 
-  it('leaves no rule, markup or code using a retired chip class', () => {
+  it('leaves no rule, markup or code using a retired chip or badge class', () => {
     const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
       .filter(name => name.endsWith('.ts') || name.endsWith('.html') || name.endsWith('.css'));
 
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of RETIRED) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
