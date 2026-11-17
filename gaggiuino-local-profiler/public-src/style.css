@@ -3125,14 +3125,9 @@
         .sticker-viewport { position:relative; overflow:hidden; border-radius:var(--radius); max-width:100%; touch-action:none; line-height:0; width: fit-content; margin-inline: auto; }
         .sticker-canvas { max-width:100%; border-radius:var(--radius); background:var(--gray-950); transform-origin:0 0; }
         .sticker-overlay .crop-editor-modal { max-width:440px; }
-        .sticker-overlay .lib-btn-sm, .sticker-overlay .lib-save-btn { min-height:44px; }
-        .sticker-mode { display:flex; width:100%; border:1px solid var(--gray-700); border-radius:var(--radius); padding:3px; gap:3px; }
-        .sticker-mode-btn { flex:1 1 50%; min-height:44px; border:1px solid transparent; border-radius: calc(var(--radius) - 3px); background:transparent; color:var(--gray-300); font-size: var(--fs-1); font-weight:600; cursor:pointer; }
-        .sticker-mode-add[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: var(--accent); color: var(--accent-ink); }
-        .sticker-mode-remove[aria-pressed="true"] { background: color-mix(in srgb, var(--err) 22%, transparent); border-color: var(--err); color: var(--err); }
-        .sticker-mode-btn:disabled { opacity:.5; cursor:default; }
+        .sticker-mode { display:flex; width:100%; gap: var(--sp-2); }
+        .sticker-mode .chip { flex:1 1 50%; }
         .sticker-tools { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap: var(--sp-2); width:100%; }
-        .sticker-tools .lib-btn-sm { min-width:44px; }
         .sticker-fit[hidden] { display:none; }
         .sticker-size { display:flex; align-items:center; gap: var(--sp-2); flex:1 1 160px; color:var(--gray-300); font-size: var(--fs-1); }
         .sticker-size .sticker-brush-size { flex:1; min-height:44px; accent-color:var(--accent); }
