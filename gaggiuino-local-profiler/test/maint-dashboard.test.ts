@@ -252,7 +252,7 @@ describe('maintenance task rows (#1923)', () => {
   it('renders the machine scope as shared chips with only the chosen one pressed (#2093)', () => {
     const saved = S.machines;
     try {
-      S.machines = [{ id: 1, name: 'Left' }, { id: 2, name: 'Right' }] as unknown as typeof S.machines;
+      S.machines = [{ id: 1, name: 'Left' }, { id: 2, name: 'Right' }];
       renderMaintenanceDashboard(
         { backflush: task('ok', { threshold_shots: 40, shotsSince: 12 }) }, 2);
 
