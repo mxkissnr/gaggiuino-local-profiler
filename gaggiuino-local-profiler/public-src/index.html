@@ -190,7 +190,7 @@
                     <li data-i18n="onboarding_step1">Maschinen-Host unter Einstellungen → Maschinen setzen</li>
                     <li data-i18n="onboarding_step2">Sicherstellen, dass die Gaggiuino-Maschine im Netzwerk erreichbar ist</li>
                 </ol>
-                <button id="onboardingDemoBtn" class="lib-save-btn" data-i18n="onboarding_demo_btn">Demo-Daten laden</button>
+                <button type="button" class="btn btn--primary" id="onboardingDemoBtn" data-i18n="onboarding_demo_btn">Demo-Daten laden</button>
             </div>
         </div>
 
@@ -382,7 +382,7 @@
                         <select id="annCoffee"></select>
                         <div id="beanAgeHint" class="bean-age-hint" style="display:none"></div>
                         <div id="annMixRows" class="ann-mix-rows" style="display:none"></div>
-                        <button type="button" class="lib-btn-sm ann-mix-add" id="annMixAddBtn"
+                        <button type="button" class="btn btn--tonal ann-mix-add" id="annMixAddBtn"
                             data-i18n="ann_add_bean">Weitere Bohne</button>
                     </div>
                     <div class="annotation-field">
@@ -722,10 +722,10 @@
                         <!-- Kept for callers that host the bean form inline. Inside the library sheet
                              (.lib-form-sheet) this row is hidden and the sheet header bar's Save is used instead. -->
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closeBeanFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveBeanBtn" data-i18n="lib_save" style="display:none">Speichern</button>
-                            <button class="lib-save-btn" id="saveBeanNoBagBtn" data-i18n="lib_save_bean_no_bag" style="display:none">Speichern ohne Packung</button>
-                            <button class="lib-save-btn" id="saveBeanAddBagBtn" data-i18n="lib_save_bean_add_bag" style="display:none">Speichern und Packung hinzufügen</button>
+                            <button type="button" class="btn btn--quiet" id="closeBeanFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="saveBeanBtn" data-i18n="lib_save" style="display:none">Speichern</button>
+                            <button type="button" class="btn btn--tonal" id="saveBeanNoBagBtn" data-i18n="lib_save_bean_no_bag" style="display:none">Speichern ohne Packung</button>
+                            <button type="button" class="btn btn--primary" id="saveBeanAddBagBtn" data-i18n="lib_save_bean_add_bag" style="display:none">Speichern und Packung hinzufügen</button>
                         </div>
                     </div>
                     <div class="lib-trigger-row">
@@ -736,7 +736,7 @@
                     </div>
                     <div class="lib-url-row" id="urlImportRow" style="display:none">
                         <input class="lib-url-input" id="urlImportInput" aria-label="Import from URL" data-i18n-aria-label="lib_url_placeholder" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…">
-                        <button class="lib-url-btn" id="importFromUrlBtn" data-i18n="lib_url_btn">Importieren</button>
+                        <button type="button" class="btn btn--tonal" id="importFromUrlBtn" data-i18n="lib_url_btn">Importieren</button>
                     </div>
                     <div class="lib-url-paste" id="urlImportPasteRow" style="display:none">
                         <div class="lib-url-paste-msg" role="status" data-i18n="lib_url_shop_blocked">Dieser Shop lässt automatische Abfragen gerade nicht zu.</div>
@@ -748,7 +748,7 @@
                             <textarea class="lib-url-input lib-url-paste-text" id="urlImportPasteText" rows="4" spellcheck="false" autocomplete="off" aria-label="Paste the product data here" data-i18n-aria-label="lib_url_paste_placeholder" data-i18n-placeholder="lib_url_paste_placeholder" placeholder="Produktdaten hier einfügen"></textarea>
                             <div class="lib-url-paste-error" id="urlImportPasteInvalid" role="alert" style="display:none" data-i18n="lib_url_paste_invalid">Das sind keine gültigen Produktdaten. Kopiere den gesamten Text der geöffneten Seite.</div>
                             <div class="lib-url-paste-error" id="urlImportPasteTooLarge" role="alert" style="display:none" data-i18n="lib_url_paste_too_large">Der eingefügte Text ist zu lang.</div>
-                            <button class="lib-url-btn" id="urlImportPasteBtn" data-i18n="lib_url_paste_btn">Formular ausfüllen</button>
+                            <button type="button" class="btn btn--tonal" id="urlImportPasteBtn" data-i18n="lib_url_paste_btn">Formular ausfüllen</button>
                         </div>
                     </div>
                     <div class="lib-import-settings" id="importSettingsRow" style="display:none">
@@ -759,14 +759,14 @@
                             <div id="importSettingsCustomList"></div>
                             <div class="lib-import-settings-add">
                                 <input type="text" id="importSettingsDomainInput" aria-label="Shop domain" data-i18n-aria-label="lib_import_settings_add_domain_ph" data-i18n-placeholder="lib_import_settings_add_domain_ph" placeholder="shop.example.com">
-                                <button class="lib-btn-sm" id="importSettingsAddDomainBtn" data-i18n="lib_import_settings_add_domain_btn">Hinzufügen</button>
+                                <button type="button" class="btn btn--tonal" id="importSettingsAddDomainBtn" data-i18n="lib_import_settings_add_domain_btn">Hinzufügen</button>
                             </div>
                         </div>
                     </div>
                     <div class="lib-variant-picker" id="variantPickerRow" style="display:none">
                         <div class="lib-variant-picker-label" data-i18n="lib_variant_picker_label">Welche Packungsgröße hast du gekauft?</div>
                         <div id="variantPickerList"></div>
-                        <button class="lib-save-btn" id="variantPickerConfirm" data-i18n="lib_variant_picker_confirm">Übernehmen</button>
+                        <button type="button" class="btn btn--primary" id="variantPickerConfirm" data-i18n="lib_variant_picker_confirm">Übernehmen</button>
                     </div>
                 </div>
                 <!-- Grinders -->
@@ -810,8 +810,8 @@
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closeGrinderFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveGrinderBtn" data-i18n="lib_save">Speichern</button>
+                            <button type="button" class="btn btn--quiet" id="closeGrinderFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="saveGrinderBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="grinderAddTrigger" data-i18n="lib_add_grinder">+ Mühle hinzufügen</button>
@@ -889,13 +889,13 @@
                         <div class="lib-recipe-steps-section">
                             <div class="lib-recipe-steps-header">
                                 <span data-i18n="lib_recipe_steps">Workflow-Schritte</span>
-                                <button class="lib-btn-sm" id="addRecipeStepBtn" data-i18n="lib_recipe_add_step">+ Schritt</button>
+                                <button type="button" class="btn btn--tonal" id="addRecipeStepBtn" data-i18n="lib_recipe_add_step">+ Schritt</button>
                             </div>
                             <div id="recipeStepsList"></div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closeRecipeFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveRecipeBtn" data-i18n="lib_save">Speichern</button>
+                            <button type="button" class="btn btn--quiet" id="closeRecipeFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="saveRecipeBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="recipeAddTrigger" data-i18n="lib_add_recipe">+ Rezept hinzufügen</button>
@@ -919,8 +919,8 @@
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closeMilkFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveMilkBtn" data-i18n="lib_save">Speichern</button>
+                            <button type="button" class="btn btn--quiet" id="closeMilkFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="saveMilkBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="milkAddTrigger" data-i18n="lib_add_milk">+ Milch hinzufügen</button>
@@ -975,8 +975,8 @@
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closeBasketFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveBasketBtn" data-i18n="lib_save">Speichern</button>
+                            <button type="button" class="btn btn--quiet" id="closeBasketFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="saveBasketBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="basketAddTrigger" data-i18n="lib_add_basket">+ Sieb hinzufügen</button>
@@ -1019,8 +1019,8 @@
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closePuckScreenFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="savePuckScreenBtn" data-i18n="lib_save">Speichern</button>
+                            <button type="button" class="btn btn--quiet" id="closePuckScreenFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="savePuckScreenBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="puckScreenAddTrigger" data-i18n="lib_add_puckscreen">+ Puck Screen hinzufügen</button>
@@ -1071,8 +1071,8 @@
                 <div class="lib-recipe-steps-section">
                     <div class="lib-recipe-steps-header">
                         <span data-i18n="profile_phases_title">Phasen</span>
-                        <button class="lib-btn-sm" id="profileApplySuggestionBtn" data-i18n="profile_apply_suggestion" style="display:none">Bohnen-Vorschlag anwenden</button>
-                        <button class="lib-btn-sm" id="addProfilePhaseBtn" data-i18n="profile_add_phase">+ Phase</button>
+                        <button type="button" class="btn btn--tonal" id="profileApplySuggestionBtn" data-i18n="profile_apply_suggestion" style="display:none">Bohnen-Vorschlag anwenden</button>
+                        <button type="button" class="btn btn--tonal" id="addProfilePhaseBtn" data-i18n="profile_add_phase">+ Phase</button>
                     </div>
                     <div id="profilePhaseList"></div>
                 </div>
@@ -1081,8 +1081,8 @@
                 </div>
             </div>
             <div class="lib-form-actions">
-                <button class="lib-btn-sm" id="cancelProfileFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                <button class="lib-save-btn" id="sendProfileToMachineBtn" data-i18n="profile_send_to_machine">An Maschine senden</button>
+                <button type="button" class="btn btn--quiet" id="cancelProfileFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                <button type="button" class="btn btn--primary" id="sendProfileToMachineBtn" data-i18n="profile_send_to_machine">An Maschine senden</button>
             </div>
         </div>
     </div>
@@ -1211,7 +1211,7 @@
             <p id="liveIdleUpdateHint" class="live-idle-hint" data-i18n="machine_update_available" style="display:none">Firmware-Update auf der Maschine verfügbar</p>
             <!-- #1324: opt-in GaggiMate machine control -- shown only while a
                  flush may be started or is running (components/machine-control.js). -->
-            <button id="liveFlushBtn" type="button" class="lib-save-btn" data-action="machine-flush-toggle" style="display:none"></button>
+            <button id="liveFlushBtn" type="button" class="btn btn--primary" data-action="machine-flush-toggle" style="display:none"></button>
 
             <!-- Pre-shot setup: bean/dose/grinder/grind/basket/puckscreen/recipe
                  chosen here get written onto the next completed shot's
@@ -1924,8 +1924,8 @@
             <!-- rendered by gaggimate-profile-editor.js -->
         </div>
         <div class="lib-form-actions">
-            <button class="lib-btn-sm" data-action="gm-editor-close" data-i18n="lib_cancel">Abbrechen</button>
-            <button class="lib-save-btn" data-action="gm-editor-save" data-i18n="gm_editor_save_to_machine">Auf Maschine speichern</button>
+            <button type="button" class="btn btn--quiet" data-action="gm-editor-close" data-i18n="lib_cancel">Abbrechen</button>
+            <button type="button" class="btn btn--primary" data-action="gm-editor-save" data-i18n="gm_editor_save_to_machine">Auf Maschine speichern</button>
         </div>
     </div>
 </div>
@@ -1943,15 +1943,15 @@
         <label for="scanManualInput" data-i18n="scan_manual_label">Oder Barcode eingeben</label>
         <div class="scan-manual-row">
             <input id="scanManualInput" class="lib-input scan-manual-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-            <button type="submit" class="lib-btn-sm scan-manual-submit" data-action="scan-manual-submit" data-i18n="scan_manual_submit">Suchen</button>
+            <button type="submit" class="btn btn--tonal scan-manual-submit" data-action="scan-manual-submit" data-i18n="scan_manual_submit">Suchen</button>
         </div>
     </form>
-    <button type="button" class="lib-btn-sm scan-photo-btn" data-action="scan-take-photo" data-i18n="scan_take_photo">Foto aufnehmen</button>
+    <button type="button" class="btn btn--quiet" data-action="scan-take-photo" data-i18n="scan_take_photo">Foto aufnehmen</button>
     <input id="scanPhotoInput" type="file" accept="image/*" capture="environment" aria-label="Take photo" data-i18n-aria-label="scan_take_photo" hidden>
     <p style="color:var(--gray-600);font-size:.7rem;text-align:center;margin:0">
         <span data-i18n="scan_attribution">Produktdaten von</span> <a href="https://world.openfoodfacts.org" target="_blank" style="color:#71717a">Open Food Facts</a> (ODbL)
     </p>
-    <button class="scan-close-btn" id="closeScanModalBtn" data-i18n="scan_close">Schließen</button>
+    <button type="button" class="btn btn--quiet" id="closeScanModalBtn" data-i18n="scan_close">Schließen</button>
 </div>
 
 <!-- ── In-app camera modal (#1836) ── the Companion app's WebView ignores the
@@ -1962,8 +1962,8 @@
         <video id="photoCameraVideo" class="photo-video-off" autoplay muted playsinline></video>
     </div>
     <div class="photo-camera-actions">
-        <button type="button" id="photoCameraCancelBtn" class="scan-close-btn" data-i18n="photo_camera_cancel">Abbrechen</button>
-        <button type="button" id="photoCameraShutter" class="lib-save-btn photo-camera-shutter" data-i18n="photo_camera_shutter">Auslösen</button>
+        <button type="button" id="photoCameraCancelBtn" class="btn btn--quiet" data-i18n="photo_camera_cancel">Abbrechen</button>
+        <button type="button" id="photoCameraShutter" class="btn btn--primary photo-camera-shutter" data-i18n="photo_camera_shutter">Auslösen</button>
     </div>
 </div>
 
@@ -2011,8 +2011,8 @@
         <p class="settings-card-desc" data-i18n="brew_confirm_desc">Die Maschine meldet diese Warnungen:</p>
         <ul id="brewConfirmWarnings"></ul>
         <div class="lib-form-actions">
-            <button class="lib-btn-sm" data-action="brew-confirm-cancel" data-i18n="brew_confirm_cancel">Zurück</button>
-            <button class="lib-save-btn" data-action="brew-confirm-start" data-i18n="brew_confirm_start">Trotzdem starten</button>
+            <button type="button" class="btn btn--quiet" data-action="brew-confirm-cancel" data-i18n="brew_confirm_cancel">Zurück</button>
+            <button type="button" class="btn btn--primary" data-action="brew-confirm-start" data-i18n="brew_confirm_start">Trotzdem starten</button>
         </div>
     </div>
 </div>

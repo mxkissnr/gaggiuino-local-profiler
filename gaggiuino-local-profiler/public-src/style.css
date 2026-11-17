@@ -1700,9 +1700,6 @@
         .lib-recipe-step { display: flex; gap: var(--sp-2); align-items: baseline; padding: var(--sp-1) 0; font-size: var(--fs-1); color: var(--gray-400); }
         .lib-recipe-step-n { color: var(--gray-600); font-size: var(--fs-1); min-width: 16px; flex-shrink: 0; }
         .lib-recipe-step-dur { color: var(--gray-600); font-size: var(--fs-1); flex-shrink: 0; white-space: nowrap; }
-        .lib-btn-sm { background: none; border: none; border-radius:var(--radius); color: var(--gray-600); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); cursor: pointer; transition: background .15s, color .15s; display: inline-flex; align-items: center; justify-content: center; }
-        .lib-btn-sm:hover { background: color-mix(in srgb, var(--paper) 6%, transparent); color: var(--gray-400); }
-        .lib-btn-sm.del:hover { background: color-mix(in srgb, var(--err) 10%, transparent); color: var(--err); }
         .lib-add-form { background: var(--gray-800); border-radius:var(--radius); padding: var(--sp-3); display: none; margin-bottom: var(--sp-2); }
         .lib-add-form.open { display: block; }
         .lib-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-bottom: var(--sp-3); }
@@ -1746,12 +1743,6 @@
            shows one, it stays at the bottom of the page so the state is in view
            whichever field was changed. */
         .lib-add-form .lib-form-actions:has(> .autosave-status.visible) { position: sticky; bottom: 0; z-index: var(--z-sticky); padding-block: var(--sp-2); background: var(--gray-800); }
-        .lib-save-btn { background: var(--accent); border: none; border-radius:var(--radius); color: var(--accent-text); font-size: var(--fs-1); font-weight: 600; padding: var(--sp-2) var(--sp-4); cursor: pointer; transition: filter .15s; }
-        .lib-save-btn:hover { filter: brightness(1.1); }
-        @media (prefers-reduced-motion: no-preference) {
-            .lib-save-btn { transition: filter .15s, transform 80ms; }
-            .lib-save-btn:active { transform: scale(.97); }
-        }
         .lib-add-trigger { background: none; border: 1px dashed var(--gray-700); border-radius:var(--radius); color: var(--gray-500); font-size: var(--fs-1); padding: var(--sp-2); width: 100%; cursor: pointer; transition: border-color .15s, color .15s; }
         .lib-add-trigger:hover { border-color: var(--gray-500); color: var(--gray-200); }
         .lib-empty { color: var(--gray-600); font-size: var(--fs-1); text-align: center; padding: var(--sp-5) 0; }
@@ -1763,8 +1754,6 @@
         .lib-url-row { display:flex; gap: var(--sp-2); margin-top: var(--sp-2); }
         .lib-url-input { flex:1; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); outline:none; }
         .lib-url-input:focus { border-color:var(--gray-500); }
-        .lib-url-btn { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); cursor:pointer; white-space:nowrap; transition:border-color .15s,color .15s; }
-        .lib-url-btn:hover { border-color:var(--gray-500); color:var(--gray-200); }
         .lib-url-paste { flex-direction:column; gap: var(--sp-2); margin-top: var(--sp-2); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-3); }
         .lib-url-paste-steps { flex-direction:column; gap: var(--sp-2); }
         .lib-url-paste-msg { font-size: var(--fs-1); color:var(--gray-200); font-weight:600; }
@@ -1772,7 +1761,7 @@
         .lib-url-paste-link { display:inline-flex; align-items:center; min-height:44px; font-size: var(--fs-1); color: var(--accent-ink); }
         .lib-url-paste-text { flex:none; min-height:6rem; resize:vertical; }
         .lib-url-paste-error { font-size: var(--fs-1); color: var(--err); }
-        .lib-url-paste .lib-url-btn { align-self:flex-start; min-height:44px; }
+        .lib-url-paste .btn { align-self:flex-start; }
         .lib-item-source { font-size: var(--fs-1); color:var(--gray-600); margin-top: var(--sp-1); overflow-wrap: break-word; word-break: break-word; }
         /* #1543: the shop link inherited the browser's default link blue. */
         .lib-item-source a { color: var(--accent-ink); }
@@ -2047,8 +2036,6 @@
         #scanStatus { color:var(--gray-400); font-size: var(--fs-1); text-align:center; min-height:1.2em; }
         #scanStatus.found { color:var(--ok); }
         #scanStatus.error { color:var(--err); }
-        .scan-close-btn { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-400); font-size: var(--fs-2); padding: var(--sp-2) var(--sp-5); cursor:pointer; }
-        .scan-close-btn:hover { background:var(--gray-700); color:var(--gray-200); }
         .scan-manual { display:flex; flex-direction:column; gap: var(--sp-2); width:100%; max-width:420px; }
         .scan-manual label { color:var(--gray-400); font-size: var(--fs-1); text-align:center; }
         .scan-manual-row { display:flex; gap: var(--sp-2); }
@@ -2059,7 +2046,6 @@
         #scanViewport video.scan-video-off { visibility:hidden; }
         .scan-hint { color:var(--gray-500); font-size: var(--fs-1); text-align:center; max-width:420px; }
         .scan-hint[hidden] { display:none; }
-        .scan-photo-btn { white-space:nowrap; }
 
         /* ── In-app camera modal (#1836) ── same overlay/viewport language as
            the scan modal above; only the action row is its own. */
