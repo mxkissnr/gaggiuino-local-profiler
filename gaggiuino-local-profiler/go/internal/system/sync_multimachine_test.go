@@ -3,6 +3,7 @@ package system
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -124,6 +125,75 @@ func TestSyncDefaultMachineShots_GaggiMateDefaultMachineScoped(t *testing.T) {
 	}
 	if *calls != before {
 		t.Fatalf("second sync made %d shot fetch(es), want 0 (already up to date)", *calls-before)
+	}
+}
+
+// TestSyncDefaultMachineShots_GaggiMateSkipsUnreadableSlog is #2076's
+// regression test: a 200 .slog body the firmware answered with its web UI HTML
+// is one damaged shot, so the sync skips it (no blocklist entry) and still
+// imports the newer shots after it.
+func TestSyncDefaultMachineShots_GaggiMateSkipsUnreadableSlog(t *testing.T) {
+	sqlDB := newTestDB(t)
+	registry := machines.NewRegistry(sqlDB)
+	if err := registry.EnsureDefaultMachine(); err != nil {
+		t.Fatalf("EnsureDefaultMachine: %v", err)
+	}
+	name, typ, host := "GaggiMate", "gaggimate", "gaggimate.test"
+	gm, err := registry.CreateMachine(machines.MachineInput{Name: &name, Type: &typ, Host: &host})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if _, err := registry.SetDefaultMachine(gm.ID); err != nil {
+		t.Fatalf("SetDefaultMachine(%d): %v", gm.ID, err)
+	}
+
+	p := NewPoller(registry, fakeAdapterProvider{adapter: &fakeAdapter{}}, newHubForTest(), newDisabledHAClient())
+	repo := shots.NewRepository(sqlDB)
+	p.SetShotsRepo(repo)
+
+	withGaggiMateSyncSeams(t, 3, func(_ context.Context, _ string, nativeID int64) (map[string]any, int, error) {
+		switch nativeID {
+		case 2, 3:
+			return map[string]any{"id": nativeID, "timestamp": nativeID * 1000, "datapoints": []any{}}, http.StatusOK, nil
+		case 1:
+			return nil, http.StatusOK, fmt.Errorf("%w: %w", machines.ErrGaggiMateBadSlog, errors.New("gaggimate: .slog bad magic 6f64213c (want 544f4853)"))
+		default:
+			t.Fatalf("unexpected native id %d", nativeID)
+			return nil, 0, nil
+		}
+	})
+
+	if err := p.syncDefaultMachineShots(context.Background()); err != nil {
+		t.Fatalf("syncDefaultMachineShots: %v", err)
+	}
+
+	for _, native := range []int64{2, 3} {
+		globalID := shots.ToGlobalShotID(gm.ID, native)
+		s, ferr := repo.FindByID(globalID)
+		if ferr != nil {
+			t.Fatalf("FindByID(%d): %v", globalID, ferr)
+		}
+		if s == nil {
+			t.Fatalf("shot %d (native %d) missing after sync", globalID, native)
+		}
+		if mid, _ := s["machineId"].(int64); mid != gm.ID {
+			t.Fatalf("shot %d machineId = %#v, want %d", globalID, s["machineId"], gm.ID)
+		}
+	}
+
+	bad := shots.ToGlobalShotID(gm.ID, 1)
+	if s, ferr := repo.FindByID(bad); ferr != nil {
+		t.Fatalf("FindByID(%d): %v", bad, ferr)
+	} else if s != nil {
+		t.Fatalf("shot %d was stored despite the unreadable body", bad)
+	}
+
+	block, err := repo.GetBlocklist()
+	if err != nil {
+		t.Fatalf("GetBlocklist: %v", err)
+	}
+	if blocklistHas(block, fmt.Sprintf("%d", bad)) {
+		t.Fatalf("blocklist = %v, must not contain %d: an unreadable shot is not permanently missing", block, bad)
 	}
 }
 
