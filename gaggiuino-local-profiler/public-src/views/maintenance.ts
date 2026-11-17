@@ -119,6 +119,13 @@ export function maintStatusLabel(status: string): string {
   return labels[status] || '';
 }
 
+// #2094: the status badge per maintenance state; never and paused stay neutral.
+const MAINT_STATUS_BADGE: Record<string, string> = { ok: 'badge--ok', soon: 'badge--warn', due: 'badge--err' };
+function _maintStatusClass(status: string): string {
+  const variant = MAINT_STATUS_BADGE[status];
+  return variant ? `badge ${variant} maint-row-status` : 'badge maint-row-status';
+}
+
 // ── Local view scope (#393) ────────────────────────────────────────────────
 // Independent of the global machine switcher (S.activeMachineId) — this view
 // gets its own filter so browsing "all machines" here never changes what the
@@ -440,11 +447,11 @@ export function _maintRowHtml(tile: MaintTile, fresh = false): Html {
   return html`<button type="button" class="${esc(rowClass)}" data-action="open-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" aria-haspopup="dialog" title="${esc(t('maint_tile_details'))}">
     <span class="maint-row-icon">${taskIconSvg(task)}</span>
     <span class="maint-row-title">${esc(title)}</span>
-    <span class="maint-chip ${esc(d.status)}">${esc(maintStatusLabel(d.status))}</span>
+    <span class="${esc(_maintStatusClass(d.status))}">${esc(maintStatusLabel(d.status))}</span>
     <span class="maint-row-meta">
-      ${machineTagText ? html`<span class="shot-machine-badge">${esc(machineTagText)}</span>` : html``}
+      ${machineTagText ? html`<span class="badge">${esc(machineTagText)}</span>` : html``}
       <span class="num">${esc(countText)}</span>
-      ${isAutoSynced(d) ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
+      ${isAutoSynced(d) ? html`<span class="badge badge--info" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
     </span>
     <span class="maint-row-bar" aria-hidden="true"><span class="maint-row-fill ${esc(d.status)}" style="width:${esc(pct)}%"></span></span>
   </button>`;
@@ -672,10 +679,10 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
     return html`<div class="maint-log-row">
       <span class="maint-log-date num">${esc(dateStr)}</span>
       <span class="maint-log-main">
-        <span class="maint-log-task">${esc(taskTitle(e.task, e))}${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}</span>
-        ${machineTag ? html`<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : html``}
+        <span class="maint-log-task">${esc(taskTitle(e.task, e))}${isManual ? html`<span class="badge">${tHtml('maint_log_manual_badge')}</span>` : html``}</span>
+        ${machineTag ? html`<span class="badge">${esc(machineTag as string)}</span>` : html``}
         ${e.notes === AUTO_SYNCED_NOTE
-          ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
+          ? html`<span class="badge badge--info" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
           : e.notes ? html`<span class="maint-log-note">${esc(e.notes)}</span>` : html``}
       </span>
       <span class="maint-log-shots num">${shotsText}</span>
