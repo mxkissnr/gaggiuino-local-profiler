@@ -153,10 +153,10 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
     bg.batchNumber ? html`<span class="lib-bag-detail"><span class="lib-bag-detail-label">${tHtml('lib_bag_batch_number')}</span><span class="lib-bag-detail-val">${esc(bg.batchNumber)}</span></span>` : esc(''),
   ].filter(Boolean);
   const stateBadge: Html = state === 'current'
-    ? html`<span class="lib-bag-active-badge">${tHtml('lib_bag_state_current')}</span>`
+    ? html`<span class="badge badge--accent">${tHtml('lib_bag_state_current')}</span>`
     : state === 'upcoming'
-    ? html`<span class="lib-bag-upcoming-badge">${tHtml('lib_bag_state_upcoming')}</span>`
-    : html`<span class="lib-bag-past-badge">${tHtml('lib_bag_state_past')}</span>`;
+    ? html`<span class="badge badge--ok">${tHtml('lib_bag_state_upcoming')}</span>`
+    : html`<span class="badge">${tHtml('lib_bag_state_past')}</span>`;
   // stockG != null (tracked), not stockG > 0 — the last-emptied exception
   // is specifically for a bag sitting at 0, so requiring a positive stock
   // here would hide the fix for the exact case it exists for.
