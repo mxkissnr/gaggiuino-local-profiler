@@ -237,6 +237,7 @@ describe('bean shelf sort chips (#2093)', () => {
     const beanShelf = { innerHTML: '' };
     const count = { textContent: '' };
     const chipQuery = '[data-action="set-bean-shelf-sort"]';
+    vi.resetModules();
 
     // Leave document undefined during the import (views/library/bags.ts wires a
     // document-level pointerdown handler at load time), then hand the shelf a
