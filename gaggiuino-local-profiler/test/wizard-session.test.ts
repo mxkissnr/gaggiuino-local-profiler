@@ -16,7 +16,8 @@ g.localStorage = localStorageStub;
 g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { createWizardSession } = await import('../public-src/views/wizard-session.js');
+const { createWizardSession, renderChips, scoreBadgeClass } = await import('../public-src/views/wizard-session.js');
+const { esc } = await import('../public-src/utils.js');
 
 interface TestSession extends Record<string, unknown> {
   status: string;
@@ -115,5 +116,23 @@ describe('createWizardSession (#1622 shared wizard plumbing)', () => {
     } finally {
       Object.defineProperty(g, 'localStorage', { value: localStorageStub, configurable: true, writable: true });
     }
+  });
+});
+
+describe('score badges (#2094)', () => {
+  it('maps a score onto the shared score-scale badge', () => {
+    expect(scoreBadgeClass(92)).toBe('badge badge--score-great');
+    expect(scoreBadgeClass(80)).toBe('badge badge--score-good');
+    expect(scoreBadgeClass(50)).toBe('badge badge--score-low');
+    expect(scoreBadgeClass(null)).toBe('badge');
+  });
+
+  it('renders every round as a badge without an inline colour', () => {
+    const rounds: { score: number | null }[] = [{ score: 80 }, { score: null }];
+    const out = renderChips(rounds, r => esc(r.score ?? 'none'));
+    expect(out).toContain('<div class="badge badge--score-good">');
+    expect(out).toContain('<div class="badge">');
+    expect(out).not.toContain('style=');
+    expect(out).not.toContain('dw-chip"');
   });
 });

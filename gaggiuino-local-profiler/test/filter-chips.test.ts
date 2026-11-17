@@ -42,6 +42,7 @@ const RETIRED_BADGES = [
   'machine-row-badge', 'lib-utility-badge', 'lib-brew-badge',
   'orders-milk-badge', 'order-eta-tag', 'order-decline-tag',
   'order-variant-badge', 'orders-new-badge',
+  'dw-score-chip', 'dw-chip',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {

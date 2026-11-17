@@ -14,7 +14,7 @@ import { t, tHtml }              from '../i18n.js';
 import { saveBeanKnownGrind } from '../api/library.js';
 import { annotateShot }          from '../api/shots.js';
 import type { ShotAnnotationInput } from '../api/types.js';
-import { esc, html, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
+import { esc, html, detectChanneling, calcBrewRatio } from '../utils.js';
 import { parseBrewRatio } from '../shared/score.js';
 import { markFieldInvalid } from '../components/field-error.js';
 import type { Html } from '../utils.js';
@@ -32,7 +32,7 @@ import type { GrindScale } from '../grind-scale.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange, _renderBeanSelect } from './shots/annotation.js';
 import { checkGrindField, forgetGrindField, getGrindFieldValue, grindFieldInvalid, refreshGrindField, renderGrindField } from './shots/grind-field.js';
-import { bestRound, checkForCandidate, createWizardSession, renderChips } from './wizard-session.js';
+import { bestRound, checkForCandidate, createWizardSession, renderChips, scoreBadgeClass } from './wizard-session.js';
 
 // state/index.ts types the session as Record<string, unknown> and shot rows
 // as metadata-only ShotMeta; these aliases name the fields this wizard
@@ -474,7 +474,7 @@ function _renderRound(s: DialinSession): Html {
     return html`<div class="dw-round">
       <div class="dw-round-label">${tHtml('dialin_wizard_round_label', roundNum)}</div>
       <div class="dw-score-row">
-        <div class="dw-score-chip" style="background:${esc(scoreColor(rr.score))}">${esc(rr.score ?? '–')}</div>
+        <div class="${esc(scoreBadgeClass(rr.score))}">${esc(rr.score ?? '–')}</div>
         <div class="dw-score-meta">${esc(rr.seconds.toFixed(0))} s${rr.ratio ? html` · 1:${esc(rr.ratio.toFixed(1))}` : html``}${rr.channeling ? html` · ${tHtml('grind_channeling_full')}` : html``}</div>
       </div>
       <div class="dw-suggestion">${esc(sugText)}</div>
@@ -520,7 +520,7 @@ function _renderSummary(s: DialinSession): Html {
     <div class="dw-summary-title">${title}</div>
     ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}
     ${best ? html`<div class="dw-summary-best">
-      <div class="dw-score-chip" style="background:${esc(scoreColor(best.score))}">${esc(best.score)}</div>
+      <div class="${esc(scoreBadgeClass(best.score))}">${esc(best.score)}</div>
       <div>${tHtml('dialin_wizard_summary_best')}: ${esc(String(best.grindSetting))} · ${esc(best.seconds.toFixed(0))} s</div>
     </div>` : html``}
     <div class="dw-actions">

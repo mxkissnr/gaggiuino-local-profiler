@@ -19,7 +19,7 @@ const PINNED = {
   literalRadius: 42,
   literalPadding: 38,
   transitionAll: 15,
-  pageLookClasses: 82,
+  pageLookClasses: 80,
 } as const;
 
 type Debt = Record<keyof typeof PINNED, string[]>;

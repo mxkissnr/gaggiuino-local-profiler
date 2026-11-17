@@ -3175,22 +3175,12 @@
         .dw-candidate-title { font-size: var(--fs-1); font-weight:600; color:var(--gray-200); }
         .dw-candidate-actions { display:flex; gap: var(--sp-2); flex-wrap:wrap; }
         .dw-score-row { display:flex; align-items:center; gap: var(--sp-3); }
-        /* #811 found, not fixed: background is set inline per-instance from
-           scoreColor() (utils.js) to one of --ok/--warn/--err/--gray-600.
-           White text clears 4.5:1 against all four in the LIGHT theme but
-           fails all four in the DARK theme (worst: --ok at 2.40:1) -- none of
-           the semantic tokens were ever audited as a fill under white, only
-           as text on a surface. Needs its own audited on-fill token (like
-           --accent-text) rather than a guessed color here; tracked as a
-           follow-up, left as-is rather than silently miscalibrated. */
-        .dw-score-chip { color:var(--on-fill); font-weight:700; font-size: var(--fs-3); padding: var(--sp-2) var(--sp-3); border-radius:var(--radius); flex-shrink:0; }
         .dw-score-meta { font-size: var(--fs-1); color:var(--gray-400); }
         .dw-suggestion { font-size: var(--fs-2); color:var(--gray-200); background:var(--gray-800); border-radius:var(--radius); padding: var(--sp-3) var(--sp-3); }
         .dw-actions { display:flex; flex-direction:column; gap: var(--sp-2); }
         .dw-override-row { display:flex; gap: var(--sp-2); }
         .dw-override-row input { flex:1 1 auto; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); }
         .dw-chip-strip { display:flex; flex-wrap:wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
-        .dw-chip { border:1.5px solid var(--gray-600); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); font-size: var(--fs-1); color:var(--gray-300); }
         .dw-summary { display:flex; flex-direction:column; gap: var(--sp-3); }
         .dw-summary-title { font-size: var(--fs-3); font-weight:700; color:var(--gray-100); }
         .dw-summary-reason { font-size: var(--fs-2); color:var(--gray-400); }
