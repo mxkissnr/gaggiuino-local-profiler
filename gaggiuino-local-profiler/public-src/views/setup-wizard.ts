@@ -147,8 +147,8 @@ function _renderWelcome(): Html {
     <div class="dw-summary-title">${tHtml('setup_wizard_welcome_title')}</div>
     <div class="dw-summary-reason">${tHtml('setup_wizard_welcome_body')}</div>
     <div class="dw-actions">
-      <button class="lib-save-btn" data-action="setup-wizard-get-started">${tHtml('setup_wizard_get_started')}</button>
-      <button class="lib-btn-sm" data-action="setup-wizard-close">${tHtml('setup_wizard_later')}</button>
+      <button type="button" class="btn btn--primary" data-action="setup-wizard-get-started">${tHtml('setup_wizard_get_started')}</button>
+      <button type="button" class="btn btn--quiet" data-action="setup-wizard-close">${tHtml('setup_wizard_later')}</button>
     </div>
   </div>`;
 }
@@ -157,7 +157,7 @@ function _renderConnectShell(): Html {
   return html`<div class="dw-setup">
     <div class="dw-summary-reason">${tHtml('setup_wizard_connect_body')}</div>
     <div id="swConnectFormSlot"></div>
-    <button type="button" class="lib-btn-sm" data-action="setup-wizard-skip-demo">${tHtml('setup_wizard_demo_link')}</button>
+    <button type="button" class="btn btn--quiet" data-action="setup-wizard-skip-demo">${tHtml('setup_wizard_demo_link')}</button>
   </div>`;
 }
 
@@ -166,7 +166,7 @@ function _renderDone(): Html {
     <div class="dw-summary-title">${tHtml('setup_wizard_done_title')}</div>
     <div class="dw-summary-reason">${tHtml('setup_wizard_done_body')}</div>
     <div class="dw-actions">
-      <button class="lib-save-btn" data-action="setup-wizard-close">${tHtml('setup_wizard_done_btn')}</button>
+      <button type="button" class="btn btn--primary" data-action="setup-wizard-close">${tHtml('setup_wizard_done_btn')}</button>
     </div>
   </div>`;
 }
