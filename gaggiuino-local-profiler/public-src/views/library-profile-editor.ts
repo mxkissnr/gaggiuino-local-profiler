@@ -131,10 +131,10 @@ export function renderProfileList(): void {
         </div>
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm" data-action="start-profile-dialin" data-id="${esc(p.id as string | number)}" title="${tHtml('profile_dialin_start')}">${TARGET_ICON_SVG}</button>
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm lib-btn-icon" data-action="duplicate-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('profile_btn_duplicate')}">${ICON_COPY}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button type="button" class="btn btn--quiet btn--icon" data-action="start-profile-dialin" data-id="${esc(p.id as string | number)}" title="${tHtml('profile_dialin_start')}">${TARGET_ICON_SVG}</button>
+        <button type="button" class="btn btn--quiet btn--icon" data-action="edit-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button type="button" class="btn btn--quiet btn--icon" data-action="duplicate-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('profile_btn_duplicate')}">${ICON_COPY}</button>
+        <button type="button" class="btn btn--danger btn--icon" data-action="delete-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`));
 }
@@ -255,7 +255,7 @@ function _phaseRowHtml(i: number, p: Phase = {}): Html {
         <input type="checkbox" class="pp-skip" ${p.skip ? html`checked` : html``}>
         <span>${tHtml('profile_phase_skip')}</span>
       </label>
-      <button class="lib-btn-sm del lib-btn-icon" data-action="remove-profile-phase" data-idx="${esc(i)}">${ICON_TRASH}</button>
+      <button type="button" class="btn btn--danger btn--icon" data-action="remove-profile-phase" data-idx="${esc(i)}">${ICON_TRASH}</button>
     </div>
     <div class="pp-grid">
       <div class="pp-field"><label for="profilePhase${esc(i)}-target-start">${tHtml('profile_phase_target_start')}</label><input type="number" step="0.1" min="0" max="20" id="profilePhase${esc(i)}-target-start" class="pp-target-start" value="${esc(target.start ?? '')}"></div>
@@ -295,7 +295,7 @@ export function removeProfilePhase(i: number): void {
   document.querySelectorAll<HTMLElement>('#profilePhaseList .pp-row').forEach((row, idx) => {
     row.id = `profilePhase${idx}`;
     (row.querySelector('.pp-num') as HTMLElement).textContent = String(idx + 1);
-    const delBtn = row.querySelector('.lib-btn-sm.del') as HTMLElement;
+    const delBtn = row.querySelector('.btn--danger') as HTMLElement;
     delBtn.dataset.action = 'remove-profile-phase';
     delBtn.dataset.idx = String(idx);
     // The labelled fields' ids (and their labels' `for`) are keyed off this

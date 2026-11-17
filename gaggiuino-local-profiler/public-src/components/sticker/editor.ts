@@ -394,8 +394,8 @@ function buildEditor(
 
   const modeGroup = element('div', 'sticker-mode');
   modeGroup.setAttribute('role', 'group');
-  const addBtn = themedButton('sticker-mode-btn sticker-mode-add', t('sticker_add'));
-  const removeBtn = themedButton('sticker-mode-btn sticker-mode-remove', t('sticker_remove'));
+  const addBtn = themedButton('chip sticker-mode-add', t('sticker_add'));
+  const removeBtn = themedButton('chip sticker-mode-remove', t('sticker_remove'));
   modeGroup.appendChild(addBtn);
   modeGroup.appendChild(removeBtn);
 
@@ -409,19 +409,19 @@ function buildEditor(
   const sizeLabel = element('label', 'sticker-size');
   sizeLabel.textContent = t('sticker_brush_size');
   sizeLabel.appendChild(sizeInput);
-  const undoBtn = themedButton('lib-btn-sm sticker-undo', t('sticker_undo'));
-  const resetBtn = themedButton('lib-btn-sm sticker-reset', t('sticker_reset'));
-  const originalBtn = themedButton('lib-btn-sm sticker-original', t('sticker_original'));
-  const fitBtn = themedButton('lib-btn-sm sticker-fit', t('sticker_fit'));
+  const undoBtn = themedButton('btn btn--quiet sticker-undo', t('sticker_undo'));
+  const resetBtn = themedButton('btn btn--quiet sticker-reset', t('sticker_reset'));
+  const originalBtn = themedButton('chip sticker-original', t('sticker_original'));
+  const fitBtn = themedButton('btn btn--quiet sticker-fit', t('sticker_fit'));
   fitBtn.hidden = true;
   for (const child of [sizeLabel, undoBtn, originalBtn, fitBtn, resetBtn]) {
     tools.appendChild(child);
   }
 
   const actions = element('div', 'crop-editor-actions');
-  const cancelBtn = themedButton('lib-btn-sm crop-editor-cancel sticker-cancel', t('lib_cancel'));
-  const applyBtn = themedButton('lib-save-btn crop-editor-apply sticker-apply', t('sticker_apply'));
-  const closeBtn = themedButton('lib-btn-sm sticker-close', t('sticker_close'));
+  const cancelBtn = themedButton('btn btn--quiet crop-editor-cancel sticker-cancel', t('lib_cancel'));
+  const applyBtn = themedButton('btn btn--primary crop-editor-apply sticker-apply', t('sticker_apply'));
+  const closeBtn = themedButton('btn btn--quiet sticker-close', t('sticker_close'));
   closeBtn.style.display = 'none';
   for (const child of [cancelBtn, applyBtn, closeBtn]) actions.appendChild(child);
 

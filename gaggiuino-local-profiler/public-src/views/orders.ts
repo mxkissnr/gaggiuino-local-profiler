@@ -317,8 +317,8 @@ export function renderOrdersList(orders: Order[]): void {
       const id  = btn.dataset.orderId as string;
       const val = parseInt(btn.dataset.etaBtn as string);
       S._ordersEtaSelected[_idKey(id)] = val;
-      btn.closest('.order-eta-picker')?.querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
+      btn.closest('.order-eta-picker')?.querySelectorAll('[data-eta-btn]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+      btn.setAttribute('aria-pressed', 'true');
       const inp = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
       if (inp) inp.value = String(val);
     });
@@ -327,7 +327,7 @@ export function renderOrdersList(orders: Order[]): void {
     inp.addEventListener('input', () => {
       const id = inp.id.replace('etaCustom_', '');
       S._ordersEtaSelected[_idKey(id)] = parseInt(inp.value) || 5;
-      inp.closest('.order-eta-picker')?.querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
+      inp.closest('.order-eta-picker')?.querySelectorAll('[data-eta-btn]').forEach(b => b.setAttribute('aria-pressed', 'false'));
     });
   });
   (acceptedEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-complete]').forEach(btn => {
@@ -367,17 +367,17 @@ export function renderOrderCard(o: Order, ctx: string): Html {
       </div>
       <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
       <div class="order-eta-picker">
-        ${joinHtml(etaBtns.map(m => html`<button class="order-eta-btn${selectedEta === m ? html` selected` : html``}" data-order-id="${esc(o.id)}" data-eta-btn="${esc(m)}">${esc(m)} min</button>`))}
+        ${joinHtml(etaBtns.map(m => html`<button type="button" class="chip" aria-pressed="${esc(selectedEta === m ? 'true' : 'false')}" data-order-id="${esc(o.id)}" data-eta-btn="${esc(m)}">${esc(m)} min</button>`))}
         <input class="order-eta-custom" type="number" min="1" max="60" step="1" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" aria-label="${esc(t('orders_eta_label'))}" placeholder="min">
         ${queuePos ? html`<span class="order-eta-suggest">${tHtml('orders_suggested_eta', queuePos.suggestedEta)}</span>` : html``}
       </div>
       <div class="order-actions">
-        <button class="order-btn accept" data-order-accept="${esc(o.id)}">${tHtml('orders_accept')}</button>
-        <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
+        <button type="button" class="btn btn--tonal" data-order-accept="${esc(o.id)}">${tHtml('orders_accept')}</button>
+        <button type="button" class="btn btn--danger" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>
       ${declineOpen ? html`<div class="order-actions">
         <input class="order-decline-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
-        <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
+        <button type="button" class="btn btn--danger" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>` : html``}
     </div>`;
   }
@@ -393,12 +393,12 @@ export function renderOrderCard(o: Order, ctx: string): Html {
       </div>
       <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
       <div class="order-actions">
-        <button class="order-btn complete" data-order-complete="${esc(o.id)}">${CHECK_ICON_SVG} ${tHtml('orders_complete')}</button>
-        <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
+        <button type="button" class="btn btn--tonal" data-order-complete="${esc(o.id)}">${CHECK_ICON_SVG} ${tHtml('orders_complete')}</button>
+        <button type="button" class="btn btn--danger" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>
       ${declineOpen ? html`<div class="order-actions">
         <input class="order-decline-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
-        <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
+        <button type="button" class="btn btn--danger" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
       </div>` : html``}
     </div>`;
   }
@@ -461,7 +461,7 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
       ? html`<span class="orders-use-beans-note">${MILK_ICON_SVG} ${tHtml('orders_use_milks_note')}</span>`
       : html`${chipHtml}
          <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" aria-label="${esc(t('orders_variant_ph'))}" placeholder="${tHtml('orders_variant_ph')}">
-         <button class="orders-menu-variant-btn" data-variant-add="${esc(item.id)}">${tHtml('orders_variant_add_btn')}</button>`;
+         <button type="button" class="btn btn--tonal" data-variant-add="${esc(item.id)}">${tHtml('orders_variant_add_btn')}</button>`;
     const milkMl = item.milkMl || '';
     return html`
     <div class="orders-menu-item">
@@ -626,7 +626,7 @@ export async function loadNotifyMappingView(): Promise<void> {
       <p class="orders-notify-hint">${tHtml('orders_types_desc')}</p>
       <div class="orders-broadcast-list" id="ordersTypesList">${typesRows}</div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersTypesSaveBtn">${tHtml('orders_types_save')}</button>
+        <button type="button" class="btn btn--tonal" id="ordersTypesSaveBtn">${tHtml('orders_types_save')}</button>
       </div>
     </div>`;
 
@@ -645,7 +645,7 @@ export async function loadNotifyMappingView(): Promise<void> {
       <p class="orders-notify-hint">${tHtml('orders_broadcast_desc')}</p>
       <div class="orders-broadcast-list" id="ordersBroadcastList">${broadcastRows}</div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersBroadcastSaveBtn">${tHtml('orders_broadcast_save')}</button>
+        <button type="button" class="btn btn--tonal" id="ordersBroadcastSaveBtn">${tHtml('orders_broadcast_save')}</button>
       </div>
     </div>`;
 
@@ -659,7 +659,7 @@ export async function loadNotifyMappingView(): Promise<void> {
       <p class="orders-notify-hint">${tHtml('orders_barista_desc')}</p>
       <select class="orders-notify-select" id="ordersBaristaSelect" aria-label="${esc(t('orders_barista_title'))}">${baristaOptions}</select>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersBaristaSaveBtn">${tHtml('orders_barista_save')}</button>
+        <button type="button" class="btn btn--tonal" id="ordersBaristaSaveBtn">${tHtml('orders_barista_save')}</button>
       </div>
     </div>`;
 
@@ -681,7 +681,7 @@ export async function loadNotifyMappingView(): Promise<void> {
           </div>`))}
       </div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersNotifySaveBtn">${tHtml('orders_notify_save')}</button>
+        <button type="button" class="btn btn--tonal" id="ordersNotifySaveBtn">${tHtml('orders_notify_save')}</button>
       </div>`;
   })() : html`<p class="orders-notify-hint">${tHtml('orders_notify_no_customers')}</p>`;
 
@@ -789,8 +789,8 @@ function renderKioskLink(section: HTMLElement, key: string): void {
     <div class="orders-menu-add-row">
       <input class="orders-menu-input" id="ordersKioskLink" style="flex:1;min-width:0" readonly
              aria-label="${esc(t('orders_kiosk_link_title'))}" value="${esc(link)}">
-      <button class="orders-menu-save-btn" id="ordersKioskCopyBtn" type="button">${tHtml('orders_kiosk_link_copy')}</button>
-      <button class="orders-menu-save-btn" id="ordersKioskRotateBtn" type="button">${tHtml('orders_kiosk_link_rotate')}</button>
+      <button class="btn btn--quiet" id="ordersKioskCopyBtn" type="button">${tHtml('orders_kiosk_link_copy')}</button>
+      <button class="btn btn--danger" id="ordersKioskRotateBtn" type="button">${tHtml('orders_kiosk_link_rotate')}</button>
     </div>
     ${ingress ? html`<p class="orders-notify-hint">${esc(t('orders_kiosk_link_ingress_hint'))}</p>` : html``}`;
 

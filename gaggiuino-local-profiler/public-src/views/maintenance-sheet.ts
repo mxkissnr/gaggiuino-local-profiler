@@ -105,12 +105,12 @@ function _history(tile: MaintTile, history: MaintLogEntry[]): Html {
 // Only the tasks with a step list in GUIDED_MAINT_STEPS get a guide button.
 function _guideButton(tile: MaintTile): Html {
   if (!GUIDED_MAINT_STEPS[tile.task]) return html``;
-  return html`<button type="button" class="analytics-filter-btn maint-guide-btn" data-action="open-guided-maint" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('guided_open')}</button>`;
+  return html`<button type="button" class="btn btn--tonal maint-guide" data-action="open-guided-maint" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('guided_open')}</button>`;
 }
 
 function _pauseButton(tile: MaintTile): Html {
   const paused = tile.d.status === 'paused';
-  return html`<button type="button" class="maint-pause-btn" data-action="toggle-maint-paused" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-paused="${esc(paused ? 'false' : 'true')}">${tHtml(paused ? 'maint_resume_btn' : 'maint_pause_btn')}</button>`;
+  return html`<button type="button" class="btn btn--quiet" data-action="toggle-maint-paused" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-paused="${esc(paused ? 'false' : 'true')}">${tHtml(paused ? 'maint_resume_btn' : 'maint_pause_btn')}</button>`;
 }
 
 function _footer(tile: MaintTile): Html {
@@ -118,8 +118,8 @@ function _footer(tile: MaintTile): Html {
   return html`<div class="maint-sheet-footer">
     ${_pauseButton(tile)}
     ${task.startsWith('custom_')
-      ? html`<button class="maint-delete-btn" data-action="delete-custom-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_log_delete')}</button>`
-      : html`<button class="maint-disable-btn" data-action="toggle-maint-disabled" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" data-disabled="true">${tHtml('maint_disable_btn')}</button>`
+      ? html`<button type="button" class="btn btn--danger" data-action="delete-custom-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_log_delete')}</button>`
+      : html`<button type="button" class="btn btn--quiet" data-action="toggle-maint-disabled" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" data-disabled="true">${tHtml('maint_disable_btn')}</button>`
     }
   </div>`;
 }

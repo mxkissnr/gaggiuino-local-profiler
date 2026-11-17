@@ -190,7 +190,7 @@
                     <li data-i18n="onboarding_step1">Maschinen-Host unter Einstellungen → Maschinen setzen</li>
                     <li data-i18n="onboarding_step2">Sicherstellen, dass die Gaggiuino-Maschine im Netzwerk erreichbar ist</li>
                 </ol>
-                <button id="onboardingDemoBtn" class="lib-save-btn" data-i18n="onboarding_demo_btn">Demo-Daten laden</button>
+                <button type="button" class="btn btn--primary" id="onboardingDemoBtn" data-i18n="onboarding_demo_btn">Demo-Daten laden</button>
             </div>
         </div>
 
@@ -224,11 +224,11 @@
                     <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="badge" style="display:none"></span><span id="firmwareVersionBadge" style="display:none;font-size:.7rem;color:var(--gray-600);margin-left:6px"></span><img id="shotHeaderThumb" class="shot-header-thumb" alt="" style="display:none" data-i18n-title="shot_photo_title"></p>
                 </div>
                 <div class="sph-actions" style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
-                    <button class="export-btn" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
-                    <button class="export-btn" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
-                    <button class="export-btn" id="exportProfileBtn" data-i18n="btn_export_profile" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
+                    <button type="button" class="btn btn--quiet" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
+                    <button type="button" class="btn btn--quiet" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
+                    <button type="button" class="btn btn--quiet" id="exportProfileBtn" data-i18n="btn_export_profile" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
                     <div class="card-fmt-wrap" id="cardFmtWrap">
-                      <button class="export-btn" id="shareCardBtn" data-i18n="share_card" data-i18n-title="share_card_tooltip" title="Shot als PNG-Karte exportieren / teilen">Teilen</button>
+                      <button type="button" class="btn btn--quiet" id="shareCardBtn" data-i18n="share_card" data-i18n-title="share_card_tooltip" title="Shot als PNG-Karte exportieren / teilen">Teilen</button>
                       <div class="card-fmt-menu" id="cardFmtMenu">
                         <button class="card-fmt-opt" data-format="square" data-i18n="card_fmt_square">Quadrat (1:1)</button>
                         <button class="card-fmt-opt" data-format="story"  data-i18n="card_fmt_story">Story (9:16)</button>
@@ -344,7 +344,7 @@
                 <div class="annotation-header">
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                         <span class="annotation-title" data-i18n="ann_title">Notizen & Bewertung</span>
-                        <button class="lib-open-btn" id="quickCloneBtn" data-i18n="ann_clone_btn" title="">↩ Letzten</button>
+                        <button type="button" class="btn btn--tonal" id="quickCloneBtn" data-i18n="ann_clone_btn" title="">↩ Letzten</button>
                     </div>
                     <div class="star-rating" id="starRating" role="group" aria-label="Rating" data-i18n-aria-label="sort_rating">
                         <button type="button" class="star" data-val="1" aria-label="1 of 5 stars" aria-pressed="false"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></button>
@@ -357,10 +357,10 @@
                 <div class="annotation-photo-row" id="annotationPhotoRow">
                     <img class="shot-photo-thumb" id="annPhotoThumb" alt="" style="display:none">
                     <input type="file" id="annPhotoInput" aria-label="Add a photo to this shot" data-i18n-aria-label="ann_photo_upload" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
-                    <button type="button" class="lib-open-btn" id="annPhotoPickBtn" data-i18n="photo_pick_btn" data-i18n-title="ann_photo_upload" title="Foto zu diesem Shot hinzufügen">Foto auswählen</button>
-                    <button type="button" class="lib-open-btn" id="annPhotoCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
-                    <button type="button" class="lib-open-btn" id="annPhotoAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
-                    <button type="button" class="lib-btn-sm del" id="annPhotoRemoveBtn" data-i18n="ann_photo_remove" style="display:none">Foto entfernen</button>
+                    <button type="button" class="btn btn--quiet" id="annPhotoPickBtn" data-i18n="photo_pick_btn" data-i18n-title="ann_photo_upload" title="Foto zu diesem Shot hinzufügen">Foto auswählen</button>
+                    <button type="button" class="btn btn--quiet" id="annPhotoCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                    <button type="button" class="btn btn--quiet" id="annPhotoAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
+                    <button type="button" class="btn btn--danger" id="annPhotoRemoveBtn" data-i18n="ann_photo_remove" style="display:none">Foto entfernen</button>
                 </div>
                 <div class="annotation-fields">
                     <div class="annotation-field full-width">
@@ -382,7 +382,7 @@
                         <select id="annCoffee"></select>
                         <div id="beanAgeHint" class="bean-age-hint" style="display:none"></div>
                         <div id="annMixRows" class="ann-mix-rows" style="display:none"></div>
-                        <button type="button" class="lib-btn-sm ann-mix-add" id="annMixAddBtn"
+                        <button type="button" class="btn btn--tonal ann-mix-add" id="annMixAddBtn"
                             data-i18n="ann_add_bean">Weitere Bohne</button>
                     </div>
                     <div class="annotation-field">
@@ -449,8 +449,8 @@
             <div class="analytics-filter-row" id="maintScopeSeg" role="group" aria-label="Maschine" data-i18n-aria-label="machine_switcher_title" hidden></div>
             <span class="maint-scope-hint" id="maintScopeHint" data-i18n="maint_shared_once" hidden>Geteilte Tasks erscheinen einmal</span>
             <span class="maint-toolbar-spacer"></span>
-            <button type="button" class="analytics-filter-btn" data-action="open-maint-log-form" data-i18n="maint_log_add">Manuell eintragen</button>
-            <button type="button" class="analytics-filter-btn" data-action="open-maint-custom-form" data-i18n="maint_custom_add_summary">Eigene Wartung hinzufügen</button>
+            <button type="button" class="btn btn--tonal" data-action="open-maint-log-form" data-i18n="maint_log_add">Manuell eintragen</button>
+            <button type="button" class="btn btn--tonal" data-action="open-maint-custom-form" data-i18n="maint_custom_add_summary">Eigene Wartung hinzufügen</button>
         </div>
         <div class="maint-container">
             <div id="maint-cards"></div>
@@ -471,8 +471,8 @@
                 <h3 class="maint-section-title" id="guidedMaintTitle"></h3>
                 <div id="guidedMaintSteps"></div>
                 <div class="maint-log-form-actions">
-                    <button class="maint-done-btn" id="guidedMaintDoneBtn" data-action="guided-maint-done" disabled></button>
-                    <button class="maint-log-cancel-btn" data-action="guided-maint-cancel" data-i18n="lib_cancel">Abbrechen</button>
+                    <button class="btn btn--primary" id="guidedMaintDoneBtn" data-action="guided-maint-done" disabled></button>
+                    <button class="btn btn--quiet" data-action="guided-maint-cancel" data-i18n="lib_cancel">Abbrechen</button>
                 </div>
             </div>
         </div>
@@ -506,7 +506,7 @@
         <div>
             <div class="orders-col-title orders-history-header">
               <span data-i18n="orders_history">Verlauf</span>
-              <button class="orders-clear-hist-btn" id="orders-clear-history" data-i18n="orders_clear_history" style="display:none">Verlauf löschen</button>
+              <button type="button" class="btn btn--danger" id="orders-clear-history" data-i18n="orders_clear_history" style="display:none">Verlauf löschen</button>
             </div>
             <div class="orders-history-list" id="orders-history-list"></div>
         </div>
@@ -520,7 +520,7 @@
                 <div class="orders-menu-add-row">
                     <input class="orders-menu-input emoji" id="ordersMenuEmoji" aria-label="Emoji" data-i18n-aria-label="lib_milk_emoji" placeholder="☕" maxlength="2">
                     <input class="orders-menu-input" id="ordersMenuName" aria-label="Name" data-i18n-aria-label="orders_menu_name_ph" style="flex:1" placeholder="Name …" data-i18n-ph="orders_menu_name_ph">
-                    <button class="orders-menu-save-btn" id="addOrderMenuItemBtn" data-i18n="orders_menu_save">Hinzufügen</button>
+                    <button type="button" class="btn btn--tonal" id="addOrderMenuItemBtn" data-i18n="orders_menu_save">Hinzufügen</button>
                 </div>
             </div>
         </div>
@@ -702,10 +702,10 @@
                                 <label for="beanFormImage" data-i18n="bean_image_label">Bild</label>
                                 <input type="file" id="beanFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
-                                    <button type="button" class="lib-open-btn" id="beanFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
-                                    <button type="button" class="lib-open-btn" id="beanFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
-                                    <button type="button" class="lib-open-btn" id="beanFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
-                                    <button type="button" class="lib-open-btn" id="beanFormStickerBtn" data-i18n="sticker_title" style="display:none">Als Sticker freistellen</button>
+                                    <button type="button" class="btn btn--quiet" id="beanFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="btn btn--quiet" id="beanFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="btn btn--quiet" id="beanFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
+                                    <button type="button" class="btn btn--quiet" id="beanFormStickerBtn" data-i18n="sticker_title" style="display:none">Als Sticker freistellen</button>
                                     <span class="lib-form-hint lib-form-hint-staged" id="beanFormImageStaged" data-i18n="bean_image_staged" style="display:none">Foto wird beim Speichern hinzugefügt</span>
                                 </div>
                                 <span class="lib-form-hint" data-i18n="bean_image_hint">Falls der automatische Import fehlschlägt</span>
@@ -722,10 +722,10 @@
                         <!-- Kept for callers that host the bean form inline. Inside the library sheet
                              (.lib-form-sheet) this row is hidden and the sheet header bar's Save is used instead. -->
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closeBeanFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveBeanBtn" data-i18n="lib_save" style="display:none">Speichern</button>
-                            <button class="lib-save-btn" id="saveBeanNoBagBtn" data-i18n="lib_save_bean_no_bag" style="display:none">Speichern ohne Packung</button>
-                            <button class="lib-save-btn" id="saveBeanAddBagBtn" data-i18n="lib_save_bean_add_bag" style="display:none">Speichern und Packung hinzufügen</button>
+                            <button type="button" class="btn btn--quiet" id="closeBeanFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="saveBeanBtn" data-i18n="lib_save" style="display:none">Speichern</button>
+                            <button type="button" class="btn btn--tonal" id="saveBeanNoBagBtn" data-i18n="lib_save_bean_no_bag" style="display:none">Speichern ohne Packung</button>
+                            <button type="button" class="btn btn--primary" id="saveBeanAddBagBtn" data-i18n="lib_save_bean_add_bag" style="display:none">Speichern und Packung hinzufügen</button>
                         </div>
                     </div>
                     <div class="lib-trigger-row">
@@ -736,7 +736,7 @@
                     </div>
                     <div class="lib-url-row" id="urlImportRow" style="display:none">
                         <input class="lib-url-input" id="urlImportInput" aria-label="Import from URL" data-i18n-aria-label="lib_url_placeholder" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…">
-                        <button class="lib-url-btn" id="importFromUrlBtn" data-i18n="lib_url_btn">Importieren</button>
+                        <button type="button" class="btn btn--tonal" id="importFromUrlBtn" data-i18n="lib_url_btn">Importieren</button>
                     </div>
                     <div class="lib-url-paste" id="urlImportPasteRow" style="display:none">
                         <div class="lib-url-paste-msg" role="status" data-i18n="lib_url_shop_blocked">Dieser Shop lässt automatische Abfragen gerade nicht zu.</div>
@@ -748,7 +748,7 @@
                             <textarea class="lib-url-input lib-url-paste-text" id="urlImportPasteText" rows="4" spellcheck="false" autocomplete="off" aria-label="Paste the product data here" data-i18n-aria-label="lib_url_paste_placeholder" data-i18n-placeholder="lib_url_paste_placeholder" placeholder="Produktdaten hier einfügen"></textarea>
                             <div class="lib-url-paste-error" id="urlImportPasteInvalid" role="alert" style="display:none" data-i18n="lib_url_paste_invalid">Das sind keine gültigen Produktdaten. Kopiere den gesamten Text der geöffneten Seite.</div>
                             <div class="lib-url-paste-error" id="urlImportPasteTooLarge" role="alert" style="display:none" data-i18n="lib_url_paste_too_large">Der eingefügte Text ist zu lang.</div>
-                            <button class="lib-url-btn" id="urlImportPasteBtn" data-i18n="lib_url_paste_btn">Formular ausfüllen</button>
+                            <button type="button" class="btn btn--tonal" id="urlImportPasteBtn" data-i18n="lib_url_paste_btn">Formular ausfüllen</button>
                         </div>
                     </div>
                     <div class="lib-import-settings" id="importSettingsRow" style="display:none">
@@ -759,14 +759,14 @@
                             <div id="importSettingsCustomList"></div>
                             <div class="lib-import-settings-add">
                                 <input type="text" id="importSettingsDomainInput" aria-label="Shop domain" data-i18n-aria-label="lib_import_settings_add_domain_ph" data-i18n-placeholder="lib_import_settings_add_domain_ph" placeholder="shop.example.com">
-                                <button class="lib-btn-sm" id="importSettingsAddDomainBtn" data-i18n="lib_import_settings_add_domain_btn">Hinzufügen</button>
+                                <button type="button" class="btn btn--tonal" id="importSettingsAddDomainBtn" data-i18n="lib_import_settings_add_domain_btn">Hinzufügen</button>
                             </div>
                         </div>
                     </div>
                     <div class="lib-variant-picker" id="variantPickerRow" style="display:none">
                         <div class="lib-variant-picker-label" data-i18n="lib_variant_picker_label">Welche Packungsgröße hast du gekauft?</div>
                         <div id="variantPickerList"></div>
-                        <button class="lib-save-btn" id="variantPickerConfirm" data-i18n="lib_variant_picker_confirm">Übernehmen</button>
+                        <button type="button" class="btn btn--primary" id="variantPickerConfirm" data-i18n="lib_variant_picker_confirm">Übernehmen</button>
                     </div>
                 </div>
                 <!-- Grinders -->
@@ -794,9 +794,9 @@
                                 <label for="grinderFormImage" data-i18n="lib_grinder_image">Bild</label>
                                 <input type="file" id="grinderFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
-                                    <button type="button" class="lib-open-btn" id="grinderFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
-                                    <button type="button" class="lib-open-btn" id="grinderFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
-                                    <button type="button" class="lib-open-btn" id="grinderFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
+                                    <button type="button" class="btn btn--quiet" id="grinderFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="btn btn--quiet" id="grinderFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="btn btn--quiet" id="grinderFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
                             <div id="grinderFormScale"></div>
@@ -810,8 +810,8 @@
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closeGrinderFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveGrinderBtn" data-i18n="lib_save">Speichern</button>
+                            <button type="button" class="btn btn--quiet" id="closeGrinderFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="saveGrinderBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="grinderAddTrigger" data-i18n="lib_add_grinder">+ Mühle hinzufügen</button>
@@ -889,13 +889,13 @@
                         <div class="lib-recipe-steps-section">
                             <div class="lib-recipe-steps-header">
                                 <span data-i18n="lib_recipe_steps">Workflow-Schritte</span>
-                                <button class="lib-btn-sm" id="addRecipeStepBtn" data-i18n="lib_recipe_add_step">+ Schritt</button>
+                                <button type="button" class="btn btn--tonal" id="addRecipeStepBtn" data-i18n="lib_recipe_add_step">+ Schritt</button>
                             </div>
                             <div id="recipeStepsList"></div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closeRecipeFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveRecipeBtn" data-i18n="lib_save">Speichern</button>
+                            <button type="button" class="btn btn--quiet" id="closeRecipeFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="saveRecipeBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="recipeAddTrigger" data-i18n="lib_add_recipe">+ Rezept hinzufügen</button>
@@ -919,8 +919,8 @@
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closeMilkFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveMilkBtn" data-i18n="lib_save">Speichern</button>
+                            <button type="button" class="btn btn--quiet" id="closeMilkFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="saveMilkBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="milkAddTrigger" data-i18n="lib_add_milk">+ Milch hinzufügen</button>
@@ -968,15 +968,15 @@
                                 <label for="basketFormImage" data-i18n="lib_basket_image">Bild</label>
                                 <input type="file" id="basketFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
-                                    <button type="button" class="lib-open-btn" id="basketFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
-                                    <button type="button" class="lib-open-btn" id="basketFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
-                                    <button type="button" class="lib-open-btn" id="basketFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
+                                    <button type="button" class="btn btn--quiet" id="basketFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="btn btn--quiet" id="basketFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="btn btn--quiet" id="basketFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closeBasketFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="saveBasketBtn" data-i18n="lib_save">Speichern</button>
+                            <button type="button" class="btn btn--quiet" id="closeBasketFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="saveBasketBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="basketAddTrigger" data-i18n="lib_add_basket">+ Sieb hinzufügen</button>
@@ -1012,15 +1012,15 @@
                                 <label for="puckScreenFormImage" data-i18n="lib_puckscreen_image">Bild</label>
                                 <input type="file" id="puckScreenFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
-                                    <button type="button" class="lib-open-btn" id="puckScreenFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
-                                    <button type="button" class="lib-open-btn" id="puckScreenFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
-                                    <button type="button" class="lib-open-btn" id="puckScreenFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
+                                    <button type="button" class="btn btn--quiet" id="puckScreenFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="btn btn--quiet" id="puckScreenFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="btn btn--quiet" id="puckScreenFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
                         </div>
                         <div class="lib-form-actions">
-                            <button class="lib-btn-sm" id="closePuckScreenFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                            <button class="lib-save-btn" id="savePuckScreenBtn" data-i18n="lib_save">Speichern</button>
+                            <button type="button" class="btn btn--quiet" id="closePuckScreenFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                            <button type="button" class="btn btn--primary" id="savePuckScreenBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
                     <button class="lib-add-trigger" id="puckScreenAddTrigger" data-i18n="lib_add_puckscreen">+ Puck Screen hinzufügen</button>
@@ -1071,8 +1071,8 @@
                 <div class="lib-recipe-steps-section">
                     <div class="lib-recipe-steps-header">
                         <span data-i18n="profile_phases_title">Phasen</span>
-                        <button class="lib-btn-sm" id="profileApplySuggestionBtn" data-i18n="profile_apply_suggestion" style="display:none">Bohnen-Vorschlag anwenden</button>
-                        <button class="lib-btn-sm" id="addProfilePhaseBtn" data-i18n="profile_add_phase">+ Phase</button>
+                        <button type="button" class="btn btn--tonal" id="profileApplySuggestionBtn" data-i18n="profile_apply_suggestion" style="display:none">Bohnen-Vorschlag anwenden</button>
+                        <button type="button" class="btn btn--tonal" id="addProfilePhaseBtn" data-i18n="profile_add_phase">+ Phase</button>
                     </div>
                     <div id="profilePhaseList"></div>
                 </div>
@@ -1081,8 +1081,8 @@
                 </div>
             </div>
             <div class="lib-form-actions">
-                <button class="lib-btn-sm" id="cancelProfileFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                <button class="lib-save-btn" id="sendProfileToMachineBtn" data-i18n="profile_send_to_machine">An Maschine senden</button>
+                <button type="button" class="btn btn--quiet" id="cancelProfileFormBtn" data-i18n="lib_cancel">Abbrechen</button>
+                <button type="button" class="btn btn--primary" id="sendProfileToMachineBtn" data-i18n="profile_send_to_machine">An Maschine senden</button>
             </div>
         </div>
     </div>
@@ -1211,7 +1211,7 @@
             <p id="liveIdleUpdateHint" class="live-idle-hint" data-i18n="machine_update_available" style="display:none">Firmware-Update auf der Maschine verfügbar</p>
             <!-- #1324: opt-in GaggiMate machine control -- shown only while a
                  flush may be started or is running (components/machine-control.js). -->
-            <button id="liveFlushBtn" type="button" class="lib-save-btn" data-action="machine-flush-toggle" style="display:none"></button>
+            <button id="liveFlushBtn" type="button" class="btn btn--primary" data-action="machine-flush-toggle" style="display:none"></button>
 
             <!-- Pre-shot setup: bean/dose/grinder/grind/basket/puckscreen/recipe
                  chosen here get written onto the next completed shot's
@@ -1360,7 +1360,7 @@
                     <h3 class="analytics-section-title" data-i18n="analytics_facts">Wusstest du?</h3>
                     <div class="analytics-shelf-tools">
                         <span id="analyticsFactsCount" class="analytics-shelf-count"></span>
-                        <button type="button" class="analytics-filter-btn" data-action="analytics-facts-shuffle" data-i18n="analytics_facts_shuffle">Neu mischen</button>
+                        <button type="button" class="btn btn--quiet" data-action="analytics-facts-shuffle" data-i18n="analytics_facts_shuffle">Neu mischen</button>
                     </div>
                 </div>
                 <div id="analyticsFacts" class="analytics-facts" aria-live="polite"></div>
@@ -1618,7 +1618,7 @@
                 </div>
             </div>
             <div class="orders-notify-actions">
-                <button class="orders-menu-save-btn" id="notifySettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
+                <button type="button" class="btn btn--tonal" id="notifySettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
             </div>
         </div>
         </section>
@@ -1648,7 +1648,7 @@
             <label for="sdDose" class="machine-form-label" data-i18n="ann_dose">Dosis (g)</label>
             <input type="number" id="sdDose" class="machine-form-input" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0" max="100">
             <div class="machine-form-actions">
-                <button id="shotDefaultsSaveBtn" type="button" class="backup-btn" data-i18n="sd_save">Speichern</button>
+                <button id="shotDefaultsSaveBtn" type="button" class="btn btn--tonal" data-i18n="sd_save">Speichern</button>
             </div>
         </div>
         <!-- Bean freshness windows and the low-stock threshold (#1835) — the
@@ -1684,8 +1684,8 @@
             </div>
             <div id="bfError" class="bf-error" role="alert" style="display:none"></div>
             <div class="machine-form-actions">
-                <button id="bfSaveBtn" type="button" class="backup-btn" data-i18n="bf_save">Speichern</button>
-                <button id="bfResetBtn" type="button" class="backup-btn" data-i18n="bf_reset">Auf Standard zurücksetzen</button>
+                <button id="bfSaveBtn" type="button" class="btn btn--tonal" data-i18n="bf_save">Speichern</button>
+                <button id="bfResetBtn" type="button" class="btn btn--quiet" data-i18n="bf_reset">Auf Standard zurücksetzen</button>
             </div>
         </div>
         </section>
@@ -1721,8 +1721,8 @@
                 <label for="mqttPrefix" class="machine-form-label" data-i18n="settings_mqtt_prefix">Topic-Präfix</label>
                 <input type="text" id="mqttPrefix" class="machine-form-input" placeholder="gaggiuino">
                 <div class="machine-form-actions">
-                    <button id="mqttSaveBtn" type="button" class="backup-btn" data-i18n="settings_mqtt_save">Speichern</button>
-                    <button id="mqttApplyToMachineBtn" type="button" class="backup-btn" data-i18n="settings_mqtt_apply">Auf Maschine übertragen</button>
+                    <button id="mqttSaveBtn" type="button" class="btn btn--tonal" data-i18n="settings_mqtt_save">Speichern</button>
+                    <button id="mqttApplyToMachineBtn" type="button" class="btn btn--quiet" data-i18n="settings_mqtt_apply">Auf Maschine übertragen</button>
                 </div>
                 <div id="mqttSettingsResult" class="machine-form-test-result"></div>
             </div>
@@ -1777,8 +1777,8 @@
                 <input type="color" id="machineThemeCustomB" class="machine-theme-color-input" aria-label="Custom colour" data-i18n-aria-label="settings_machine_theme_custom" value="#f59e0b" style="display:none">
             </div>
             <div class="machine-form-actions">
-                <button id="machineFormTestBtn" type="button" class="backup-btn" data-i18n="settings_machine_test">Verbindung testen</button>
-                <button id="machineFormSaveBtn" type="button" class="backup-btn" data-i18n="settings_machine_save">Speichern</button>
+                <button id="machineFormTestBtn" type="button" class="btn btn--quiet" data-i18n="settings_machine_test">Verbindung testen</button>
+                <button id="machineFormSaveBtn" type="button" class="btn btn--primary" data-i18n="settings_machine_save">Speichern</button>
             </div>
             <div id="machineFormTestResult" class="machine-form-test-result"></div>
         </div>
@@ -1805,12 +1805,12 @@
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="backup_title">Backup & Restore</h3>
             <p class="settings-card-desc" data-i18n="backup_desc">Die komplette Datenbank (Shots, Bibliothek, Wartung, Bestellungen, Maschinen, Einstellungen) als ZIP-Datei sichern oder wiederherstellen. API-Token und MQTT-Login sind nur verschlüsselt mit einem selbst gewählten Passwort enthalten.</p>
-            <button id="backupDownloadBtn" type="button" class="backup-btn" data-i18n="backup_download">Backup herunterladen</button>
+            <button id="backupDownloadBtn" type="button" class="btn btn--tonal" data-i18n="backup_download">Backup herunterladen</button>
             <!-- Translation text must live in its own span: applyTranslations sets
                  textContent on [data-i18n] nodes, which would wipe the file input.
                  Both .zip (current export format) and .json (backups downloaded
                  before #658) are accepted -- see backup-modal.js's looksLikeZip(). -->
-            <label class="backup-btn" style="cursor:pointer">
+            <label class="btn btn--quiet">
                 <span data-i18n="backup_restore">Aus Backup wiederherstellen …</span>
                 <input type="file" id="backupRestoreInput" accept=".zip,.json" style="display:none">
             </label>
@@ -1826,7 +1826,7 @@
             <p class="settings-card-desc" data-i18n="settings_api_token_desc">Für Integrationen wie die Order Card im Direkt-URL-Modus (ohne HA Ingress) benötigst du diesen Token als glp_token in der YAML-Konfiguration.</p>
             <div class="api-token-row" id="apiTokenRow">
                 <code id="apiTokenValue" class="api-token-value"></code>
-                <button id="apiTokenCopyBtn" type="button" class="backup-btn" data-i18n="settings_api_token_copy">Kopieren</button>
+                <button id="apiTokenCopyBtn" type="button" class="btn btn--quiet" data-i18n="settings_api_token_copy">Kopieren</button>
             </div>
             <p class="settings-card-desc" id="apiTokenPortClosedNotice" data-i18n="settings_api_token_port_closed" style="display:none">Diese Sitzung hat keinen Token, weil expose_api_port deaktiviert ist und die Anfrage nicht über HA Ingress kam. Öffne die App über das Home-Assistant-Ingress-Panel, um einen Token zu erhalten, oder aktiviere expose_api_port wieder in der App-Konfiguration.</p>
         </div>
@@ -1851,13 +1851,13 @@
                 </label>
                 <label for="devBlindRating" data-i18n="settings_devtools_blind_rating">Blind bewerten — Score und Urteil eines Shots erst nach der Sternebewertung zeigen</label>
             </div>
-            <button id="devExportDbBtn" type="button" class="backup-btn" data-i18n="settings_devtools_export_db">Download raw database</button>
+            <button id="devExportDbBtn" type="button" class="btn btn--quiet" data-i18n="settings_devtools_export_db">Download raw database</button>
             <!-- #755: counterpart to the export button above. Translation
                  text must live in its own span, same reasoning as the
                  Backup & Restore card's restore label (applyTranslations
                  sets textContent on [data-i18n] nodes, which would wipe the
                  file input). -->
-            <label class="backup-btn" style="cursor:pointer">
+            <label class="btn btn--quiet">
                 <span data-i18n="settings_devtools_import_db">Upload raw database …</span>
                 <input type="file" id="devImportDbInput" accept=".db" style="display:none">
             </label>
@@ -1883,7 +1883,7 @@
                 </div>
             </div>
             <div class="orders-notify-actions">
-                <button class="orders-menu-save-btn" id="mcpSettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
+                <button type="button" class="btn btn--tonal" id="mcpSettingsSaveBtn" data-i18n="orders_types_save">Speichern</button>
             </div>
         </div>
         </section>
@@ -1924,8 +1924,8 @@
             <!-- rendered by gaggimate-profile-editor.js -->
         </div>
         <div class="lib-form-actions">
-            <button class="lib-btn-sm" data-action="gm-editor-close" data-i18n="lib_cancel">Abbrechen</button>
-            <button class="lib-save-btn" data-action="gm-editor-save" data-i18n="gm_editor_save_to_machine">Auf Maschine speichern</button>
+            <button type="button" class="btn btn--quiet" data-action="gm-editor-close" data-i18n="lib_cancel">Abbrechen</button>
+            <button type="button" class="btn btn--primary" data-action="gm-editor-save" data-i18n="gm_editor_save_to_machine">Auf Maschine speichern</button>
         </div>
     </div>
 </div>
@@ -1943,15 +1943,15 @@
         <label for="scanManualInput" data-i18n="scan_manual_label">Oder Barcode eingeben</label>
         <div class="scan-manual-row">
             <input id="scanManualInput" class="lib-input scan-manual-input" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off">
-            <button type="submit" class="lib-btn-sm scan-manual-submit" data-action="scan-manual-submit" data-i18n="scan_manual_submit">Suchen</button>
+            <button type="submit" class="btn btn--tonal scan-manual-submit" data-action="scan-manual-submit" data-i18n="scan_manual_submit">Suchen</button>
         </div>
     </form>
-    <button type="button" class="lib-btn-sm scan-photo-btn" data-action="scan-take-photo" data-i18n="scan_take_photo">Foto aufnehmen</button>
+    <button type="button" class="btn btn--quiet" data-action="scan-take-photo" data-i18n="scan_take_photo">Foto aufnehmen</button>
     <input id="scanPhotoInput" type="file" accept="image/*" capture="environment" aria-label="Take photo" data-i18n-aria-label="scan_take_photo" hidden>
     <p style="color:var(--gray-600);font-size:.7rem;text-align:center;margin:0">
         <span data-i18n="scan_attribution">Produktdaten von</span> <a href="https://world.openfoodfacts.org" target="_blank" style="color:#71717a">Open Food Facts</a> (ODbL)
     </p>
-    <button class="scan-close-btn" id="closeScanModalBtn" data-i18n="scan_close">Schließen</button>
+    <button type="button" class="btn btn--quiet" id="closeScanModalBtn" data-i18n="scan_close">Schließen</button>
 </div>
 
 <!-- ── In-app camera modal (#1836) ── the Companion app's WebView ignores the
@@ -1962,8 +1962,8 @@
         <video id="photoCameraVideo" class="photo-video-off" autoplay muted playsinline></video>
     </div>
     <div class="photo-camera-actions">
-        <button type="button" id="photoCameraCancelBtn" class="scan-close-btn" data-i18n="photo_camera_cancel">Abbrechen</button>
-        <button type="button" id="photoCameraShutter" class="lib-save-btn photo-camera-shutter" data-i18n="photo_camera_shutter">Auslösen</button>
+        <button type="button" id="photoCameraCancelBtn" class="btn btn--quiet" data-i18n="photo_camera_cancel">Abbrechen</button>
+        <button type="button" id="photoCameraShutter" class="btn btn--primary photo-camera-shutter" data-i18n="photo_camera_shutter">Auslösen</button>
     </div>
 </div>
 
@@ -1996,8 +1996,8 @@
         <div id="backupModalError" class="backup-modal-error" style="display:none"></div>
 
         <div class="machine-form-actions">
-            <button id="backupModalConfirmBtn" type="button" class="backup-btn"></button>
-            <button id="backupModalCancelBtn" type="button" class="backup-btn" data-i18n="backup_modal_cancel">Abbrechen</button>
+            <button id="backupModalConfirmBtn" type="button" class="btn btn--primary"></button>
+            <button id="backupModalCancelBtn" type="button" class="btn btn--quiet" data-i18n="backup_modal_cancel">Abbrechen</button>
         </div>
     </div>
 </div>
@@ -2011,8 +2011,8 @@
         <p class="settings-card-desc" data-i18n="brew_confirm_desc">Die Maschine meldet diese Warnungen:</p>
         <ul id="brewConfirmWarnings"></ul>
         <div class="lib-form-actions">
-            <button class="lib-btn-sm" data-action="brew-confirm-cancel" data-i18n="brew_confirm_cancel">Zurück</button>
-            <button class="lib-save-btn" data-action="brew-confirm-start" data-i18n="brew_confirm_start">Trotzdem starten</button>
+            <button type="button" class="btn btn--quiet" data-action="brew-confirm-cancel" data-i18n="brew_confirm_cancel">Zurück</button>
+            <button type="button" class="btn btn--primary" data-action="brew-confirm-start" data-i18n="brew_confirm_start">Trotzdem starten</button>
         </div>
     </div>
 </div>

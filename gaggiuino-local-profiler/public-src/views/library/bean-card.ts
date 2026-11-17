@@ -224,8 +224,8 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
           <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="editFrozenDate${esc(fp.id)}" value="${esc(localIsoDate(fp.frozenAt))}" max="${esc(todayIsoDate())}">
         </div>
         <div class="lib-form-actions">
-          <button class="lib-btn-sm" data-action="close-edit-frozen-form" data-portion-id="${esc(fp.id)}">${tHtml('lib_cancel')}</button>
-          <button class="lib-save-btn" data-action="save-edit-frozen-form" data-id="${esc(b.id)}" data-portion-id="${esc(fp.id)}">${tHtml('bag_freeze_save')}</button>
+          <button type="button" class="btn btn--quiet" data-action="close-edit-frozen-form" data-portion-id="${esc(fp.id)}">${tHtml('lib_cancel')}</button>
+          <button type="button" class="btn btn--tonal" data-action="save-edit-frozen-form" data-id="${esc(b.id)}" data-portion-id="${esc(fp.id)}">${tHtml('bag_freeze_save')}</button>
         </div>
       </div>`;
     // #477: each portion's own effective age (frozen time counts at a
@@ -248,12 +248,12 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
       : esc('');
     if (fp.thawedAt) {
       const thawedStr = formatDate(fp.thawedAt, locale);
-      return html`<span class="badge lib-frozen" title="${esc(fpTitle)}">${tHtml('bag_frozen_thawed_badge', esc(thawedStr))}${fpAgeBadge}
-        <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
+      return html`<span class="badge lib-frozen" title="${esc(fpTitle)}">${tHtml('bag_frozen_thawed_badge', esc(thawedStr))}${fpAgeBadge}</span>
+        <button type="button" class="btn btn--quiet btn--icon" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button>${editForm}`;
     }
-    return html`<span class="badge badge--info lib-frozen" title="${esc(fpTitle)}">${SNOWFLAKE_ICON_SVG} ${esc(remaining)}/${esc(fp.portionCount)} ${tHtml('bag_frozen_badge', esc(frozenStr))}${fpAgeBadge}
-      <button class="lib-frozen-thaw-btn" data-action="thaw-portion" data-bean-id="${esc(b.id)}" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_thaw_btn')}">${tHtml('bag_thaw_btn')}</button>
-      <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
+    return html`<span class="badge badge--info lib-frozen" title="${esc(fpTitle)}">${SNOWFLAKE_ICON_SVG} ${esc(remaining)}/${esc(fp.portionCount)} ${tHtml('bag_frozen_badge', esc(frozenStr))}${fpAgeBadge}</span>
+      <button type="button" class="btn btn--tonal" data-action="thaw-portion" data-bean-id="${esc(b.id)}" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_thaw_btn')}">${tHtml('bag_thaw_btn')}</button>
+      <button type="button" class="btn btn--quiet btn--icon" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button>${editForm}`;
   }))}</div>` : esc('');
 
   const rating = calcBeanRating(b, _singleBeanShots(_shots()), S.coffeeLibrary?.beans);
@@ -350,8 +350,8 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
         <input type="text" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_batch_number')}" id="newBagBatchNumber${esc(b.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50">
       </div>
       <div class="lib-form-actions">
-        <button class="lib-btn-sm" data-action="close-new-bag" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
-        <button class="lib-save-btn" data-action="save-new-bag" data-id="${esc(b.id)}">${tHtml('lib_new_bag_save')}</button>
+        <button type="button" class="btn btn--quiet" data-action="close-new-bag" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
+        <button type="button" class="btn btn--tonal" data-action="save-new-bag" data-id="${esc(b.id)}">${tHtml('lib_new_bag_save')}</button>
       </div>
     </div>
     <div id="freezeForm${esc(b.id)}" class="lib-new-bag-form" style="display:none">
@@ -361,8 +361,8 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
         <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="freezeDate${esc(b.id)}" title="${tHtml('bag_freeze_date')}" value="${esc(todayIsoDate())}" max="${esc(todayIsoDate())}">
       </div>
       <div class="lib-form-actions">
-        <button class="lib-btn-sm" data-action="close-freeze-form" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
-        <button class="lib-save-btn" data-action="save-freeze-form" data-id="${esc(b.id)}">${tHtml('bag_freeze_save')}</button>
+        <button type="button" class="btn btn--quiet" data-action="close-freeze-form" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
+        <button type="button" class="btn btn--tonal" data-action="save-freeze-form" data-id="${esc(b.id)}">${tHtml('bag_freeze_save')}</button>
       </div>
     </div>
     <div class="bean-qr-wrap" id="beanQR${esc(b.id)}" style="display:none">

@@ -279,7 +279,7 @@ function moveSelectedItem(id: string, dir: 'up' | 'down'): void {
 function buildReorderButton(dir: 'up' | 'down', row: SettingsRow, label: string): HTMLButtonElement {
   const btn = document.createElement('button');
   btn.type = 'button';
-  btn.className = 'bottom-nav-reorder-btn';
+  btn.className = 'btn btn--quiet btn--icon';
   btn.dataset.dir = dir;
   btn.setAttribute('aria-label', label);
   btn.disabled = dir === 'up' ? !row.canMoveUp : !row.canMoveDown;

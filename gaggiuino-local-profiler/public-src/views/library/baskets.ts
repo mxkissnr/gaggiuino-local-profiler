@@ -56,8 +56,8 @@ export function renderBasketList(): void {
         ${b.notes ? html`<div class="lib-item-sub">${esc(b.notes)}</div>` : html``}
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-basket" data-id="${esc(b.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-basket" data-id="${esc(b.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button type="button" class="btn btn--quiet btn--icon" data-action="edit-basket" data-id="${esc(b.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button type="button" class="btn btn--danger btn--icon" data-action="delete-basket" data-id="${esc(b.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`;
   }));

@@ -103,12 +103,12 @@ export function renderGrinderList(): void {
         ${zeroPoint != null ? html`<div class="lib-item-sub">${tHtml('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</div>` : html``}
         ${g.wear ? html`<div class="lib-item-sub lib-grinder-wear">
           <span>${WRENCH_ICON_SVG} ${tHtml('lib_grinder_wear', g.wear.shotsSinceBurrs, esc(formatWearGrams(g.wear.gramsSinceBurrs)))}</span>
-          <button class="lib-btn-sm lib-grinder-reset-burrs" data-action="reset-grinder-burrs" data-id="${esc(g.id)}">${tHtml('lib_grinder_reset_burrs')}</button>
+          <button type="button" class="btn btn--quiet" data-action="reset-grinder-burrs" data-id="${esc(g.id)}">${tHtml('lib_grinder_reset_burrs')}</button>
         </div>` : html``}
       </div>
       <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-grinder" data-id="${esc(g.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder" data-id="${esc(g.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
+        <button type="button" class="btn btn--quiet btn--icon" data-action="edit-grinder" data-id="${esc(g.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
+        <button type="button" class="btn btn--danger btn--icon" data-action="delete-grinder" data-id="${esc(g.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
       </div>
     </div>`;
   }));
@@ -194,7 +194,7 @@ function renderGrinderZeroPointHistory(grinder: GrinderRow | null | undefined): 
     const date = formatDate(e.since, localeFor(S.currentLang));
     return html`<div class="zp-history-entry">
       <span>${esc(String(e.zeroPoint))} &mdash; ${esc(date)}</span>
-      <button type="button" class="lib-btn-sm del lib-btn-icon" data-action="delete-grinder-zero-point" data-id="${esc(grinder?.id)}" data-since="${esc(e.since)}" title="${tHtml('lib_grinder_zero_point_delete')}">&#x2715;</button>
+      <button type="button" class="btn btn--danger btn--icon" data-action="delete-grinder-zero-point" data-id="${esc(grinder?.id)}" data-since="${esc(e.since)}" title="${tHtml('lib_grinder_zero_point_delete')}">&#x2715;</button>
     </div>`;
   }))}</div>`;
 }

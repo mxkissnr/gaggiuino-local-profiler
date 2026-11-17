@@ -45,6 +45,23 @@ const RETIRED_BADGES = [
   'dw-score-chip', 'dw-chip',
 ] as const;
 
+// Button classes retired by #2095: every action button outside the navigation
+// is a .btn with one variant (docs/DESIGN.md, "Shapes and components"). No
+// rule, markup or code may use them again. Each slice of #2095 adds the
+// classes it retires.
+const RETIRED_BUTTONS = [
+  'analytics-filter-btn', 'maint-banner-btn', 'maint-done-btn', 'maint-pause-btn',
+  'maint-disable-btn', 'maint-delete-btn', 'maint-reenable-btn',
+  'maint-log-cancel-btn', 'maint-log-del-btn', 'maint-guide-btn',
+  'order-btn', 'order-eta-btn', 'orders-clear-hist-btn', 'orders-menu-variant-btn', 'orders-menu-save-btn',
+  'compare-btn', 'delete-btn', 'trash-restore-btn', 'trash-delete-btn', 'export-btn',
+  'lib-open-btn', 'mbk-btn', 'mbk-btn-primary', 'mbk-btn-danger', 'bottom-nav-reorder-btn',
+  'backup-btn', 'lib-btn-icon', 'lib-grinder-reset-burrs',
+  'lib-frozen-thaw-btn', 'lib-frozen-edit-btn', 'lib-bag-edit-btn', 'lib-bag-del',
+  'sticker-mode-btn', 'lib-save-btn', 'lib-btn-sm', 'lib-url-btn', 'scan-close-btn',
+  'scan-photo-btn',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -98,14 +115,14 @@ describe('shared filter chips (#2093)', () => {
     expect(search).toContain('border-radius: var(--radius-ctl)');
   });
 
-  it('leaves no rule, markup or code using a retired chip or badge class', () => {
+  it('leaves no rule, markup or code using a retired chip, badge or button class', () => {
     const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
       .filter(name => name.endsWith('.ts') || name.endsWith('.html') || name.endsWith('.css'));
 
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -159,5 +176,83 @@ describe('status badges (#2094)', () => {
     const shots = read('views/shots/index.ts');
     expect(shots).toContain("'badge shot-delta'");
     expect(shots).toContain('badge shot-delta badge--');
+  });
+});
+
+describe('shared buttons (#2095)', () => {
+  it('gives the maintenance and analytics actions a shared button variant', () => {
+    const index = read('index.html');
+    expect(index).toContain('<button type="button" class="btn btn--tonal" data-action="open-maint-log-form"');
+    expect(index).toContain('<button type="button" class="btn btn--tonal" data-action="open-maint-custom-form"');
+    expect(index).toContain('<button type="button" class="btn btn--quiet" data-action="analytics-facts-shuffle"');
+    expect(index).toContain('<button class="btn btn--primary" id="guidedMaintDoneBtn"');
+    const maint = read('views/maintenance.ts');
+    expect(maint).toContain('class="btn btn--primary" data-action="mark-maint-done"');
+    expect(maint).toContain('class="btn btn--tonal" data-action="toggle-maint-disabled"');
+  });
+
+  it('gives the order actions a shared button variant and the ETA picker shared chips', () => {
+    const orders = read('views/orders.ts');
+    expect(orders).toContain('class="btn btn--tonal" data-order-accept=');
+    expect(orders).toContain('class="btn btn--tonal" data-order-complete=');
+    expect(orders).toContain('class="btn btn--danger" data-order-decline-toggle=');
+    expect(orders).toContain('<button type="button" class="chip" aria-pressed="${esc(selectedEta === m');
+    expect(orders).not.toContain("classList.add('selected')");
+  });
+
+  it('gives the shot view, shot list and trash actions a shared button variant', () => {
+    const index = read('index.html');
+    for (const id of ['exportAllCsvBtn', 'exportShotBtn', 'exportProfileBtn', 'shareCardBtn', 'annPhotoPickBtn']) {
+      expect(index, id).toContain(`class="btn btn--quiet" id="${id}"`);
+    }
+    expect(index).toContain('class="btn btn--danger" id="annPhotoRemoveBtn"');
+    const sidebar = read('components/sidebar.ts');
+    expect(sidebar).toContain("btnCmp.className = 'chip shot-compare';");
+    expect(sidebar).toContain("btnDel.className = 'btn btn--quiet btn--icon';");
+    expect(read('views/shots/index.ts')).toContain('class="btn btn--danger btn--icon" title=');
+  });
+
+  it('gives the settings actions a shared button variant, saves tonal', () => {
+    const index = read('index.html');
+    for (const id of ['shotDefaultsSaveBtn', 'bfSaveBtn', 'mqttSaveBtn', 'backupDownloadBtn']) {
+      expect(index, id).toContain(`<button id="${id}" type="button" class="btn btn--tonal"`);
+    }
+    expect(index).toContain('<button id="machineFormSaveBtn" type="button" class="btn btn--primary"');
+    expect(index).not.toContain('class="backup-btn"');
+  });
+
+  it('keeps the frozen portion buttons outside the badge and gives bag actions shared buttons', () => {
+    const card = read('views/library/bean-card.ts');
+    expect(card).toContain('${fpAgeBadge}</span>\n      <button type="button" class="btn btn--tonal" data-action="thaw-portion"');
+    const bags = read('views/library/bags.ts');
+    expect(bags).toContain('class="btn btn--quiet btn--icon" data-action="open-edit-bag"');
+    expect(bags).toContain('class="btn btn--danger btn--icon" data-action="delete-bag"');
+  });
+
+  it('gives the dialogs shared buttons and the sticker toggles shared chips', () => {
+    const sticker = read('components/sticker/editor.ts');
+    expect(sticker).toContain("themedButton('chip sticker-mode-add',");
+    expect(sticker).toContain("themedButton('chip sticker-original',");
+    expect(sticker).toContain("themedButton('btn btn--primary crop-editor-apply sticker-apply',");
+    expect(read('components/confirm-dialog.ts')).toContain("accept.className = 'btn btn--primary';");
+    expect(read('components/image-crop.ts')).toContain('class="btn btn--primary crop-editor-apply"');
+    expect(read('views/library/bean-form-sheet.ts')).toContain("discard.className = 'btn btn--danger';");
+  });
+
+  it('gives the library forms one primary each and the new bean form one of its two saves', () => {
+    const index = read('index.html');
+    for (const id of ['saveGrinderBtn', 'saveRecipeBtn', 'saveMilkBtn', 'saveBasketBtn', 'savePuckScreenBtn', 'saveBeanAddBagBtn']) {
+      expect(index, id).toContain(`<button type="button" class="btn btn--primary" id="${id}"`);
+    }
+    expect(index).toContain('<button type="button" class="btn btn--tonal" id="saveBeanNoBagBtn"');
+    expect(index).not.toMatch(/class="[^"]*\b(?:lib-save-btn|lib-btn-sm)\b/);
+  });
+
+  it('gives the wizards and the profile editor one primary per step', () => {
+    for (const file of ['views/dialin-wizard.ts', 'views/profile-dialin-wizard.ts', 'views/setup-wizard.ts', 'views/gaggimate-profile-editor.ts', 'views/shots/annotation-mix.ts']) {
+      const text = read(file);
+      expect(text, file).not.toMatch(/lib-save-btn|lib-btn-sm/);
+      expect(text, file).toContain('class="btn btn--');
+    }
   });
 });

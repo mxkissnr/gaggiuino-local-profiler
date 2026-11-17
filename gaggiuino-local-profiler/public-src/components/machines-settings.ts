@@ -778,7 +778,7 @@ function renderFirmwarePanelHtml(): Html {
     <span class="machine-firmware-update-banner">
       <span class="machine-firmware-update-msg"></span>
       <a class="machine-firmware-changelog-link" href="#" target="_blank" rel="noopener">${escapeHtml(t('update_changelog'))}</a>
-      <button type="button" class="machine-firmware-update-btn backup-btn">${escapeHtml(t('settings_machine_firmware_update_btn'))}</button>
+      <button type="button" class="btn btn--primary machine-firmware-update-btn">${escapeHtml(t('settings_machine_firmware_update_btn'))}</button>
     </span>
     <span class="machine-firmware-progress-bar" style="display:none">
       <span class="machine-firmware-progress-label"></span>

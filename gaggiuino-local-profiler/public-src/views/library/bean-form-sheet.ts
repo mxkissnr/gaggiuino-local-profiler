@@ -166,14 +166,14 @@ function _beanFormSheetHost(): HTMLElement | null {
   confirmActions.className = 'lib-form-confirm-actions';
   const discard = document.createElement('button');
   discard.type = 'button';
-  discard.className = 'lib-btn-sm';
+  discard.className = 'btn btn--danger';
   discard.textContent = t('lib_form_discard');
   discard.setAttribute('data-i18n', 'lib_form_discard');
   discard.addEventListener('click', () => discardBeanForm());
   confirmActions.appendChild(discard);
   const keep = document.createElement('button');
   keep.type = 'button';
-  keep.className = 'lib-save-btn';
+  keep.className = 'btn btn--tonal';
   keep.textContent = t('lib_form_keep_editing');
   keep.setAttribute('data-i18n', 'lib_form_keep_editing');
   keep.addEventListener('click', () => _hideFormConfirm());

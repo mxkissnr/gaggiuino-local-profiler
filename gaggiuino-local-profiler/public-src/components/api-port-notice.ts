@@ -22,7 +22,7 @@ export function apiPortClosedHtml(): Html {
   return html`<div class="loading-state" style="max-width:520px;margin:0 auto;text-align:center">
     <div style="font-weight:600;margin-bottom:6px">${tHtml('api_port_closed_title')}</div>
     <div style="font-size:var(--fs-2);line-height:1.45">${tHtml('api_port_closed_desc')}</div>
-    <button data-action="goto-settings" class="export-btn" style="margin-top:var(--sp-3)">${tHtml('api_port_closed_settings_btn')}</button>
+    <button type="button" data-action="goto-settings" class="btn btn--tonal" style="margin-top:var(--sp-3)">${tHtml('api_port_closed_settings_btn')}</button>
   </div>`;
 }
 
