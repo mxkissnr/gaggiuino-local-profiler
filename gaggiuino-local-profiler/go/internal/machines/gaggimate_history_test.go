@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"math"
 	"net/http"
 	"net/http/httptest"
@@ -35,6 +36,55 @@ func TestHttpGetBytesCapped_TruncatesOversizedResponse(t *testing.T) {
 	if len(data) != maxBytes {
 		t.Fatalf("len(data) = %d, want exactly the %d-byte cap (response body was %d bytes)", len(data), maxBytes, len(oversized))
 	}
+}
+
+// TestFetchGaggiMateShot_HTMLBodyIsBadSlog is #2076's regression test: the
+// firmware answers a missing shot with its web UI HTML under HTTP 200, so that
+// response has to be tagged as one unreadable shot (skippable) instead of a
+// transport failure. A non-200 stays a transport error.
+func TestFetchGaggiMateShot_HTMLBodyIsBadSlog(t *testing.T) {
+	allowLoopbackMachineHost(t)
+
+	t.Run("html body", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/html")
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("<!doctype html><html></html>"))
+		}))
+		defer srv.Close()
+
+		shot, status, err := FetchGaggiMateShot(context.Background(), srv.URL, 1)
+		if err == nil {
+			t.Fatal("FetchGaggiMateShot returned no error for an HTML body")
+		}
+		if !errors.Is(err, ErrGaggiMateBadSlog) {
+			t.Fatalf("error %v does not wrap ErrGaggiMateBadSlog", err)
+		}
+		if shot != nil {
+			t.Fatalf("shot = %v, want nil", shot)
+		}
+		if status != http.StatusOK {
+			t.Fatalf("status = %d, want %d", status, http.StatusOK)
+		}
+	})
+
+	t.Run("server error", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		defer srv.Close()
+
+		_, status, err := FetchGaggiMateShot(context.Background(), srv.URL, 1)
+		if err == nil {
+			t.Fatal("FetchGaggiMateShot returned no error for HTTP 500")
+		}
+		if errors.Is(err, ErrGaggiMateBadSlog) {
+			t.Fatalf("HTTP 500 error %v must not match ErrGaggiMateBadSlog", err)
+		}
+		if status != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d", status, http.StatusInternalServerError)
+		}
+	})
 }
 
 // buildSlogFixture assembles a minimal-but-valid .slog buffer: header +
