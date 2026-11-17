@@ -94,7 +94,8 @@ describe('maintTaskSheetBody (#1923)', () => {
     expect((out.match(/data-action="set-maint-mode"/g) || []).length).toBe(3);
     expect((out.match(/data-machine-id="1"/g) || []).length).toBeGreaterThanOrEqual(5);
     // shots is the active mode
-    expect(out).toMatch(/class="analytics-filter-btn active"[^>]*data-mode="shots"/);
+    expect(out).toMatch(/class="chip"[^>]*data-mode="shots"[^>]*aria-pressed="true"/);
+    expect(out).not.toMatch(/class="[^"]*\bactive\b/);
     expect(out).toContain('aria-pressed="true"');
     expect(out).toContain('data-field="threshold_shots"');
     expect(out).toContain('data-action="toggle-maint-disabled"');
@@ -108,7 +109,7 @@ describe('maintTaskSheetBody (#1923)', () => {
     const out = maintTaskSheetBody(t0, []);
 
     expect((out.match(/data-action="set-maint-mode"/g) || []).length).toBe(4);
-    expect(out).toMatch(/class="analytics-filter-btn active"[^>]*data-mode="g"/);
+    expect(out).toMatch(/class="chip"[^>]*data-mode="g"[^>]*aria-pressed="true"/);
     expect(out).toContain('data-field="threshold_g"');
     expect(out).not.toContain('data-field="threshold_shots"');
   });
