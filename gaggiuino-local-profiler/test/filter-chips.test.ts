@@ -54,6 +54,8 @@ const RETIRED_BUTTONS = [
   'maint-disable-btn', 'maint-delete-btn', 'maint-reenable-btn',
   'maint-log-cancel-btn', 'maint-log-del-btn', 'maint-guide-btn',
   'order-btn', 'order-eta-btn', 'orders-clear-hist-btn', 'orders-menu-variant-btn', 'orders-menu-save-btn',
+  'compare-btn', 'delete-btn', 'trash-restore-btn', 'trash-delete-btn', 'export-btn',
+  'lib-open-btn',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -192,5 +194,17 @@ describe('shared buttons (#2095)', () => {
     expect(orders).toContain('class="btn btn--danger" data-order-decline-toggle=');
     expect(orders).toContain('<button type="button" class="chip" aria-pressed="${esc(selectedEta === m');
     expect(orders).not.toContain("classList.add('selected')");
+  });
+
+  it('gives the shot view, shot list and trash actions a shared button variant', () => {
+    const index = read('index.html');
+    for (const id of ['exportAllCsvBtn', 'exportShotBtn', 'exportProfileBtn', 'shareCardBtn', 'annPhotoPickBtn']) {
+      expect(index, id).toContain(`class="btn btn--quiet" id="${id}"`);
+    }
+    expect(index).toContain('class="btn btn--danger" id="annPhotoRemoveBtn"');
+    const sidebar = read('components/sidebar.ts');
+    expect(sidebar).toContain("btnCmp.className = 'chip shot-compare';");
+    expect(sidebar).toContain("btnDel.className = 'btn btn--quiet btn--icon';");
+    expect(read('views/shots/index.ts')).toContain('class="btn btn--danger btn--icon" title=');
   });
 });

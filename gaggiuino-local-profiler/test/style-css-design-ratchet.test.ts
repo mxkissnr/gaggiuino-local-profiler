@@ -18,8 +18,8 @@ const TOKENS_PATH = join(here, '..', 'public-src', 'tokens.css');
 const PINNED = {
   literalRadius: 42,
   literalPadding: 32,
-  transitionAll: 9,
-  pageLookClasses: 50,
+  transitionAll: 6,
+  pageLookClasses: 37,
 } as const;
 
 type Debt = Record<keyof typeof PINNED, string[]>;
@@ -145,6 +145,7 @@ describe('style.css design ratchet (#2091)', () => {
       '.btn--tonal',
       '.btn--quiet',
       '.btn--danger',
+      '.btn--icon',
       '.badge',
       '.badge--ok',
       '.badge--warn',
