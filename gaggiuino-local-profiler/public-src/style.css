@@ -46,6 +46,95 @@
             transition: background-color 9999s ease-in-out 0s;
         }
 
+        /* ── Shared components ── #2091: the role decides the shape (see
+           docs/DESIGN.md, "Shapes and components"). A page picks one of
+           these and keeps only layout in its own class (position, grid
+           area, gap), never colour, radius or padding. The design ratchet
+           test counts every page class that still styles its own look. */
+        .chip {
+            display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1);
+            min-height: 44px;
+            padding: 0 var(--sp-3);
+            border: 1px solid var(--gray-700);
+            border-radius: var(--radius-ctl);
+            background: transparent;
+            color: var(--gray-400);
+            font-size: var(--fs-1);
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: background-color .15s, border-color .15s, color .15s;
+        }
+        .chip:hover { border-color: var(--gray-500); color: var(--gray-200); }
+        /* aria-pressed is the only active state a screen reader announces. */
+        .chip[aria-pressed="true"] {
+            background: color-mix(in srgb, var(--accent) 15%, transparent);
+            border-color: var(--accent);
+            color: color-mix(in srgb, var(--accent-ink) 80%, var(--gray-100));
+        }
+
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
+            min-height: 44px;
+            padding: 0 var(--sp-4);
+            border: 0;
+            border-radius: var(--radius-ctl);
+            background: var(--raised);
+            color: var(--gray-200);
+            font-size: var(--fs-2);
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color .15s, color .15s;
+        }
+        .btn--primary { background: var(--accent); color: var(--accent-text); }
+        .btn--tonal {
+            background: color-mix(in srgb, var(--accent) 15%, transparent);
+            color: color-mix(in srgb, var(--accent-ink) 80%, var(--gray-100));
+        }
+        .btn--quiet { background: transparent; color: var(--accent-ink); }
+        .btn--danger {
+            background: color-mix(in srgb, var(--err) 15%, transparent);
+            color: color-mix(in srgb, var(--err) 80%, var(--gray-100));
+        }
+        /* One hover for every variant: a state layer in the text colour on
+           top of the variant's own background. */
+        .btn:hover:not(:disabled) {
+            background-image: linear-gradient(color-mix(in srgb, currentColor 10%, transparent), color-mix(in srgb, currentColor 10%, transparent));
+        }
+        .chip:disabled, .btn:disabled { opacity: .5; cursor: default; }
+        .chip:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+
+        /* Status only, never clickable, so the full radius. A variant only
+           sets --badge-c; the 15 % tint and the 80 % text mix keep every
+           variant at 4.5:1 or better on every surface in both themes. */
+        .badge {
+            --badge-c: var(--gray-400);
+            display: inline-flex; align-items: center; gap: var(--sp-1);
+            padding: 0 var(--sp-2);
+            border-radius: var(--radius-full);
+            background: color-mix(in srgb, var(--badge-c) 15%, transparent);
+            color: color-mix(in srgb, var(--badge-c) 80%, var(--gray-100));
+            font-size: var(--fs-1);
+            font-weight: 600;
+            line-height: 1.5;
+            white-space: nowrap;
+        }
+        .badge--ok     { --badge-c: var(--ok); }
+        .badge--warn   { --badge-c: var(--warn); }
+        .badge--err    { --badge-c: var(--err); }
+        .badge--info   { --badge-c: var(--ice); }
+        .badge--accent { --badge-c: var(--accent-ink); }
+
+        /* The small grey heading above a card, with an optional counter. */
+        .section-title {
+            display: flex; align-items: baseline; gap: var(--sp-2);
+            margin: 0 0 var(--sp-2);
+            font-size: var(--fs-1);
+            font-weight: 600;
+            color: var(--gray-500);
+        }
+        .section-title__count { font-weight: 400; color: var(--gray-600); }
+
         /* ── Sidebar ── */
         #sidebar {
             width: 320px;

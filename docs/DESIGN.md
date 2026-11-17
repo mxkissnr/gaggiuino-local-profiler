@@ -23,10 +23,34 @@ Statistics (#1467), maintenance (#1923) and the coffee library's shelf still fol
 - **Love for detail.** Every view gets small coffee touches (a crema dot for a 100, ice for frozen beans, cup streaks, travelling bean routes, fact cards). They respect `prefers-reduced-motion` and are never loud. Easter eggs never appear in release notes, docs or public issues.
 - **Mobile is designed, not shrunk.** Design at 390 px first; touch targets are at least 44 px.
 - **One sheet header.** Every bottom sheet and its desktop dialog share the same bar: close on the left, the title, then the main actions as 44 px icons on the right, each with an `aria-label` through `t()`. There is no extra Cancel button; closing is the cancel. The bar stays at the top while the content scrolls and only then draws a hairline. The more menu keeps only what the bar does not already show. The pages that still use popovers (see above) give them the same bar.
-- **One visual system.** One radius token, surface colour instead of borders, `tabular-nums` for numbers, one score colour scale (ok / warn / err), Figtree for text and Fraunces for large display numbers, warmth through colour rather than typography.
+- **One visual system.** The role decides the shape (see "Shapes and components"), surface colour instead of borders, `tabular-nums` for numbers, one score colour scale (ok / warn / err), Figtree for text and Fraunces for large display numbers, warmth through colour rather than typography.
 - **Readable.** Contrast of at least 4.5:1, labels included; both light and dark theme.
 - **No generic look.** No default font stacks, no purple gradients, no emoji, no interchangeable dashboard cards; every element earns its place with real data.
 - **Six languages.** Every visible string goes through `t()` in all six language files.
+
+## Shapes and components
+
+The role decides the shape. A page picks a role, never a look.
+
+| Token | Used for |
+|---|---|
+| `--radius-ctl` (8 px) | everything interactive: filter chips, buttons, inputs, dropdowns, segments, input chips (flavour/origin) |
+| `--radius` (10 px) | cards and containers |
+| `--radius-lg` (16 px) | bottom sheets and dialogs |
+| `--radius-full` | only non-interactive status badges, avatars, dots |
+
+Round therefore means "status", not "clickable". `--radius-sm` is the old control radius and goes once its last user has moved to `--radius-ctl`.
+
+Four shared components live in one block near the top of the stylesheet. A page class keeps only layout (position, grid area, gap), never colour, radius or padding.
+
+| Role | Class | Variants | Active state |
+|---|---|---|---|
+| Filter chip | `.chip` | none | `aria-pressed="true"`: accent tint and accent border |
+| Button | `.btn` | neutral (no modifier), `.btn--primary`, `.btn--tonal`, `.btn--quiet`, `.btn--danger` | none; a control that stays on is a chip |
+| Status badge | `.badge` | neutral (no modifier), `.badge--ok`, `.badge--warn`, `.badge--err`, `.badge--info`, `.badge--accent` | none; a badge is never clickable |
+| Section title | `.section-title` | optional counter in `.section-title__count` | none |
+
+A guard test counts literal radii, literal px paddings, `transition: all` and page classes named `*-chip`, `*-badge`, `*-pill`, `*-tag` or `*-btn` that still set colour, background, border or radius. The counts may only go down.
 
 ## Interaction rules
 
@@ -46,6 +70,7 @@ The same kind of control behaves the same way on every page.
 - [ ] Verdict first.
 - [ ] No bare title bar; a top app bar only for back, search or overflow; filter chips first if the page filters.
 - [ ] Lists are cards of rows (icon, title, subtitle, value, chevron), not card stacks or tile grids.
+- [ ] Chips, buttons, badges and section titles use the shared components only.
 - [ ] No number twice.
 - [ ] Screenshot at 390 px and at 1280 px attached.
 - [ ] Every clickable row opens its details: a dialog on desktop, a bottom sheet on phones, close top left and no extra Cancel.
