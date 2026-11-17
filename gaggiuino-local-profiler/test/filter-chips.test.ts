@@ -56,7 +56,7 @@ const RETIRED_BUTTONS = [
   'order-btn', 'order-eta-btn', 'orders-clear-hist-btn', 'orders-menu-variant-btn', 'orders-menu-save-btn',
   'compare-btn', 'delete-btn', 'trash-restore-btn', 'trash-delete-btn', 'export-btn',
   'lib-open-btn', 'mbk-btn', 'mbk-btn-primary', 'mbk-btn-danger', 'bottom-nav-reorder-btn',
-  'backup-btn',
+  'backup-btn', 'lib-btn-icon', 'lib-grinder-reset-burrs',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {

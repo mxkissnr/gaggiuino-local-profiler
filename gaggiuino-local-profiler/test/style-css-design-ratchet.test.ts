@@ -17,7 +17,7 @@ const TOKENS_PATH = join(here, '..', 'public-src', 'tokens.css');
 // Measured on dev when #2092 landed. Only ever lower these.
 const PINNED = {
   literalRadius: 42,
-  literalPadding: 32,
+  literalPadding: 31,
   transitionAll: 6,
   pageLookClasses: 26,
 } as const;
