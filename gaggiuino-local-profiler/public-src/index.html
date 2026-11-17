@@ -224,11 +224,11 @@
                     <p id="topSubtitle" style="margin:0"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="badge" style="display:none"></span><span id="firmwareVersionBadge" style="display:none;font-size:.7rem;color:var(--gray-600);margin-left:6px"></span><img id="shotHeaderThumb" class="shot-header-thumb" alt="" style="display:none" data-i18n-title="shot_photo_title"></p>
                 </div>
                 <div class="sph-actions" style="display:flex;gap:12px;align-items:flex-start;flex-shrink:0">
-                    <button class="export-btn" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
-                    <button class="export-btn" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
-                    <button class="export-btn" id="exportProfileBtn" data-i18n="btn_export_profile" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
+                    <button type="button" class="btn btn--quiet" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
+                    <button type="button" class="btn btn--quiet" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
+                    <button type="button" class="btn btn--quiet" id="exportProfileBtn" data-i18n="btn_export_profile" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
                     <div class="card-fmt-wrap" id="cardFmtWrap">
-                      <button class="export-btn" id="shareCardBtn" data-i18n="share_card" data-i18n-title="share_card_tooltip" title="Shot als PNG-Karte exportieren / teilen">Teilen</button>
+                      <button type="button" class="btn btn--quiet" id="shareCardBtn" data-i18n="share_card" data-i18n-title="share_card_tooltip" title="Shot als PNG-Karte exportieren / teilen">Teilen</button>
                       <div class="card-fmt-menu" id="cardFmtMenu">
                         <button class="card-fmt-opt" data-format="square" data-i18n="card_fmt_square">Quadrat (1:1)</button>
                         <button class="card-fmt-opt" data-format="story"  data-i18n="card_fmt_story">Story (9:16)</button>
@@ -344,7 +344,7 @@
                 <div class="annotation-header">
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
                         <span class="annotation-title" data-i18n="ann_title">Notizen & Bewertung</span>
-                        <button class="lib-open-btn" id="quickCloneBtn" data-i18n="ann_clone_btn" title="">↩ Letzten</button>
+                        <button type="button" class="btn btn--tonal" id="quickCloneBtn" data-i18n="ann_clone_btn" title="">↩ Letzten</button>
                     </div>
                     <div class="star-rating" id="starRating" role="group" aria-label="Rating" data-i18n-aria-label="sort_rating">
                         <button type="button" class="star" data-val="1" aria-label="1 of 5 stars" aria-pressed="false"><svg class="rail-icon sm star-glyph" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg></button>
@@ -357,10 +357,10 @@
                 <div class="annotation-photo-row" id="annotationPhotoRow">
                     <img class="shot-photo-thumb" id="annPhotoThumb" alt="" style="display:none">
                     <input type="file" id="annPhotoInput" aria-label="Add a photo to this shot" data-i18n-aria-label="ann_photo_upload" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
-                    <button type="button" class="lib-open-btn" id="annPhotoPickBtn" data-i18n="photo_pick_btn" data-i18n-title="ann_photo_upload" title="Foto zu diesem Shot hinzufügen">Foto auswählen</button>
-                    <button type="button" class="lib-open-btn" id="annPhotoCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
-                    <button type="button" class="lib-open-btn" id="annPhotoAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
-                    <button type="button" class="lib-btn-sm del" id="annPhotoRemoveBtn" data-i18n="ann_photo_remove" style="display:none">Foto entfernen</button>
+                    <button type="button" class="btn btn--quiet" id="annPhotoPickBtn" data-i18n="photo_pick_btn" data-i18n-title="ann_photo_upload" title="Foto zu diesem Shot hinzufügen">Foto auswählen</button>
+                    <button type="button" class="btn btn--quiet" id="annPhotoCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                    <button type="button" class="btn btn--quiet" id="annPhotoAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
+                    <button type="button" class="btn btn--danger" id="annPhotoRemoveBtn" data-i18n="ann_photo_remove" style="display:none">Foto entfernen</button>
                 </div>
                 <div class="annotation-fields">
                     <div class="annotation-field full-width">
@@ -702,10 +702,10 @@
                                 <label for="beanFormImage" data-i18n="bean_image_label">Bild</label>
                                 <input type="file" id="beanFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
-                                    <button type="button" class="lib-open-btn" id="beanFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
-                                    <button type="button" class="lib-open-btn" id="beanFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
-                                    <button type="button" class="lib-open-btn" id="beanFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
-                                    <button type="button" class="lib-open-btn" id="beanFormStickerBtn" data-i18n="sticker_title" style="display:none">Als Sticker freistellen</button>
+                                    <button type="button" class="btn btn--quiet" id="beanFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="btn btn--quiet" id="beanFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="btn btn--quiet" id="beanFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
+                                    <button type="button" class="btn btn--quiet" id="beanFormStickerBtn" data-i18n="sticker_title" style="display:none">Als Sticker freistellen</button>
                                     <span class="lib-form-hint lib-form-hint-staged" id="beanFormImageStaged" data-i18n="bean_image_staged" style="display:none">Foto wird beim Speichern hinzugefügt</span>
                                 </div>
                                 <span class="lib-form-hint" data-i18n="bean_image_hint">Falls der automatische Import fehlschlägt</span>
@@ -794,9 +794,9 @@
                                 <label for="grinderFormImage" data-i18n="lib_grinder_image">Bild</label>
                                 <input type="file" id="grinderFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
-                                    <button type="button" class="lib-open-btn" id="grinderFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
-                                    <button type="button" class="lib-open-btn" id="grinderFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
-                                    <button type="button" class="lib-open-btn" id="grinderFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
+                                    <button type="button" class="btn btn--quiet" id="grinderFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="btn btn--quiet" id="grinderFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="btn btn--quiet" id="grinderFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
                             <div id="grinderFormScale"></div>
@@ -968,9 +968,9 @@
                                 <label for="basketFormImage" data-i18n="lib_basket_image">Bild</label>
                                 <input type="file" id="basketFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
-                                    <button type="button" class="lib-open-btn" id="basketFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
-                                    <button type="button" class="lib-open-btn" id="basketFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
-                                    <button type="button" class="lib-open-btn" id="basketFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
+                                    <button type="button" class="btn btn--quiet" id="basketFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="btn btn--quiet" id="basketFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="btn btn--quiet" id="basketFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
                         </div>
@@ -1012,9 +1012,9 @@
                                 <label for="puckScreenFormImage" data-i18n="lib_puckscreen_image">Bild</label>
                                 <input type="file" id="puckScreenFormImage" accept="image/jpeg,image/png,image/webp,image/gif" style="display:none">
                                 <div class="photo-picker-row">
-                                    <button type="button" class="lib-open-btn" id="puckScreenFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
-                                    <button type="button" class="lib-open-btn" id="puckScreenFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
-                                    <button type="button" class="lib-open-btn" id="puckScreenFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
+                                    <button type="button" class="btn btn--quiet" id="puckScreenFormImagePickBtn" data-i18n="photo_pick_btn">Foto auswählen</button>
+                                    <button type="button" class="btn btn--quiet" id="puckScreenFormImageCameraBtn" data-i18n="photo_take_btn" style="display:none">Foto aufnehmen</button>
+                                    <button type="button" class="btn btn--quiet" id="puckScreenFormImageAdjustBtn" data-i18n="crop_editor_title" style="display:none">Foto zuschneiden</button>
                                 </div>
                             </div>
                         </div>

@@ -98,6 +98,8 @@
             background: color-mix(in srgb, var(--err) 15%, transparent);
             color: color-mix(in srgb, var(--err) 80%, var(--gray-100));
         }
+        /* An icon-only button: a square of the shared height, combined with one variant. */
+        .btn--icon { width: var(--ctl-height); padding: 0; flex-shrink: 0; }
         /* One hover for every variant: a state layer in the text colour on
            top of the variant's own background. */
         .btn:hover:not(:disabled) {
@@ -283,36 +285,15 @@
         /* #399: only visible on row hover/keyboard-focus (still tab-reachable
            while invisible — opacity, not display/visibility) — except on
            touch, where there's no hover to reveal it, so it stays shown. */
-        .compare-btn {
-            background: var(--gray-800);
-            color: var(--gray-400);
-            border: 1px solid transparent;
-            border-radius:var(--radius);
-            width: 34px; height: 34px;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            font-size: var(--fs-3);
-            flex-shrink: 0;
-            opacity: 0;
-            transition: all .2s;
-        }
-        .shot-wrapper:hover .compare-btn,
-        .shot-wrapper:focus-within .compare-btn,
-        .shot-wrapper.compare-active .compare-btn { opacity: 1; }
+        .shot-compare { flex-shrink: 0; opacity: 0; transition: opacity .2s; }
+        .shot-wrapper:hover .shot-compare,
+        .shot-wrapper:focus-within .shot-compare,
+        .shot-wrapper.compare-active .shot-compare { opacity: 1; }
+        /* #403: on touch there is no hover, and this is the only way to reach
+           compare mode, so it stays shown (the chip is 44 px high there). */
         @media (hover: none) {
-            /* #403: visible isn't enough — on touch this is the only way to
-               reach compare mode, so its hit area must clear the 44x44px
-               minimum touch target, not just the 34x34px desktop hover size. */
-            .compare-btn { opacity: 1; width: 44px; height: 44px; font-size: var(--fs-4); }
+            .shot-compare { opacity: 1; }
         }
-        .compare-btn:hover { background: var(--gray-800); color: var(--gray-200); }
-        /* #811: a fixed, deliberately non-theme-inverting fill — the "compare
-           mode" indicator is not one of the gray/accent tokens, so that it
-           reads the same whichever theme is active. It is NOT exempt from
-           contrast though: white on the original #3498db measured 3.15:1.
-           Darkened along the same hue to the first value that carries white
-           text at 4.5:1. */
-        .shot-wrapper.compare-active .compare-btn { background: var(--compare-fill); color: var(--paper); }
 
         #sidebar-footer {
             padding: var(--sp-3) var(--sp-5);
@@ -1518,8 +1499,6 @@
         .tabs-scroll > * { flex: 0 0 auto; white-space: nowrap; }
 
         /* ── Coffee Library ── */
-        .lib-open-btn { background: none; border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-400); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); cursor: pointer; transition: border-color .15s, color .15s; }
-        .lib-open-btn:hover { border-color: var(--gray-500); color: var(--gray-200); }
         #library-view { display: none; flex-direction: column; flex: 1; overflow-y: auto; padding: var(--sp-5); }
         #library-view > .lib-page { max-width: 1400px; width: 100%; }
         .lib-tabs { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-4); }
@@ -2030,7 +2009,7 @@
         .lib-sheet-name { margin: 0; font-size: var(--fs-4); color: var(--gray-100); }
         .lib-sheet-badges { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1); }
         .lib-sheet-stock { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); color: var(--gray-400); font-size: var(--fs-1); }
-        .lib-sheet-close, .lib-sheet-iconbtn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: none; border-radius: 50%; background: transparent; color: var(--gray-200); cursor: pointer; }
+        .lib-sheet-close, .lib-sheet-iconbtn { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: none; border-radius: var(--radius-ctl); background: transparent; color: var(--gray-200); cursor: pointer; }
         .lib-sheet-close:hover, .lib-sheet-iconbtn:hover { background: var(--raised); }
         .lib-sheet-close:focus-visible, .lib-sheet-iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .lib-sheet-more { position: relative; }
@@ -2550,27 +2529,6 @@
         #closeFullscreenBtn:hover { color: var(--gray-200); border-color: var(--gray-500); }
         #chartFullscreen .fs-body { flex: 1; position: relative; min-height: 0; padding: var(--sp-2); }
 
-        /* ── Export button ── */
-        /* #397: buttons live on fill + hover instead of a persistent 1px
-           border.
-           #811: that fill was a hardcoded rgba(63,63,70,.5) here and on
-           .compare-btn/#syncBtn/#powerBtn. Being a fixed neutral it never
-           inverted, so on the light page it composited to #9b9b9e and left
-           --gray-400 label text at 3.03:1. --gray-800 is the same "one step
-           off the page" surface in every theme. */
-        .export-btn {
-            background: var(--gray-800);
-            color: var(--gray-400);
-            border: 1px solid transparent;
-            border-radius:var(--radius);
-            padding: var(--sp-1) var(--sp-3);
-            cursor: pointer;
-            font-size: var(--fs-1);
-            transition: all .2s;
-            white-space: nowrap;
-        }
-        .export-btn:hover { background: var(--gray-800); color: var(--gray-200); }
-
         /* ── Share-card format picker ── */
         .card-fmt-wrap { position: relative; display: inline-flex; align-items: flex-start; }
         .card-fmt-menu {
@@ -2651,35 +2609,6 @@
         .trash-item-info { flex: 1; min-width: 0; }
         .trash-item-name { color: var(--gray-400); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .trash-item-days { font-size: var(--fs-1); color: var(--gray-600); margin-top: 1px; }
-        .trash-restore-btn {
-            background: none; border: 1px solid var(--gray-700);
-            border-radius:var(--radius); color: var(--gray-600); cursor: pointer;
-            padding: var(--sp-1) var(--sp-2); font-size: var(--fs-1); transition: all .15s; white-space: nowrap; flex-shrink: 0;
-        }
-        .trash-restore-btn:hover { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
-        .trash-delete-btn {
-            background: none; border: none; color: var(--gray-700);
-            cursor: pointer; padding: var(--sp-1); border-radius:var(--radius); min-width: 28px; min-height: 28px;
-            display: inline-flex; align-items: center; justify-content: center;
-            transition: background .15s, color .15s; flex-shrink: 0;
-        }
-        .trash-delete-btn:hover { background: color-mix(in srgb, var(--err) 10%, transparent); color: var(--err); }
-
-        /* ── Delete button (in sidebar shot items) ── */
-        .delete-btn {
-            background: none;
-            border: none;
-            border-radius:var(--radius);
-            color: var(--gray-500);
-            cursor: pointer;
-            padding: var(--sp-1);
-            width: 28px; height: 28px;
-            display: flex; align-items: center; justify-content: center;
-            transition: background .15s, color .15s;
-            flex-shrink: 0;
-        }
-        .delete-btn:hover { background: color-mix(in srgb, var(--err) 10%, transparent); color: var(--err); }
-
         /* ── Desktop sidebar collapse ── */
         #collapseBtn {
             display: flex;
@@ -2961,7 +2890,6 @@
                for the annotation panel below. */
             .chart-container, .live-chart-container { height: clamp(280px, 42vh, 360px); }
             .annotation-panel  { padding: var(--sp-3); }
-            .export-btn        { padding: var(--sp-1) var(--sp-2); font-size: var(--fs-1); }
         }
 
         /* The rendered sections are the grid items, not the wrapper. */

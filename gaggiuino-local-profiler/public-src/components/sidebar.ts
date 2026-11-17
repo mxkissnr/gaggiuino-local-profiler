@@ -205,13 +205,18 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     };
 
     const btnCmp = document.createElement('button');
-    btnCmp.className = 'compare-btn';
+    btnCmp.type = 'button';
+    // #2095: compare stays on until it is switched off, so it is a chip;
+    // updateSidebarHighlighting() sets its aria-pressed.
+    btnCmp.className = 'chip shot-compare';
+    btnCmp.dataset.shotId = String(shot.id);
     btnCmp.innerHTML = html`⇄`;
     btnCmp.title = t('btn_compare_tooltip');
     btnCmp.onclick = e => { e.stopPropagation(); toggleCompare(shot.id); };
 
     const btnDel = document.createElement('button');
-    btnDel.className = 'delete-btn';
+    btnDel.type = 'button';
+    btnDel.className = 'btn btn--quiet btn--icon';
     btnDel.innerHTML = html`<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
     btnDel.title = t('btn_delete_tooltip');
     btnDel.onclick = e => { e.stopPropagation(); if (window.trashShot) window.trashShot(shot.id); };
@@ -259,6 +264,9 @@ export function updateSidebarHighlighting(): void {
     const id = parseInt(x.id.replace('wrapper-', ''));
     if (id === S.primaryShotId) x.classList.add('active');
     if (id === S.compareShotId) x.classList.add('compare-active');
+  });
+  document.querySelectorAll<HTMLElement>('.shot-compare').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(Number(btn.dataset.shotId) === S.compareShotId));
   });
 }
 

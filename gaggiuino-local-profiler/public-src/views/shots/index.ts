@@ -192,10 +192,9 @@ async function _loadDataBody(opts: { quiet?: boolean } | undefined, token: numbe
       // #814: was a hardcoded #ef4444 (the pre-redesign err value) and an
       // untranslated German string in an otherwise six-language app.
       html`<div class="loading-state" style="color:var(--err)">${tHtml('conn_error')}<br>`,
-      // #814: was inline dark-theme neutrals (rgba(63,63,70,.5) fill, #a1a1aa
-      // text, #3f3f46 border) that never inverted. .export-btn is the same
-      // "fill, no persistent border" button this was hand-rolling.
-      html`<button data-action="reload-data" class="export-btn" style="margin-top:var(--sp-3)">${tHtml('btn_reload')}</button></div>`,
+      // #814: was inline dark-theme neutrals that never inverted; #2095: the
+      // shared button, the one way out of this error state.
+      html`<button type="button" data-action="reload-data" class="btn btn--tonal" style="margin-top:var(--sp-3)">${tHtml('btn_reload')}</button></div>`,
     ]);
     return;
   }
@@ -470,8 +469,8 @@ export function renderTrash(): void {
         <div class="trash-item-name">${esc(name)}</div>
         <div class="trash-item-days">Shot ${esc(shot.id)} · ${tHtml('trash_days_left', daysLeft)}</div>
       </div>
-      <button class="trash-restore-btn" data-action="restore-shot" data-id="${esc(shot.id)}">${tHtml('trash_restore_label')}</button>
-      <button class="trash-delete-btn" title="${tHtml('trash_delete_title')}" data-action="perm-delete-shot" data-id="${esc(shot.id)}"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
+      <button type="button" class="btn btn--tonal" data-action="restore-shot" data-id="${esc(shot.id)}">${tHtml('trash_restore_label')}</button>
+      <button type="button" class="btn btn--danger btn--icon" title="${tHtml('trash_delete_title')}" data-action="perm-delete-shot" data-id="${esc(shot.id)}"><svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
     `;
     listEl.appendChild(row);
   });
