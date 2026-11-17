@@ -62,7 +62,7 @@ function _query<T extends HTMLElement>(selector: string): T | null {
 }
 
 function _checkedTransport(): string {
-  return _query<HTMLElement>('#mqttTransportToggle .theme-btn.active')?.textContent?.trim() ?? '';
+  return _query<HTMLElement>('#mqttTransportToggle [aria-pressed="true"]')?.textContent?.trim() ?? '';
 }
 
 function _shotDefaultsValue(): string {
