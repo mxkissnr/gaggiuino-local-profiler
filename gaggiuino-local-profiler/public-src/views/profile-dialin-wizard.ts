@@ -315,7 +315,7 @@ function _renderRound(s: ProfileDialinSession): Html {
   if (s.reviewRound) {
     const rr = s.reviewRound;
     const sug = rr.suggestion;
-    const symptomButtons = joinHtml(SYMPTOMS.map(sym => html`<button type="button" class="pdw-symptom-btn${esc((s.pendingSymptoms || []).includes(sym) ? ' active' : '')}" data-action="profile-dialin-symptom" data-symptom="${esc(sym)}">${tHtml('profile_dialin_symptom_' + sym)}</button>`));
+    const symptomButtons = joinHtml(SYMPTOMS.map(sym => html`<button type="button" class="chip" aria-pressed="${esc(String((s.pendingSymptoms || []).includes(sym)))}" data-action="profile-dialin-symptom" data-symptom="${esc(sym)}">${tHtml('profile_dialin_symptom_' + sym)}</button>`));
 
     let suggestionBlock: Html = html``;
     if (sug) {
