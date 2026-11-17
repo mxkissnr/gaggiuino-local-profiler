@@ -3239,18 +3239,13 @@
            colors/border/radius) — deliberately not merged: .pp-field lives
            in the dense 2-4 column .pp-grid and needs the tighter sp-1
            padding to fit, this form doesn't. */
-        .lib-btn-sm.active { background:var(--accent-from); color:var(--accent-text); }
         .lib-select, .lib-input { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-2); }
         .lib-select:focus, .lib-input:focus { outline:none; border-color:var(--gray-500); }
         .lib-input { min-width:0; }
         .flex-1 { flex:1; }
         .gm-chart-container { flex-shrink:0; margin:.5rem 0 .75rem; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); overflow:hidden; height:180px; position:relative; }
-        /* Segmented-control look (shared background/border around the whole
-           group, tighter radius per button) so a row of mode buttons reads
-           as one group with a selection, not a loose row of buttons. */
-        .gm-toggle-group { display:inline-flex; gap:2px; flex-wrap:wrap; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); padding:2px; }
-        .gm-toggle-group .lib-btn-sm { border-radius:calc(var(--radius) - 2px); }
-        .gm-toggle-group .lib-btn-sm.active { box-shadow:0 1px 2px color-mix(in srgb, var(--scrim) 25%, transparent); }
+        /* A row of shared chips; the pressed one is the selection (#2093). */
+        .gm-toggle-group { display:inline-flex; flex-wrap:wrap; gap: var(--sp-1); }
         .gm-phase { background:var(--gray-800); border-radius:var(--radius); padding:var(--sp-3); margin-bottom:var(--sp-2); }
         .gm-phase-nav { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
         .gm-phase-nav span { flex:0 0 auto; font-size:var(--fs-1); color:var(--gray-400); }
@@ -3304,8 +3299,6 @@
         .pdw-profile-name { font-size: var(--fs-3); font-weight:700; color:var(--gray-100); text-align:center; padding: var(--sp-2) 0; }
         .pdw-symptom-label { font-size: var(--fs-1); color:var(--gray-500); font-weight:700; }
         .pdw-symptom-row { display:flex; flex-wrap:wrap; gap: var(--sp-2); }
-        .pdw-symptom-btn { background:var(--gray-800); border:1.5px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-300); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); cursor:pointer; }
-        .pdw-symptom-btn.active { background:var(--accent); border-color:var(--accent); color:var(--accent-text); font-weight:700; }
         .fw-header { display:flex; align-items:center; gap: var(--sp-3); flex-shrink:0; }
         .fw-close-x { margin-left: auto; background:none; border:none; color:var(--gray-400); font-size: var(--fs-3); line-height:1; padding: var(--sp-2); cursor:pointer; flex-shrink:0; }
         .fw-close-x:hover, .fw-close-x:focus-visible { color:var(--gray-200); }
@@ -3573,10 +3566,6 @@
         .orders-menu-item { display:flex; flex-direction:column; gap: var(--sp-1); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
         .orders-menu-item-top { display:flex; align-items:center; gap: var(--sp-3); }
         .orders-menu-item-name { flex:1; font-size: var(--fs-2); color:var(--gray-200); }
-        /* #415: was a 🔥 emoji glyph — inline stroke-SVG (.rail-icon), same treatment as #414. */
-        .orders-menu-trend { background:none; border:none; cursor:pointer; padding: 2px var(--sp-2); opacity:.3; transition:opacity .15s; display:flex; align-items:center; }
-        .orders-menu-trend:hover { opacity:.7; }
-        .orders-menu-trend.active { opacity:1; }
         .orders-menu-del { background:none; border:none; color:var(--gray-600); font-size: var(--fs-3); cursor:pointer; padding: 2px var(--sp-2); transition:color .15s; }
         .orders-menu-del:hover { color:var(--err); }
         .orders-menu-variants { display:flex; flex-wrap:wrap; gap: var(--sp-1); align-items:center; padding-left: 2px; }
@@ -3588,15 +3577,8 @@
         .orders-menu-variant-btn { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-400); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); cursor:pointer; transition:all .15s; }
         .orders-menu-variant-btn:hover { background:var(--gray-700); color:var(--gray-200); }
         .order-variant-badge { font-size: var(--fs-1); color:var(--gray-400); font-weight:400; }
-        /* #416: were 🫘/🥛 emoji glyphs — inline stroke-SVG (.rail-icon), same treatment as #415. */
-        .orders-menu-use-beans { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); padding: 2px var(--sp-2); cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; }
-        .orders-menu-use-beans:hover { border-color:var(--gray-500); color:var(--gray-300); }
-        .orders-menu-use-beans.active { border-color:var(--beans-ink); color:var(--beans-ink); background:color-mix(in srgb, var(--beans-ink) 8%, transparent); }
         .orders-use-beans-note { font-size: var(--fs-1); color:var(--gray-500); font-style:italic; padding-left: 2px; display:inline-flex; align-items:center; gap: var(--sp-1); }
 
-        .orders-menu-use-milks { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); padding: 2px var(--sp-2); cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; }
-        .orders-menu-use-milks:hover { border-color:var(--gray-500); color:var(--gray-300); }
-        .orders-menu-use-milks.active { border-color:var(--milk-ink); color:var(--milk-ink); background:color-mix(in srgb, var(--milk-ink) 8%, transparent); }
         .ann-ordered-by { display:flex; flex-direction:column; gap: 2px; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); background:color-mix(in srgb, var(--paper) 3%, transparent); border:1px solid var(--gray-800); border-radius:var(--radius); }
         .ann-ordered-by-label { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .ann-ordered-by-val { font-size: var(--fs-1); color:var(--gray-200); }
