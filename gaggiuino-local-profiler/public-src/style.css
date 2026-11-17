@@ -1517,8 +1517,6 @@
         }
         .lib-grinder-wear { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; white-space: normal; }
         .lib-grinder-wear > span:first-child { display: inline-flex; align-items: center; gap: var(--sp-1); }
-        .lib-grinder-reset-burrs { background: var(--gray-800); border: 1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-300); font-size: var(--fs-1); padding: 2px var(--sp-2); cursor:pointer; transition:background .15s,color .15s,border-color .15s; }
-        .lib-grinder-reset-burrs:hover { background:var(--gray-700); color:var(--gray-100); border-color:var(--gray-600); }
         /* ── Inventory block (Material 3 linear progress indicator) ─────────── */
         .lib-inv-block { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-1); }
         .lib-inv-bar-row { display: flex; align-items: center; gap: var(--sp-2); }
@@ -1725,7 +1723,6 @@
         .lib-btn-sm { background: none; border: none; border-radius:var(--radius); color: var(--gray-600); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); cursor: pointer; transition: background .15s, color .15s; display: inline-flex; align-items: center; justify-content: center; }
         .lib-btn-sm:hover { background: color-mix(in srgb, var(--paper) 6%, transparent); color: var(--gray-400); }
         .lib-btn-sm.del:hover { background: color-mix(in srgb, var(--err) 10%, transparent); color: var(--err); }
-        .lib-btn-icon { padding: var(--sp-1); min-width: 28px; min-height: 28px; }
         .lib-add-form { background: var(--gray-800); border-radius:var(--radius); padding: var(--sp-3); display: none; margin-bottom: var(--sp-2); }
         .lib-add-form.open { display: block; }
         .lib-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); margin-bottom: var(--sp-3); }
