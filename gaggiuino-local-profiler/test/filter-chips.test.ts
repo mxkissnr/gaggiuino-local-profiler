@@ -53,6 +53,7 @@ const RETIRED_BUTTONS = [
   'analytics-filter-btn', 'maint-banner-btn', 'maint-done-btn', 'maint-pause-btn',
   'maint-disable-btn', 'maint-delete-btn', 'maint-reenable-btn',
   'maint-log-cancel-btn', 'maint-log-del-btn', 'maint-guide-btn',
+  'order-btn', 'order-eta-btn', 'orders-clear-hist-btn', 'orders-menu-variant-btn', 'orders-menu-save-btn',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -182,5 +183,14 @@ describe('shared buttons (#2095)', () => {
     const maint = read('views/maintenance.ts');
     expect(maint).toContain('class="btn btn--primary" data-action="mark-maint-done"');
     expect(maint).toContain('class="btn btn--tonal" data-action="toggle-maint-disabled"');
+  });
+
+  it('gives the order actions a shared button variant and the ETA picker shared chips', () => {
+    const orders = read('views/orders.ts');
+    expect(orders).toContain('class="btn btn--tonal" data-order-accept=');
+    expect(orders).toContain('class="btn btn--tonal" data-order-complete=');
+    expect(orders).toContain('class="btn btn--danger" data-order-decline-toggle=');
+    expect(orders).toContain('<button type="button" class="chip" aria-pressed="${esc(selectedEta === m');
+    expect(orders).not.toContain("classList.add('selected')");
   });
 });
