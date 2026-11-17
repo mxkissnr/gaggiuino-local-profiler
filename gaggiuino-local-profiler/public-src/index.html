@@ -1648,7 +1648,7 @@
             <label for="sdDose" class="machine-form-label" data-i18n="ann_dose">Dosis (g)</label>
             <input type="number" id="sdDose" class="machine-form-input" data-i18n-placeholder="ann_dose_ph" placeholder="z.B. 18" step="0.1" min="0" max="100">
             <div class="machine-form-actions">
-                <button id="shotDefaultsSaveBtn" type="button" class="backup-btn" data-i18n="sd_save">Speichern</button>
+                <button id="shotDefaultsSaveBtn" type="button" class="btn btn--tonal" data-i18n="sd_save">Speichern</button>
             </div>
         </div>
         <!-- Bean freshness windows and the low-stock threshold (#1835) — the
@@ -1684,8 +1684,8 @@
             </div>
             <div id="bfError" class="bf-error" role="alert" style="display:none"></div>
             <div class="machine-form-actions">
-                <button id="bfSaveBtn" type="button" class="backup-btn" data-i18n="bf_save">Speichern</button>
-                <button id="bfResetBtn" type="button" class="backup-btn" data-i18n="bf_reset">Auf Standard zurücksetzen</button>
+                <button id="bfSaveBtn" type="button" class="btn btn--tonal" data-i18n="bf_save">Speichern</button>
+                <button id="bfResetBtn" type="button" class="btn btn--quiet" data-i18n="bf_reset">Auf Standard zurücksetzen</button>
             </div>
         </div>
         </section>
@@ -1721,8 +1721,8 @@
                 <label for="mqttPrefix" class="machine-form-label" data-i18n="settings_mqtt_prefix">Topic-Präfix</label>
                 <input type="text" id="mqttPrefix" class="machine-form-input" placeholder="gaggiuino">
                 <div class="machine-form-actions">
-                    <button id="mqttSaveBtn" type="button" class="backup-btn" data-i18n="settings_mqtt_save">Speichern</button>
-                    <button id="mqttApplyToMachineBtn" type="button" class="backup-btn" data-i18n="settings_mqtt_apply">Auf Maschine übertragen</button>
+                    <button id="mqttSaveBtn" type="button" class="btn btn--tonal" data-i18n="settings_mqtt_save">Speichern</button>
+                    <button id="mqttApplyToMachineBtn" type="button" class="btn btn--quiet" data-i18n="settings_mqtt_apply">Auf Maschine übertragen</button>
                 </div>
                 <div id="mqttSettingsResult" class="machine-form-test-result"></div>
             </div>
@@ -1777,8 +1777,8 @@
                 <input type="color" id="machineThemeCustomB" class="machine-theme-color-input" aria-label="Custom colour" data-i18n-aria-label="settings_machine_theme_custom" value="#f59e0b" style="display:none">
             </div>
             <div class="machine-form-actions">
-                <button id="machineFormTestBtn" type="button" class="backup-btn" data-i18n="settings_machine_test">Verbindung testen</button>
-                <button id="machineFormSaveBtn" type="button" class="backup-btn" data-i18n="settings_machine_save">Speichern</button>
+                <button id="machineFormTestBtn" type="button" class="btn btn--quiet" data-i18n="settings_machine_test">Verbindung testen</button>
+                <button id="machineFormSaveBtn" type="button" class="btn btn--primary" data-i18n="settings_machine_save">Speichern</button>
             </div>
             <div id="machineFormTestResult" class="machine-form-test-result"></div>
         </div>
@@ -1805,12 +1805,12 @@
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="backup_title">Backup & Restore</h3>
             <p class="settings-card-desc" data-i18n="backup_desc">Die komplette Datenbank (Shots, Bibliothek, Wartung, Bestellungen, Maschinen, Einstellungen) als ZIP-Datei sichern oder wiederherstellen. API-Token und MQTT-Login sind nur verschlüsselt mit einem selbst gewählten Passwort enthalten.</p>
-            <button id="backupDownloadBtn" type="button" class="backup-btn" data-i18n="backup_download">Backup herunterladen</button>
+            <button id="backupDownloadBtn" type="button" class="btn btn--tonal" data-i18n="backup_download">Backup herunterladen</button>
             <!-- Translation text must live in its own span: applyTranslations sets
                  textContent on [data-i18n] nodes, which would wipe the file input.
                  Both .zip (current export format) and .json (backups downloaded
                  before #658) are accepted -- see backup-modal.js's looksLikeZip(). -->
-            <label class="backup-btn" style="cursor:pointer">
+            <label class="btn btn--quiet">
                 <span data-i18n="backup_restore">Aus Backup wiederherstellen …</span>
                 <input type="file" id="backupRestoreInput" accept=".zip,.json" style="display:none">
             </label>
@@ -1826,7 +1826,7 @@
             <p class="settings-card-desc" data-i18n="settings_api_token_desc">Für Integrationen wie die Order Card im Direkt-URL-Modus (ohne HA Ingress) benötigst du diesen Token als glp_token in der YAML-Konfiguration.</p>
             <div class="api-token-row" id="apiTokenRow">
                 <code id="apiTokenValue" class="api-token-value"></code>
-                <button id="apiTokenCopyBtn" type="button" class="backup-btn" data-i18n="settings_api_token_copy">Kopieren</button>
+                <button id="apiTokenCopyBtn" type="button" class="btn btn--quiet" data-i18n="settings_api_token_copy">Kopieren</button>
             </div>
             <p class="settings-card-desc" id="apiTokenPortClosedNotice" data-i18n="settings_api_token_port_closed" style="display:none">Diese Sitzung hat keinen Token, weil expose_api_port deaktiviert ist und die Anfrage nicht über HA Ingress kam. Öffne die App über das Home-Assistant-Ingress-Panel, um einen Token zu erhalten, oder aktiviere expose_api_port wieder in der App-Konfiguration.</p>
         </div>
@@ -1851,13 +1851,13 @@
                 </label>
                 <label for="devBlindRating" data-i18n="settings_devtools_blind_rating">Blind bewerten — Score und Urteil eines Shots erst nach der Sternebewertung zeigen</label>
             </div>
-            <button id="devExportDbBtn" type="button" class="backup-btn" data-i18n="settings_devtools_export_db">Download raw database</button>
+            <button id="devExportDbBtn" type="button" class="btn btn--quiet" data-i18n="settings_devtools_export_db">Download raw database</button>
             <!-- #755: counterpart to the export button above. Translation
                  text must live in its own span, same reasoning as the
                  Backup & Restore card's restore label (applyTranslations
                  sets textContent on [data-i18n] nodes, which would wipe the
                  file input). -->
-            <label class="backup-btn" style="cursor:pointer">
+            <label class="btn btn--quiet">
                 <span data-i18n="settings_devtools_import_db">Upload raw database …</span>
                 <input type="file" id="devImportDbInput" accept=".db" style="display:none">
             </label>
@@ -1996,8 +1996,8 @@
         <div id="backupModalError" class="backup-modal-error" style="display:none"></div>
 
         <div class="machine-form-actions">
-            <button id="backupModalConfirmBtn" type="button" class="backup-btn"></button>
-            <button id="backupModalCancelBtn" type="button" class="backup-btn" data-i18n="backup_modal_cancel">Abbrechen</button>
+            <button id="backupModalConfirmBtn" type="button" class="btn btn--primary"></button>
+            <button id="backupModalCancelBtn" type="button" class="btn btn--quiet" data-i18n="backup_modal_cancel">Abbrechen</button>
         </div>
     </div>
 </div>
