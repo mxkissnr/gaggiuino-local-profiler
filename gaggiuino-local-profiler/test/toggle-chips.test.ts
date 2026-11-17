@@ -133,10 +133,11 @@ describe('order menu toggles', () => {
     const { els, document: doc } = fakeDocument();
     g.document = doc;
 
-    renderOrdersMenuAdmin([
+    const menu: MenuItem[] = [
       { id: 'a', name: 'Latte', emoji: 'L', useBeans: true, useMilks: false, trending: false, variants: [] },
       { id: 'b', name: 'Flat', emoji: 'F', useBeans: false, useMilks: true, trending: true, variants: [] },
-    ] as unknown as MenuItem[]);
+    ];
+    renderOrdersMenuAdmin(menu);
     const html = els.ordersMenuList?.innerHTML ?? '';
 
     expect(html).toContain('class="chip" aria-pressed="true" data-menu-use-beans="a"');
