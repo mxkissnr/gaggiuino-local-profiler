@@ -346,16 +346,19 @@ describe('triggerMachineFirmwareUpdate (#1876)', () => {
       .mockResolvedValueOnce({ status: 'IN_PROGRESS' }) // the pre-check adopts it
       .mockResolvedValue({ status: 'SUCCESS', migration: { active: false, state: 'complete' } });
     const { row, els } = fakeRow();
-    // Create the panel/badge entries the finish path looks for.
+    // Create the panel, status and update entries the finish path looks for.
     const panel = els['.machine-row-firmware-panel'] ??= new FakeEl();
-    const badge = els['.machine-row-firmware-badge'] ??= new FakeEl();
+    const status = els['.machine-row-firmware-status'] ??= new FakeEl();
+    const update = els['.machine-row-firmware-update'] ??= new FakeEl();
 
     await triggerMachineFirmwareUpdate(9103, row);
     await vi.advanceTimersByTimeAsync(10000);
 
     expect(toast).toHaveBeenCalledWith('Firmware update complete');
     expect(panel.remove).toHaveBeenCalled();
-    expect(badge.textContent).toBe('Checking firmware version…');
+    expect(status.textContent).toBe('Checking firmware version…');
+    expect(status.className).toBe('badge machine-row-firmware-status');
+    expect(update.style.display).toBe('none');
     // No second-start window: the banner is never shown again before the reload.
     expect(els[banner]?.style.display).toBe('none');
     expect(els[button]?.disabled).toBe(true);
