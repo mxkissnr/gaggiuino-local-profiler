@@ -56,6 +56,7 @@ const RETIRED_BUTTONS = [
   'order-btn', 'order-eta-btn', 'orders-clear-hist-btn', 'orders-menu-variant-btn', 'orders-menu-save-btn',
   'compare-btn', 'delete-btn', 'trash-restore-btn', 'trash-delete-btn', 'export-btn',
   'lib-open-btn', 'mbk-btn', 'mbk-btn-primary', 'mbk-btn-danger', 'bottom-nav-reorder-btn',
+  'backup-btn',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -206,5 +207,14 @@ describe('shared buttons (#2095)', () => {
     expect(sidebar).toContain("btnCmp.className = 'chip shot-compare';");
     expect(sidebar).toContain("btnDel.className = 'btn btn--quiet btn--icon';");
     expect(read('views/shots/index.ts')).toContain('class="btn btn--danger btn--icon" title=');
+  });
+
+  it('gives the settings actions a shared button variant, saves tonal', () => {
+    const index = read('index.html');
+    for (const id of ['shotDefaultsSaveBtn', 'bfSaveBtn', 'mqttSaveBtn', 'backupDownloadBtn']) {
+      expect(index, id).toContain(`<button id="${id}" type="button" class="btn btn--tonal"`);
+    }
+    expect(index).toContain('<button id="machineFormSaveBtn" type="button" class="btn btn--primary"');
+    expect(index).not.toContain('class="backup-btn"');
   });
 });
