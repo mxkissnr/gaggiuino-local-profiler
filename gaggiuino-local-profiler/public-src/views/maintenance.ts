@@ -330,7 +330,7 @@ function _renderDisabledSection(container: HTMLElement, tiles: MaintTile[]): voi
     return html`<div class="maint-disabled-row">
       <span class="maint-row-icon">${taskIconSvg(tile.task)}</span>
       <span class="maint-disabled-title">${esc(title)}</span>
-      <button class="maint-reenable-btn" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-disabled="false">${tHtml('maint_enable_btn')}</button>
+      <button class="btn btn--tonal" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-disabled="false">${tHtml('maint_enable_btn')}</button>
     </div>`;
   }));
   // codeql[js/xss-through-dom] false positive: esc() applied
@@ -362,7 +362,7 @@ export function _maintVerdictHtml(state: MaintVerdictState): Html {
   }
 
   const doneBtn = state.kind === 'due' && tile
-    ? html`<button type="button" class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>`
+    ? html`<button type="button" class="btn btn--primary" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>`
     : html``;
   const numClass = state.dueCount > 0 ? 'due' : 'ok';
   const cup = state.kind === 'ok'
@@ -686,7 +686,7 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
           : e.notes ? html`<span class="maint-log-note">${esc(e.notes)}</span>` : html``}
       </span>
       <span class="maint-log-shots num">${shotsText}</span>
-      <button type="button" class="lib-sheet-iconbtn maint-log-del-btn" data-action="delete-maint-log" data-id="${esc(e.id)}" aria-label="${esc(t('maint_log_delete'))}" title="${esc(t('maint_log_confirm_delete'))}">${ICON_TRASH}</button>
+      <button type="button" class="lib-sheet-iconbtn" data-action="delete-maint-log" data-id="${esc(e.id)}" aria-label="${esc(t('maint_log_delete'))}" title="${esc(t('maint_log_confirm_delete'))}">${ICON_TRASH}</button>
     </div>`;
   };
 

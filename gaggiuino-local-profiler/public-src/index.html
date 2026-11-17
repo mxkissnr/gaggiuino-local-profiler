@@ -449,8 +449,8 @@
             <div class="analytics-filter-row" id="maintScopeSeg" role="group" aria-label="Maschine" data-i18n-aria-label="machine_switcher_title" hidden></div>
             <span class="maint-scope-hint" id="maintScopeHint" data-i18n="maint_shared_once" hidden>Geteilte Tasks erscheinen einmal</span>
             <span class="maint-toolbar-spacer"></span>
-            <button type="button" class="analytics-filter-btn" data-action="open-maint-log-form" data-i18n="maint_log_add">Manuell eintragen</button>
-            <button type="button" class="analytics-filter-btn" data-action="open-maint-custom-form" data-i18n="maint_custom_add_summary">Eigene Wartung hinzufügen</button>
+            <button type="button" class="btn btn--tonal" data-action="open-maint-log-form" data-i18n="maint_log_add">Manuell eintragen</button>
+            <button type="button" class="btn btn--tonal" data-action="open-maint-custom-form" data-i18n="maint_custom_add_summary">Eigene Wartung hinzufügen</button>
         </div>
         <div class="maint-container">
             <div id="maint-cards"></div>
@@ -471,8 +471,8 @@
                 <h3 class="maint-section-title" id="guidedMaintTitle"></h3>
                 <div id="guidedMaintSteps"></div>
                 <div class="maint-log-form-actions">
-                    <button class="maint-done-btn" id="guidedMaintDoneBtn" data-action="guided-maint-done" disabled></button>
-                    <button class="maint-log-cancel-btn" data-action="guided-maint-cancel" data-i18n="lib_cancel">Abbrechen</button>
+                    <button class="btn btn--primary" id="guidedMaintDoneBtn" data-action="guided-maint-done" disabled></button>
+                    <button class="btn btn--quiet" data-action="guided-maint-cancel" data-i18n="lib_cancel">Abbrechen</button>
                 </div>
             </div>
         </div>
@@ -1360,7 +1360,7 @@
                     <h3 class="analytics-section-title" data-i18n="analytics_facts">Wusstest du?</h3>
                     <div class="analytics-shelf-tools">
                         <span id="analyticsFactsCount" class="analytics-shelf-count"></span>
-                        <button type="button" class="analytics-filter-btn" data-action="analytics-facts-shuffle" data-i18n="analytics_facts_shuffle">Neu mischen</button>
+                        <button type="button" class="btn btn--quiet" data-action="analytics-facts-shuffle" data-i18n="analytics_facts_shuffle">Neu mischen</button>
                     </div>
                 </div>
                 <div id="analyticsFacts" class="analytics-facts" aria-live="polite"></div>
