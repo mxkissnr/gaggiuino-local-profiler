@@ -20,6 +20,12 @@
             --radius-ctl: 8px;
             --radius-full: 999px;
 
+            /* ── Control height ── #2093: chips, buttons and the search
+               fields and dropdowns in a chip row share one height, 36 px
+               with a fine pointer. The pointer: coarse rule after the
+               light block raises it to the 44 px touch target. */
+            --ctl-height: 36px;
+
             /* ── z-index scale ── #1618: named layers instead of magic
                numbers scattered through style.css. The numbers keep the
                order the app shipped with; changing one reorders whatever
@@ -244,6 +250,13 @@
             --ice:    #1f6d95;
             --night-from: #dfe6f5;
             --on-fill: #fff;
+        }
+
+        /* #2093: on a touch screen every chip, button and input in a chip
+           row grows to the 44 px touch target (docs/DESIGN.md, "Shapes
+           and components"). */
+        @media (pointer: coarse) {
+            :root { --ctl-height: 44px; }
         }
         /* #1019: the per-accent --accent-ink light-theme audit (#811, plus
            Crema's whole separate warm-paper light block) was retired along
