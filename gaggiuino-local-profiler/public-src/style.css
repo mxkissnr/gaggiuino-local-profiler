@@ -562,13 +562,6 @@
             display: inline-block; font-size: var(--fs-1); color: var(--gray-500); background: var(--gray-800);
             border-radius:var(--radius); padding: 1px var(--sp-2); margin-left: var(--sp-2); vertical-align: middle;
         }
-        /* #578: small tag on a maintenance mini-tile whose last "done" came
-           from the machine's own native Service Log, not a manual click. */
-        .maint-auto-synced {
-            display: inline-block; font-size: var(--fs-1); font-weight: 600; color: var(--ice);
-            background: color-mix(in srgb, var(--ice) 10%, transparent); border: 1px solid color-mix(in srgb, var(--ice) 30%, transparent);
-            border-radius:var(--radius); padding: 1px var(--sp-2); margin-left: var(--sp-2); vertical-align: middle;
-        }
         .live-dot {
             position: absolute; bottom: -1px; right: -1px;
             width: 7px; height: 7px; border-radius: 50%;
@@ -3122,12 +3115,7 @@
         .maint-row-icon svg { width: 16px; height: 16px; }
         .maint-row-title { grid-area: title; font-size: var(--fs-2); font-weight: 600; color: var(--gray-100); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .maint-row:hover .maint-row-title { color: var(--accent-ink); }
-        .maint-chip { grid-area: chip; padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--fs-1); font-weight: 600; flex-shrink: 0; }
-        .maint-chip.due    { background: color-mix(in srgb, var(--err) 18%, transparent); color: var(--err); }
-        .maint-chip.soon   { background: color-mix(in srgb, var(--amber-deep) 18%, transparent); color: var(--accent-ink); }
-        .maint-chip.ok     { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
-        .maint-chip.never  { background: var(--gray-800); color: var(--gray-500); }
-        .maint-chip.paused { background: var(--gray-800); color: var(--gray-500); }
+        .maint-row-status { grid-area: chip; flex-shrink: 0; }
         .maint-row-meta { grid-area: meta; font-size: var(--fs-1); color: var(--gray-500); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
         .maint-row-bar { grid-area: bar; display: block; position: relative; height: 4px; margin-top: var(--sp-1); background: var(--gray-800); border-radius: 2px; overflow: hidden; }
         .maint-row-fill { display: block; height: 100%; border-radius: 2px; background: var(--ok); }
@@ -3451,7 +3439,7 @@
         .maint-log-form-actions { display:flex; gap: var(--sp-2); }
         .maint-log-cancel-btn { background:transparent; border:1px solid var(--gray-700); color:var(--gray-500); border-radius:var(--radius); padding: var(--sp-2) var(--sp-4); cursor:pointer; font-size: var(--fs-1); }
         .maint-log-cancel-btn:hover { color:var(--gray-300); }
-        .maint-log-manual-badge { font-size: var(--fs-1); font-weight:600; background:var(--gray-700); color:var(--gray-300); border-radius:var(--radius-sm); padding: 1px var(--sp-1); vertical-align:middle; margin-left: var(--sp-1); }
+        .maint-log-task .badge { margin-left: var(--sp-1); vertical-align: middle; }
 
         /* #1923: log entries as rows with dividers */
         .maint-log-rows { display: flex; flex-direction: column; }
