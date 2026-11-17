@@ -138,7 +138,7 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     const line2 = [beanLabel(ann) || null, dose ? `${dose.toFixed(1)} g` : null].filter(Boolean).join(' · ') || durLabel || '';
     // #502: which frozen-portion batch (if any) this shot's dose came from —
     // an explicit annotation-panel choice, shown at a glance in the list too.
-    const frozenBadge = ann.frozenPortionId ? html`<span class="shot-frozen-badge" title="${esc(t('ann_frozen_portion'))}">${SNOWFLAKE_ICON_SVG}</span>` : html``;
+    const frozenBadge = ann.frozenPortionId ? html`<span class="shot-frozen-icon" title="${esc(t('ann_frozen_portion'))}">${SNOWFLAKE_ICON_SVG}</span>` : html``;
 
       const rating = parseInt(String(ann.rating ?? '')) || 0;
     const starsHtml = rating > 0
@@ -150,7 +150,7 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     // grinder name itself is relegated to the badge's title tooltip, since
     // it changes far less often than the grind setting does.
     const grindBadgeHtml = ann.grindSetting
-      ? html`<span class="sidebar-grind-badge"${ann.grinder ? html` title="${esc(ann.grinder)}"` : html``}>${esc(ann.grindSetting)}</span>`
+      ? html`<span class="badge"${ann.grinder ? html` title="${esc(ann.grinder)}"` : html``}>${esc(ann.grindSetting)}</span>`
       : html``;
 
     // Multi-machine badge (#325): only shown in "all machines" mode with
@@ -159,7 +159,7 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     // be redundant noise there.
     const machineRec = S.machines.find(m => m.id === shot.machineId) as { name?: string } | undefined;
     const machineBadge = ((S.machines?.length ?? 0) > 1 && S.activeMachineId === 'all' && shot.machineId != null)
-      ? html`<span class="shot-machine-badge">${esc(machineRec?.name || '?')}</span>` : html``;
+      ? html`<span class="badge">${esc(machineRec?.name || '?')}</span>` : html``;
     // #816: the bean-photo/avatar circle (.shot-thumb) is gone — the
     // prototype's rail-item mockup is text-only, no image or colored circle
     // (Border-Diät extends to photos, not just boxes). The photo itself is
