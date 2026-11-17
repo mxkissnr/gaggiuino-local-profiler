@@ -160,7 +160,7 @@ function renderScaleTypePills(): void {
   const group = document.getElementById('grinderFormScaleType');
   if (!group) return;
   group.innerHTML = joinHtml(SCALE_TYPE_PILLS.map(([value, key]) =>
-    html`<button type="button" class="drink-pill${esc(scaleFormType === value ? ' active' : '')}" aria-pressed="${esc(String(scaleFormType === value))}" data-scale-type="${esc(value)}" data-i18n="${esc(key)}">${tHtml(key)}</button>`));
+    html`<button type="button" class="chip" aria-pressed="${esc(String(scaleFormType === value))}" data-scale-type="${esc(value)}" data-i18n="${esc(key)}">${tHtml(key)}</button>`));
 }
 
 function pickScaleType(type: string): void {

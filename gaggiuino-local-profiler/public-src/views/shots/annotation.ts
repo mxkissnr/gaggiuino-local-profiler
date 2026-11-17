@@ -335,7 +335,7 @@ export function _renderDrinkPills(selectedId: string): void {
   if (!container) return;
   if (!S.drinkMenu?.length) { container.innerHTML = html``; return; }
   container.innerHTML = joinHtml((S.drinkMenu as DrinkRow[]).map(m =>
-    html`<button type="button" class="drink-pill${esc(selectedId === m.id ? ' active' : '')}"
+    html`<button type="button" class="chip" aria-pressed="${esc(String(selectedId === m.id))}"
       data-action="select-drink" data-id="${esc(m.id)}">${esc(m.emoji)} ${esc(m.name)}</button>`
   ));
   if (hidden) hidden.value = selectedId || '';
@@ -356,7 +356,7 @@ export function _renderMilkPills(selectedId: string): void {
   if (!container) return;
   if (!S.milkTypes?.length) { container.innerHTML = html``; return; }
   container.innerHTML = joinHtml((S.milkTypes as MilkRow[]).map(m =>
-    html`<button type="button" class="drink-pill${esc(selectedId === String(m.id) ? ' active' : '')}"
+    html`<button type="button" class="chip" aria-pressed="${esc(String(selectedId === String(m.id)))}"
       data-action="select-milk" data-id="${esc(String(m.id))}">${m.emoji ? esc(m.emoji) : MILK_ICON_SVG} ${esc(m.name)}</button>`
   ));
   if (hidden) hidden.value = selectedId || '';
@@ -377,7 +377,7 @@ export function _renderTasteTagPills(selected: string): void {
   const hidden    = document.getElementById('annTasteTag') as HTMLInputElement | null;
   if (!container) return;
   container.innerHTML = joinHtml(TASTE_TAGS.map(tag =>
-    html`<button type="button" class="drink-pill${esc(selected === tag ? ' active' : '')}" aria-pressed="${esc(String(selected === tag))}"
+    html`<button type="button" class="chip" aria-pressed="${esc(String(selected === tag))}"
       data-action="select-taste-tag" data-id="${esc(tag)}">${esc(t(TASTE_TAG_LABELS[tag]))}</button>`
   ));
   if (hidden) hidden.value = selected;
@@ -436,7 +436,7 @@ export function _renderFrozenPortionPills(beanName: string | null, shotMs: numbe
     return { id: String(p.id), label: `${remaining}/${p.portionCount} · ${dateStr}` };
   })];
   container.innerHTML = joinHtml(options.map(o =>
-    html`<button type="button" class="drink-pill${esc(selected === o.id ? ' active' : '')}" data-action="select-frozen-portion" data-id="${esc(o.id)}">${esc(o.label)}</button>`
+    html`<button type="button" class="chip" aria-pressed="${esc(String(selected === o.id))}" data-action="select-frozen-portion" data-id="${esc(o.id)}">${esc(o.label)}</button>`
   ));
   hidden.value = selected;
 }
