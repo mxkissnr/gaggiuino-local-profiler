@@ -552,7 +552,7 @@ function _renderStandardPhases(phases: GmPhase[]): Html {
     <div class="lib-recipe-steps-section">
       <div class="lib-recipe-steps-header">
         <span>${tHtml('gm_phases_header')}</span>
-        <button class="lib-btn-sm" data-action="gm-add-phase">${tHtml('gm_add_phase')}</button>
+        <button type="button" class="btn btn--tonal" data-action="gm-add-phase">${tHtml('gm_add_phase')}</button>
       </div>
       <div id="gmPhaseList">${rows || html`<div style="opacity:.5;padding:.5rem">${tHtml('gm_no_phases')}</div>`}</div>
     </div>
@@ -570,7 +570,7 @@ function _renderStandardPhase(ph: GmPhase, i: number): Html {
         ${_phaseTypeSelect(ph, i, 'gm-std-phase-type')}
         <input type="text" class="lib-input flex-1" aria-label="${esc(t('gm_phase_name_placeholder'))}" value="${esc(ph.name || '')}"
           data-action="gm-std-phase-name" data-idx="${esc(i)}" placeholder="${esc(t('gm_phase_name_placeholder'))}">
-        <button class="lib-btn-sm del" data-action="gm-remove-phase" data-idx="${esc(i)}" title="${esc(t('gm_remove_phase_title'))}">✕</button>
+        <button type="button" class="btn btn--danger btn--icon" data-action="gm-remove-phase" data-idx="${esc(i)}" title="${esc(t('gm_remove_phase_title'))}">✕</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
         ${_durationField(ph, i, 'gm-std-duration')}
@@ -620,11 +620,11 @@ function _renderProPhases(phases: GmPhase[]): Html {
   const ph = phases[i];
   const nav: Html = html`
     <div class="gm-phase-nav">
-      <button class="lib-btn-sm" data-action="gm-phase-prev" ${i === 0 ? html`disabled` : html``}>◀</button>
+      <button type="button" class="btn btn--quiet btn--icon" data-action="gm-phase-prev" ${i === 0 ? html`disabled` : html``}>◀</button>
       <span>${n > 0 ? html`${esc(i + 1)} / ${esc(n)}` : html`0 / 0`}</span>
-      <button class="lib-btn-sm" data-action="gm-phase-next" ${i >= n - 1 ? html`disabled` : html``}>▶</button>
-      <button class="lib-btn-sm" data-action="gm-add-phase">${tHtml('gm_add_phase')}</button>
-      <button class="lib-btn-sm del" data-action="gm-remove-phase" data-idx="${esc(i)}" ${n === 0 ? html`disabled` : html``}>✕ ${tHtml('gm_remove_phase_label')}</button>
+      <button type="button" class="btn btn--quiet btn--icon" data-action="gm-phase-next" ${i >= n - 1 ? html`disabled` : html``}>▶</button>
+      <button type="button" class="btn btn--tonal" data-action="gm-add-phase">${tHtml('gm_add_phase')}</button>
+      <button type="button" class="btn btn--danger" data-action="gm-remove-phase" data-idx="${esc(i)}" ${n === 0 ? html`disabled` : html``}>✕ ${tHtml('gm_remove_phase_label')}</button>
     </div>
   `;
   return html`
@@ -738,7 +738,7 @@ function _renderProPhase(ph: GmPhase, i: number): Html {
           <span style="font-weight:500">${tHtml('gm_stop_conditions')}</span>
           ${availTargets.length ? html`
             <div class="gm-dropdown">
-              <button type="button" class="lib-btn-sm" data-action="gm-pro-target-menu" data-idx="${esc(i)}">${tHtml('gm_add_condition')}</button>
+              <button type="button" class="btn btn--tonal" data-action="gm-pro-target-menu" data-idx="${esc(i)}">${tHtml('gm_add_condition')}</button>
               <ul class="gm-dropdown-menu" id="gmTargetMenu${esc(i)}" style="display:none">
                 ${joinHtml(availTargets.map(tt => html`
                   <li><button type="button" class="gm-dropdown-item" data-action="gm-pro-add-target"
@@ -763,7 +763,7 @@ function _renderProTarget(tg: GmTarget, phaseIdx: number, targetIdx: number): Ht
       <input type="number" class="lib-input" style="width:80px" aria-label="${esc(tt.label)}" value="${esc(tg.value ?? 0)}" min="0" max="2000" step="0.1"
         data-action="gm-pro-target-value" data-idx="${esc(phaseIdx)}" data-tidx="${esc(targetIdx)}">
       <span style="opacity:.6;font-size:.85em">${esc(tt.unit)}</span>
-      <button type="button" class="lib-btn-sm del" data-action="gm-pro-remove-target"
+      <button type="button" class="btn btn--danger btn--icon" data-action="gm-pro-remove-target"
         data-idx="${esc(phaseIdx)}" data-tidx="${esc(targetIdx)}">✕</button>
     </div>
   `;
