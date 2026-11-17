@@ -125,6 +125,12 @@
         .badge--err    { --badge-c: var(--err); }
         .badge--info   { --badge-c: var(--ice); }
         .badge--accent { --badge-c: var(--accent-ink); }
+        /* The score scale (scoreClass() in utils.ts) as badge variants. */
+        .badge--score-great { --badge-c: var(--ok); }
+        .badge--score-good  { --badge-c: var(--score-good); }
+        .badge--score-ok    { --badge-c: var(--warn); }
+        .badge--score-low   { --badge-c: var(--score-low); }
+        .badge--score-bad   { --badge-c: var(--err); }
 
         /* The small grey heading above a card, with an optional counter. */
         .section-title {
@@ -223,8 +229,8 @@
            elsewhere (e.g. #sidebar h2 above, .analytics-section-title). */
         .profile-name-sidebar { font-size: var(--fs-2); font-weight: 600; color: var(--gray-200); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .shot-line2 { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        /* #502: same "on ice" blue as the library's .lib-frozen-badge */
-        .shot-frozen-badge { color: var(--ice); margin-right: var(--sp-1); }
+        /* #502: the same "on ice" blue as the library's frozen portions */
+        .shot-frozen-icon { color: var(--ice); margin-right: var(--sp-1); }
         .shot-line3 {
             display: flex; align-items: center; gap: var(--sp-2);
             font-size: var(--fs-1); color: var(--gray-500); margin-top: var(--sp-1);
@@ -557,10 +563,6 @@
             display: inline-block; margin-top: var(--sp-3);
             background: none; border: none; color: var(--accent-ink);
             cursor: pointer; font-size: var(--fs-2);
-        }
-        .shot-machine-badge {
-            display: inline-block; font-size: var(--fs-1); color: var(--gray-500); background: var(--gray-800);
-            border-radius:var(--radius); padding: 1px var(--sp-2); margin-left: var(--sp-2); vertical-align: middle;
         }
         .live-dot {
             position: absolute; bottom: -1px; right: -1px;
@@ -1291,30 +1293,14 @@
            it reads as metadata rather than another verdict judgment. */
         .verdict-bean-target-hint { display: inline-flex; margin-left: 2px; color: var(--gray-500); cursor: help; }
 
-        /* ── Delta chips (#402): same-profile auto-compare vs. the previous shot.
-           Score delta reuses the unified score-scale classes (#1622,
-           score-great/-good/-ok/-low/-bad); process-metric deltas (no quality
-           judgment) stay neutral gray. */
-        .delta-chip {
-            display: inline-block;
-            font-size: var(--fs-1);
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-            padding: 1px var(--sp-2);
-            border-radius: var(--radius);
-            margin-top: var(--sp-1);
-            background: var(--gray-800);
-            color: var(--gray-400);
-        }
-        .delta-chip.score-great { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
-        .delta-chip.score-good  { background: color-mix(in srgb, var(--score-good) 15%, transparent); color: var(--score-good); }
-        .delta-chip.score-ok    { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
-        .delta-chip.score-low   { background: color-mix(in srgb, var(--score-low) 15%, transparent); color: var(--score-low); }
-        .delta-chip.score-bad   { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
+        /* ── Delta badges (#402): same-profile auto-compare vs. the previous shot.
+           The score delta uses the score-scale badge variants; process-metric
+           deltas (no quality judgment) stay neutral. */
+        .shot-delta { margin-top: var(--sp-1); font-variant-numeric: tabular-nums; }
         /* #816: inline after the verdict line, not stacked block below it —
            the old boxed layout needed the stack, the plain line doesn't. */
-        .verdict-line .delta-chip { margin-top: 0; }
-        .process-card .delta-chip { display: block; width: fit-content; }
+        .verdict-line .shot-delta { margin-top: 0; }
+        .process-card .shot-delta { display: flex; width: fit-content; }
 
         /* ── Recipe zone (#398): large cards, the values the user sets ── */
         /* #813: a guided line, not a tile wall. These four were a grid of
@@ -1499,7 +1485,7 @@
             transition: border-color .15s, color .15s;
         }
         #lsReset:hover { border-color: var(--gray-500); color: var(--gray-300); }
-        .ordered-by-badge { font-size: var(--fs-1); color: var(--warn); background: color-mix(in srgb, var(--amber) 12%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); display: inline-flex; align-items: center; gap: var(--sp-1); }
+        #orderedByBadge { white-space: normal; }
         .autosave-status { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-1); color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
         .autosave-status.visible { opacity: 1; }
         .autosave-status.failed { color: var(--err); }
@@ -2480,20 +2466,6 @@
             margin-left: var(--sp-2);
             vertical-align: middle;
         }
-        /* #837: compact grind-setting badge, line 1 — bare number, no border
-           (Border-Diät: no border on non-clickable elements), grinder name
-           lives in its title tooltip instead of taking up row space. */
-        .sidebar-grind-badge {
-            font-size: var(--fs-1);
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            border-radius: var(--radius);
-            padding: 1px var(--sp-2);
-            margin-left: var(--sp-2);
-            vertical-align: middle;
-            background: var(--gray-800);
-            color: var(--gray-400);
-        }
 
         /* ── Sidebar sort bar ── */
         #sort-bar {
@@ -2503,16 +2475,7 @@
             flex-wrap: wrap;
         }
         /* ── Freshness badge ── */
-        .freshness-badge {
-            display: inline-block;
-            font-size: var(--fs-1); font-weight: 600;
-            border-radius:var(--radius); padding: 2px var(--sp-2);
-            margin-left: var(--sp-2); vertical-align: middle;
-            white-space: nowrap;
-        }
-        .freshness-fresh  { background: color-mix(in srgb, var(--ok) 15%, transparent);  color: var(--ok); }
-        .freshness-ok     { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--accent-ink); }
-        .freshness-old    { background: color-mix(in srgb, var(--err) 12%, transparent);  color: var(--err); }
+        #freshnessBadge { margin-left: var(--sp-2); vertical-align: middle; }
 
         /* Shot-detail header photo thumbnail (#448) — originally the mobile
            fallback for the space next to machine/freshness text. #850 made
@@ -2679,25 +2642,10 @@
         .card-fmt-opt:hover { background: var(--gray-800); color: var(--gray-200); }
 
         /* ── Channeling warning ── */
-        .channeling-warn {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--sp-1);
-            background: color-mix(in srgb, var(--err) 12%, transparent);
-            color: var(--err);
-            border: 1px solid color-mix(in srgb, var(--err) 25%, transparent);
-            border-radius:var(--radius);
-            font-size: var(--fs-1);
-            padding: 1px var(--sp-1);
-            margin-left: var(--sp-2);
-            font-weight: 600;
-            vertical-align: middle;
-            letter-spacing: .03em;
-        }
+        #channelingWarning { margin-left: var(--sp-2); vertical-align: middle; }
 
-
-        /* ── Temp stability / meta badge ── */
-        .meta-badge { font-size: var(--fs-1); color: var(--gray-500); margin-left: var(--sp-1); font-weight: normal; }
+        /* ── Temp stability ── */
+        .meta-stability { font-size: var(--fs-1); color: var(--gray-500); margin-left: var(--sp-1); font-weight: normal; }
 
         /* #1622: the one five-step score scale (SCORE_STEPS, utils.ts) as CSS
            classes — each step names the matching token, exactly like scoreColor()
@@ -2723,11 +2671,7 @@
             transition: color .15s;
         }
         #trash-toggle:hover { color: var(--gray-400); }
-        #trash-toggle .trash-count {
-            margin-left: auto;
-            background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err);
-            border-radius:var(--radius); padding: 1px var(--sp-2); font-size: var(--fs-1); font-weight: 700;
-        }
+        #trash-toggle .badge { margin-left: auto; }
         #trash-list { overflow-y: auto; max-height: 220px; }
         /* ── Toast action (#1716, e.g. Undo after trashing a shot) ── */
         .glp-toast-action {
