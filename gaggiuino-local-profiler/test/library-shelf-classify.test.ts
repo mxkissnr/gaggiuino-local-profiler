@@ -589,7 +589,7 @@ describe('shelf toolbar chips (#2093)', () => {
       beans: [bean({ id: 1, name: 'Shelf Bean' })],
       recipes: [],
       grinders: [],
-    } as unknown as typeof S.coffeeLibrary;
+    };
 
     library.resetShelfPrefs();
 
@@ -605,6 +605,8 @@ describe('shelf toolbar chips (#2093)', () => {
     expect(viewChips).toHaveLength(2);
     expect(viewChips.filter(m => m[2] === 'true')).toHaveLength(1);
 
-    expect(list.innerHTML).not.toMatch(/lib-shelf-chip|lib-shelf-view-btn|class="[^"]*\bactive\b/);
+    // The names must stand alone: the kept `lib-shelf-chips` row wrapper is not
+    // the retired chip class.
+    expect(list.innerHTML).not.toMatch(/(?<![\w-])(?:lib-shelf-chip|lib-shelf-view-btn)(?![\w-])|class="[^"]*\bactive\b/);
   });
 });
