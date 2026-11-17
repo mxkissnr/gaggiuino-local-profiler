@@ -50,12 +50,12 @@ export function wireAppearance(): void {
   safeLocalStorage.setItem('glp_accent_theme', _savedAccent);
   document.documentElement.dataset.accent = _savedAccent;
   renderAccentSwatches();
-  // #1018: scoped to #themeToggleGroup, not the bare .theme-btn class --
-  // #mqttTransportToggle below reuses that same class for its own toggle and
-  // has no data-theme-val, so an unscoped query used to also wire this click
+  // #1018: scoped to the group's [data-theme-val] buttons, not the shared
+  // chip class -- #mqttTransportToggle below uses the same shared chip and has
+  // no data-theme-val, so an unscoped query used to also wire this click
   // handler onto it, calling setTheme(undefined) and silently corrupting the
-  // stored theme (neither Dark nor Light showed .active afterwards).
-  document.querySelectorAll<HTMLElement>('#themeToggleGroup .theme-btn').forEach(btn => {
+  // stored theme (neither Dark nor Light ended up pressed afterwards).
+  document.querySelectorAll<HTMLElement>('#themeToggleGroup [data-theme-val]').forEach(btn => {
     btn.addEventListener('click', () => setTheme(btn.dataset.themeVal!));
   });
   const langSelect = document.getElementById('settingsLang') as HTMLSelectElement | null;

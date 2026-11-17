@@ -145,10 +145,13 @@ describe('_renderFrozenPortionPills', () => {
         expect(container.innerHTML).toContain('data-id="200"');
     });
 
-    it('marks the selected portion pill active and sets the hidden input value', () => {
+    it('presses the selected portion chip and sets the hidden input value', () => {
         S.coffeeLibrary = library([makeBean([{ id: 100, portionCount: 20, remainingCount: 19, frozenAt: Date.now() }])]);
-        const { hidden } = fakePanelDom();
+        const { container, hidden } = fakePanelDom();
         _renderFrozenPortionPills('Flower Power', Date.now(), 100);
+        expect(container.innerHTML).toContain('class="chip" aria-pressed="true" data-action="select-frozen-portion" data-id="100"');
+        expect(container.innerHTML).toContain('class="chip" aria-pressed="false" data-action="select-frozen-portion" data-id=""');
+        expect(container.innerHTML).not.toMatch(/class="[^"]*\bactive\b/);
         expect(hidden.value).toBe('100');
     });
 

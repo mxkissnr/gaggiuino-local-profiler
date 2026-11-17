@@ -43,9 +43,11 @@ Round therefore means "status", not "clickable". `--radius-sm` is the old contro
 
 Four shared components live in one block near the top of the stylesheet. A page class keeps only layout (position, grid area, gap), never colour, radius or padding.
 
+Chips, buttons, and the search fields and dropdowns that share a row with chips have one height, `--ctl-height`: 44 px on touch devices (`pointer: coarse`), 36 px with a fine pointer. Input chips with a remove button (flavour, origin) and the aroma chips keep their own class and colour tint but use `--radius-ctl`.
+
 | Role | Class | Variants | Active state |
 |---|---|---|---|
-| Filter chip | `.chip` | none | `aria-pressed="true"`: accent tint and accent border |
+| Filter chip, single-choice pills | `.chip` | none | `aria-pressed="true"`: accent tint and accent border; never an `.active` class |
 | Button | `.btn` | neutral (no modifier), `.btn--primary`, `.btn--tonal`, `.btn--quiet`, `.btn--danger` | none; a control that stays on is a chip |
 | Status badge | `.badge` | neutral (no modifier), `.badge--ok`, `.badge--warn`, `.badge--err`, `.badge--info`, `.badge--accent` | none; a badge is never clickable |
 | Section title | `.section-title` | optional counter in `.section-title__count` | none |

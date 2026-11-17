@@ -30,7 +30,7 @@ function _modeButtons(tile: MaintTile, mode: string): Html {
   const shotsVal = d.threshold_shots ?? '';
   const daysVal  = d.threshold_days ?? '';
   const gVal     = d.threshold_g ?? '';
-  const btn = (m: string, label: Html): Html => html`<button type="button" class="analytics-filter-btn${mode === m ? html` active` : esc('')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="${esc(m)}" data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}" aria-pressed="${mode === m ? esc('true') : esc('false')}">${label}</button>`;
+  const btn = (m: string, label: Html): Html => html`<button type="button" class="chip" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="${esc(m)}" data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}" aria-pressed="${mode === m ? esc('true') : esc('false')}">${label}</button>`;
   return html`<div class="analytics-filter-row maint-mode-seg">
     ${btn('shots', tHtml('maint_unit_shots'))}
     ${btn('days', tHtml('maint_by_days'))}

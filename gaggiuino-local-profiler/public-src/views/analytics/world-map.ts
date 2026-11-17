@@ -493,11 +493,10 @@ function _clearMapExtras(wrap: HTMLElement): void {
 function _renderMapChips(wrap: HTMLElement, countries: string[], byCode: Record<string, MapStats>): void {
   const host = _mapChipsHost(wrap);
   if (!host) return;
-  // #2092: no bare "chip" class yet; it would pick up the shared .chip look before #2093 moves these chips over.
   host.innerHTML = joinHtml(countries.map(code =>
-    html`<button type="button" class="analytics-filter-btn" data-code="${esc(code)}">${esc(countryName(code, S.currentLang))} ${esc(Math.round(byCode[code]?.shots ?? 0))}</button>`));
+    html`<button type="button" class="chip" data-code="${esc(code)}">${esc(countryName(code, S.currentLang))} ${esc(Math.round(byCode[code]?.shots ?? 0))}</button>`));
   if (typeof host.querySelectorAll !== 'function') return;
-  host.querySelectorAll<HTMLElement>('.analytics-filter-btn').forEach(chip => {
+  host.querySelectorAll<HTMLElement>('.chip').forEach(chip => {
     const code = chip.dataset.code;
     if (!code) return;
     chip.addEventListener('click', () => _openCountryDetail(code, chip));

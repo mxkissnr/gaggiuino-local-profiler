@@ -248,6 +248,23 @@ describe('maintenance task rows (#1923)', () => {
     const html = renderOne('backflush', { threshold_shots: 40, shotsSince: 12 });
     expect(html).toContain('12 / 40 Shots');
   });
+
+  it('renders the machine scope as shared chips with only the chosen one pressed (#2093)', () => {
+    const saved = S.machines;
+    try {
+      S.machines = [{ id: 1, name: 'Left' }, { id: 2, name: 'Right' }];
+      renderMaintenanceDashboard(
+        { backflush: task('ok', { threshold_shots: 40, shotsSince: 12 }) }, 2);
+
+      const scope = els.get('maintScopeSeg')!.innerHTML;
+      expect((scope.match(/class="chip" data-action="set-maint-scope"/g) || []).length).toBe(3);
+      expect((scope.match(/aria-pressed="true"/g) || []).length).toBe(1);
+      expect(scope).toMatch(/data-scope="2" aria-pressed="true"/);
+      expect(scope).not.toMatch(/class="[^"]*\bactive\b/);
+    } finally {
+      S.machines = saved;
+    }
+  });
 });
 
 // #1923: the task row is the button; icon, title, chip, meta and the slim bar

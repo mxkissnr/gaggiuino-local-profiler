@@ -47,23 +47,23 @@ export function resolveTheme(theme: string, prefersDark: boolean): string {
 }
 
 // Applies `theme` (the raw stored/selected value -- 'auto' included) to the
-// page: resolves and sets <html data-theme>, updates which
-// #themeToggleGroup button carries .active (matched against the RAW value,
-// so picking Auto highlights the Auto button even though the resolved
-// concrete theme is whatever the OS currently reports), and fires
+// page: resolves and sets <html data-theme>, marks the matching
+// #themeToggleGroup button pressed through aria-pressed (matched against the
+// RAW value, so picking Auto presses Auto even though the resolved concrete
+// theme is whatever the OS currently reports), and fires
 // THEME_CHANGE_EVENT (#814) so live Chart.js instances re-theme.
 //
-// Scoped to `#themeToggleGroup .theme-btn`, not the bare `.theme-btn` class
-// -- #mqttTransportToggle (Settings -> Live-Verbindung) reuses that same
-// class for its own WebSocket/MQTT toggle and has no data-theme-val. #1018's
-// actual bug: an unscoped query also wired/matched those buttons, so
-// clicking one called this with theme=undefined, which matches neither
-// 'dark' nor 'light' and left both real buttons permanently un-highlighted.
+// Scoped to `#themeToggleGroup [data-theme-val]`, not the bare shared chip
+// class -- #mqttTransportToggle (Settings -> Live-Verbindung) uses the same
+// shared chip without data-theme-val. #1018's actual bug: an unscoped query
+// also matched those buttons, so clicking one called this with
+// theme=undefined, which matches neither 'dark' nor 'light' and left neither
+// Dark nor Light pressed.
 export function applyTheme(theme: string, { doc = document, win = window }: { doc?: Document; win?: Window & typeof globalThis } = {}): void {
   const prefersDark = !!win.matchMedia?.('(prefers-color-scheme: dark)')?.matches;
   doc.documentElement.dataset.theme = resolveTheme(theme, prefersDark);
-  doc.querySelectorAll<HTMLElement>('#themeToggleGroup .theme-btn').forEach(b =>
-    b.classList.toggle('active', b.dataset.themeVal === theme));
+  doc.querySelectorAll<HTMLElement>('#themeToggleGroup [data-theme-val]').forEach(b =>
+    b.setAttribute('aria-pressed', String(b.dataset.themeVal === theme)));
   // #814: Chart.js resolves its colours once, at construction. Setting the
   // theme attribute repaints everything CSS controls but leaves every chart
   // already on screen with the previous theme's legend, ticks and grid, so

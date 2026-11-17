@@ -307,11 +307,11 @@ export function achPageHtml(
   }
 
   const cardChips = joinHtml(CARD_KEYS.map(key =>
-    html`<button type="button" class="lib-shelf-chip" data-ach-card="${esc(key)}" aria-pressed="${esc(key === card ? 'true' : 'false')}">${tHtml(CARD_NAME_KEYS[key] ?? '')}</button>`
+    html`<button type="button" class="chip" data-ach-card="${esc(key)}" aria-pressed="${esc(key === card ? 'true' : 'false')}">${tHtml(CARD_NAME_KEYS[key] ?? '')}</button>`
   ));
   const filters: [AchFilter, string][] = [['all', 'lib_shelf_all'], ['got', 'ach_filter_got'], ['open', 'ach_filter_open']];
   const showChips = joinHtml(filters.map(([value, key]) =>
-    html`<button type="button" class="lib-shelf-chip" data-ach-show="${esc(value)}" aria-pressed="${esc(value === filter ? 'true' : 'false')}">${tHtml(key)}</button>`
+    html`<button type="button" class="chip" data-ach-show="${esc(value)}" aria-pressed="${esc(value === filter ? 'true' : 'false')}">${tHtml(key)}</button>`
   ));
 
   // The verdict already names the closest stamp, so "Coming up" starts after

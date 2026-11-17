@@ -468,9 +468,9 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
       <div class="orders-menu-item-top">
         <span>${esc(item.emoji)}</span>
         <span class="orders-menu-item-name">${esc(item.name)}</span>
-        <button class="orders-menu-use-beans${useBeans ? html` active` : html``}" data-menu-use-beans="${esc(item.id)}" title="${tHtml('orders_use_beans_toggle')}">${BEAN_ICON_SVG}</button>
-        <button class="orders-menu-use-milks${useMilks ? html` active` : html``}" data-menu-use-milks="${esc(item.id)}" title="${tHtml('orders_use_milks_toggle')}">${MILK_ICON_SVG}</button>
-        <button class="orders-menu-trend${item.trending ? html` active` : html``}" data-menu-trend="${esc(item.id)}" title="${tHtml('orders_trending_toggle')}"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></button>
+        <button type="button" class="chip" aria-pressed="${esc(String(useBeans))}" data-menu-use-beans="${esc(item.id)}" title="${tHtml('orders_use_beans_toggle')}">${BEAN_ICON_SVG}</button>
+        <button type="button" class="chip" aria-pressed="${esc(String(useMilks))}" data-menu-use-milks="${esc(item.id)}" title="${tHtml('orders_use_milks_toggle')}">${MILK_ICON_SVG}</button>
+        <button type="button" class="chip" aria-pressed="${esc(String(!!item.trending))}" data-menu-trend="${esc(item.id)}" title="${tHtml('orders_trending_toggle')}"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></button>
         <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${tHtml('orders_confirm_delete_item')}">${CLOSE_ICON_SVG}</button>
       </div>
       <div class="orders-menu-variants">${variantSection}</div>

@@ -481,7 +481,7 @@ function _initChart(): void {
 function _toggleGroup(action: string, options: { val: string; label: string }[], activeVal: string | number | undefined, idx?: number): Html {
   const idxAttr: Html = idx != null ? html` data-idx="${esc(idx)}"` : html``;
   return html`<div class="gm-toggle-group">${joinHtml(options.map(o =>
-    html`<button type="button" class="lib-btn-sm${o.val === activeVal ? html` active` : html``}" data-action="${esc(action)}"${idxAttr} data-val="${esc(o.val)}">${esc(o.label)}</button>`
+    html`<button type="button" class="chip" aria-pressed="${esc(String(o.val === activeVal))}" data-action="${esc(action)}"${idxAttr} data-val="${esc(o.val)}">${esc(o.label)}</button>`
   ))}</div>`;
 }
 

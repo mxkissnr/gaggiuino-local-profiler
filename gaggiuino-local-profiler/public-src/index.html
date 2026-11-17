@@ -34,10 +34,10 @@
         <div id="beanFilterIndicator" style="display:none"></div>
     </div>
     <div id="sort-bar">
-        <button class="sort-btn active" id="sortNewest">Neueste</button>
-        <button class="sort-btn" id="sortScore">Score ↓</button>
-        <button class="sort-btn" id="sortRating"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg> Bewertung</button>
-        <button class="sort-btn" id="sortDur">Dauer</button>
+        <button type="button" class="chip" id="sortNewest" aria-pressed="true">Neueste</button>
+        <button type="button" class="chip" id="sortScore" aria-pressed="false">Score ↓</button>
+        <button type="button" class="chip" id="sortRating" aria-pressed="false"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg> Bewertung</button>
+        <button type="button" class="chip" id="sortDur" aria-pressed="false">Dauer</button>
     </div>
     <div id="shots"></div>
     <div id="trash-section" style="display:none">
@@ -1272,10 +1272,10 @@
         <div class="analytics-toolbar" id="analyticsToolbar">
             <input type="search" id="analyticsSearch" class="lib-shelf-search" data-i18n-placeholder="analytics_search_ph" data-i18n-aria-label="analytics_search_ph" placeholder="Bohne oder Profil filtern" aria-label="Bohne oder Profil filtern">
             <div class="analytics-filter-row">
-                <button type="button" class="analytics-filter-btn" data-action="analytics-range" data-days="7" aria-pressed="false" data-i18n="analytics_range_7">7 T</button>
-                <button type="button" class="analytics-filter-btn active" data-action="analytics-range" data-days="30" aria-pressed="true" data-i18n="analytics_range_30">30 T</button>
-                <button type="button" class="analytics-filter-btn" data-action="analytics-range" data-days="90" aria-pressed="false" data-i18n="analytics_range_90">90 T</button>
-                <button type="button" class="analytics-filter-btn" data-action="analytics-range" data-days="0" aria-pressed="false" data-i18n="analytics_range_all">Alles</button>
+                <button type="button" class="chip" data-action="analytics-range" data-days="7" aria-pressed="false" data-i18n="analytics_range_7">7 T</button>
+                <button type="button" class="chip" data-action="analytics-range" data-days="30" aria-pressed="true" data-i18n="analytics_range_30">30 T</button>
+                <button type="button" class="chip" data-action="analytics-range" data-days="90" aria-pressed="false" data-i18n="analytics_range_90">90 T</button>
+                <button type="button" class="chip" data-action="analytics-range" data-days="0" aria-pressed="false" data-i18n="analytics_range_all">Alles</button>
             </div>
             <p id="analyticsFilterEmpty" class="empty-note analytics-filter-empty" data-i18n="analytics_filter_empty" style="display:none">Keine Shots für diesen Filter.</p>
         </div>
@@ -1346,8 +1346,8 @@
                     <div class="analytics-shelf-tools">
                         <span id="beanShelfCount" class="analytics-shelf-count"></span>
                         <div class="analytics-filter-row">
-                            <button type="button" class="analytics-filter-btn active" data-action="set-bean-shelf-sort" data-sort="score" aria-pressed="true" data-i18n="analytics_shelf_sort_score">Score</button>
-                            <button type="button" class="analytics-filter-btn" data-action="set-bean-shelf-sort" data-sort="shots" aria-pressed="false" data-i18n="analytics_shelf_sort_shots">Shots</button>
+                            <button type="button" class="chip" data-action="set-bean-shelf-sort" data-sort="score" aria-pressed="true" data-i18n="analytics_shelf_sort_score">Score</button>
+                            <button type="button" class="chip" data-action="set-bean-shelf-sort" data-sort="shots" aria-pressed="false" data-i18n="analytics_shelf_sort_shots">Shots</button>
                         </div>
                     </div>
                 </div>
@@ -1553,9 +1553,9 @@
         <div class="settings-card">
             <h3 class="settings-card-title" data-i18n="settings_theme">Theme</h3>
             <div class="theme-toggle-group" id="themeToggleGroup">
-                <button class="theme-btn" data-theme-val="dark"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg> <span data-i18n="theme_dark">Dark</span></button>
-                <button class="theme-btn" data-theme-val="light"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg> <span data-i18n="theme_light">Light</span></button>
-                <button class="theme-btn" data-theme-val="auto"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg> <span data-i18n="theme_auto">Auto</span></button>
+                <button type="button" class="chip" data-theme-val="dark" aria-pressed="false"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg> <span data-i18n="theme_dark">Dark</span></button>
+                <button type="button" class="chip" data-theme-val="light" aria-pressed="false"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg> <span data-i18n="theme_light">Light</span></button>
+                <button type="button" class="chip" data-theme-val="auto" aria-pressed="false"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg> <span data-i18n="theme_auto">Auto</span></button>
             </div>
             <h3 class="settings-card-title" style="margin-top:14px" data-i18n="settings_accent">Farbschema</h3>
             <!-- #1019: shown when the ACTIVE machine (topbar switcher) has its
@@ -1699,8 +1699,8 @@
             <h3 class="settings-card-title" data-i18n="settings_mqtt_title">Live-Verbindung</h3>
             <p class="settings-card-desc" data-i18n="settings_mqtt_desc">Wie GLP Live-Sensordaten von der Maschine bezieht.</p>
             <div class="theme-toggle-group" id="mqttTransportToggle">
-                <button type="button" class="theme-btn" data-mqtt-transport="websocket" data-i18n="settings_mqtt_transport_ws">WebSocket (Standard)</button>
-                <button type="button" class="theme-btn" data-mqtt-transport="mqtt" data-i18n="settings_mqtt_transport_mqtt">MQTT</button>
+                <button type="button" class="chip" data-mqtt-transport="websocket" aria-pressed="false" data-i18n="settings_mqtt_transport_ws">WebSocket (Standard)</button>
+                <button type="button" class="chip" data-mqtt-transport="mqtt" aria-pressed="false" data-i18n="settings_mqtt_transport_mqtt">MQTT</button>
             </div>
             <div id="mqttConnFields" style="display:none">
                 <p class="settings-card-desc" id="mqttDiscoveryHint"></p>

@@ -219,3 +219,56 @@ describe('bean shelf renders its own thumbnails (#1467)', () => {
     expect(beanShelf.innerHTML).toContain('analytics-shelf-tile');
   });
 });
+
+describe('bean shelf sort chips (#2093)', () => {
+  it('marks the chosen sort through aria-pressed and never toggles a class', async () => {
+    const chip = (sort: 'score' | 'shots') => ({
+      dataset: { sort },
+      attrs: {} as Record<string, string>,
+      setAttribute(name: string, value: string): void { this.attrs[name] = value; },
+      classList: {
+        toggle: (): void => { throw new Error('a sort chip must not toggle a class'); },
+        add: (): void => { throw new Error('a sort chip must not toggle a class'); },
+        remove: (): void => { throw new Error('a sort chip must not toggle a class'); },
+      },
+    });
+    const score = chip('score');
+    const shots = chip('shots');
+    const beanShelf = { innerHTML: '' };
+    const count = { textContent: '' };
+    const chipQuery = '[data-action="set-bean-shelf-sort"]';
+    vi.resetModules();
+
+    // Leave document undefined during the import (views/library/bags.ts wires a
+    // document-level pointerdown handler at load time), then hand the shelf a
+    // minimal stand-in for the render that setBeanShelfSort triggers.
+    Object.defineProperty(globalThis, 'document', { value: undefined, configurable: true, writable: true });
+    Object.defineProperty(globalThis, 'window', {
+      value: { calcShotScore: (s: { score?: number }) => s.score ?? null, getShotData: () => ({}) },
+      configurable: true, writable: true,
+    });
+    const { S } = await import('../public-src/state/index.js');
+    const { setBeanShelfSort } = await import('../public-src/views/analytics.js');
+    S.shots = [];
+
+    Object.defineProperty(globalThis, 'document', {
+      value: {
+        getElementById: (id: string) => (id === 'beanShelf' ? beanShelf : id === 'beanShelfCount' ? count : null),
+        querySelectorAll: (selector: string) => (selector === chipQuery ? [score, shots] : []),
+        querySelector: (): null => null,
+        addEventListener: (): void => {},
+        removeEventListener: (): void => {},
+        documentElement: { lang: 'en' },
+      },
+      configurable: true, writable: true,
+    });
+
+    setBeanShelfSort('shots');
+    expect(shots.attrs['aria-pressed']).toBe('true');
+    expect(score.attrs['aria-pressed']).toBe('false');
+
+    setBeanShelfSort('score');
+    expect(score.attrs['aria-pressed']).toBe('true');
+    expect(shots.attrs['aria-pressed']).toBe('false');
+  });
+});

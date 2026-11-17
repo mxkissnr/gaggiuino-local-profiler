@@ -289,10 +289,10 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   if (seg) {
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     seg.innerHTML = joinHtml([
-      html`<button type="button" class="${esc(scope === 'all' ? 'analytics-filter-btn active' : 'analytics-filter-btn')}" data-action="set-maint-scope" data-scope="all" aria-pressed="${esc(scope === 'all' ? 'true' : 'false')}">${tHtml('machine_switcher_all')}</button>`,
+      html`<button type="button" class="chip" data-action="set-maint-scope" data-scope="all" aria-pressed="${esc(scope === 'all' ? 'true' : 'false')}">${tHtml('machine_switcher_all')}</button>`,
       ...S.machines.map(m => {
         const on = scope === m.id;
-        return html`<button type="button" class="${esc(on ? 'analytics-filter-btn active' : 'analytics-filter-btn')}" data-action="set-maint-scope" data-scope="${esc(m.id)}" aria-pressed="${esc(on ? 'true' : 'false')}">${esc(m.name as string)}</button>`;
+        return html`<button type="button" class="chip" data-action="set-maint-scope" data-scope="${esc(m.id)}" aria-pressed="${esc(on ? 'true' : 'false')}">${esc(m.name as string)}</button>`;
       }),
     ]);
     seg.hidden = !hasMachines;

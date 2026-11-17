@@ -296,6 +296,16 @@ describe('SETTINGS_DIALOG_ROWS table (slice 5)', () => {
         expect(rows.get('shot-defaults')?.value()).toBe('');
     });
 
+    it('reads the live connection from the pressed transport chip (#2093)', () => {
+        const rows = new Map(SETTINGS_DIALOG_ROWS.map(r => [r.id, r] as const));
+        g.document = {
+            getElementById: () => null,
+            querySelector: (sel: string) => (sel === '#mqttTransportToggle [aria-pressed="true"]' ? { textContent: ' MQTT ' } : null),
+        };
+
+        expect(rows.get('live')?.value()).toBe('MQTT');
+    });
+
     it('opens the card in the detail sheet as a dialog and reloads it on close', async () => {
         const card = { classList: { add: vi.fn() }, style: { display: '' } };
         const appended: { className: string; innerHTML: string }[] = [];

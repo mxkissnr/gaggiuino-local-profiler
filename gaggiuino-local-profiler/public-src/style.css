@@ -51,9 +51,10 @@
            these and keeps only layout in its own class (position, grid
            area, gap), never colour, radius or padding. The design ratchet
            test counts every page class that still styles its own look. */
+        /* Height from --ctl-height (tokens.css): 44 px on touch screens, 36 px with a fine pointer. */
         .chip {
             display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-1);
-            min-height: 44px;
+            min-height: var(--ctl-height);
             padding: 0 var(--sp-3);
             border: 1px solid var(--gray-700);
             border-radius: var(--radius-ctl);
@@ -75,7 +76,7 @@
 
         .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
-            min-height: 44px;
+            min-height: var(--ctl-height);
             padding: 0 var(--sp-4);
             border: 0;
             border-radius: var(--radius-ctl);
@@ -659,11 +660,10 @@
         .analytics-filter-row { display: flex; gap: var(--sp-2); }
         .analytics-filter-btn {
             background: transparent; border: 1px solid var(--gray-700); color: var(--gray-500);
-            padding: var(--sp-1) var(--sp-3); border-radius:var(--radius); cursor: pointer;
+            padding: var(--sp-1) var(--sp-3); border-radius: var(--radius-ctl); cursor: pointer;
             font-size: var(--fs-1); transition: all .15s;
         }
         .analytics-filter-btn:hover { color: var(--gray-200); border-color: var(--gray-600); }
-        .analytics-filter-btn.active { color: var(--gray-200); border-color: var(--accent-ink); font-weight: 600; }
 
         /* Analytics toolbar (#1467): one sticky filter row for the whole page.
            The page background keeps the cards scrolling underneath it. */
@@ -1513,15 +1513,9 @@
 
         /* ── Drink type pills ── */
         .drink-pills { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: 2px; }
-        .drink-pill { background: color-mix(in srgb, var(--paper) 4%, transparent); border: 1px solid var(--gray-700); border-radius: 20px; color: var(--gray-400); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-3); cursor: pointer; transition: border-color .15s, color .15s, background .15s; white-space: nowrap; }
-        .drink-pill:hover { border-color: var(--gray-500); color: var(--gray-200); background: color-mix(in srgb, var(--paper) 7%, transparent); }
-        .drink-pill.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
 
         /* ── Theme toggle (settings) ── */
         .theme-toggle-group { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
-        .theme-btn { background: color-mix(in srgb, var(--paper) 4%, transparent); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-400); font-size: var(--fs-2); padding: var(--sp-2) var(--sp-4); cursor: pointer; transition: all .15s; display: inline-flex; align-items: center; gap: var(--sp-2); }
-        .theme-btn:hover { border-color: var(--gray-500); color: var(--gray-200); }
-        .theme-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent-ink); font-weight: 500; }
 
         /* ── Accent swatches ── */
         .accent-swatches { display: flex; gap: var(--sp-3); flex-wrap: wrap; margin-top: var(--sp-1); }
@@ -1662,7 +1656,7 @@
            flavour chip list always contains its input, so it is unaffected). */
         #beanFormOriginChips:empty { display: none; }
         .flavor-chips-wrap input { background: transparent; border: none; outline: none; color: var(--gray-200); font-size: var(--fs-1); flex: 1; min-width: 110px; padding: var(--sp-1) 0; }
-        .flavor-chip { display: inline-flex; align-items: center; gap: var(--sp-1); background: color-mix(in srgb, var(--flavor-tint) 12%, transparent); border: 1px solid color-mix(in srgb, var(--flavor-tint) 30%, transparent); color: var(--flavor-ink); border-radius:var(--radius); padding: 2px var(--sp-2); font-size: var(--fs-1); font-weight: 600; overflow-wrap: break-word; max-width: 100%; }
+        .flavor-chip { display: inline-flex; align-items: center; gap: var(--sp-1); background: color-mix(in srgb, var(--flavor-tint) 12%, transparent); border: 1px solid color-mix(in srgb, var(--flavor-tint) 30%, transparent); color: var(--flavor-ink); border-radius: var(--radius-ctl); padding: 2px var(--sp-2); font-size: var(--fs-1); font-weight: 600; overflow-wrap: break-word; max-width: 100%; }
         .flavor-chip-x { background: none; border: none; color: inherit; cursor: pointer; font-size: var(--fs-1); padding: 0; opacity: .7; }
         .flavor-chip-x:hover { opacity: 1; }
         /* #404: read-only display pills (bean cards) go quiet-outline
@@ -2023,21 +2017,12 @@
         }
         /* Shelf toolbar (#1329 part 2): search, filter chips and sort. */
         .lib-shelf-toolbar { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
-        .lib-shelf-search { flex:1 1 100%; min-width:0; box-sizing:border-box; min-height:44px; padding: var(--sp-2); background: var(--gray-900); border:1px solid var(--gray-700); border-radius: var(--radius-sm); color: var(--gray-200); font-size: var(--fs-2); }
+        .lib-shelf-search { flex:1 1 100%; min-width:0; box-sizing:border-box; min-height: var(--ctl-height); padding: var(--sp-2); background: var(--gray-900); border:1px solid var(--gray-700); border-radius: var(--radius-ctl); color: var(--gray-200); font-size: var(--fs-2); }
         .lib-shelf-search:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
         .lib-shelf-search-row { display:flex; align-items:center; gap: var(--sp-2); flex:1 1 100%; min-width:0; }
         .lib-shelf-search-row .lib-shelf-search { flex:1 1 auto; }
-        .lib-shelf-views { display:flex; flex:0 0 auto; }
-        .lib-shelf-view-btn { position:relative; min-height:32px; padding: 0 var(--sp-2); border:1px solid var(--gray-700); background:none; color: var(--gray-400); font-size: var(--fs-1); font-weight:600; cursor:pointer; transition: border-color .15s, color .15s, background .15s; }
-        .lib-shelf-view-btn + .lib-shelf-view-btn { margin-left:-1px; }
-        .lib-shelf-view-btn:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
-        .lib-shelf-view-btn:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
-        .lib-shelf-view-btn:hover { border-color: var(--gray-500); color: var(--gray-200); }
-        .lib-shelf-view-btn[aria-pressed="true"] { z-index: var(--z-local-1); background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--accent-ink); }
+        .lib-shelf-views { display:flex; flex:0 0 auto; gap: var(--sp-1); }
         .lib-shelf-chips { display:flex; flex-wrap:wrap; gap: var(--sp-1); }
-        .lib-shelf-chip { min-height:32px; padding: 0 var(--sp-3); border:1px solid var(--gray-700); border-radius: var(--radius-sm); background:none; color: var(--gray-400); font-size: var(--fs-1); font-weight:600; cursor:pointer; transition: border-color .15s, color .15s, background .15s; }
-        .lib-shelf-chip:hover { border-color: var(--gray-500); color: var(--gray-200); }
-        .lib-shelf-chip[aria-pressed="true"] { background: color-mix(in srgb, var(--accent) 18%, transparent); border-color: var(--accent); color: var(--accent-ink); }
         .lib-shelf-sort { min-height:44px; padding: 0 var(--sp-2); background: var(--gray-900); border:1px solid var(--gray-700); border-radius: var(--radius-sm); color: var(--gray-200); font-size: var(--fs-1); }
         .lib-shelf-sort:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
         .lib-shelf-no-match { color: var(--gray-500); font-size: var(--fs-1); padding: var(--sp-3) 0; }
@@ -2524,25 +2509,6 @@
             padding: var(--sp-2) var(--sp-3);
             flex-wrap: wrap;
         }
-        /* #397: buttons live on fill + hover instead of a persistent 1px
-           border. */
-        .sort-btn {
-            background: color-mix(in srgb, var(--paper) 4%, transparent);
-            color: var(--gray-500);
-            border: 1px solid transparent;
-            border-radius:var(--radius);
-            padding: var(--sp-1) var(--sp-2);
-            cursor: pointer;
-            font-size: var(--fs-1);
-            transition: all .15s;
-            white-space: nowrap;
-            display: inline-flex;
-            align-items: center;
-            gap: var(--sp-1);
-        }
-        .sort-btn:hover     { color: var(--gray-200); background: color-mix(in srgb, var(--paper) 8%, transparent); }
-        .sort-btn.active    { color: var(--gray-200); border-color: var(--accent-ink); font-weight: 600; }
-
         /* ── Freshness badge ── */
         .freshness-badge {
             display: inline-block;
@@ -3075,7 +3041,6 @@
             .annotation-panel  { padding: var(--sp-4); margin-top: var(--sp-4); }
             .annotation-actions { flex-direction: column; align-items: stretch; gap: var(--sp-2); }
             .star              { padding: var(--sp-2) var(--sp-2); font-size: var(--fs-5); }
-            .drink-pill        { min-height: 44px; padding: var(--sp-2) var(--sp-4); font-size: var(--fs-2); display: flex; align-items: center; }
             /* #1960: every library picker and its free-text fallback is a 44px target on a phone. */
             .annotation-field select, .lib-form-field select, select.machine-form-input, #annGrinderOther, #lsGrinderOther, #dwGrinderOther { min-height: 44px; }
         }
@@ -3122,7 +3087,7 @@
             .maint-log-sec { grid-area: log; }
         }
 
-        .maint-toolbar .analytics-filter-btn { min-height: 44px; }
+        .maint-toolbar .analytics-filter-btn { min-height: var(--ctl-height); }
         .maint-toolbar-spacer { flex: 1 1 auto; }
         /* .analytics-filter-row sets display:flex, which would beat the UA
            rule for [hidden] — the scope chips need the explicit one. */
@@ -3274,18 +3239,13 @@
            colors/border/radius) — deliberately not merged: .pp-field lives
            in the dense 2-4 column .pp-grid and needs the tighter sp-1
            padding to fit, this form doesn't. */
-        .lib-btn-sm.active { background:var(--accent-from); color:var(--accent-text); }
         .lib-select, .lib-input { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-2); }
         .lib-select:focus, .lib-input:focus { outline:none; border-color:var(--gray-500); }
         .lib-input { min-width:0; }
         .flex-1 { flex:1; }
         .gm-chart-container { flex-shrink:0; margin:.5rem 0 .75rem; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); overflow:hidden; height:180px; position:relative; }
-        /* Segmented-control look (shared background/border around the whole
-           group, tighter radius per button) so a row of mode buttons reads
-           as one group with a selection, not a loose row of buttons. */
-        .gm-toggle-group { display:inline-flex; gap:2px; flex-wrap:wrap; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); padding:2px; }
-        .gm-toggle-group .lib-btn-sm { border-radius:calc(var(--radius) - 2px); }
-        .gm-toggle-group .lib-btn-sm.active { box-shadow:0 1px 2px color-mix(in srgb, var(--scrim) 25%, transparent); }
+        /* A row of shared chips; the pressed one is the selection (#2093). */
+        .gm-toggle-group { display:inline-flex; flex-wrap:wrap; gap: var(--sp-1); }
         .gm-phase { background:var(--gray-800); border-radius:var(--radius); padding:var(--sp-3); margin-bottom:var(--sp-2); }
         .gm-phase-nav { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
         .gm-phase-nav span { flex:0 0 auto; font-size:var(--fs-1); color:var(--gray-400); }
@@ -3339,8 +3299,6 @@
         .pdw-profile-name { font-size: var(--fs-3); font-weight:700; color:var(--gray-100); text-align:center; padding: var(--sp-2) 0; }
         .pdw-symptom-label { font-size: var(--fs-1); color:var(--gray-500); font-weight:700; }
         .pdw-symptom-row { display:flex; flex-wrap:wrap; gap: var(--sp-2); }
-        .pdw-symptom-btn { background:var(--gray-800); border:1.5px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-300); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); cursor:pointer; }
-        .pdw-symptom-btn.active { background:var(--accent); border-color:var(--accent); color:var(--accent-text); font-weight:700; }
         .fw-header { display:flex; align-items:center; gap: var(--sp-3); flex-shrink:0; }
         .fw-close-x { margin-left: auto; background:none; border:none; color:var(--gray-400); font-size: var(--fs-3); line-height:1; padding: var(--sp-2); cursor:pointer; flex-shrink:0; }
         .fw-close-x:hover, .fw-close-x:focus-visible { color:var(--gray-200); }
@@ -3516,7 +3474,6 @@
            surface carries the group, separators are hairlines. */
         .maint-sheet { display:flex; flex-direction:column; gap: var(--sp-4); }
         .maint-sheet-interval { display:flex; flex-direction:column; gap: var(--sp-3); }
-        .maint-sheet .analytics-filter-btn { min-height:44px; }
         .maint-sheet .maint-threshold-field input { min-height:44px; }
         .maint-hist-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:2px var(--sp-2); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
         .maint-hist-row:last-child { border-bottom:none; }
@@ -3609,10 +3566,6 @@
         .orders-menu-item { display:flex; flex-direction:column; gap: var(--sp-1); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
         .orders-menu-item-top { display:flex; align-items:center; gap: var(--sp-3); }
         .orders-menu-item-name { flex:1; font-size: var(--fs-2); color:var(--gray-200); }
-        /* #415: was a 🔥 emoji glyph — inline stroke-SVG (.rail-icon), same treatment as #414. */
-        .orders-menu-trend { background:none; border:none; cursor:pointer; padding: 2px var(--sp-2); opacity:.3; transition:opacity .15s; display:flex; align-items:center; }
-        .orders-menu-trend:hover { opacity:.7; }
-        .orders-menu-trend.active { opacity:1; }
         .orders-menu-del { background:none; border:none; color:var(--gray-600); font-size: var(--fs-3); cursor:pointer; padding: 2px var(--sp-2); transition:color .15s; }
         .orders-menu-del:hover { color:var(--err); }
         .orders-menu-variants { display:flex; flex-wrap:wrap; gap: var(--sp-1); align-items:center; padding-left: 2px; }
@@ -3624,15 +3577,8 @@
         .orders-menu-variant-btn { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-400); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); cursor:pointer; transition:all .15s; }
         .orders-menu-variant-btn:hover { background:var(--gray-700); color:var(--gray-200); }
         .order-variant-badge { font-size: var(--fs-1); color:var(--gray-400); font-weight:400; }
-        /* #416: were 🫘/🥛 emoji glyphs — inline stroke-SVG (.rail-icon), same treatment as #415. */
-        .orders-menu-use-beans { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); padding: 2px var(--sp-2); cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; }
-        .orders-menu-use-beans:hover { border-color:var(--gray-500); color:var(--gray-300); }
-        .orders-menu-use-beans.active { border-color:var(--beans-ink); color:var(--beans-ink); background:color-mix(in srgb, var(--beans-ink) 8%, transparent); }
         .orders-use-beans-note { font-size: var(--fs-1); color:var(--gray-500); font-style:italic; padding-left: 2px; display:inline-flex; align-items:center; gap: var(--sp-1); }
 
-        .orders-menu-use-milks { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-500); padding: 2px var(--sp-2); cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; }
-        .orders-menu-use-milks:hover { border-color:var(--gray-500); color:var(--gray-300); }
-        .orders-menu-use-milks.active { border-color:var(--milk-ink); color:var(--milk-ink); background:color-mix(in srgb, var(--milk-ink) 8%, transparent); }
         .ann-ordered-by { display:flex; flex-direction:column; gap: 2px; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); background:color-mix(in srgb, var(--paper) 3%, transparent); border:1px solid var(--gray-800); border-radius:var(--radius); }
         .ann-ordered-by-label { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .ann-ordered-by-val { font-size: var(--fs-1); color:var(--gray-200); }
@@ -4027,7 +3973,7 @@
         .ach-filters { display:flex; flex-direction:column; gap: var(--sp-2); min-width:0; }
         .ach-chips { display:flex; gap: var(--sp-2); overflow-x:auto; scrollbar-width:none; overscroll-behavior-x: contain; }
         .ach-chips::-webkit-scrollbar { display:none; }
-        .ach-chips .lib-shelf-chip { flex:none; min-height:44px; white-space:nowrap; }
+        .ach-chips .chip { flex:none; }
         .ach-layout { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }
         .ach-layout[data-ach-filter="got"] .ach-field:not(.ach-got),
         .ach-layout[data-ach-filter="open"] .ach-field.ach-got { opacity:.28; filter:saturate(.3); transition:opacity .15s; }
