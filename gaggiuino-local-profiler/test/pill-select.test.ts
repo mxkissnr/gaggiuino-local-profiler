@@ -127,6 +127,7 @@ describe('#1962 pill select', () => {
     const pills = pillsOf(select);
     expect(pills.map(p => p.dataset.val)).toEqual(['pressurized', 'high-flow']);
     expect(pills.map(p => p.textContent)).toEqual(['Pressurized', 'High-Flow']);
+    expect(pills.map(p => p.className)).toEqual(['chip', 'chip']);
     expect(select.style.display).toBe('none');
     expect(at(select.inserted, 0).className).toBe('theme-toggle-group');
     expect(at(select.inserted, 0).getAttribute('aria-label')).toBe('Wall type');
@@ -197,13 +198,13 @@ describe('#1962 pill select', () => {
     expect(sort.value).toBe('fresh');
   });
 
-  it('writing select.value repaints active and aria-pressed', () => {
+  it('writing select.value repaints aria-pressed and toggles no class', () => {
     bindPillSelect(asSelect(select));
     const pills = pillsOf(select);
-    expect(pills.map(p => p.classList.contains('active'))).toEqual([false, false]);
+    expect(pills.map(p => p.getAttribute('aria-pressed'))).toEqual(['false', 'false']);
     select.value = 'high-flow';
-    expect(pills.map(p => p.classList.contains('active'))).toEqual([false, true]);
     expect(pills.map(p => p.getAttribute('aria-pressed'))).toEqual(['false', 'true']);
+    expect(pills.map(p => p.classList.contains('active'))).toEqual([false, false]);
   });
 
   it('binding twice adds no second group', () => {

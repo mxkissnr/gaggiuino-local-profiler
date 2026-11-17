@@ -390,14 +390,14 @@ export function setSortMode(mode: string): void {
   }
   const arrow = S.sortAsc ? ' ↑' : ' ↓';
   const labels: Record<string, Html> = { newest: tHtml('sort_newest'), score: tHtml('sort_score'), rating: html`${STAR_ICON_SVG} ${tHtml('sort_rating')}`, duration: tHtml('sort_duration') };
-  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
   const map: Record<string, string> = { newest: 'sortNewest', score: 'sortScore', rating: 'sortRating', duration: 'sortDur' };
+  // #2093: the chosen sort is pressed through aria-pressed only.
+  for (const [key, id] of Object.entries(map)) {
+    document.getElementById(id)?.setAttribute('aria-pressed', String(key === mode));
+  }
   const domId = map[mode];
   const activeBtn = domId ? document.getElementById(domId) : null;
-  if (activeBtn) {
-    activeBtn.classList.add('active');
-    activeBtn.innerHTML = html`${labels[mode] || esc(mode)}${esc(arrow)}`;
-  }
+  if (activeBtn) activeBtn.innerHTML = html`${labels[mode] || esc(mode)}${esc(arrow)}`;
   renderSidebar();
 }
 

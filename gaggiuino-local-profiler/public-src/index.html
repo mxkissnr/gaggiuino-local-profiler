@@ -34,10 +34,10 @@
         <div id="beanFilterIndicator" style="display:none"></div>
     </div>
     <div id="sort-bar">
-        <button class="sort-btn active" id="sortNewest">Neueste</button>
-        <button class="sort-btn" id="sortScore">Score ↓</button>
-        <button class="sort-btn" id="sortRating"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg> Bewertung</button>
-        <button class="sort-btn" id="sortDur">Dauer</button>
+        <button type="button" class="chip" id="sortNewest" aria-pressed="true">Neueste</button>
+        <button type="button" class="chip" id="sortScore" aria-pressed="false">Score ↓</button>
+        <button type="button" class="chip" id="sortRating" aria-pressed="false"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg> Bewertung</button>
+        <button type="button" class="chip" id="sortDur" aria-pressed="false">Dauer</button>
     </div>
     <div id="shots"></div>
     <div id="trash-section" style="display:none">

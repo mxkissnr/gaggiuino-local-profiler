@@ -18,8 +18,8 @@ const TOKENS_PATH = join(here, '..', 'public-src', 'tokens.css');
 const PINNED = {
   literalRadius: 45,
   literalPadding: 67,
-  transitionAll: 19,
-  pageLookClasses: 143,
+  transitionAll: 18,
+  pageLookClasses: 140,
 } as const;
 
 type Debt = Record<keyof typeof PINNED, string[]>;

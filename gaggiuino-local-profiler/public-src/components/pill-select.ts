@@ -1,5 +1,6 @@
 // Shows a <select> of up to 5 short options as visible pills (#1962,
 // docs/DESIGN.md "Choosing"). The hidden select stays the source of truth.
+// #2093: the pills are the shared .chip; the pressed one carries aria-pressed only.
 
 // vitest's node environment has no DOM, and importing this module must not throw there.
 const proto = typeof HTMLSelectElement === 'undefined' ? undefined : HTMLSelectElement.prototype;
@@ -39,7 +40,7 @@ export function bindPillSelect(select: HTMLSelectElement | null): void {
   const buttons = Array.from(select.options).filter(o => o.value !== '').map(option => {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'theme-btn';
+    btn.className = 'chip';
     btn.dataset.val = option.value;
     btn.textContent = option.textContent;
     // The translation pass reaches the pill the same way it reaches the option.
@@ -56,7 +57,6 @@ export function bindPillSelect(select: HTMLSelectElement | null): void {
   const paint = (): void => {
     for (const btn of buttons) {
       const on = btn.dataset.val === select.value;
-      btn.classList.toggle('active', on);
       btn.setAttribute('aria-pressed', String(on));
       btn.disabled = select.disabled;
     }

@@ -2515,25 +2515,6 @@
             padding: var(--sp-2) var(--sp-3);
             flex-wrap: wrap;
         }
-        /* #397: buttons live on fill + hover instead of a persistent 1px
-           border. */
-        .sort-btn {
-            background: color-mix(in srgb, var(--paper) 4%, transparent);
-            color: var(--gray-500);
-            border: 1px solid transparent;
-            border-radius:var(--radius);
-            padding: var(--sp-1) var(--sp-2);
-            cursor: pointer;
-            font-size: var(--fs-1);
-            transition: all .15s;
-            white-space: nowrap;
-            display: inline-flex;
-            align-items: center;
-            gap: var(--sp-1);
-        }
-        .sort-btn:hover     { color: var(--gray-200); background: color-mix(in srgb, var(--paper) 8%, transparent); }
-        .sort-btn.active    { color: var(--gray-200); border-color: var(--accent-ink); font-weight: 600; }
-
         /* ── Freshness badge ── */
         .freshness-badge {
             display: inline-block;
