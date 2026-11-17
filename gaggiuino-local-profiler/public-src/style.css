@@ -133,6 +133,10 @@
         .badge--score-low   { --badge-c: var(--score-low); }
         .badge--score-bad   { --badge-c: var(--err); }
 
+        /* A badge on a photo (bean shelf): the tint alone would vanish into the
+           picture, so it sits on the page colour. */
+        .badge--scrim { background: color-mix(in srgb, var(--gray-950) 70%, transparent); color: var(--gray-200); }
+
         /* The small grey heading above a card, with an optional counter. */
         .section-title {
             display: flex; align-items: baseline; gap: var(--sp-2);
@@ -1726,15 +1730,6 @@
         .lib-bag-drag-handle:hover { background: color-mix(in srgb, var(--paper) 6%, transparent); color: var(--gray-400); }
         .lib-bag-drag-handle:active { cursor: grabbing; }
         .lib-bag-drag-list { display: flex; flex-direction: column; gap: var(--sp-2); }
-        /* State badges as Material 3 assist chips: tonal fill, no border,
-           full pill shape — color-mix() keyed to each state's semantic
-           color (--accent for current, --ok for upcoming/"has stock",
-           neutral gray for past) instead of the old bordered-outline look
-           with hand-picked hex greens that ignored the active theme. */
-        .lib-bag-active-badge, .lib-bag-upcoming-badge, .lib-bag-past-badge { font-size: var(--fs-1); font-weight: 600; border-radius: var(--radius-sm); padding: 2px var(--sp-2); border: none; }
-        .lib-bag-active-badge { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); }
-        .lib-bag-upcoming-badge { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
-        .lib-bag-past-badge { background: var(--gray-700); color: var(--gray-500); }
         .lib-bag-card-actions-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
         .lib-bag-card-actions { margin-left: auto; display: flex; gap: var(--sp-1); }
         /* Icon buttons get a proper circular state layer on hover (Material
@@ -1943,8 +1938,9 @@
         .lib-shelf-stack-layer { position:absolute; inset:0; border-radius: var(--radius-sm); background: var(--gray-800); border:1px solid var(--gray-700); }
         .lib-shelf-stack-layer:nth-child(1) { transform: translate(4px,-4px); }
         .lib-shelf-stack-layer:nth-child(2) { transform: translate(8px,-8px); }
-        .lib-shelf-sealed-badge { position:absolute; top: var(--sp-1); right: var(--sp-1); z-index: var(--z-local-2); font-size: var(--fs-1); font-weight:600; color: var(--gray-200); background: color-mix(in srgb, var(--gray-950) 70%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
-        .lib-shelf-open-badge { display:inline-block; font-size: var(--fs-1); font-weight:600; color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
+        .lib-shelf-mark-top, .lib-shelf-mark-bottom { position:absolute; z-index: var(--z-local-2); }
+        .lib-shelf-mark-top { top: var(--sp-1); right: var(--sp-1); }
+        .lib-shelf-mark-bottom { bottom: var(--sp-1); left: var(--sp-1); }
         /* Thin stock bar, same look as the full card's .lib-stock-bar-md. */
         .lib-shelf-bar { display:block; height:6px; border-radius:999px; background: var(--gray-700); overflow:hidden; }
         .lib-shelf-bar-fill { display:block; height:100%; border-radius:999px; background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
@@ -1953,7 +1949,6 @@
         .lib-shelf-sealed { margin-left: var(--sp-1); color: var(--gray-500); }
         .lib-shelf-frozen-line { display:inline-flex; align-items:center; gap:2px; font-size: var(--fs-1); color: var(--ice); }
         .lib-shelf-frozen-line .rail-icon { width:12px; height:12px; }
-        .lib-shelf-archived-tag { position:absolute; bottom: var(--sp-1); left: var(--sp-1); font-size: var(--fs-1); font-weight:600; color: var(--gray-200); background: color-mix(in srgb, var(--gray-950) 70%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
         .lib-shelf-tile.muted { filter: saturate(.25); opacity:.6; }
         .lib-shelf-tile.muted:hover, .lib-shelf-tile.muted:focus-visible { filter: saturate(.6); opacity:.85; }
         /* List view: one compact row per bean, same tap-to-expand contract. */
