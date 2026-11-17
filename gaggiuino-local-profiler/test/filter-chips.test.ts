@@ -92,3 +92,33 @@ describe('shared filter chips (#2093)', () => {
     expect(hits).toEqual([]);
   });
 });
+
+function buttons(action: string): string[] {
+  return read('index.html').match(new RegExp(`<button[^>]*data-action="${action}"[^>]*>`, 'g')) ?? [];
+}
+
+describe('analytics chips (#2093)', () => {
+  it.each(['analytics-range', 'set-bean-shelf-sort'])('%s: shared chips with exactly one pressed', action => {
+    const found = buttons(action);
+    expect(found.length).toBeGreaterThan(1);
+    for (const button of found) {
+      expect(button).toContain('class="chip"');
+      expect(button).toMatch(/aria-pressed="(true|false)"/);
+      expect(button).not.toMatch(/class="[^"]*\bactive\b/);
+    }
+    expect(found.filter(button => button.includes('aria-pressed="true"')).length).toBe(1);
+  });
+
+  it('syncs the period chips through aria-pressed only', () => {
+    const views = read('boot/views.ts');
+    expect(views).toContain("chip.setAttribute('aria-pressed'");
+    expect(views).not.toContain("classList.toggle('active'");
+  });
+
+  it('renders the world map country chips as shared chips', () => {
+    const map = read('views/analytics/world-map.ts');
+    expect(map).toContain('class="chip" data-code=');
+    expect(map).toContain("querySelectorAll<HTMLElement>('.chip')");
+    expect(map).not.toContain('analytics-filter-btn');
+  });
+});
