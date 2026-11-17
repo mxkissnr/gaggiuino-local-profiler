@@ -660,11 +660,10 @@
         .analytics-filter-row { display: flex; gap: var(--sp-2); }
         .analytics-filter-btn {
             background: transparent; border: 1px solid var(--gray-700); color: var(--gray-500);
-            padding: var(--sp-1) var(--sp-3); border-radius:var(--radius); cursor: pointer;
+            padding: var(--sp-1) var(--sp-3); border-radius: var(--radius-ctl); cursor: pointer;
             font-size: var(--fs-1); transition: all .15s;
         }
         .analytics-filter-btn:hover { color: var(--gray-200); border-color: var(--gray-600); }
-        .analytics-filter-btn.active { color: var(--gray-200); border-color: var(--accent-ink); font-weight: 600; }
 
         /* Analytics toolbar (#1467): one sticky filter row for the whole page.
            The page background keeps the cards scrolling underneath it. */
@@ -3114,7 +3113,7 @@
             .maint-log-sec { grid-area: log; }
         }
 
-        .maint-toolbar .analytics-filter-btn { min-height: 44px; }
+        .maint-toolbar .analytics-filter-btn { min-height: var(--ctl-height); }
         .maint-toolbar-spacer { flex: 1 1 auto; }
         /* .analytics-filter-row sets display:flex, which would beat the UA
            rule for [hidden] — the scope chips need the explicit one. */
@@ -3508,7 +3507,6 @@
            surface carries the group, separators are hairlines. */
         .maint-sheet { display:flex; flex-direction:column; gap: var(--sp-4); }
         .maint-sheet-interval { display:flex; flex-direction:column; gap: var(--sp-3); }
-        .maint-sheet .analytics-filter-btn { min-height:44px; }
         .maint-sheet .maint-threshold-field input { min-height:44px; }
         .maint-hist-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:2px var(--sp-2); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
         .maint-hist-row:last-child { border-bottom:none; }
