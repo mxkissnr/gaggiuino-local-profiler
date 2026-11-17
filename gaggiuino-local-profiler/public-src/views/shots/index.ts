@@ -581,7 +581,7 @@ export async function permanentDeleteShot(id: number): Promise<void> {
 
 // ── Main view ─────────────────────────────────────────────────────────────
 
-// Shared setter for the #402 delta-chip spans (verdict score + process-zone
+// Shared setter for the #402 delta badges (verdict score + process-zone
 // metrics): hides the chip entirely when there's nothing to compare against,
 // never shows an empty pill.
 function _setDeltaChip(id: string, delta: number | null, decimals = 0, unit = '', colorClass: string | null = null, title = ''): void {
@@ -589,7 +589,7 @@ function _setDeltaChip(id: string, delta: number | null, decimals = 0, unit = ''
   if (!el) return;
   if (delta == null) { el.style.display = 'none'; return; }
   el.textContent = formatDelta(delta, decimals, unit);
-  el.className   = 'delta-chip' + (colorClass ? ` ${colorClass}` : '');
+  el.className   = 'badge shot-delta' + (colorClass ? ` badge--${colorClass}` : '');
   el.title       = title;
   el.style.display = '';
 }
@@ -762,10 +762,10 @@ export async function updateView(): Promise<void> {
     const fresh = beanFreshnessContext(ann);
     const resolved = resolveFreshness(ageAtShot, fresh.roastLevel, fresh.override);
     const state = resolved.state;
-    const cls = state === 'fading' ? 'freshness-ok' : state === 'old' ? 'freshness-old' : 'freshness-fresh';
+    const cls = state === 'fading' ? 'badge--warn' : state === 'old' ? 'badge--err' : 'badge--ok';
     const sourceKey = freshnessSourceLabelKey(resolved);
     const sourceLabel = sourceKey ? t(sourceKey) : '';
-    freshEl.className   = `freshness-badge ${cls}`;
+    freshEl.className   = `badge ${cls}`;
     freshEl.textContent = beanAge.atShot ? t('bean_age_badge', ageAtShot) : t('freshness_badge', ageAtShot);
     freshEl.title       = beanAge.atShot
       ? t('bean_age_at_shot', ageAtShot) + (sourceLabel ? ` · ${sourceLabel}` : '')
@@ -870,7 +870,7 @@ export async function updateView(): Promise<void> {
       const cls = scoreDelta > 0 ? 'score-great' : scoreDelta < 0 ? 'score-bad' : 'score-ok';
       const vsShot = t('delta_vs_shot', previousShot.nativeId ?? previousShot.id);
       verdictDeltaChip.textContent = `${formatDelta(scoreDelta)} ${vsShot}`;
-      verdictDeltaChip.className   = `delta-chip ${cls}`;
+      verdictDeltaChip.className   = `badge shot-delta badge--${cls}`;
       verdictDeltaChip.style.display = '';
     } else {
       verdictDeltaChip.style.display = 'none';
