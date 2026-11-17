@@ -33,6 +33,8 @@ const RETIRED_BADGES = [
   'delta-chip', 'freshness-badge', 'freshness-fresh', 'freshness-ok', 'freshness-old',
   'ordered-by-badge', 'meta-badge', 'channeling-warn', 'sidebar-grind-badge',
   'shot-machine-badge', 'shot-frozen-badge',
+  'lib-fresh-badge', 'lib-frozen-badge', 'lib-decaf-badge', 'lib-roast-badge',
+  'lib-disabled-badge', 'lib-inv-reorder',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
