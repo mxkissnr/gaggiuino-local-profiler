@@ -107,13 +107,13 @@ describe('frozen shelf tile (#1350)', () => {
     // The tile keeps its inner text as the accessible name (no aria-label), so
     // the sealed count and the frozen grams are still announced, alongside the
     // open word that moved into the visually hidden span.
-    expect(tile).not.toContain('lib-shelf-open-badge');
+    expect(tile).not.toContain('badge--accent');
     expect(tile).not.toContain('aria-label');
     expect(tile).toContain('class="lib-shelf-open-label"');
     expect(tile).toContain('>open</span>');
     expect(tile).toContain('+1 full');
     expect(tile).toContain('36 g');
-    expect(renderShelfRow(b, { muted: false })).toContain('lib-shelf-open-badge');
+    expect(renderShelfRow(b, { muted: false })).toContain('class="badge badge--accent"');
   });
 
   it('keeps the archived tag in the tile text as well', () => {
@@ -125,7 +125,7 @@ describe('frozen shelf tile (#1350)', () => {
     });
     const tile = renderShelfTile(b, { muted: false });
     expect(tile).not.toContain('aria-label');
-    expect(tile).toContain('lib-shelf-archived-tag');
+    expect(tile).toContain('class="badge badge--scrim lib-shelf-mark-bottom"');
     expect(tile).toContain('Archived');
   });
 });

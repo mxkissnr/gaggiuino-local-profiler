@@ -161,7 +161,7 @@ describe('maintTaskSheetBody (#1923)', () => {
       entry(2, 'backflush', { shotCountAtTime: 12, notes: 'a<b' }),
     ]);
 
-    expect(out).toContain('maint-auto-synced');
+    expect(out).toContain('class="badge badge--info"');
     expect(out).not.toContain(AUTO_SYNCED_NOTE);
     expect(out).toContain('a&lt;b');
     expect(out).not.toContain('a<b');
@@ -171,7 +171,7 @@ describe('maintTaskSheetBody (#1923)', () => {
     const out = maintTaskSheetBody(tile('backflush', { threshold_shots: 40 }), [
       entry(1, 'backflush', { shotCountAtTime: null }),
     ]);
-    expect(out).toContain('maint-log-manual-badge');
+    expect(out).toContain('<span class="badge">');
     expect(out).toContain('<span class="maint-hist-count">–</span>');
   });
 

@@ -81,13 +81,13 @@ function _historyRow(e: MaintLogEntry, locale: string): Html {
   const dateStr = formatDate(e.ts * 1000, locale);
   const isManual = e.shotCountAtTime === null;
   const note = e.notes === AUTO_SYNCED_NOTE
-    ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
+    ? html`<span class="badge badge--info" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
     : e.notes ? esc(e.notes) : html``;
   return html`<div class="maint-hist-row">
     <span class="maint-hist-date">${esc(dateStr)}</span>
     <span class="maint-hist-side">
       <span class="maint-hist-count">${esc(e.shotCountAtTime ?? '–')}</span>
-      ${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}
+      ${isManual ? html`<span class="badge">${tHtml('maint_log_manual_badge')}</span>` : html``}
     </span>
     ${note ? html`<div class="maint-hist-note">${note}</div>` : html``}
   </div>`;

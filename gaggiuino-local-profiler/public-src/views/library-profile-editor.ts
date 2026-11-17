@@ -126,8 +126,8 @@ export function renderProfileList(): void {
       <div class="lib-item-info">
         <div class="lib-item-name-row">
           <span class="lib-item-name">${esc(p.name)}</span>
-          ${p.utility ? html`<span class="lib-utility-badge">${tHtml('profile_utility_badge')}</span>` : html``}
-          ${p.syncStatus && p.syncStatus !== 'synced' ? html`<span class="lib-utility-badge" title="${tHtml('profile_not_synced')}">⏳</span>` : html``}
+          ${p.utility ? html`<span class="badge">${tHtml('profile_utility_badge')}</span>` : html``}
+          ${p.syncStatus && p.syncStatus !== 'synced' ? html`<span class="badge badge--warn" title="${tHtml('profile_not_synced')}">⏳</span>` : html``}
         </div>
       </div>
       <div class="lib-item-actions">

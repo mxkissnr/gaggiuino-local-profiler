@@ -55,7 +55,7 @@ function badgeTitle(bean: BeanRow = beanAgedDays(12)): string {
 }
 
 function badgeClass(bean: BeanRow): string {
-  const match = /class="lib-fresh-badge ([^"]*)"/.exec(beanFreshBadge(bean));
+  const match = /class="(badge[^"]*)"/.exec(beanFreshBadge(bean));
   return match?.[1] ?? '';
 }
 
@@ -114,8 +114,8 @@ describe('freshness tooltip follows the bean roast level (#1977)', () => {
   it('changing the level changes the badge band at the same age', () => {
     // Day 12 is still degassing for a light roast (degas until 14, peak from
     // 21) but already peak under the global window (7–21).
-    expect(badgeClass(beanAgedDays(12, { roastLevel: 'light' }))).toBe('fresh-degassing');
-    expect(badgeClass(beanAgedDays(12))).toBe('fresh-peak');
+    expect(badgeClass(beanAgedDays(12, { roastLevel: 'light' }))).toBe('badge');
+    expect(badgeClass(beanAgedDays(12))).toBe('badge badge--ok');
   });
 
   it('lets a per-bean override replace the peak window and names it custom', () => {

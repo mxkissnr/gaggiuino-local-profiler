@@ -16,7 +16,7 @@
 import { S, concreteActiveMachineId } from '../state/index.js';
 import { t, tHtml }        from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
-import { esc, html, joinHtml, scoreColor } from '../utils.js';
+import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
 import type { ShotLike } from './shots/utils.js';
@@ -25,7 +25,7 @@ import { markFieldInvalid } from '../components/field-error.js';
 import { suggestPhaseAdjustment, applyPhaseAdjustment, isProfileDialinConverged, profileDialinConvergenceReason }
   from '../profile-dialin-convergence.js';
 import type { ProfileSuggestion } from '../profile-dialin-convergence.js';
-import { bestRound, checkForCandidate, createWizardSession, renderChips } from './wizard-session.js';
+import { bestRound, checkForCandidate, createWizardSession, renderChips, scoreBadgeClass } from './wizard-session.js';
 
 // state/index.ts types the session as Record<string, unknown> and shot rows
 // as metadata-only ShotMeta; these aliases name the fields this wizard
@@ -338,7 +338,7 @@ function _renderRound(s: ProfileDialinSession): Html {
     return html`<div class="dw-round">
       <div class="dw-round-label">${tHtml('dialin_wizard_round_label', roundNum)}</div>
       <div class="dw-score-row">
-        <div class="dw-score-chip" style="background:${esc(scoreColor(rr.score))}">${esc(rr.score ?? '–')}</div>
+        <div class="${esc(scoreBadgeClass(rr.score))}">${esc(rr.score ?? '–')}</div>
       </div>
       <div class="pdw-symptom-label">${tHtml('profile_dialin_symptom_prompt')}</div>
       <div class="pdw-symptom-row">${symptomButtons}</div>
@@ -375,7 +375,7 @@ function _renderSummary(s: ProfileDialinSession): Html {
     <div class="dw-summary-title">${esc(title)}</div>
     ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}
     ${best ? html`<div class="dw-summary-best">
-      <div class="dw-score-chip" style="background:${esc(scoreColor(best.score))}">${esc(best.score)}</div>
+      <div class="${esc(scoreBadgeClass(best.score))}">${esc(best.score)}</div>
       <div>${tHtml('profile_dialin_summary_best')}</div>
     </div>` : html``}
     <div class="dw-actions">

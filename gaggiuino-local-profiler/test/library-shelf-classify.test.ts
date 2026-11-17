@@ -287,10 +287,10 @@ describe('renderShelfTile (#1330 one shelf)', () => {
     expect(out).toContain('120 g');
     expect(out).toContain('+1 full');
     expect(out).toContain('lib-shelf-stack');
-    expect(out).toContain('lib-shelf-sealed-badge');
+    expect(out).toContain('class="badge badge--scrim lib-shelf-mark-top"');
     // The open badge left the photo; its word stays in the markup for screen
     // readers, without an aria-label replacing the tile's inner text.
-    expect(out).not.toContain('lib-shelf-open-badge');
+    expect(out).not.toContain('badge--accent');
     expect(out).not.toContain('aria-label');
     expect(out).toContain('class="lib-shelf-open-label"');
     expect(out).toContain('>open</span>');
@@ -307,7 +307,7 @@ describe('renderShelfTile (#1330 one shelf)', () => {
     const sticker = renderShelfTile(bean({ id: 22, name: 'Sticker', image: 'png', imageSticker: true, bags }), { muted: false });
     expect(sticker).toContain('is-sticker');
     expect(sticker).not.toContain('lib-shelf-stack');
-    expect(sticker).toContain('lib-shelf-sealed-badge');
+    expect(sticker).toContain('class="badge badge--scrim lib-shelf-mark-top"');
     expect(sticker).toContain('+1 full');
 
     const photo = renderShelfTile(bean({ id: 23, name: 'Photo', image: 'jpg', imageSticker: false, bags }), { muted: false });
@@ -342,7 +342,7 @@ describe('renderShelfRow (#1330 list view)', () => {
     expect(out).toContain('Brazil');
     expect(out).toContain('120 g');
     expect(out).toContain('+1 full');
-    expect(out).toContain('lib-shelf-open-badge');
+    expect(out).toContain('class="badge badge--accent"');
     expect(out).toContain('lib-shelf-bar');
   });
 

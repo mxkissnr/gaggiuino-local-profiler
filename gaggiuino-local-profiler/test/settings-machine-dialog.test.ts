@@ -253,5 +253,8 @@ describe('the machine dialog (#2038)', () => {
     expect(first.innerHTML).not.toContain('Default');
     expect(second.innerHTML).toContain('Default');
     expect(first.innerHTML).not.toContain('machine-row-badge');
+    expect(first.innerHTML).toContain('<span class="badge machine-row-firmware-status">');
+    expect(first.innerHTML).toContain('<button type="button" class="btn btn--tonal machine-row-firmware-update" aria-expanded="false" style="display:none">');
+    expect(second.innerHTML).not.toContain('machine-row-firmware');
   });
 });

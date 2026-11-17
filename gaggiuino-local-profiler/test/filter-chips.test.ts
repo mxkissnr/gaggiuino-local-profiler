@@ -25,6 +25,26 @@ function read(rel: string): string {
 // Chip classes retired by #2093. No rule, markup or code may use them again.
 const RETIRED = ['lib-shelf-chip', 'lib-shelf-view-btn', 'sort-btn', 'theme-btn', 'drink-pill', 'pdw-symptom-btn', 'orders-menu-use-beans', 'orders-menu-use-milks', 'orders-menu-trend'] as const;
 
+// Status badge classes retired by #2094: every status label is a .badge
+// (docs/DESIGN.md, "Shapes and components"). No rule, markup or code may
+// use them again. Each slice of #2094 adds the classes it retires.
+const RETIRED_BADGES = [
+  'maint-chip', 'maint-auto-synced', 'maint-log-manual-badge',
+  'delta-chip', 'freshness-badge', 'freshness-fresh', 'freshness-ok', 'freshness-old',
+  'ordered-by-badge', 'meta-badge', 'channeling-warn', 'sidebar-grind-badge',
+  'shot-machine-badge', 'shot-frozen-badge',
+  'lib-fresh-badge', 'lib-frozen-badge', 'lib-decaf-badge', 'lib-roast-badge',
+  'lib-disabled-badge', 'lib-inv-reorder',
+  'lib-bag-active-badge', 'lib-bag-upcoming-badge', 'lib-bag-past-badge',
+  'lib-shelf-sealed-badge', 'lib-shelf-open-badge', 'lib-shelf-archived-tag',
+  'machine-row-firmware-badge', 'machine-row-firmware-badge-muted',
+  'machine-row-firmware-badge-update', 'mbk-chip',
+  'machine-row-badge', 'lib-utility-badge', 'lib-brew-badge',
+  'orders-milk-badge', 'order-eta-tag', 'order-decline-tag',
+  'order-variant-badge', 'orders-new-badge',
+  'dw-score-chip', 'dw-chip',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -78,14 +98,14 @@ describe('shared filter chips (#2093)', () => {
     expect(search).toContain('border-radius: var(--radius-ctl)');
   });
 
-  it('leaves no rule, markup or code using a retired chip class', () => {
+  it('leaves no rule, markup or code using a retired chip or badge class', () => {
     const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
       .filter(name => name.endsWith('.ts') || name.endsWith('.html') || name.endsWith('.css'));
 
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of RETIRED) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -120,5 +140,24 @@ describe('analytics chips (#2093)', () => {
     expect(map).toContain('class="chip" data-code=');
     expect(map).toContain("querySelectorAll<HTMLElement>('.chip')");
     expect(map).not.toContain('analytics-filter-btn');
+  });
+});
+
+describe('status badges (#2094)', () => {
+  it('renders the shot detail status labels as shared badges', () => {
+    const index = read('index.html');
+    for (const id of ['verdictDeltaChip', 'pressureDeltaChip', 'flowDeltaChip', 'tempDeltaChip']) {
+      expect(index, id).toContain(`<span class="badge shot-delta" id="${id}"`);
+    }
+    expect(index).toContain('<span id="channelingWarning" class="badge badge--err"');
+    expect(index).toContain('<span id="freshnessBadge" class="badge"');
+    expect(index).toContain('<div id="orderedByBadge" class="badge badge--warn"');
+    expect(index).toContain('<span class="badge badge--err" id="trash-count">');
+  });
+
+  it('colours score deltas through the score-scale badge variants', () => {
+    const shots = read('views/shots/index.ts');
+    expect(shots).toContain("'badge shot-delta'");
+    expect(shots).toContain('badge shot-delta badge--');
   });
 });

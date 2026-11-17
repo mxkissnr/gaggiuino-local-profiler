@@ -85,6 +85,7 @@
             font-size: var(--fs-2);
             font-weight: 600;
             cursor: pointer;
+            text-decoration: none;
             transition: background-color .15s, color .15s;
         }
         .btn--primary { background: var(--accent); color: var(--accent-text); }
@@ -125,6 +126,16 @@
         .badge--err    { --badge-c: var(--err); }
         .badge--info   { --badge-c: var(--ice); }
         .badge--accent { --badge-c: var(--accent-ink); }
+        /* The score scale (scoreClass() in utils.ts) as badge variants. */
+        .badge--score-great { --badge-c: var(--ok); }
+        .badge--score-good  { --badge-c: var(--score-good); }
+        .badge--score-ok    { --badge-c: var(--warn); }
+        .badge--score-low   { --badge-c: var(--score-low); }
+        .badge--score-bad   { --badge-c: var(--err); }
+
+        /* A badge on a photo (bean shelf): the tint alone would vanish into the
+           picture, so it sits on the page colour. */
+        .badge--scrim { background: color-mix(in srgb, var(--gray-950) 70%, transparent); color: var(--gray-200); }
 
         /* The small grey heading above a card, with an optional counter. */
         .section-title {
@@ -223,8 +234,8 @@
            elsewhere (e.g. #sidebar h2 above, .analytics-section-title). */
         .profile-name-sidebar { font-size: var(--fs-2); font-weight: 600; color: var(--gray-200); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .shot-line2 { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        /* #502: same "on ice" blue as the library's .lib-frozen-badge */
-        .shot-frozen-badge { color: var(--ice); margin-right: var(--sp-1); }
+        /* #502: the same "on ice" blue as the library's frozen portions */
+        .shot-frozen-icon { color: var(--ice); margin-right: var(--sp-1); }
         .shot-line3 {
             display: flex; align-items: center; gap: var(--sp-2);
             font-size: var(--fs-1); color: var(--gray-500); margin-top: var(--sp-1);
@@ -557,17 +568,6 @@
             display: inline-block; margin-top: var(--sp-3);
             background: none; border: none; color: var(--accent-ink);
             cursor: pointer; font-size: var(--fs-2);
-        }
-        .shot-machine-badge {
-            display: inline-block; font-size: var(--fs-1); color: var(--gray-500); background: var(--gray-800);
-            border-radius:var(--radius); padding: 1px var(--sp-2); margin-left: var(--sp-2); vertical-align: middle;
-        }
-        /* #578: small tag on a maintenance mini-tile whose last "done" came
-           from the machine's own native Service Log, not a manual click. */
-        .maint-auto-synced {
-            display: inline-block; font-size: var(--fs-1); font-weight: 600; color: var(--ice);
-            background: color-mix(in srgb, var(--ice) 10%, transparent); border: 1px solid color-mix(in srgb, var(--ice) 30%, transparent);
-            border-radius:var(--radius); padding: 1px var(--sp-2); margin-left: var(--sp-2); vertical-align: middle;
         }
         .live-dot {
             position: absolute; bottom: -1px; right: -1px;
@@ -1026,18 +1026,12 @@
         .machine-row-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
         .machine-row-name { font-size: var(--fs-2); color:var(--gray-100); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .machine-row-sub { font-size: var(--fs-1); color:var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .machine-row-badge { font-size: var(--fs-1); color:var(--err); background:color-mix(in srgb, var(--err) 15%, transparent); border-radius:var(--radius); padding: 2px var(--sp-2); }
-        /* #1046: firmware status badge, moved here from #machineFormCard
-           (#1044) so update-available is visible on the row without opening
-           Edit. .machine-row-firmware-panel is a plain flex sibling of the
-           badge (not nested inside it), so its own flex-basis:100% can force
-           the expand panel onto its own line within .machine-row's existing
-           flex-wrap without any extra wrapper. Only the -update variant gets
-           a pointer cursor -- the plain/muted badges never grow a panel to
-           expand, see toggleMachineFirmwarePanel() in machines-settings.js. */
-        .machine-row-firmware-badge { font-size: var(--fs-1); color:var(--gray-300); background:var(--gray-900); border-radius:var(--radius); padding: 2px var(--sp-2); }
-        .machine-row-firmware-badge-muted { color:var(--gray-600); }
-        .machine-row-firmware-badge-update { color:var(--accent-text); background:var(--accent); cursor:pointer; }
+        /* #1046: firmware status on the row, so update-available is visible
+           without opening Edit. Up to date or unknown is a status badge; an
+           available update is a button that opens the update panel (#2094).
+           .machine-row-firmware-panel is a plain flex sibling, so its
+           flex-basis:100% puts the panel on its own line within .machine-row's
+           flex-wrap without any extra wrapper. */
         .machine-row-firmware-panel { display:flex; flex-direction:column; gap: var(--sp-2); flex-basis:100%; }
         /* #2038: the "+ Add machine" row at the end of the list. */
         .settings-row-add .settings-row-title { color: var(--accent-ink); }
@@ -1070,9 +1064,6 @@
         .mbk-pick-wrap { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; }
         .mbk-pick { width:20px; height:20px; accent-color:var(--accent); }
         .mbk-date { font-size: var(--fs-2); color:var(--gray-200); font-variant-numeric:tabular-nums; }
-        .mbk-chip { font-size: var(--fs-1); padding: 2px var(--sp-2); border-radius:var(--radius-sm); background:var(--gray-800); color:var(--gray-300); }
-        .mbk-chip-manual { background:color-mix(in srgb, var(--accent) 15%, transparent); color:var(--accent-ink); }
-        .mbk-chip-pre_update { background:color-mix(in srgb, var(--warn) 15%, transparent); color:var(--warn); }
         .mbk-meta, .mbk-owner { font-size: var(--fs-1); color:var(--gray-400); font-variant-numeric:tabular-nums; }
         .mbk-note { font-size: var(--fs-1); color:var(--gray-300); overflow-wrap:anywhere; }
         .mbk-row-actions .mbk-btn { background:none; color:var(--accent-ink); padding: 0 var(--sp-2); }
@@ -1298,30 +1289,14 @@
            it reads as metadata rather than another verdict judgment. */
         .verdict-bean-target-hint { display: inline-flex; margin-left: 2px; color: var(--gray-500); cursor: help; }
 
-        /* ── Delta chips (#402): same-profile auto-compare vs. the previous shot.
-           Score delta reuses the unified score-scale classes (#1622,
-           score-great/-good/-ok/-low/-bad); process-metric deltas (no quality
-           judgment) stay neutral gray. */
-        .delta-chip {
-            display: inline-block;
-            font-size: var(--fs-1);
-            font-weight: 600;
-            font-variant-numeric: tabular-nums;
-            padding: 1px var(--sp-2);
-            border-radius: var(--radius);
-            margin-top: var(--sp-1);
-            background: var(--gray-800);
-            color: var(--gray-400);
-        }
-        .delta-chip.score-great { background: color-mix(in srgb, var(--ok) 15%, transparent); color: var(--ok); }
-        .delta-chip.score-good  { background: color-mix(in srgb, var(--score-good) 15%, transparent); color: var(--score-good); }
-        .delta-chip.score-ok    { background: color-mix(in srgb, var(--warn) 15%, transparent); color: var(--warn); }
-        .delta-chip.score-low   { background: color-mix(in srgb, var(--score-low) 15%, transparent); color: var(--score-low); }
-        .delta-chip.score-bad   { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); }
+        /* ── Delta badges (#402): same-profile auto-compare vs. the previous shot.
+           The score delta uses the score-scale badge variants; process-metric
+           deltas (no quality judgment) stay neutral. */
+        .shot-delta { margin-top: var(--sp-1); font-variant-numeric: tabular-nums; }
         /* #816: inline after the verdict line, not stacked block below it —
            the old boxed layout needed the stack, the plain line doesn't. */
-        .verdict-line .delta-chip { margin-top: 0; }
-        .process-card .delta-chip { display: block; width: fit-content; }
+        .verdict-line .shot-delta { margin-top: 0; }
+        .process-card .shot-delta { display: flex; width: fit-content; }
 
         /* ── Recipe zone (#398): large cards, the values the user sets ── */
         /* #813: a guided line, not a tile wall. These four were a grid of
@@ -1506,7 +1481,7 @@
             transition: border-color .15s, color .15s;
         }
         #lsReset:hover { border-color: var(--gray-500); color: var(--gray-300); }
-        .ordered-by-badge { font-size: var(--fs-1); color: var(--warn); background: color-mix(in srgb, var(--amber) 12%, transparent); border: 1px solid color-mix(in srgb, var(--amber) 25%, transparent); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); display: inline-flex; align-items: center; gap: var(--sp-1); }
+        #orderedByBadge { white-space: normal; }
         .autosave-status { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-1); color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
         .autosave-status.visible { opacity: 1; }
         .autosave-status.failed { color: var(--err); }
@@ -1566,12 +1541,12 @@
         .lib-item-info { flex: 1; min-width: 0; }
         .lib-item-name { font-size: var(--fs-2); color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-name .serif-display { font-size: var(--fs-3); font-weight: 600; }
+        .lib-item-name .badge { margin-right: var(--sp-1); }
         /* Machine-profile list (library-profile-editor.js renderProfileList):
            name + optional utility badge on one row — badge sits outside the
            name's own ellipsis-truncation so it never gets clipped away. */
         .lib-item-name-row { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
         .lib-item-name-row .lib-item-name { min-width: 0; }
-        .lib-utility-badge { flex-shrink: 0; font-size: var(--fs-1); font-weight: 600; color: var(--gray-400); background: var(--gray-700); border-radius: var(--radius-sm); padding: 1px var(--sp-2); }
         .lib-item-utility .lib-item-name { opacity: .75; }
         /* #404: eyebrow above the bean name — small, muted, uppercase,
            same visual weight class as the recipe/process-card labels. */
@@ -1614,26 +1589,11 @@
         /* #1618: the removed legacy rule came later and won here, so keep
            its colour rather than the earlier --gray-600. */
         .lib-inv-total { color: var(--gray-700); }
-        .lib-inv-reorder { background: color-mix(in srgb, var(--err) 12%, transparent); border: 1px solid color-mix(in srgb, var(--err) 30%, transparent); color: var(--err); border-radius:var(--radius); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; text-decoration: none; }
-        .lib-decaf-badge { display: inline-block; background: color-mix(in srgb, var(--ok) 14%, transparent); color: var(--ok); border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
-        .lib-fresh-badge { display: inline-block; border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
-        .lib-fresh-badge.fresh-degassing { color: var(--gray-500); background: var(--gray-700); }
-        .lib-fresh-badge.fresh-almost    { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
-        .lib-fresh-badge.fresh-peak      { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent); }
-        .lib-fresh-badge.fresh-fading    { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
-        .lib-fresh-badge.fresh-old       { color: var(--err); background: color-mix(in srgb, var(--err) 14%, transparent); }
-        .lib-roast-badge { display: inline-block; background: var(--gray-700); color: var(--gray-300); border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
-        .lib-disabled-badge { display: inline-block; background: var(--gray-700); color: var(--gray-500); border-radius:var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600; vertical-align: middle; margin-left: var(--sp-1); }
         .lib-item-disabled { opacity: .55; }
-        /* Frozen portion badges (#freeze) — same pill language as .lib-fresh-badge,
-           blue-ish to read distinctly as "on ice" rather than a freshness state. */
+        /* Frozen portions (#freeze): an info badge that wraps on a narrow card
+           and holds the thaw and edit buttons. */
         .lib-frozen-row { margin-top: var(--sp-1); display: flex; flex-wrap: wrap; gap: var(--sp-1); }
-        .lib-frozen-badge {
-            display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--sp-1);
-            background: color-mix(in srgb, var(--ice) 10%, transparent); border: 1px solid color-mix(in srgb, var(--ice) 30%, transparent); color: var(--ice);
-            border-radius: var(--radius-sm); padding: 1px var(--sp-1); font-size: var(--fs-1); font-weight: 600;
-        }
-        .lib-frozen-badge.thawed { background: var(--gray-700); border-color: transparent; color: var(--gray-500); }
+        .lib-frozen { flex-wrap: wrap; white-space: normal; }
         .lib-frozen-thaw-btn {
             background: none; border: none; color: inherit; cursor: pointer;
             font-size: var(--fs-1); font-weight: 700; text-decoration: underline; padding: 0;
@@ -1761,15 +1721,6 @@
         .lib-bag-drag-handle:hover { background: color-mix(in srgb, var(--paper) 6%, transparent); color: var(--gray-400); }
         .lib-bag-drag-handle:active { cursor: grabbing; }
         .lib-bag-drag-list { display: flex; flex-direction: column; gap: var(--sp-2); }
-        /* State badges as Material 3 assist chips: tonal fill, no border,
-           full pill shape — color-mix() keyed to each state's semantic
-           color (--accent for current, --ok for upcoming/"has stock",
-           neutral gray for past) instead of the old bordered-outline look
-           with hand-picked hex greens that ignored the active theme. */
-        .lib-bag-active-badge, .lib-bag-upcoming-badge, .lib-bag-past-badge { font-size: var(--fs-1); font-weight: 600; border-radius: var(--radius-sm); padding: 2px var(--sp-2); border: none; }
-        .lib-bag-active-badge { background: color-mix(in srgb, var(--accent) 22%, transparent); color: var(--accent-ink); }
-        .lib-bag-upcoming-badge { background: color-mix(in srgb, var(--ok) 20%, transparent); color: var(--ok); }
-        .lib-bag-past-badge { background: var(--gray-700); color: var(--gray-500); }
         .lib-bag-card-actions-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-1); }
         .lib-bag-card-actions { margin-left: auto; display: flex; gap: var(--sp-1); }
         /* Icon buttons get a proper circular state layer on hover (Material
@@ -1797,7 +1748,7 @@
         .lib-bag-history-toggle:hover { background: color-mix(in srgb, var(--paper) 5%, transparent); color: var(--gray-200); }
         .lib-bag-history-toggle .lib-bag-chevron { transition: transform .2s ease; }
         .lib-bag-history-toggle.expanded .lib-bag-chevron { transform: rotate(90deg); }
-        .lib-bag-past-count { margin-left: auto; background: var(--gray-700); color: var(--gray-400); border-radius: 999px; padding: 1px var(--sp-2); font-size: 10px; font-weight: 700; }
+        .lib-bag-past-count { margin-left: auto; }
         /* grid-template-rows 0fr -> 1fr is the standard modern trick for
            animating to "auto" height — the inner element's own
            overflow:hidden is what actually clips it mid-transition. */
@@ -1817,7 +1768,6 @@
         .lib-step-dur { width: 58px; background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); outline: none; flex-shrink: 0; }
         .lib-step-dur:focus { border-color: var(--gray-600); }
         /* Recipe card display */
-        .lib-brew-badge { display: inline-block; background: color-mix(in srgb, var(--brew-tint) 12%, transparent); border: 1px solid color-mix(in srgb, var(--brew-tint) 30%, transparent); color: var(--brew-ink); border-radius:var(--radius); padding: 1px var(--sp-2); font-size: var(--fs-1); font-weight: 700; margin-right: var(--sp-1); }
         .lib-recipe-params { font-size: var(--fs-1); color: var(--gray-500); margin-top: var(--sp-1); display: flex; gap: var(--sp-3); flex-wrap: wrap; }
         .lib-recipe-params span { display: inline-flex; align-items: center; gap: var(--sp-1); }
         .lib-recipe-steps-list { margin-top: var(--sp-2); border-top: 1px solid var(--gray-800); padding-top: var(--sp-2); }
@@ -1978,8 +1928,9 @@
         .lib-shelf-stack-layer { position:absolute; inset:0; border-radius: var(--radius-sm); background: var(--gray-800); border:1px solid var(--gray-700); }
         .lib-shelf-stack-layer:nth-child(1) { transform: translate(4px,-4px); }
         .lib-shelf-stack-layer:nth-child(2) { transform: translate(8px,-8px); }
-        .lib-shelf-sealed-badge { position:absolute; top: var(--sp-1); right: var(--sp-1); z-index: var(--z-local-2); font-size: var(--fs-1); font-weight:600; color: var(--gray-200); background: color-mix(in srgb, var(--gray-950) 70%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
-        .lib-shelf-open-badge { display:inline-block; font-size: var(--fs-1); font-weight:600; color: var(--accent-ink); background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
+        .lib-shelf-mark-top, .lib-shelf-mark-bottom { position:absolute; z-index: var(--z-local-2); }
+        .lib-shelf-mark-top { top: var(--sp-1); right: var(--sp-1); }
+        .lib-shelf-mark-bottom { bottom: var(--sp-1); left: var(--sp-1); }
         /* Thin stock bar, same look as the full card's .lib-stock-bar-md. */
         .lib-shelf-bar { display:block; height:6px; border-radius:999px; background: var(--gray-700); overflow:hidden; }
         .lib-shelf-bar-fill { display:block; height:100%; border-radius:999px; background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
@@ -1988,7 +1939,6 @@
         .lib-shelf-sealed { margin-left: var(--sp-1); color: var(--gray-500); }
         .lib-shelf-frozen-line { display:inline-flex; align-items:center; gap:2px; font-size: var(--fs-1); color: var(--ice); }
         .lib-shelf-frozen-line .rail-icon { width:12px; height:12px; }
-        .lib-shelf-archived-tag { position:absolute; bottom: var(--sp-1); left: var(--sp-1); font-size: var(--fs-1); font-weight:600; color: var(--gray-200); background: color-mix(in srgb, var(--gray-950) 70%, transparent); border-radius: var(--radius-sm); padding: 0 var(--sp-1); }
         .lib-shelf-tile.muted { filter: saturate(.25); opacity:.6; }
         .lib-shelf-tile.muted:hover, .lib-shelf-tile.muted:focus-visible { filter: saturate(.6); opacity:.85; }
         /* List view: one compact row per bean, same tap-to-expand contract. */
@@ -2159,10 +2109,6 @@
         .orders-milk-row { display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-1) 0; border-bottom:1px solid var(--gray-800); font-size: var(--fs-1); }
         .orders-milk-emoji { font-size: var(--fs-3); }
         .orders-milk-name { flex:1; color:var(--gray-200); }
-        .orders-milk-badge { font-size: var(--fs-1); font-weight:600; padding: 2px var(--sp-2); border-radius:var(--radius-sm); }
-        .orders-milk-badge.ok    { background:color-mix(in srgb, var(--ok) 14%, transparent); color:var(--ok); }
-        .orders-milk-badge.low   { background:color-mix(in srgb, var(--warn) 14%, transparent); color:var(--warn); }
-        .orders-milk-badge.empty { background:color-mix(in srgb, var(--err) 14%, transparent); color:var(--err); }
         .orders-menu-milk-row { display:flex; align-items:center; gap: var(--sp-2); padding-left: 2px; font-size: var(--fs-1); color:var(--gray-500); }
         .orders-menu-milk-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; width:60px; }
         .orders-menu-milk-input:focus { border-color:var(--gray-600); }
@@ -2487,20 +2433,6 @@
             margin-left: var(--sp-2);
             vertical-align: middle;
         }
-        /* #837: compact grind-setting badge, line 1 — bare number, no border
-           (Border-Diät: no border on non-clickable elements), grinder name
-           lives in its title tooltip instead of taking up row space. */
-        .sidebar-grind-badge {
-            font-size: var(--fs-1);
-            font-weight: 700;
-            font-variant-numeric: tabular-nums;
-            border-radius: var(--radius);
-            padding: 1px var(--sp-2);
-            margin-left: var(--sp-2);
-            vertical-align: middle;
-            background: var(--gray-800);
-            color: var(--gray-400);
-        }
 
         /* ── Sidebar sort bar ── */
         #sort-bar {
@@ -2510,16 +2442,7 @@
             flex-wrap: wrap;
         }
         /* ── Freshness badge ── */
-        .freshness-badge {
-            display: inline-block;
-            font-size: var(--fs-1); font-weight: 600;
-            border-radius:var(--radius); padding: 2px var(--sp-2);
-            margin-left: var(--sp-2); vertical-align: middle;
-            white-space: nowrap;
-        }
-        .freshness-fresh  { background: color-mix(in srgb, var(--ok) 15%, transparent);  color: var(--ok); }
-        .freshness-ok     { background: color-mix(in srgb, var(--amber) 15%, transparent); color: var(--accent-ink); }
-        .freshness-old    { background: color-mix(in srgb, var(--err) 12%, transparent);  color: var(--err); }
+        #freshnessBadge { margin-left: var(--sp-2); vertical-align: middle; }
 
         /* Shot-detail header photo thumbnail (#448) — originally the mobile
            fallback for the space next to machine/freshness text. #850 made
@@ -2686,25 +2609,10 @@
         .card-fmt-opt:hover { background: var(--gray-800); color: var(--gray-200); }
 
         /* ── Channeling warning ── */
-        .channeling-warn {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--sp-1);
-            background: color-mix(in srgb, var(--err) 12%, transparent);
-            color: var(--err);
-            border: 1px solid color-mix(in srgb, var(--err) 25%, transparent);
-            border-radius:var(--radius);
-            font-size: var(--fs-1);
-            padding: 1px var(--sp-1);
-            margin-left: var(--sp-2);
-            font-weight: 600;
-            vertical-align: middle;
-            letter-spacing: .03em;
-        }
+        #channelingWarning { margin-left: var(--sp-2); vertical-align: middle; }
 
-
-        /* ── Temp stability / meta badge ── */
-        .meta-badge { font-size: var(--fs-1); color: var(--gray-500); margin-left: var(--sp-1); font-weight: normal; }
+        /* ── Temp stability ── */
+        .meta-stability { font-size: var(--fs-1); color: var(--gray-500); margin-left: var(--sp-1); font-weight: normal; }
 
         /* #1622: the one five-step score scale (SCORE_STEPS, utils.ts) as CSS
            classes — each step names the matching token, exactly like scoreColor()
@@ -2730,11 +2638,7 @@
             transition: color .15s;
         }
         #trash-toggle:hover { color: var(--gray-400); }
-        #trash-toggle .trash-count {
-            margin-left: auto;
-            background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err);
-            border-radius:var(--radius); padding: 1px var(--sp-2); font-size: var(--fs-1); font-weight: 700;
-        }
+        #trash-toggle .badge { margin-left: auto; }
         #trash-list { overflow-y: auto; max-height: 220px; }
         /* ── Toast action (#1716, e.g. Undo after trashing a shot) ── */
         .glp-toast-action {
@@ -3122,12 +3026,7 @@
         .maint-row-icon svg { width: 16px; height: 16px; }
         .maint-row-title { grid-area: title; font-size: var(--fs-2); font-weight: 600; color: var(--gray-100); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .maint-row:hover .maint-row-title { color: var(--accent-ink); }
-        .maint-chip { grid-area: chip; padding: 2px 8px; border-radius: var(--radius-sm); font-size: var(--fs-1); font-weight: 600; flex-shrink: 0; }
-        .maint-chip.due    { background: color-mix(in srgb, var(--err) 18%, transparent); color: var(--err); }
-        .maint-chip.soon   { background: color-mix(in srgb, var(--amber-deep) 18%, transparent); color: var(--accent-ink); }
-        .maint-chip.ok     { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); }
-        .maint-chip.never  { background: var(--gray-800); color: var(--gray-500); }
-        .maint-chip.paused { background: var(--gray-800); color: var(--gray-500); }
+        .maint-row-status { grid-area: chip; flex-shrink: 0; }
         .maint-row-meta { grid-area: meta; font-size: var(--fs-1); color: var(--gray-500); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
         .maint-row-bar { grid-area: bar; display: block; position: relative; height: 4px; margin-top: var(--sp-1); background: var(--gray-800); border-radius: 2px; overflow: hidden; }
         .maint-row-fill { display: block; height: 100%; border-radius: 2px; background: var(--ok); }
@@ -3276,22 +3175,12 @@
         .dw-candidate-title { font-size: var(--fs-1); font-weight:600; color:var(--gray-200); }
         .dw-candidate-actions { display:flex; gap: var(--sp-2); flex-wrap:wrap; }
         .dw-score-row { display:flex; align-items:center; gap: var(--sp-3); }
-        /* #811 found, not fixed: background is set inline per-instance from
-           scoreColor() (utils.js) to one of --ok/--warn/--err/--gray-600.
-           White text clears 4.5:1 against all four in the LIGHT theme but
-           fails all four in the DARK theme (worst: --ok at 2.40:1) -- none of
-           the semantic tokens were ever audited as a fill under white, only
-           as text on a surface. Needs its own audited on-fill token (like
-           --accent-text) rather than a guessed color here; tracked as a
-           follow-up, left as-is rather than silently miscalibrated. */
-        .dw-score-chip { color:var(--on-fill); font-weight:700; font-size: var(--fs-3); padding: var(--sp-2) var(--sp-3); border-radius:var(--radius); flex-shrink:0; }
         .dw-score-meta { font-size: var(--fs-1); color:var(--gray-400); }
         .dw-suggestion { font-size: var(--fs-2); color:var(--gray-200); background:var(--gray-800); border-radius:var(--radius); padding: var(--sp-3) var(--sp-3); }
         .dw-actions { display:flex; flex-direction:column; gap: var(--sp-2); }
         .dw-override-row { display:flex; gap: var(--sp-2); }
         .dw-override-row input { flex:1 1 auto; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); }
         .dw-chip-strip { display:flex; flex-wrap:wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
-        .dw-chip { border:1.5px solid var(--gray-600); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); font-size: var(--fs-1); color:var(--gray-300); }
         .dw-summary { display:flex; flex-direction:column; gap: var(--sp-3); }
         .dw-summary-title { font-size: var(--fs-3); font-weight:700; color:var(--gray-100); }
         .dw-summary-reason { font-size: var(--fs-2); color:var(--gray-400); }
@@ -3451,7 +3340,7 @@
         .maint-log-form-actions { display:flex; gap: var(--sp-2); }
         .maint-log-cancel-btn { background:transparent; border:1px solid var(--gray-700); color:var(--gray-500); border-radius:var(--radius); padding: var(--sp-2) var(--sp-4); cursor:pointer; font-size: var(--fs-1); }
         .maint-log-cancel-btn:hover { color:var(--gray-300); }
-        .maint-log-manual-badge { font-size: var(--fs-1); font-weight:600; background:var(--gray-700); color:var(--gray-300); border-radius:var(--radius-sm); padding: 1px var(--sp-1); vertical-align:middle; margin-left: var(--sp-1); }
+        .maint-log-task .badge { margin-left: var(--sp-1); vertical-align: middle; }
 
         /* #1923: log entries as rows with dividers */
         .maint-log-rows { display: flex; flex-direction: column; }
@@ -3511,8 +3400,7 @@
         .order-customer  { font-size: var(--fs-1); color:var(--gray-400); }
         .order-note      { font-size: var(--fs-1); color:var(--gray-500); font-style:italic; }
         .order-meta      { font-size: var(--fs-1); color:var(--gray-600); }
-        .order-eta-tag   { font-size: var(--fs-1); font-weight:600; color:var(--ok); background:color-mix(in srgb, var(--ok) 10%, transparent); border:1px solid color-mix(in srgb, var(--ok) 25%, transparent); border-radius:var(--radius); padding: 2px var(--sp-2); }
-        .order-decline-tag { font-size: var(--fs-1); color:var(--err); }
+        .order-decline-reason { font-size: var(--fs-1); color:var(--err); }
         .order-shot-link { font-size: var(--fs-1); color:var(--gray-500); cursor:pointer; border:0; border-bottom:1px dotted var(--gray-600); background:none; padding:0; font-family:inherit; }
         .order-shot-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
         .order-shot-link:hover { color:var(--gray-200); border-bottom-color:var(--gray-200); }
@@ -3576,7 +3464,7 @@
         .orders-menu-variant-input:focus { border-color:var(--gray-600); }
         .orders-menu-variant-btn { background:none; border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-400); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); cursor:pointer; transition:all .15s; }
         .orders-menu-variant-btn:hover { background:var(--gray-700); color:var(--gray-200); }
-        .order-variant-badge { font-size: var(--fs-1); color:var(--gray-400); font-weight:400; }
+        .order-variant { font-size: var(--fs-1); color:var(--gray-400); font-weight:400; }
         .orders-use-beans-note { font-size: var(--fs-1); color:var(--gray-500); font-style:italic; padding-left: 2px; display:inline-flex; align-items:center; gap: var(--sp-1); }
 
         .ann-ordered-by { display:flex; flex-direction:column; gap: 2px; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); background:color-mix(in srgb, var(--paper) 3%, transparent); border:1px solid var(--gray-800); border-radius:var(--radius); }
@@ -3588,7 +3476,7 @@
         .orders-menu-input.emoji { width:56px; text-align:center; }
         .orders-menu-save-btn { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-400); font-size: var(--fs-1); font-weight:600; padding: var(--sp-2) var(--sp-4); cursor:pointer; transition:all .15s; }
         .orders-menu-save-btn:hover { background:var(--gray-700); color:var(--gray-200); }
-        .orders-new-badge { font-size: var(--fs-1); font-weight:700; background:color-mix(in srgb, var(--err) 15%, transparent); color:var(--err); border-radius:var(--radius); padding: 1px var(--sp-1); margin-left: var(--sp-2); vertical-align:middle; }
+        .order-item-name .badge { margin-left: var(--sp-2); }
         .orders-notify-hint { font-size: var(--fs-1); color:var(--gray-500); margin: 0 0 var(--sp-3); }
         .orders-notify-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
         .orders-notify-row { display:flex; align-items:center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
