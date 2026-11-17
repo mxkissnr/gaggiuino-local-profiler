@@ -15,10 +15,10 @@ type RealWindow = Window & typeof globalThis;
 
 interface FakeButton {
   dataset: { themeVal: string | undefined };
-  classList: {
-    toggle: (name: string, on: boolean) => void;
-    contains: (name: string) => boolean;
-  };
+  attrs: Record<string, string>;
+  setAttribute: (name: string, value: string) => void;
+  getAttribute: (name: string) => string | null;
+  classList: { toggle: () => never };
 }
 
 interface FakeDoc {
@@ -48,27 +48,32 @@ const asDoc = (doc: FakeDoc): Document => doc as unknown as Document;
 const asWin = (win: FakeWin): RealWindow => win as unknown as RealWindow;
 const asStorage = (storage: unknown): Storage => storage as Storage;
 
-// A button as #themeToggleGroup's real markup declares it: class list +
-// data-theme-val, nothing else applyTheme() touches.
+// A button as #themeToggleGroup's real markup declares it: a dataset value
+// and attributes, nothing else applyTheme() touches. classList.toggle throws
+// so a regression to the old class-based highlight fails loudly.
 function fakeButton(themeVal: string | undefined): FakeButton {
-  const classes = new Set<string>(['theme-btn']);
+  const attrs: Record<string, string> = {};
   return {
     dataset: { themeVal },
+    attrs,
+    setAttribute(name, value) { attrs[name] = value; },
+    getAttribute: name => (name in attrs ? attrs[name] : null),
     classList: {
-      toggle: (name, on) => { if (on) classes.add(name); else classes.delete(name); },
-      contains: name => classes.has(name),
+      toggle: () => { throw new Error('classList.toggle must not be used'); },
     },
   };
 }
+
+const pressed = (b: FakeButton): boolean => b.getAttribute('aria-pressed') === 'true';
 
 function fakeDoc(buttons: FakeButton[], allButtons: FakeButton[] = buttons): FakeDoc {
   return {
     documentElement: { dataset: {} },
     querySelectorAll: sel => {
-      if (sel === '#themeToggleGroup .theme-btn') return buttons;
-      // A bare `.theme-btn` query (the pre-#1018 bug) also matches the buttons
+      if (sel === '#themeToggleGroup [data-theme-val]') return buttons;
+      // A bare `.chip` query (the pre-#1018 bug) also matches the buttons
       // passed as allButtons, e.g. the MQTT transport toggle.
-      if (sel === '.theme-btn') return allButtons;
+      if (sel === '.chip') return allButtons;
       return [];
     },
   };
@@ -125,63 +130,63 @@ describe('resolveTheme (#1018)', () => {
   });
 });
 
-describe('applyTheme active-state class (#1018)', () => {
-  it('marks only the dark button active for theme="dark"', () => {
+describe('applyTheme pressed state (#1018, #2093)', () => {
+  it('presses only the dark button for theme="dark"', () => {
     const dark = fakeButton('dark'), light = fakeButton('light'), auto = fakeButton('auto');
     const doc = fakeDoc([dark, light, auto]);
     const win = linkWin(fakeWin(false));
     applyTheme('dark', { doc: asDoc(doc), win: asWin(win) });
-    expect(dark.classList.contains('active')).toBe(true);
-    expect(light.classList.contains('active')).toBe(false);
-    expect(auto.classList.contains('active')).toBe(false);
+    expect(pressed(dark)).toBe(true);
+    expect(pressed(light)).toBe(false);
+    expect(pressed(auto)).toBe(false);
     expect(doc.documentElement.dataset.theme).toBe('dark');
   });
 
-  it('marks only the light button active for theme="light"', () => {
+  it('presses only the light button for theme="light"', () => {
     const dark = fakeButton('dark'), light = fakeButton('light'), auto = fakeButton('auto');
     const doc = fakeDoc([dark, light, auto]);
     const win = linkWin(fakeWin(true));
     applyTheme('light', { doc: asDoc(doc), win: asWin(win) });
-    expect(light.classList.contains('active')).toBe(true);
-    expect(dark.classList.contains('active')).toBe(false);
-    expect(auto.classList.contains('active')).toBe(false);
+    expect(pressed(light)).toBe(true);
+    expect(pressed(dark)).toBe(false);
+    expect(pressed(auto)).toBe(false);
     expect(doc.documentElement.dataset.theme).toBe('light');
   });
 
-  // The user's SELECTION carries .active, not the resolved concrete theme --
-  // picking Auto highlights the Auto button even though <html data-theme>
-  // resolves to whatever the OS currently reports.
-  it('marks only the auto button active for theme="auto", regardless of OS preference', () => {
+  // The user's SELECTION carries aria-pressed, not the resolved concrete
+  // theme -- picking Auto presses the Auto button even though <html
+  // data-theme> resolves to whatever the OS currently reports.
+  it('presses only the auto button for theme="auto", regardless of OS preference', () => {
     const dark = fakeButton('dark'), light = fakeButton('light'), auto = fakeButton('auto');
     const doc = fakeDoc([dark, light, auto]);
     const win = linkWin(fakeWin(true));
     applyTheme('auto', { doc: asDoc(doc), win: asWin(win) });
-    expect(auto.classList.contains('active')).toBe(true);
-    expect(dark.classList.contains('active')).toBe(false);
-    expect(light.classList.contains('active')).toBe(false);
+    expect(pressed(auto)).toBe(true);
+    expect(pressed(dark)).toBe(false);
+    expect(pressed(light)).toBe(false);
     // resolved concrete theme still lands on <html data-theme>
     expect(doc.documentElement.dataset.theme).toBe('dark');
   });
 
-  // #1018's actual bug: main.ts used to query the bare `.theme-btn` class,
-  // which #mqttTransportToggle's WebSocket/MQTT buttons also carry (with no
-  // data-theme-val) -- an unscoped query wired/matched those too, and
-  // clicking one called setTheme(undefined), which matched neither 'dark'
-  // nor 'light' and left BOTH real buttons permanently un-highlighted.
-  // applyTheme() must never touch anything outside #themeToggleGroup.
+  // #1018's actual bug: main.ts used to query the shared chip class, which
+  // #mqttTransportToggle's WebSocket/MQTT buttons also carry (with no
+  // data-theme-val) -- an unscoped query matched those too, and clicking one
+  // called setTheme(undefined), which matched neither 'dark' nor 'light' and
+  // left BOTH real buttons unpressed. applyTheme() must never touch anything
+  // outside #themeToggleGroup.
   it('never touches buttons outside #themeToggleGroup (e.g. the MQTT transport toggle)', () => {
     const dark = fakeButton('dark'), light = fakeButton('light');
     const mqttBtn = fakeButton(undefined);
-    mqttBtn.classList.toggle('active', true); // pre-existing, unrelated .active
-    // A bare `.theme-btn` query would return mqttBtn too; only the scoped query
+    mqttBtn.setAttribute('aria-pressed', 'true'); // pre-existing, unrelated
+    // A bare `.chip` query would return mqttBtn too; only the scoped query
     // hides it. If applyTheme regressed to the unscoped selector, mqttBtn (no
-    // data-theme-val) would be toggled off and the last assertion would fail.
+    // data-theme-val) would be unpressed and the last assertion would fail.
     const doc = fakeDoc([dark, light], [dark, light, mqttBtn]);
     const win = linkWin(fakeWin(false));
     applyTheme('dark', { doc: asDoc(doc), win: asWin(win) });
-    expect(dark.classList.contains('active')).toBe(true);
-    expect(light.classList.contains('active')).toBe(false);
-    expect(mqttBtn.classList.contains('active')).toBe(true); // untouched
+    expect(pressed(dark)).toBe(true);
+    expect(pressed(light)).toBe(false);
+    expect(pressed(mqttBtn)).toBe(true); // untouched
   });
 
   it('fires the theme-change event so live charts re-theme', () => {
@@ -213,7 +218,7 @@ describe('watchSystemTheme (#1018 live auto re-resolution)', () => {
 
       expect(storage.getItem).toHaveBeenCalledWith(THEME_STORAGE_KEY);
       expect(doc.documentElement.dataset.theme).toBe('dark');
-      expect(auto.classList.contains('active')).toBe(true);
+      expect(pressed(auto)).toBe(true);
     } finally {
       g.document = realDocument;
     }
@@ -236,9 +241,9 @@ describe('watchSystemTheme (#1018 live auto re-resolution)', () => {
       win.fireChange();
 
       // untouched -- no applyTheme() call should have fired, so no
-      // theme-change event and no button re-highlighting.
+      // theme-change event and no button re-pressing.
       expect(win.events).toEqual([]);
-      expect(dark.classList.contains('active')).toBe(false);
+      expect(pressed(dark)).toBe(false);
     } finally {
       g.document = realDocument;
     }
