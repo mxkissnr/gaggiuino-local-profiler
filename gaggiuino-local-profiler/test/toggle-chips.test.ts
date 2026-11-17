@@ -27,14 +27,22 @@ interface FakeEl {
   style: Record<string, string>;
   textContent: string;
   addEventListener(): void;
+  querySelectorAll(): [];
+  querySelector(): null;
 }
 
-function fakeDocument(ids: string[], absent: string[] = []) {
+function newEl(): FakeEl {
+  return { innerHTML: '', style: {}, textContent: '', addEventListener() {}, querySelectorAll: () => [], querySelector: () => null };
+}
+
+// The editor, the wizard and the order menu all render into one container and
+// bind through getElementById; #gmProfileChart is absent so the editor bails
+// before it touches a canvas.
+function fakeDocument(absent: string[] = []) {
   const els: Record<string, FakeEl> = {};
-  for (const id of ids) els[id] = { innerHTML: '', style: {}, textContent: '', addEventListener() {} };
   const getElementById = (id: string): FakeEl | undefined => {
     if (absent.includes(id)) return undefined;
-    return (els[id] ??= { innerHTML: '', style: {}, textContent: '', addEventListener() {} });
+    return (els[id] ??= newEl());
   };
   return { els, document: { getElementById, querySelectorAll: () => [] } };
 }
@@ -53,7 +61,7 @@ describe('GaggiMate editor toggle groups', () => {
   beforeEach(() => { fetchSpy.mockReset(); });
 
   it('renders every segmented choice as a chip pressed through aria-pressed', async () => {
-    const { els, document: doc } = fakeDocument(['gmEditorBody'], ['gmProfileChart']);
+    const { els, document: doc } = fakeDocument(['gmProfileChart']);
     g.document = doc;
     fetchSpy.mockResolvedValueOnce({
       ok: true,
@@ -85,7 +93,7 @@ describe('GaggiMate editor toggle groups', () => {
 
 describe('dial-in symptom chips', () => {
   it('presses each picked symptom through aria-pressed and clears the others', () => {
-    const { els, document: doc } = fakeDocument(['pdwBody']);
+    const { els, document: doc } = fakeDocument();
     g.document = doc;
     S.profileDialinSession = {
       status: 'active',
@@ -122,7 +130,7 @@ describe('dial-in symptom chips', () => {
 
 describe('order menu toggles', () => {
   it('renders the beans, milks and trending toggles as chips pressed through aria-pressed', () => {
-    const { els, document: doc } = fakeDocument(['ordersMenuList']);
+    const { els, document: doc } = fakeDocument();
     g.document = doc;
 
     renderOrdersMenuAdmin([
