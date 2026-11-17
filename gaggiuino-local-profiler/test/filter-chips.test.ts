@@ -57,6 +57,7 @@ const RETIRED_BUTTONS = [
   'compare-btn', 'delete-btn', 'trash-restore-btn', 'trash-delete-btn', 'export-btn',
   'lib-open-btn', 'mbk-btn', 'mbk-btn-primary', 'mbk-btn-danger', 'bottom-nav-reorder-btn',
   'backup-btn', 'lib-btn-icon', 'lib-grinder-reset-burrs',
+  'lib-frozen-thaw-btn', 'lib-frozen-edit-btn', 'lib-bag-edit-btn', 'lib-bag-del',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -216,5 +217,13 @@ describe('shared buttons (#2095)', () => {
     }
     expect(index).toContain('<button id="machineFormSaveBtn" type="button" class="btn btn--primary"');
     expect(index).not.toContain('class="backup-btn"');
+  });
+
+  it('keeps the frozen portion buttons outside the badge and gives bag actions shared buttons', () => {
+    const card = read('views/library/bean-card.ts');
+    expect(card).toContain('${fpAgeBadge}</span>\n      <button type="button" class="btn btn--tonal" data-action="thaw-portion"');
+    const bags = read('views/library/bags.ts');
+    expect(bags).toContain('class="btn btn--quiet btn--icon" data-action="open-edit-bag"');
+    expect(bags).toContain('class="btn btn--danger btn--icon" data-action="delete-bag"');
   });
 });
