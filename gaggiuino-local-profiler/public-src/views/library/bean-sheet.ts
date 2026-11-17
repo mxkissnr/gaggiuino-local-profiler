@@ -88,11 +88,11 @@ function _sheetBadges(b: BeanListRow): Html {
   const level = normalizeRoastLevel(b.roastLevel);
   const best = freshnessOverrideFrom(b);
   return html`${beanFreshBadge(b)}
-    ${b.roastType ? html`<span class="lib-roast-badge">${esc(t('roast_type_' + b.roastType))}</span>` : esc('')}
-    ${level ? html`<span class="lib-roast-badge">${esc(t('roast_level_' + level.replace(/-/g, '_')))}</span>` : esc('')}
-    ${best ? html`<span class="lib-roast-badge">${esc(t('bean_best_badge', best.from, best.until))}</span>` : esc('')}
-    ${b.decaf ? html`<span class="lib-decaf-badge">${tHtml('lib_bean_decaf_short')}</span>` : esc('')}
-    ${disabled ? html`<span class="lib-disabled-badge">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}`;
+    ${b.roastType ? html`<span class="badge">${esc(t('roast_type_' + b.roastType))}</span>` : esc('')}
+    ${level ? html`<span class="badge">${esc(t('roast_level_' + level.replace(/-/g, '_')))}</span>` : esc('')}
+    ${best ? html`<span class="badge">${esc(t('bean_best_badge', best.from, best.until))}</span>` : esc('')}
+    ${b.decaf ? html`<span class="badge badge--ok">${tHtml('lib_bean_decaf_short')}</span>` : esc('')}
+    ${disabled ? html`<span class="badge">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}`;
 }
 
 function _sheetStockHtml(b: BeanListRow): Html {
