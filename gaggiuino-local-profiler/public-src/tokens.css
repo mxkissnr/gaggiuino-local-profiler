@@ -26,6 +26,11 @@
                light block raises it to the 44 px touch target. */
             --ctl-height: 36px;
 
+            /* ── Bottom navigation ── #2096: the height of the phone's
+               bottom navigation row; the scroll areas above it keep this
+               much room at their bottom edge. */
+            --bottom-nav-h: 56px;
+
             /* ── z-index scale ── #1618: named layers instead of magic
                numbers scattered through style.css. The numbers keep the
                order the app shipped with; changing one reorders whatever
