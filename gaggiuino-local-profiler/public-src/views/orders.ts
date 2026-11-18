@@ -255,7 +255,7 @@ export function renderMilkStock(milks: MilkStock[]): void {
   if (!el) return;
   if (!milks?.length) { el.style.display = 'none'; return; }
   el.style.display = '';
-  el.innerHTML = html`<p class="orders-milk-title">${MILK_ICON_SVG} ${tHtml('orders_milk_title')}</p>${joinHtml(
+  el.innerHTML = html`<p class="section-title">${MILK_ICON_SVG} ${tHtml('orders_milk_title')}</p>${joinHtml(
     milks.map(m => {
       const cls = (m.stockMl as number) <= 0 ? 'badge badge--err' : m.remaining < 300 ? 'badge badge--warn' : 'badge badge--ok';
       const label = (m.stockMl as number) <= 0 ? tHtml('lib_milk_empty')
@@ -622,7 +622,7 @@ export async function loadNotifyMappingView(): Promise<void> {
 
   const typesHtml = html`
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_types_title')}</p>
+      <p class="section-title">${BELL_ICON_SVG} ${tHtml('orders_types_title')}</p>
       <p class="orders-notify-hint">${tHtml('orders_types_desc')}</p>
       <div class="orders-broadcast-list" id="ordersTypesList">${typesRows}</div>
       <div class="orders-notify-actions">
@@ -641,7 +641,7 @@ export async function loadNotifyMappingView(): Promise<void> {
 
   const broadcastHtml = html`
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_broadcast_title')}</p>
+      <p class="section-title">${BELL_ICON_SVG} ${tHtml('orders_broadcast_title')}</p>
       <p class="orders-notify-hint">${tHtml('orders_broadcast_desc')}</p>
       <div class="orders-broadcast-list" id="ordersBroadcastList">${broadcastRows}</div>
       <div class="orders-notify-actions">
@@ -655,7 +655,7 @@ export async function loadNotifyMappingView(): Promise<void> {
 
   const baristaHtml = html`
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_barista_title')}</p>
+      <p class="section-title">${BELL_ICON_SVG} ${tHtml('orders_barista_title')}</p>
       <p class="orders-notify-hint">${tHtml('orders_barista_desc')}</p>
       <select class="orders-notify-select" id="ordersBaristaSelect" aria-label="${esc(t('orders_barista_title'))}">${baristaOptions}</select>
       <div class="orders-notify-actions">

@@ -316,7 +316,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     const flavors = b.flavors;
     if (!Array.isArray(flavors) || flavors.length === 0) return esc('');
     return html`<div class="lib-sheet-aromas">
-      <div class="lib-sheet-aromas-title">${tHtml('lib_sheet_aromas')}</div>
+      <div class="section-title">${tHtml('lib_sheet_aromas')}</div>
       <div class="lib-sheet-aromas-body">
         <button type="button" class="lib-aroma-wheel" data-action="open-flavor-wheel" data-id="${esc(b.id)}" aria-label="${tHtml('flavor_wheel_btn')}">${miniWheelSvg(flavors, 168)}</button>
         <div class="lib-aroma-chips">${flavorChipsHtml(flavors)}</div>
