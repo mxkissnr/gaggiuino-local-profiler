@@ -74,6 +74,26 @@
             color: color-mix(in srgb, var(--accent-ink) 80%, var(--gray-100));
         }
 
+        /* An input chip: a value the user added (flavour, origin, an order
+           menu variant) or a flavour that highlights the wheel, with an
+           optional remove button. Used on its own, never together with
+           .chip. A page class only sets the tint: --input-chip-c for the
+           background and border, --input-chip-ink for the text. */
+        .chip--input {
+            --input-chip-c: var(--flavor-tint);
+            --input-chip-ink: var(--flavor-ink);
+            display: inline-flex; align-items: center; gap: var(--sp-1);
+            max-width: 100%;
+            padding: var(--sp-1) var(--sp-2);
+            border: 1px solid color-mix(in srgb, var(--input-chip-c) 30%, transparent);
+            border-radius: var(--radius-ctl);
+            background: color-mix(in srgb, var(--input-chip-c) 12%, transparent);
+            color: var(--input-chip-ink);
+            font-size: var(--fs-1);
+            font-weight: 600;
+            overflow-wrap: break-word;
+        }
+
         .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
             min-height: var(--ctl-height);
@@ -1553,16 +1573,15 @@
            flavour chip list always contains its input, so it is unaffected). */
         #beanFormOriginChips:empty { display: none; }
         .flavor-chips-wrap input { background: transparent; border: none; outline: none; color: var(--gray-200); font-size: var(--fs-1); flex: 1; min-width: 110px; padding: var(--sp-1) 0; }
-        .flavor-chip { display: inline-flex; align-items: center; gap: var(--sp-1); background: color-mix(in srgb, var(--flavor-tint) 12%, transparent); border: 1px solid color-mix(in srgb, var(--flavor-tint) 30%, transparent); color: var(--flavor-ink); border-radius: var(--radius-ctl); padding: 2px var(--sp-2); font-size: var(--fs-1); font-weight: 600; overflow-wrap: break-word; max-width: 100%; }
         .flavor-chip-x { background: none; border: none; color: inherit; cursor: pointer; font-size: var(--fs-1); padding: 0; opacity: .7; }
         .flavor-chip-x:hover { opacity: 1; }
         /* #404: read-only display pills (bean cards) go quiet-outline
            instead of the filled badge the editable form's chips still use —
            .flavor-chip-static is only ever rendered without a .flavor-chip-x
            remove button, so this never touches the editor. */
-        .flavor-chip-static { padding: 1px var(--sp-2); font-size: var(--fs-1); background: transparent; border-color: var(--gray-700); color: var(--gray-500); }
-        .origin-chip { background: color-mix(in srgb, var(--ice) 12%, transparent); border-color: color-mix(in srgb, var(--ice) 30%, transparent); color: var(--ice); }
-        .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: color-mix(in srgb, var(--paper) 8%, transparent); border-radius: 3px; padding: 1px 2px; -moz-appearance: textfield; }
+        .flavor-chip-static { padding: 0 var(--sp-2); font-size: var(--fs-1); background: transparent; border-color: var(--gray-700); color: var(--gray-500); }
+        .origin-chip { --input-chip-c: var(--ice); --input-chip-ink: var(--ice); }
+        .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: color-mix(in srgb, var(--paper) 8%, transparent); border-radius: var(--radius-ctl); padding: 0 var(--sp-1); -moz-appearance: textfield; }
         .origin-chip-percent::-webkit-outer-spin-button, .origin-chip-percent::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         /* #1350: "Aromas" block in the bean detail sheet — the inline mini
            wheel next to highlight chips coloured from each flavour's segment. */
@@ -1587,7 +1606,7 @@
         /* #1543: the note's own colour as text was unreadable for dark notes
            (e.g. Molasses) on the dark theme -- keep it as the border/background
            tint only and use the theme's primary text colour for readability. */
-        .flavor-chip.lib-aroma-chip { background: color-mix(in srgb, var(--chip-color) 18%, transparent); border-color: color-mix(in srgb, var(--chip-color) 45%, transparent); color: var(--gray-100); cursor: pointer; }
+        .lib-aroma-chip { --input-chip-c: var(--chip-color); --input-chip-ink: var(--gray-100); cursor: pointer; }
         @media (prefers-reduced-motion: no-preference) {
             .lib-aroma-seg.is-pulse { animation: aroma-pulse 500ms ease-out; }
             @keyframes aroma-pulse { 0% { filter: brightness(1); } 45% { filter: brightness(1.7); } 100% { filter: brightness(1); } }
@@ -3271,7 +3290,7 @@
         .orders-menu-del { background:none; border:none; color:var(--gray-600); font-size: var(--fs-3); cursor:pointer; padding: var(--sp-1) var(--sp-2); transition:color .15s; }
         .orders-menu-del:hover { color:var(--err); }
         .orders-menu-variants { display:flex; flex-wrap:wrap; gap: var(--sp-1); align-items:center; }
-        .orders-menu-variant-chip { display:inline-flex; align-items:center; gap: var(--sp-1); background:var(--gray-800); border-radius:var(--radius); font-size: var(--fs-1); color:var(--gray-300); padding: 2px var(--sp-1) 2px var(--sp-2); }
+        .orders-menu-variant-chip { --input-chip-c: var(--gray-500); --input-chip-ink: var(--gray-300); }
         .orders-menu-variant-del { background:none; border:none; color:var(--gray-600); cursor:pointer; font-size: var(--fs-1); padding: 0; line-height:1; transition:color .15s; }
         .orders-menu-variant-del:hover { color:var(--err); }
         .orders-menu-variant-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; width:100px; }
