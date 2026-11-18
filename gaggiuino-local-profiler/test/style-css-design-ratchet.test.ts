@@ -1,9 +1,9 @@
-// #2092: ratchet for the shared design system (#2091). It counts what
-// style.css still has to migrate and pins each count to its current value.
-// The test fails when a count rises (a page added its own radius, padding or
-// look) and also when it falls: lower the pinned number in the same change,
-// so progress cannot slip back. The last slice of the epic brings every count
-// to zero.
+// #2092: guard for the shared design system (#2091). It counts what
+// style.css does outside the shared components: literal radii, literal px
+// paddings, `transition: all` and page classes that style their own look.
+// #2096 brought every count to zero, so this is a hard rule now: a page that
+// adds its own radius, padding or look fails here. Use a token or a shared
+// component (.chip, .chip--input, .btn, .badge, .section-title) instead.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +14,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const CSS_PATH = join(here, '..', 'public-src', 'style.css');
 const TOKENS_PATH = join(here, '..', 'public-src', 'tokens.css');
 
-// Measured on dev when #2092 landed. Only ever lower these.
+// #2096: every count is zero and stays zero.
 const PINNED = {
   literalRadius: 0,
   literalPadding: 0,
@@ -80,7 +80,7 @@ describe('style.css design ratchet (#2091)', () => {
   const debt = countDesignDebt(css);
 
   for (const key of Object.keys(PINNED) as (keyof typeof PINNED)[]) {
-    it(`keeps ${key} at its pinned count`, () => {
+    it(`keeps ${key} at zero`, () => {
       const found = debt[key];
       const message =
         found.length > PINNED[key]
