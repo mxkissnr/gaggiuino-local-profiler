@@ -281,10 +281,19 @@ async function runProfile(browser: Browser, baseUrl: string, profile: Profile, p
         await openView(page, VIEWS[0]!);
         await openShotDetail(page);
         if (!profile.isMobile) {
-            // Picking a shot folds the desktop list away (#2056); widening the
-            // window narrows the card again. The chart must follow each time.
+            // #2115: picking a shot from the list keeps the desktop list open,
+            // so the chart has to fit next to it straight away. The collapse
+            // button in the list header is what narrows it, and widening the
+            // window narrows the card again — the chart must follow each time.
             // The collapsed width is 1 px, not 0: `width: 0` cannot drop the
             // 1 px border-right under the app's global box-sizing: border-box.
+            await page.waitForFunction(
+                () => (document.getElementById('sidebar')?.getBoundingClientRect().width ?? 0) >= 319,
+                undefined, { timeout: 5000 },
+            );
+            await assertShotChartFits(page, problems, profile.name, 'after a pick in the list');
+
+            await page.click('#collapseBtn');
             await page.waitForFunction(() => {
                 const sidebar = document.getElementById('sidebar');
                 return !!sidebar && sidebar.classList.contains('desktop-collapsed')
