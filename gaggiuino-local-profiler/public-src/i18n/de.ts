@@ -147,6 +147,7 @@ const de: Partial<Translations> = {
     machine_warn_water:'Wassertank fast leer', machine_warn_flush:'Spülen empfohlen',
     machine_warn_switch:'Dampfschalter ist an', machine_warn_scaleConnected:'Waage nicht verbunden',
     machine_warn_scaleBattery:'Waagen-Akku schwach', machine_warn_temperature:'Temperatur nicht stabil',
+    machine_warn_backflush:'Rückspülen fällig', machine_warn_descaling:'Entkalken fällig',
     machine_update_available:'Firmware-Update auf der Maschine verfügbar',
     lib_beans:'Bohnen', lib_grinders:'Mühlen',
     lib_add_bean:'+ Bohne hinzufügen', lib_add_grinder:'+ Mühle hinzufügen',

@@ -147,6 +147,7 @@ const it: Partial<Translations> = {
     machine_warn_water:'Serbatoio acqua quasi vuoto', machine_warn_flush:'Flush consigliato',
     machine_warn_switch:'Interruttore vapore attivo', machine_warn_scaleConnected:'Bilancia non connessa',
     machine_warn_scaleBattery:'Batteria bilancia scarica', machine_warn_temperature:'Temperatura non stabile',
+    machine_warn_backflush:'Backflush necessario', machine_warn_descaling:'Decalcificazione necessaria',
     machine_update_available:'Aggiornamento firmware disponibile sulla macchina',
     lib_beans:'Grani', lib_grinders:'Macinini',
     lib_add_bean:'+ Aggiungi grani', lib_add_grinder:'+ Aggiungi macinino',

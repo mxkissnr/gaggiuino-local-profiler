@@ -147,6 +147,7 @@ const fr: Partial<Translations> = {
     machine_warn_water:"Réservoir d'eau presque vide", machine_warn_flush:'Rinçage recommandé',
     machine_warn_switch:'Interrupteur vapeur activé', machine_warn_scaleConnected:'Balance non connectée',
     machine_warn_scaleBattery:'Batterie de la balance faible', machine_warn_temperature:'Température instable',
+    machine_warn_backflush:'Backflush nécessaire', machine_warn_descaling:'Détartrage nécessaire',
     machine_update_available:'Mise à jour du firmware disponible sur la machine',
     lib_beans:'Grains', lib_grinders:'Moulins',
     lib_add_bean:'+ Ajouter un grain', lib_add_grinder:'+ Ajouter un moulin',
