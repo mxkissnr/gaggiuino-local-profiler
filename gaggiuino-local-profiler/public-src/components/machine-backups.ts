@@ -307,7 +307,7 @@ export function parseBackupFile(text: string): MachineBackupDocument | null {
 
 /** The row action slice W adds to every Gaggiuino machine row. */
 export function machineBackupsButtonHtml(): Html {
-  return html`<button type="button" class="machine-backups-btn">${tHtml('mbk_row_action')}</button>`;
+  return html`<button type="button" class="lib-sheet-menu-item machine-backups-btn">${tHtml('mbk_row_action')}</button>`;
 }
 
 /** The update did not start because the backup before it failed. True is the user's
