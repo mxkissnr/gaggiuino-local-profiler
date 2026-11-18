@@ -69,6 +69,8 @@ const RETIRED_BUTTONS = [
 // retires.
 const RETIRED_2096 = [
   'analytics-section-title', 'lib-shelf-heading', 'lib-shelf-count',
+  'maint-section-title', 'orders-col-title', 'orders-milk-title', 'orders-broadcast-title',
+  'lib-sheet-aromas-title', 'lib-sheet-profiles-title', 'licenses-count',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -277,5 +279,15 @@ describe('section titles (#2096)', () => {
     expect(library).toContain('<div class="section-title"><span>');
     expect(library).toContain('<summary class="section-title lib-shelf-archive-summary">');
     expect(library).toContain('<span class="section-title__count">');
+  });
+
+  it('gives the dialog titles, orders, licences and bean sheet headings the shared section title', () => {
+    const index = read('index.html');
+    expect(index).toContain('<h3 class="section-title" id="guidedMaintTitle">');
+    expect(index).toContain('<div class="section-title" data-i18n="orders_queue">');
+    expect(index).toContain('<div class="section-title orders-history-header">');
+    expect(read('views/orders.ts')).toContain('<p class="section-title">');
+    expect(read('components/licenses-sheet.ts')).toContain('<h3 class="section-title licenses-heading">');
+    expect(read('views/library/bean-card.ts')).toContain('<div class="section-title">');
   });
 });

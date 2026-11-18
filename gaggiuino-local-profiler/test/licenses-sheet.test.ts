@@ -94,7 +94,7 @@ describe('licensesSheetHtml()', () => {
     });
 
     it('heads every non-empty group with its translated label', () => {
-        const headings = [...markup.matchAll(/<h3 class="licenses-heading">([^<]*)<span/g)].map(m => (m[1] ?? '').trim());
+        const headings = [...markup.matchAll(/<h3 class="section-title licenses-heading">([^<]*)<span/g)].map(m => (m[1] ?? '').trim());
         expect(headings).toEqual([
             t('licenses_group_libraries'), t('licenses_group_fonts'),
             t('licenses_group_models'), t('licenses_group_server'), t('licenses_texts'),
