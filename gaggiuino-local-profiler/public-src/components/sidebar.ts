@@ -196,9 +196,12 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
           updateMobileShotSidebarVisibility();
           setTimeout(() => { if (window.updateView) window.updateView(); }, 50);
         } else {
-          // #2056: a picked shot gets the full width; the expand button in the
-          // topbar opens the list again.
-          setDesktopSidebarCollapsed(true);
+          // #2115: a pick from the list itself keeps the list open — it is the
+          // control used to browse shot after shot, so folding it away after
+          // every click would hide the very rows the user is comparing. The
+          // detail panel still re-lays out at the list's width. Only
+          // goToShot() (a shot opened from a link elsewhere) folds it away,
+          // and the collapse button in the list header stays available.
           if (window.updateView) window.updateView();
         }
       }
@@ -438,7 +441,9 @@ export function updateFlapCounter(count: number): void {
 // #2056: one state for the desktop list on the Shots page, the existing
 // `desktop-collapsed` class, never stored. switchMode() opens it on every page
 // switch (entering Shots shows the list; other pages hide #sidebar anyway, see
-// updateMobileShotSidebarVisibility()), and a picked shot folds it away.
+// updateMobileShotSidebarVisibility()), and #2115: only goToShot() (a shot
+// opened from a link elsewhere) folds it away — a pick inside the list keeps
+// it open, and the collapse button in the list header still folds it by hand.
 export function setDesktopSidebarCollapsed(collapsed: boolean): void {
   document.getElementById('sidebar')?.classList.toggle('desktop-collapsed', collapsed);
   document.getElementById('expandSidebarBtn')?.classList.toggle('visible', collapsed);
