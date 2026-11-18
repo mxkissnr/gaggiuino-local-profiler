@@ -72,6 +72,7 @@ const RETIRED_2096 = [
   'maint-section-title', 'orders-col-title', 'orders-milk-title', 'orders-broadcast-title',
   'lib-sheet-aromas-title', 'lib-sheet-profiles-title', 'licenses-count',
   'flavor-chip', 'has-badge', 'maint-badge',
+  'mobile-drawer-btn', 'bottom-nav-btn', 'lib-sheet-menu-btn',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -318,5 +319,15 @@ describe('notification dots and the live status (#2096)', () => {
     expect(index).toContain('<span id="maintBadge" class="maint-dot"');
     expect(index).toContain('<span id="ordersBadge" class="maint-dot"');
     expect(index).toContain('<div id="live-status-badge" class="badge">');
+  });
+});
+
+describe('navigation and menu items (#2096)', () => {
+  it('names the drawer toggle, the bottom navigation and the menu entries as items, not buttons', () => {
+    const index = read('index.html');
+    expect(index).toContain('class="mobile-drawer-toggle"');
+    expect(index).toContain('class="lib-sheet-menu-item"');
+    expect(read('components/bottom-nav.ts')).toContain("className = 'bottom-nav-item'");
+    expect(read('components/machine-backups.ts')).toContain('<button type="button" class="lib-sheet-menu-item machine-backups-btn">');
   });
 });
