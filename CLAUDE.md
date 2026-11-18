@@ -1,18 +1,14 @@
 # CLAUDE.md — Gaggiuino Local Profiler
 
-Working rules for this repo. Follow these in every session.
+Working rules for this repo. Follow these in every session. The checklist every contribution has to meet, whoever or whatever writes it, is in AGENTS.md and imported here:
 
-## Language rules
+@AGENTS.md
 
-- **Code, comments, commit messages, GitHub issues, PR descriptions** → always English
-- **DOCS.md, README.md** → English (primary)
-- **DOCS.de.md** → German (supplementary, always kept in sync with DOCS.md)
-- **UI strings** → translated via `t()` from `public-src/i18n/{de,en,it,fr,es,nl}.ts`; add new keys to **all 6 language files** when adding UI text
-- **UI design** → every visible change follows [docs/DESIGN.md](docs/DESIGN.md) (bean-library design language, "nothing twice", desktop layout of its own).
+Everything below is maintainer- or Claude-specific and comes on top of it.
 
 ## Workflow
 
-> **STOP — issue first, then code. This rule has been violated repeatedly.**
+> **STOP — issue first, then code (AGENTS.md). In Claude sessions this rule has been violated repeatedly.**
 > Do not write a single line of implementation before the issue exists.
 > No exceptions for bug fixes, security fixes, refactors, or "small" changes.
 > The only exception is a typo or single-word change.
@@ -20,22 +16,28 @@ Working rules for this repo. Follow these in every session.
 **Step 1 — create the issue (always, before anything else):**
 ```
 gh issue create --repo mxkissnr/gaggiuino-local-profiler --title "..." --label "bug|enhancement" --body "..."
-gh project item-add 2 --owner mxkissnr --url <issue-url>
 ```
+The GLP Roadmap project adds new issues from this repo automatically; there is no manual `gh project item-add` step.
 
 **Step 2 — implement the fix/feature.**
 
-**Step 3 — close the issue in the commit message:** `Closes #N`
+**Step 3 — link the issue in the PR body with `Closes #N`.** GitHub's own auto-close only fires on a merge into `main`. On a merge into `dev`, the close-dev-issues workflow reads the PR body: it closes issues opened by the repository owner, a bot or the project's automation account, and leaves issues from external reporters open with the `fixed-in-dev` label and a comment until the release ships the fix.
 
 If you catch yourself writing code without an issue number in hand: stop, create the issue first, then continue.
 
 ## Branch workflow
 
-**Work happens on `dev`, not `main`.** Feature/fix branches for a round are cut from
+Work happens on `dev`, not `main` (AGENTS.md). Feature/fix branches for a round are cut from
 `origin/dev` and PR'd back into `dev` — `main` only receives merges from `dev` at release
 time (see "Release & documentation rules" below). This applies to every PR unless the round
 is itself the release round. When setting up a worktree, `glp-worktree` auto-detects this
 (branches from `origin/dev` when it exists) — no manual `--base` needed for this repo.
+
+**Patch line** (maintainers only, details in [docs/MAINTAINING.md](docs/MAINTAINING.md#patch-release)):
+`release/X.Y.x` is cut from the `vX.Y.0` tag. A fix is merged to `dev` first; if a released
+version also needs it, it gets the label `backport-X.Y` and is cherry-picked with
+`git cherry-pick -x <sha>` into `release/X.Y.x` by PR. Tag `vX.Y.Z` after that PR is merged.
+Never merge `dev` downward.
 
 ## Regression policy
 
@@ -126,36 +128,27 @@ together, in one commit:
 
 ## Commits
 
-Docs and code always in the same commit — never deliver CHANGELOG/DOCS/README separately afterward.
+The changelog fragment, docs, version and whats-new rules are in AGENTS.md. On top of them:
 
-Every commit that ships a feature or fix needs:
-1. Code change
-2. A changelog fragment file under `gaggiuino-local-profiler/changelog.d/` (one file per PR; format in `changelog.d/README.md`) instead of editing `CHANGELOG.md` directly, so concurrent PRs never conflict — **keep it short: one bold lead-in sentence per bullet, optionally one short trailing clause, plus `Closes #N`.** No multi-sentence technical paragraphs, no file/function names, no "Review follow-up"/"Live-testing follow-up" sub-narratives, and no version number of its own. Home Assistant Supervisor renders these entries verbatim in the app's own Update dialog (screenshot-verified 2026-08-11) — a long entry there is a real UX problem, not just a cosmetic one. The deep technical writeup (root cause, file paths, edge cases) belongs in the commit message and PR description, which stay the actual detailed record; don't duplicate it into `CHANGELOG.md`. The release run runs `npm run changelog:collect` to fold the fragments into `## [Unreleased]` before it retitles that section.
-3. `DOCS.md` **and** `DOCS.de.md` update if the feature is user-facing — both languages always in sync
-4. `README.md` features table update if it's a new feature
-
-Do **not** bump the version (`config.yaml`/`package.json`/the two Go
-consts) or touch `public-src/shared/whats-new.ts` in a feature/fix commit —
-both happen once, together, at release time (see Versioning above and the
-`glp-release-checklist` skill).
-
-Tagging and the GitHub release are part of the release run only (`releaser`
-agent / `glp-release-checklist` skill), never done by hand from a feature round.
+- Docs and code always go in the same commit — never deliver CHANGELOG/DOCS/README separately afterward.
+- Keep fragments short (one bold lead-in sentence per bullet, optionally one short trailing clause, no "Review follow-up"/"Live-testing follow-up" sub-narratives): Home Assistant Supervisor renders these entries verbatim in the app's own Update dialog (screenshot-verified 2026-08-11), so a long entry there is a real UX problem. The deep technical writeup (root cause, file paths, edge cases) belongs in the commit message and PR description, which stay the actual detailed record. The release run runs `npm run changelog:collect` to fold the fragments into `## [Unreleased]` before it retitles that section.
+- The version bump and the whats-new update happen once, together, at release time (see Versioning above and the `glp-release-checklist` skill).
+- Tagging and the GitHub release are part of the release run only (`releaser` agent / `glp-release-checklist` skill), never done by hand from a feature round.
 
 ## Release & documentation rules (since 2026-07-05)
 
 - **A release ends at the GitHub release.** Do NOT deploy to Home Assistant — Max installs app/HACS updates himself. This is an internal workflow note for you, not something users need to know — **never** put a "no HA deploy included" / "install the update yourself" disclaimer in the public release notes body. Release notes are for end users and describe the software, not this project's internal release process.
 - **GLP documentation lives ONLY in the GLP repos.** Never write GLP release notes into mkab-infra/CHANGELOG.md.
 - **Update the GitHub wiki every feature round** (`git clone git@github.com:mxkissnr/gaggiuino-local-profiler.wiki.git`): pages are bilingual (`Page.md` + `Page-de.md`, always both). Minimum when touched by features: Coffee-Library, Analytics, Features, Home.
-- **Keep README screenshots current** when the UI changes: `node scripts/screenshots.mts` regenerates `docs/screenshots/*.png`.
+- **README screenshots are regenerated in the release run only**, with the screenshot script described in CONTRIBUTING.md ("Screenshots"); `npm run release:check` check 3 gates their freshness. Feature and fix PRs never touch `docs/screenshots/` (AGENTS.md); a UI PR shows before/after images in its description instead.
 - **Regenerate dev-stats at every release, not just when they look stale.** Run whatever the current dev-stats script is (see `scripts/`) and re-check DOCS.md/DOCS.de.md/README.md against the actual feature set shipped in that release — stale stats and stale feature docs are a recurring failure mode here.
-- **Every commit involving Claude/an AI agent — including release/chore commits, not just feature commits — must carry a `Co-Authored-By:` trailer naming the SPECIFIC model, not a bare "Claude".** Format: `Co-Authored-By: Claude <model name> <noreply@anthropic.com>`, e.g. `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` or `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` — whichever model actually authored that commit. `DEVELOPMENT.md`'s model-breakdown table groups commits by this exact string, so a generic "Claude" silently pollutes the stats as an unidentifiable bucket. This has been silently skipped/genericized multiple times; every dispatch prompt (release agents included) must explicitly state which model string to use.
+- **Claude's `Co-Authored-By:` trailer names the specific model** (the trailer rule itself is in AGENTS.md), on release/chore commits too: `Co-Authored-By: Claude <model name> <noreply@anthropic.com>`, e.g. `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>` or `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`, whichever model actually authored that commit. `DEVELOPMENT.md`'s model-breakdown table groups commits by this exact string, so a generic "Claude" silently pollutes the stats. This has been skipped or genericized multiple times; every dispatch prompt (release agents included) must state which model string to use.
 
 - **Easter eggs (hidden panels, secret gestures, secret badges) are never mentioned in CHANGELOG.md, whats-new, DOCS/README, release notes or PR titles that end up in release notes — finding them is the point.**
 
 ## Gaggiuino project boundaries
 
-GLP is purely a client of the Gaggiuino machine's own WebSocket/REST API — never a firmware fork. No active firmware changes, no embedding/redistributing Gaggiuino's own code, JS bundles or other assets in the GLP repo (not even for research — throwaway downloads belong in the scratchpad, never in the repo). Gaggiuino's firmware is CC-BY-NC 4.0; GLP itself stays GPLv3 and non-commercial. Use "Gaggiuino" as a name/mark only descriptively ("for Gaggiuino machines"), never implying official affiliation. Goal: never get in the way of or harm the Gaggiuino developers — when in doubt, build more conservatively and ask Max rather than deciding unilaterally.
+The boundary rule is in AGENTS.md. On top of it: throwaway downloads for research belong in the scratchpad, never in the repo, and "Gaggiuino" is never used in a way that implies official affiliation. Goal: never get in the way of or harm the Gaggiuino developers — when in doubt, build more conservatively and ask the maintainer rather than deciding unilaterally.
 
 ## Repo structure
 
@@ -197,16 +190,12 @@ README.md                     ← Repo root README (English)
 - `shot.profile?.name || shot.profileName` for profile name
 - `shot.annotation?.coffee` etc. — annotation fields are optional
 - `calcShotScore(shot, getShotData(shot))` returns null for test/empty shots
-- All fetch calls use relative URLs (no leading `/`) for HA ingress compatibility
 - Chart.js is an npm dependency bundled by Vite; reuse existing chart instances (destroy before re-creating)
 - `/data/` is the persistent storage directory inside the app container
-- i18n: translations live in `public-src/i18n/{de,en,it,fr,es,nl}.ts` — each exports a default object; `public-src/constants.ts` re-exports them as `TRANSLATIONS`; add new keys to **all 6 files**
-- **Go + TypeScript only**: the repository is Go + TypeScript only — the backend is Go, and everything that runs in the browser or as build/dev tooling is TypeScript. No new `.js`/`.mjs`/`.cjs` files may be added: vendored `/vendor/` files are the only exception, enforced by `test/no-javascript-sources.test.ts`. Tooling Node runs directly is `.mts` and runs on Node's built-in type stripping (official Node ≥ 22.18; CI uses 26); `npm run lint` passes ESLint's `unstable_native_nodejs_ts_config` flag. Service workers are `.ts`, bundled to classic scripts and typed by `tsconfig.sw.json`. The SPA under `public-src/` is `.ts`; `tsconfig.json` turns on `strict`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`; every `innerHTML` assignment must take an `Html` value, never a raw string — enforced by the local ESLint rule `html-sink`.
-- **PR AI disclosure** — every PR fills the PR template's "AI assistance disclosure" section
-  (`none`/`assisted`/`substantial`/`generated` + tool/model); every AI-assisted commit carries
-  a `Co-Authored-By:` trailer. CI enforces it. See CONTRIBUTING.md.
+- i18n: each language file in `public-src/i18n/` exports a default object; `constants.ts` re-exports them as `TRANSLATIONS` (the six-languages rule is in AGENTS.md)
+- **Go + TypeScript only** (rule in AGENTS.md): vendored `/vendor/` files are the only exception to the no-JavaScript rule. Tooling Node runs directly is `.mts` and runs on Node's built-in type stripping (official Node ≥ 22.18; CI uses 26); `npm run lint` passes ESLint's `unstable_native_nodejs_ts_config` flag. Service workers are `.ts`, bundled to classic scripts and typed by `tsconfig.sw.json`. The SPA under `public-src/` is `.ts`; `tsconfig.json` turns on `strict`, `exactOptionalPropertyTypes` and `noUncheckedIndexedAccess`.
 
 ## GitHub project
 
 Roadmap project ID: `2` (owner: mxkissnr), named **GLP Roadmap**.
-Add all new feature/bug issues to it.
+New issues from this repo are added to it automatically.
