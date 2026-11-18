@@ -29,7 +29,7 @@ vi.mock('../public-src/api/machines.js', () => ({
 const { S } = await import('../public-src/state/index.js');
 const {
   renderMachineControl, toggleFlush, confirmBrewFromDialog, cancelBrewFromDialog,
-  loadMachineControlSetting, saveMachineControlSetting,
+  loadMachineControlSetting, saveMachineControlSetting, machineWarningLabel,
 } = await import('../public-src/components/machine-control.js');
 
 interface FakeElement {
@@ -99,6 +99,29 @@ describe('machine-control flush button (#1324)', () => {
 
     expect(doc.getElementById('brewConfirmModal').style.display).toBe('flex');
     expect(doc.getElementById('brewConfirmWarnings').innerHTML).toBe('<li>Water tank low</li><li>futureKey</li>');
+  });
+
+  // #2126: GaggiMate v1.10.0 adds the backflush and descaling warnings.
+  it('shows the backflush and descaling warnings with translated labels', () => {
+    renderMachineControl({ machineId: 7, canFlush: false, flushing: false, brewConfirm: ['backflush', 'descaling'] });
+
+    expect(doc.getElementById('brewConfirmWarnings').innerHTML).toBe('<li>Backflush due</li><li>Descaling due</li>');
+  });
+
+  it('translates the backflush and descaling warnings in every language', () => {
+    const want: Record<string, [string, string]> = {
+      de: ['Rückspülen fällig', 'Entkalken fällig'],
+      en: ['Backflush due', 'Descaling due'],
+      es: ['Backflush pendiente', 'Descalcificación pendiente'],
+      fr: ['Backflush nécessaire', 'Détartrage nécessaire'],
+      it: ['Backflush necessario', 'Decalcificazione necessaria'],
+      nl: ['Terugspoelen nodig', 'Ontkalken nodig'],
+    };
+    for (const [lang, [backflush, descaling]] of Object.entries(want)) {
+      S.currentLang = lang;
+      expect(machineWarningLabel('backflush'), `${lang} backflush`).toBe(backflush);
+      expect(machineWarningLabel('descaling'), `${lang} descaling`).toBe(descaling);
+    }
   });
 
   it('confirms the brew and hides the dialog immediately (optimistic)', async () => {
