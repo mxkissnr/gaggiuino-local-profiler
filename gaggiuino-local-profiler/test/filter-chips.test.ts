@@ -71,6 +71,7 @@ const RETIRED_2096 = [
   'analytics-section-title', 'lib-shelf-heading', 'lib-shelf-count',
   'maint-section-title', 'orders-col-title', 'orders-milk-title', 'orders-broadcast-title',
   'lib-sheet-aromas-title', 'lib-sheet-profiles-title', 'licenses-count',
+  'flavor-chip',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -289,5 +290,24 @@ describe('section titles (#2096)', () => {
     expect(read('views/orders.ts')).toContain('<p class="section-title">');
     expect(read('components/licenses-sheet.ts')).toContain('<h3 class="section-title licenses-heading">');
     expect(read('views/library/bean-card.ts')).toContain('<div class="section-title">');
+  });
+});
+
+describe('input chips (#2096)', () => {
+  it('renders flavour, origin, aroma and order menu variant chips as shared input chips', () => {
+    const form = read('views/library/bean-form-chips.ts');
+    expect(form).toContain("chip.className = 'chip--input';");
+    expect(form).toContain('<span class="chip--input origin-chip">');
+    expect(read('components/flavor-mini-wheel.ts')).toContain('<button type="button" class="chip--input lib-aroma-chip"');
+    expect(read('views/orders.ts')).toContain('<span class="chip--input orders-menu-variant-chip">');
+  });
+
+  it('lets the input chip page classes set only the tint', () => {
+    const root = postcss.parse(read('style.css'));
+    for (const selector of ['.origin-chip', '.lib-aroma-chip', '.orders-menu-variant-chip']) {
+      const decls = declsOf(rulesWith(root, selector));
+      expect(decls.length, selector).toBeGreaterThan(0);
+      for (const decl of decls) expect(decl, selector).toMatch(/^(?:--input-chip-c|--input-chip-ink|cursor):/);
+    }
   });
 });

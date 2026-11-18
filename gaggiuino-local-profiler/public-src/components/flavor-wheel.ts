@@ -509,7 +509,7 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   const unmatchedWrap = document.getElementById('flavorWheelUnmatched') as HTMLElement;
   unmatchedWrap.innerHTML = unmatched.length
     ? html`<div class="fw-unmatched-label">${tHtml('flavor_wheel_unmatched')}</div>
-       <div class="fw-unmatched-chips">${joinHtml(unmatched.map(f => html`<span class="flavor-chip flavor-chip-static">${esc(f)}</span>`))}</div>`
+       <div class="fw-unmatched-chips">${joinHtml(unmatched.map(f => html`<span class="chip--input flavor-chip-static">${esc(f)}</span>`))}</div>`
     : html``;
 
   const legendEl = document.getElementById('flavorWheelLegend');

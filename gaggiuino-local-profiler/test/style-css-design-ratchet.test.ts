@@ -16,10 +16,10 @@ const TOKENS_PATH = join(here, '..', 'public-src', 'tokens.css');
 
 // Measured on dev when #2092 landed. Only ever lower these.
 const PINNED = {
-  literalRadius: 1,
-  literalPadding: 4,
+  literalRadius: 0,
+  literalPadding: 0,
   transitionAll: 0,
-  pageLookClasses: 16,
+  pageLookClasses: 12,
 } as const;
 
 type Debt = Record<keyof typeof PINNED, string[]>;
@@ -140,6 +140,7 @@ describe('style.css design ratchet (#2091)', () => {
     for (const selector of [
       '.chip',
       '.chip[aria-pressed="true"]',
+      '.chip--input',
       '.btn',
       '.btn--primary',
       '.btn--tonal',

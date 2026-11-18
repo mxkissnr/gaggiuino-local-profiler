@@ -43,13 +43,14 @@ Round therefore means "status", not "clickable". Heat map and calendar cells are
 
 Four shared components live in one block near the top of the stylesheet. A page class keeps only layout (position, grid area, gap), never colour, radius or padding.
 
-Chips, buttons, and the search fields and dropdowns that share a row with chips have one height, `--ctl-height`: 44 px on touch devices (`pointer: coarse`), 36 px with a fine pointer. Input chips with a remove button (flavour, origin) and the aroma chips keep their own class and colour tint but use `--radius-ctl`.
+Chips, buttons, and the search fields and dropdowns that share a row with chips have one height, `--ctl-height`: 44 px on touch devices (`pointer: coarse`), 36 px with a fine pointer. Input chips with a remove button (flavour, origin, order menu variants) and the aroma chips are `.chip--input`; their page class only sets the tint.
 
 | Role | Class | Variants | Active state |
 |---|---|---|---|
 | Filter chip, single-choice pills | `.chip` | none | `aria-pressed="true"`: accent tint and accent border; never an `.active` class |
 | Button | `.btn` | `.btn--primary` (the one main action of a view), `.btn--tonal` (positive secondary action), `.btn--quiet` (neutral secondary action), `.btn--danger` (destructive); `.btn--icon` makes any of them an icon-only square | none; a control that stays on is a chip |
 | Status badge | `.badge` | neutral (no modifier), `.badge--ok`, `.badge--warn`, `.badge--err`, `.badge--info`, `.badge--accent`; the score scale `.badge--score-great`, `.badge--score-good`, `.badge--score-ok`, `.badge--score-low`, `.badge--score-bad`; `.badge--scrim` for a badge on a photo | none; a badge is never clickable, a clickable status is a `.btn` or a `.chip` |
+| Input chip | `.chip--input`, on its own, never with `.chip` | the tint through `--input-chip-c` (background, border) and `--input-chip-ink` (text) | none |
 | Section title | `.section-title` | optional counter in `.section-title__count` | none |
 
 Every status label is a `.badge`. A page class next to it only places it (margin, grid area, position); a badge never has a border or its own tint.

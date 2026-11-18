@@ -453,7 +453,7 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
     const useBeans   = !!item.useBeans;
     const useMilks   = !!item.useMilks;
     const chipHtml   = joinHtml(variants.map(v =>
-      html`<span class="orders-menu-variant-chip">${esc(v)}<button class="orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}">×</button></span>`
+      html`<span class="chip--input orders-menu-variant-chip">${esc(v)}<button class="orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}">×</button></span>`
     ));
     const variantSection = useBeans
       ? html`<span class="orders-use-beans-note">${BEAN_ICON_SVG} ${tHtml('orders_use_beans_note')}</span>`
