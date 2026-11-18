@@ -602,7 +602,13 @@ func (p *Poller) syncGaggiMateShots(ctx context.Context, machine *machines.Machi
 
 	recordErr, err := p.backfillShots(ctx, machine.ID, latestMachineID,
 		func(ctx context.Context, native int64) (map[string]any, int, error) {
-			return syncFetchGaggiMateShot(ctx, base, native)
+			shot, status, err := syncFetchGaggiMateShot(ctx, base, native)
+			if errors.Is(err, machines.ErrGaggiMateBadSlog) {
+				// #2076: an unreadable .slog is one damaged shot, not a failing
+				// machine: skip it like a malformed Gaggiuino shot (#1151).
+				err = fmt.Errorf("shot %d: %w: %w", native, errMalformedShot, err)
+			}
+			return shot, status, err
 		},
 		func(shot map[string]any, native int64) (bool, error) {
 			// #1147: index.bin reports the machine's own native ids, but shots are

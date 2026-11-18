@@ -7,7 +7,9 @@ import { shotsRenderedLang } from '../views/shots/index.js';
 export function goToShot(id: number): void {
   switchMode('shots');
   if (window.selectShot) window.selectShot(id);
-  // #2056: opening a shot from another page is a pick, so the desktop list folds away.
+  // #2056/#2115: a shot opened from a link elsewhere (Analytics, Dial-In,
+  // Orders, or the advice panel on the shot page itself) still gets the full
+  // width; a pick inside the list no longer folds it.
   setDesktopSidebarCollapsed(true);
   setTimeout(() => {
     const el = document.getElementById(`wrapper-${id}`);
