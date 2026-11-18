@@ -2519,6 +2519,15 @@
         #trash-toggle:hover { color: var(--gray-400); }
         #trash-toggle .badge { margin-left: auto; }
         #trash-list { overflow-y: auto; max-height: 220px; }
+        /* ── Fixed top banners and the toast (#2096) ── The components build
+           them in code and keep position and colours inline; spacing and
+           shape live here, where the design guard sees them. */
+        .app-banner { padding: var(--sp-2) var(--sp-4); }
+        .app-banner-action { padding: var(--sp-1) var(--sp-3); border-radius: var(--radius-ctl); }
+        .app-banner-close { padding: 0 var(--sp-1); }
+        .demo-banner { padding: var(--sp-1) var(--sp-3); }
+        .demo-banner-link { padding: 0; }
+        .glp-toast { padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); }
         /* ── Toast action (#1716, e.g. Undo after trashing a shot) ── */
         .glp-toast-action {
             background: none; border: none; border-radius: var(--radius);

@@ -31,10 +31,11 @@ function showUpdateBanner({ current, latest, release_url }: { current: string; l
 
     const banner = document.createElement('div');
     banner.id = 'glpUpdateBanner';
+    banner.className = 'app-banner';
     Object.assign(banner.style, {
         position: 'fixed', top: `${devBannerHeight()}px`, left: '0', right: '0', zIndex: '9998',
         background: 'var(--accent)', color: 'var(--accent-text)',
-        padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '12px',
+        display: 'flex', alignItems: 'center', gap: '12px',
         fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',
     });
 
@@ -55,10 +56,11 @@ function showUpdateBanner({ current, latest, release_url }: { current: string; l
 
     const closeBtn = document.createElement('button');
     closeBtn.type = 'button';
+    closeBtn.className = 'app-banner-close';
     closeBtn.setAttribute?.('aria-label', t('lib_sheet_close'));
     closeBtn.innerHTML = CLOSE_ICON_SVG;
     Object.assign(closeBtn.style, {
-        background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--accent-text)', padding: '0 2px',
+        background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'var(--accent-text)',
     });
     closeBtn.addEventListener('click', () => banner.remove());
 
