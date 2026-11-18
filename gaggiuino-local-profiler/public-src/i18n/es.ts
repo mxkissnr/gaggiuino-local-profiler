@@ -147,6 +147,7 @@ const es: Partial<Translations> = {
     machine_warn_water:'Depósito de agua bajo', machine_warn_flush:'Se recomienda purgar',
     machine_warn_switch:'Interruptor de vapor activado', machine_warn_scaleConnected:'Báscula no conectada',
     machine_warn_scaleBattery:'Batería de la báscula baja', machine_warn_temperature:'Temperatura no estable',
+    machine_warn_backflush:'Backflush pendiente', machine_warn_descaling:'Descalcificación pendiente',
     machine_update_available:'Actualización de firmware disponible en la máquina',
     lib_beans:'Granos', lib_grinders:'Molinos',
     lib_add_bean:'+ Añadir grano', lib_add_grinder:'+ Añadir molino',
