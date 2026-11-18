@@ -2,6 +2,8 @@
 
 Bug reports, feature ideas and pull requests are welcome!
 
+Working with an AI coding agent? Point it at [AGENTS.md](AGENTS.md), the short checklist every pull request has to meet.
+
 The [roadmap board](https://github.com/users/mxkissnr/projects/2/views/2) shows what is planned for the next release, what comes later and
 where help is wanted.
 
