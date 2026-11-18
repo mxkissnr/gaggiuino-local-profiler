@@ -147,6 +147,7 @@ const en: Translations = {
     machine_warn_water:'Water tank low', machine_warn_flush:'Flush recommended',
     machine_warn_switch:'Steam switch is on', machine_warn_scaleConnected:'Scale not connected',
     machine_warn_scaleBattery:'Scale battery low', machine_warn_temperature:'Temperature not stable',
+    machine_warn_backflush:'Backflush due', machine_warn_descaling:'Descaling due',
     machine_update_available:'Firmware update available on the machine',
     lib_beans:'Beans', lib_grinders:'Grinders',
     lib_add_bean:'+ Add bean', lib_add_grinder:'+ Add grinder',
