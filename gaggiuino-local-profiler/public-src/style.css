@@ -148,6 +148,8 @@
             color: var(--gray-500);
         }
         .section-title__count { font-weight: 400; color: var(--gray-600); }
+        /* An icon in front of the title sits on the text's centre line. */
+        .section-title > svg { align-self: center; }
 
         /* ── Sidebar ── */
         #sidebar {
@@ -904,8 +906,7 @@
         .settings-row-value { flex:0 0 auto; font-size: var(--fs-1); color: var(--gray-400); font-variant-numeric: tabular-nums; }
         .settings-chev { flex:0 0 auto; width:8px; height:8px; border-right:2px solid var(--gray-500); border-bottom:2px solid var(--gray-500); transform: rotate(-45deg); }
         /* #2080: open-source licenses sheet */
-        .licenses-heading { display:flex; gap: var(--sp-2); margin: var(--sp-4) 0 var(--sp-2); font-size: var(--fs-1); font-weight:600; color: var(--gray-500); }
-        .licenses-count { font-weight:400; font-variant-numeric: tabular-nums; }
+        .licenses-heading { margin-top: var(--sp-4); }
         .licenses-row .settings-row-title, .licenses-row .settings-row-sub, .licenses-text .settings-row-sub { white-space: normal; overflow-wrap: anywhere; }
         .licenses-licence { font-size: var(--fs-1); color: var(--gray-400); }
         .licenses-text + .licenses-text { border-top: 1px solid var(--gray-800); }
@@ -1566,7 +1567,6 @@
         /* #1350: "Aromas" block in the bean detail sheet — the inline mini
            wheel next to highlight chips coloured from each flavour's segment. */
         .lib-sheet-aromas { margin-top: var(--sp-2); }
-        .lib-sheet-aromas-title { font-size: var(--fs-1); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin-bottom: var(--sp-2); }
         .lib-sheet-aromas-body { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
         /* #1963 slice 3: proven/suggested profile rows under the Aromas block.
            Same quiet sheet styling — plain rows, no card of their own. */
@@ -2014,7 +2014,6 @@
         .lib-form-hint-staged { color: var(--ok); }
 
         .orders-milk-section { margin-top: var(--sp-4); }
-        .orders-milk-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); margin: 0 0 var(--sp-2); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .orders-milk-row { display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-1) 0; border-bottom:1px solid var(--gray-800); font-size: var(--fs-1); }
         .orders-milk-emoji { font-size: var(--fs-3); }
         .orders-milk-name { flex:1; color:var(--gray-200); }
@@ -3150,7 +3149,6 @@
         .fw-unmatched-label { font-size: var(--fs-1); color:var(--gray-500); margin-bottom: var(--sp-1); }
         .fw-unmatched-chips { display:flex; flex-wrap:wrap; gap: var(--sp-1); max-height:15vh; overflow-y:auto; flex-shrink:0; }
         .fw-credit { font-size: var(--fs-1); color:var(--gray-600); text-align:center; flex-shrink:0; }
-        .maint-section-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); margin: var(--sp-2) 0 var(--sp-1); grid-column:1/-1; }
         /* Maintenance Log */
         .maint-log-sec { display:flex; flex-direction:column; gap: var(--sp-3); }
         /* #1923: the log-entry and custom-task forms are sheet bodies */
@@ -3210,7 +3208,6 @@
         #orders-view { display:none; flex-direction:column; flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding: var(--sp-5); gap: var(--sp-5); }
         .orders-columns { display:grid; grid-template-columns:1fr 1fr; gap: var(--sp-4); align-items:start; }
         @media(max-width:700px){ .orders-columns { grid-template-columns:1fr; } }
-        .orders-col-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); margin-bottom: var(--sp-3); }
         .orders-history-header { display:flex; align-items:center; justify-content:space-between; }
         .order-history-right { display:flex; align-items:center; gap: var(--sp-2); }
         .order-hist-del { background:none; border:none; border-radius:var(--radius); color:var(--gray-700); padding: var(--sp-1); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:background .15s,color .15s; flex-shrink:0; }
@@ -3297,7 +3294,6 @@
         .orders-notify-select:focus { border-color:var(--gray-600); }
         .orders-notify-actions { display:flex; justify-content:flex-end; }
         .orders-broadcast-section { margin-bottom: var(--sp-4); padding-bottom: var(--sp-4); border-bottom:1px solid var(--gray-800); }
-        .orders-broadcast-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-400); margin: 0 0 var(--sp-2); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .orders-broadcast-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
         .orders-broadcast-row { display:flex; align-items:center; gap: var(--sp-2); }
         .orders-broadcast-row label { font-size: var(--fs-2); color:var(--gray-200); cursor:pointer; }
