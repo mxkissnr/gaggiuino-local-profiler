@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // #2056: on desktop the shot list is a Shots-page-only panel. It is open when
-// Shots is entered (also after it was folded), a picked shot folds it away, and
-// every other page hides it entirely. Nothing is stored, so a reload starts
-// open. The click paths are exercised on a fake DOM, same minimal-node approach
-// as test/bean-mix-display.test.ts (rows are built imperatively), with the
-// `classList.toggle(token, force)` semantics of test/mode-switch-closes-sheet.test.ts.
+// Shots is entered (also after it was folded), and every other page hides it
+// entirely. #2115: a pick inside the list keeps it open; only a shot opened
+// from another page (goToShot()) folds it away. Nothing is stored, so a reload
+// starts open. The click paths are exercised on a fake DOM, same minimal-node
+// approach as test/bean-mix-display.test.ts (rows are built imperatively), with
+// the `classList.toggle(token, force)` semantics of test/mode-switch-closes-sheet.test.ts.
 
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
@@ -133,7 +134,7 @@ const sidebar = (): FakeNode => nodes.sidebar!;
 const expanded = (): boolean => nodes.expandSidebarBtn!.classList.contains('visible');
 let updateView = vi.fn();
 
-describe('desktop shot list (#2056)', () => {
+describe('desktop shot list (#2056, #2115)', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     installDocument();
@@ -191,12 +192,19 @@ describe('desktop shot list (#2056)', () => {
     expect(expanded()).toBe(false);
   });
 
-  it('picking a shot in the list folds it away', () => {
+  it('picking a shot in the list keeps it open (#2115)', () => {
     click(2);
-    expect(sidebar().classList.contains('desktop-collapsed')).toBe(true);
-    expect(expanded()).toBe(true);
+    expect(sidebar().classList.contains('desktop-collapsed')).toBe(false);
+    expect(expanded()).toBe(false);
     expect(S.primaryShotId).toBe(2);
     expect(updateView).toHaveBeenCalled();
+  });
+
+  it('picking another shot after one was picked keeps it open too', () => {
+    click(2);
+    click(1);
+    expect(sidebar().classList.contains('desktop-collapsed')).toBe(false);
+    expect(S.primaryShotId).toBe(1);
   });
 
   it('a compare click keeps the list open', () => {
@@ -206,13 +214,13 @@ describe('desktop shot list (#2056)', () => {
     expect(S.compareShotId).toBe(2);
   });
 
-  it('the expand button opens it again and the collapse button folds it', () => {
-    click(2);
+  it('the collapse button folds it and the expand button opens it again', () => {
+    toggleDesktopSidebar();
+    expect(sidebar().classList.contains('desktop-collapsed')).toBe(true);
+    expect(expanded()).toBe(true);
     toggleDesktopSidebar();
     expect(sidebar().classList.contains('desktop-collapsed')).toBe(false);
     expect(expanded()).toBe(false);
-    toggleDesktopSidebar();
-    expect(sidebar().classList.contains('desktop-collapsed')).toBe(true);
   });
 
   it('opening a shot from another page folds the list', () => {
