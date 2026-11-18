@@ -73,6 +73,7 @@ const RETIRED_2096 = [
   'lib-sheet-aromas-title', 'lib-sheet-profiles-title', 'licenses-count',
   'flavor-chip', 'has-badge', 'maint-badge',
   'mobile-drawer-btn', 'bottom-nav-btn', 'lib-sheet-menu-btn',
+  'lib-recipe-shots-badge',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -329,5 +330,37 @@ describe('navigation and menu items (#2096)', () => {
     expect(index).toContain('class="lib-sheet-menu-item"');
     expect(read('components/bottom-nav.ts')).toContain("className = 'bottom-nav-item'");
     expect(read('components/machine-backups.ts')).toContain('<button type="button" class="lib-sheet-menu-item machine-backups-btn">');
+  });
+});
+
+// #2096: radius and padding live in style.css, where the design ratchet sees
+// them, never in an inline style that a view or component writes: a style
+// attribute, a style object with a string value or a cssText entry. Offsets
+// measured at runtime (body.style.paddingTop below a fixed banner) are no
+// authored style and stay allowed.
+const INLINE_RADIUS_OR_PADDING = [
+  /style="[^"]*\b(?:padding|border-radius)/,
+  /\b(?:padding(?:Top|Right|Bottom|Left|Inline|Block)?|borderRadius)\s*:\s*['"`]/,
+  /['"`;]\s*(?:padding|border-radius)[\w-]*\s*:/,
+] as const;
+
+describe('inline styles (#2096)', () => {
+  it('leaves no radius or padding in an inline style', () => {
+    const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
+      .filter(name => name.endsWith('.ts') || name.endsWith('.html'));
+
+    const hits: string[] = [];
+    for (const file of files) {
+      const lines = read(file).split('\n');
+      lines.forEach((line, i) => {
+        if (INLINE_RADIUS_OR_PADDING.some(re => re.test(line))) hits.push(`${file}:${i + 1}: ${line.trim()}`);
+      });
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('shows the firmware version and the recipe shot count as shared badges', () => {
+    expect(read('index.html')).toContain('<span id="firmwareVersionBadge" class="badge" style="display:none"></span>');
+    expect(read('views/library/recipes.ts')).toContain('<span class="badge lib-recipe-shots">');
   });
 });

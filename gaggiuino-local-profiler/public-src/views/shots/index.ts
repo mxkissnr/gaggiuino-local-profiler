@@ -776,7 +776,7 @@ export async function updateView(): Promise<void> {
   const fwEl = _el('firmwareVersionBadge');
   if (fwEl) {
     const fw = !shotB && shotA.glpFirmwareVersion;
-    fwEl.textContent = fw ? `· fw ${fw}` : '';
+    fwEl.textContent = fw ? `fw ${fw}` : '';
     fwEl.setAttribute('aria-label', fw ? t('settings_machine_firmware_badge_current', fw) : '');
     fwEl.style.display = fw ? '' : 'none';
   }

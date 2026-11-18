@@ -214,7 +214,7 @@ function _render(): void {
     _initChart();
   } catch (e) {
     console.error('[GLP] GaggiMate editor render error:', e);
-    body.innerHTML = html`<div style="padding:1rem;color:var(--red-400)">${tHtml('gm_render_error', esc(e instanceof Error ? e.message : String(e)))}</div>`;
+    body.innerHTML = html`<div class="gm-render-error">${tHtml('gm_render_error', esc(e instanceof Error ? e.message : String(e)))}</div>`;
   }
   // Stub DOMs in other views' tests hand over a body without querySelectorAll.
   if (typeof body.querySelectorAll === 'function') bindPillSelects(body);
@@ -227,7 +227,7 @@ function _renderBody(isPro: boolean): Html {
     ${_renderInfo()}
     ${_renderChart()}
     ${isPro ? _renderProPhases(phases) : _renderStandardPhases(phases)}
-    ${_saving ? html`<div style="text-align:center;padding:.5rem;opacity:.6">${tHtml('autosave_pending')}</div>` : html``}
+    ${_saving ? html`<div class="gm-note">${tHtml('autosave_pending')}</div>` : html``}
   `;
 }
 
@@ -546,7 +546,7 @@ function _renderInfo(): Html {
 // ── Standard profile phases ───────────────────────────────────────────────
 
 function _renderStandardPhases(phases: GmPhase[]): Html {
-  const sep = html`<div style="text-align:center;padding:.25rem;opacity:.4">↓</div>`;
+  const sep = html`<div class="gm-phase-sep">↓</div>`;
   const rows = joinHtml(phases.map((ph, i) => (i ? html`${sep}${_renderStandardPhase(ph, i)}` : _renderStandardPhase(ph, i))));
   return html`
     <div class="lib-recipe-steps-section">
@@ -554,7 +554,7 @@ function _renderStandardPhases(phases: GmPhase[]): Html {
         <span>${tHtml('gm_phases_header')}</span>
         <button type="button" class="btn btn--tonal" data-action="gm-add-phase">${tHtml('gm_add_phase')}</button>
       </div>
-      <div id="gmPhaseList">${rows || html`<div style="opacity:.5;padding:.5rem">${tHtml('gm_no_phases')}</div>`}</div>
+      <div id="gmPhaseList">${rows || html`<div class="gm-empty">${tHtml('gm_no_phases')}</div>`}</div>
     </div>
   `;
 }
@@ -632,7 +632,7 @@ function _renderProPhases(phases: GmPhase[]): Html {
       <div class="lib-recipe-steps-header"><span>${tHtml('gm_phases_pro_header')}</span></div>
       ${nav}
       <div id="gmProPhaseDetail">
-        ${ph ? _renderProPhase(ph, i) : html`<div style="opacity:.5;padding:.5rem">${tHtml('gm_no_phases_add')}</div>`}
+        ${ph ? _renderProPhase(ph, i) : html`<div class="gm-empty">${tHtml('gm_no_phases_add')}</div>`}
       </div>
     </div>
   `;

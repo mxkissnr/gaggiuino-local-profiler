@@ -1510,6 +1510,7 @@
         .lib-item-name { font-size: var(--fs-2); color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-name .serif-display { font-size: var(--fs-3); font-weight: 600; }
         .lib-item-name .badge { margin-right: var(--sp-1); }
+        .lib-item-name .lib-recipe-shots { margin-left: var(--sp-1); }
         /* Machine-profile list (library-profile-editor.js renderProfileList):
            name + optional utility badge on one row — badge sits outside the
            name's own ellipsis-truncation so it never gets clipped away. */
@@ -2342,7 +2343,7 @@
             flex-wrap: wrap;
         }
         /* ── Freshness badge ── */
-        #freshnessBadge { margin-left: var(--sp-2); vertical-align: middle; }
+        #freshnessBadge, #firmwareVersionBadge { margin-left: var(--sp-2); vertical-align: middle; }
 
         /* Shot-detail header photo thumbnail (#448) — originally the mobile
            fallback for the space next to machine/freshness text. #850 made
@@ -2988,6 +2989,10 @@
         .gm-phase { background:var(--gray-800); border-radius:var(--radius); padding:var(--sp-3); margin-bottom:var(--sp-2); }
         .gm-phase-nav { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
         .gm-phase-nav span { flex:0 0 auto; font-size:var(--fs-1); color:var(--gray-400); }
+        .gm-render-error { padding: var(--sp-4); color: var(--err); }
+        .gm-note { text-align: center; padding: var(--sp-2); opacity: .6; }
+        .gm-phase-sep { text-align: center; padding: var(--sp-1); opacity: .4; }
+        .gm-empty { padding: var(--sp-2); opacity: .5; }
         .gm-dropdown { position:relative; display:inline-block; }
         /* This is a <ul> — list-style/margin were never reset, so its
            default browser bullet/indent showed next to every item (2026-
@@ -3250,6 +3255,7 @@
         .orders-stats-global-item { display:flex; flex-direction:column; gap: 2px; }
         .orders-stats-global-label { font-size: var(--fs-1); color:var(--gray-600); }
         .orders-stats-global-val   { font-size: var(--fs-3); font-weight:700; color:var(--gray-200); }
+        .orders-stats-empty { color: var(--gray-600); font-size: var(--fs-1); padding: var(--sp-2) 0; }
         .orders-toggle-row { display:flex; align-items:center; gap: var(--sp-3); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4) var(--sp-4); }
         .orders-toggle-label { font-size: var(--fs-2); font-weight:600; color:var(--gray-200); flex:1; }
         .orders-toggle-state { font-size: var(--fs-1); font-weight:600; min-width:54px; text-align:right; }

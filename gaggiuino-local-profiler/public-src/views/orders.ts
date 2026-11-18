@@ -557,7 +557,7 @@ export function renderOrdersStats(stats: OrderStats | null | undefined): void {
   const el = document.getElementById('ordersStatsContent');
   if (!el) return;
   if (!stats?.total) {
-    el.innerHTML = html`<div style="color:#52525b;font-size:.8rem;padding:8px 0">${tHtml('orders_stats_no_data')}</div>`;
+    el.innerHTML = html`<div class="orders-stats-empty">${tHtml('orders_stats_no_data')}</div>`;
     return;
   }
 
