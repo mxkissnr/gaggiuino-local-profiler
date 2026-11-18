@@ -71,7 +71,7 @@ const RETIRED_2096 = [
   'analytics-section-title', 'lib-shelf-heading', 'lib-shelf-count',
   'maint-section-title', 'orders-col-title', 'orders-milk-title', 'orders-broadcast-title',
   'lib-sheet-aromas-title', 'lib-sheet-profiles-title', 'licenses-count',
-  'flavor-chip',
+  'flavor-chip', 'has-badge', 'maint-badge',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -309,5 +309,14 @@ describe('input chips (#2096)', () => {
       expect(decls.length, selector).toBeGreaterThan(0);
       for (const decl of decls) expect(decl, selector).toMatch(/^(?:--input-chip-c|--input-chip-ink|cursor):/);
     }
+  });
+});
+
+describe('notification dots and the live status (#2096)', () => {
+  it('names the notification dots *-dot and gives the live status the shared badge', () => {
+    const index = read('index.html');
+    expect(index).toContain('<span id="maintBadge" class="maint-dot"');
+    expect(index).toContain('<span id="ordersBadge" class="maint-dot"');
+    expect(index).toContain('<div id="live-status-badge" class="badge">');
   });
 });

@@ -121,7 +121,7 @@
                 <button class="topbar-nav" id="btnMaintenance" data-i18n-title="nav_maintenance" title="Wartung">
                     <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M14.7 6.3a4.8 4.8 0 0 0-6.4 6.4L3 18l3 3 5.3-5.3a4.8 4.8 0 0 0 6.4-6.4l-3 3-2.7-2.7z"/></svg></span>
                     <span class="rail-label" data-i18n="nav_maintenance">Wartung</span>
-                    <span id="maintBadge" class="maint-badge" style="display:none"></span>
+                    <span id="maintBadge" class="maint-dot" style="display:none"></span>
                 </button>
                 <button class="topbar-nav" id="btnAchievements" data-i18n-title="nav_achievements" title="Achievements">
                     <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M12 3 14.6 8.3 20.4 9.2 16.2 13.3 17.2 19 12 16.3 6.8 19 7.8 13.3 3.6 9.2 9.4 8.3z"/></svg></span>
@@ -130,7 +130,7 @@
                 <button class="topbar-nav" id="btnOrders" style="display:none" data-i18n-title="nav_orders" title="Bestellungen">
                     <span class="rail-icon-slot"><svg class="rail-icon" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4a2 2 0 0 0 1-1.73z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg></span>
                     <span class="rail-label" data-i18n="nav_orders">Bestellungen</span>
-                    <span id="ordersBadge" class="maint-badge" style="display:none"></span>
+                    <span id="ordersBadge" class="maint-dot" style="display:none"></span>
                 </button>
             </div>
             <details id="topbarNavMore" class="topbar-nav-more" hidden>
@@ -1116,7 +1116,7 @@
     <div id="live-view">
         <div id="live-header">
             <h1 data-i18n="live_title">Live Shot</h1>
-            <div id="live-status-badge">
+            <div id="live-status-badge" class="badge">
                 <span class="badge-dot"></span>
                 <span id="live-status-text">Verbinde …</span>
             </div>

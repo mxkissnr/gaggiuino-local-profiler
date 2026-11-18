@@ -628,12 +628,28 @@ export function disconnectLiveStream(): void {
   S.liveBrewStartWall = null;
 }
 
+// #2096: the live status is a shared status badge; the state picks its
+// variant. #902/#983: steaming, flushing and descaling share the accent,
+// distinct from a brewing shot. #1541: standby, connecting and idle stay
+// neutral, warming takes the accent.
+const LIVE_BADGE_VARIANTS: Record<string, string> = {
+  ready: 'badge--ok',
+  brewing: 'badge--err',
+  error: 'badge--err',
+  unreachable: 'badge--err',
+  steaming: 'badge--accent',
+  flushing: 'badge--accent',
+  descaling: 'badge--accent',
+  warming: 'badge--accent',
+};
+
 export function setLiveBadge(state: string, detail = ''): void {
   const badge   = document.getElementById('live-status-badge') as HTMLElement;
   const textEl  = document.getElementById('live-status-text') as HTMLElement;
   const liveBtn = document.getElementById('btnLive') as HTMLElement;
 
-  badge.className = `live-status-badge ${state}`;
+  const variant = LIVE_BADGE_VARIANTS[state];
+  badge.className = variant ? `badge ${variant} ${state}` : `badge ${state}`;
   liveBtn.classList.remove('live-brewing', 'live-ready');
 
   const labels: Record<string, string> = {

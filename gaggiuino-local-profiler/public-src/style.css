@@ -437,9 +437,9 @@
         .topbar-nav-more > summary::-webkit-details-marker { display: none; }
         .topbar-nav-more[open] > summary { color: var(--gray-200); background: color-mix(in srgb, var(--paper) 4%, transparent); }
         /* A badge on a tab inside the menu must still be visible from the
-           closed row: a dot at the icon's top right, in the .maint-badge
+           closed row: a dot at the icon's top right, in the .maint-dot
            background colour (that rule paints it with var(--err) too). */
-        .topbar-nav-more.has-badge .rail-icon-slot::after {
+        .topbar-nav-more.has-dot .rail-icon-slot::after {
             content: "";
             position: absolute; top: -1px; right: -1px;
             width: 6px; height: 6px; border-radius: 50%;
@@ -2133,30 +2133,6 @@
 
         #live-header h1 { font-size: var(--fs-5); font-weight: 600; color: var(--gray-200); margin: 0; }
 
-        #live-status-badge {
-            display: flex;
-            align-items: center;
-            gap: var(--sp-2);
-            font-size: var(--fs-1);
-            font-weight: 600;
-            color: var(--gray-600);
-        }
-
-        #live-status-badge.brewing     { color: var(--err); }
-        #live-status-badge.ready       { color: var(--ok); }
-        #live-status-badge.error       { color: var(--err); }
-        #live-status-badge.unreachable { color: var(--err); }
-        /* #902/#983: steaming/flushing/descaling get their own accent color,
-           distinct from brewing's --err red -- an active-but-not-a-shot
-           process. */
-        #live-status-badge.steaming,
-        #live-status-badge.flushing,
-        #live-status-badge.descaling   { color: var(--accent-ink); }
-        /* #1541: the idle badge mirrors the idle title's standby/warming
-           states instead of always reading as "Ready". */
-        #live-status-badge.standby     { color: var(--gray-500); }
-        #live-status-badge.warming     { color: var(--accent-ink); }
-
         #live-status-badge .badge-dot {
             width: 8px; height: 8px;
             border-radius: 50%;
@@ -3218,7 +3194,7 @@
         .maint-sheet-footer { display:flex; justify-content:flex-end; gap: var(--sp-2); }
         .maint-guide { align-self: flex-start; }
 
-        .maint-badge {
+        .maint-dot {
             display:inline-block; width:7px; height:7px; background:var(--err);
             border-radius:50%; margin-left: var(--sp-1); vertical-align:middle;
             animation:pulse 1.2s infinite;
