@@ -7,6 +7,12 @@ import { attachAutocomplete } from '../../components/autocomplete.js';
 import { _field, _el } from './bean-shared.js';
 import type { OriginChip, OriginBean } from './bean-shared.js';
 
+// A chip edit changes no form field, so tell the bean form the same way a
+// committed field does: it marks the form dirty and autosaves an edit (#2118).
+function notifyFormChanged(el: EventTarget): void {
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 // ── Flavor chips input ────────────────────────────────────────────────────
 // Module-level working array; rendered into #beanFormFlavorChips before the
 // text input. Enter/comma commits the typed value, × removes a chip.
@@ -35,6 +41,7 @@ export function commitFlavorInput(): void {
   if (_formFlavors.some(f => f.toLowerCase() === val.toLowerCase())) return;
   _formFlavors.push(val);
   renderFlavorChips();
+  notifyFormChanged(input);
 }
 
 export function setFormFlavors(flavors?: string[] | null): void {
@@ -53,6 +60,7 @@ export function bindFlavorInput(): void {
     else if (e.key === 'Backspace' && !input.value && _formFlavors.length) {
       _formFlavors.pop();
       renderFlavorChips();
+      notifyFormChanged(input);
     }
   });
   input.addEventListener('blur', commitFlavorInput);
@@ -61,6 +69,7 @@ export function bindFlavorInput(): void {
     if (!btn) return;
     _formFlavors.splice(Number(btn.dataset.flavorIdx), 1);
     renderFlavorChips();
+    notifyFormChanged(wrap);
   });
 }
 
@@ -117,6 +126,7 @@ export function bindOriginInput(): void {
     if (!btn) return;
     _formOrigins.splice(Number(btn.dataset.originIdxRemove), 1);
     renderOriginChips();
+    notifyFormChanged(wrap);
   });
   wrap.addEventListener('change', e => {
     const input = (e.target as HTMLElement).closest<HTMLInputElement>('.origin-chip-percent');
