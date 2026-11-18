@@ -174,7 +174,7 @@
             /* #405: was a hardcoded #fff — unreadable on the light/Crema
                themes, where this surface is near-white. --gray-200 is the
                same "brightest text" token the rest of the app uses (e.g.
-               .analytics-section-title), themed correctly in both modes. */
+               .lib-item-name), themed correctly in both modes. */
             color: var(--gray-200);
             background: color-mix(in srgb, var(--paper) 2%, transparent);
         }
@@ -233,7 +233,7 @@
         }
         /* #405: was a hardcoded #fff, unreadable on the light/Crema themes —
            --gray-200 is the same themed "brightest text" token used
-           elsewhere (e.g. #sidebar h2 above, .analytics-section-title). */
+           elsewhere (e.g. #sidebar h2 above, .lib-item-name). */
         .profile-name-sidebar { font-size: var(--fs-2); font-weight: 600; color: var(--gray-200); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .shot-line2 { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         /* #502: the same "on ice" blue as the library's frozen portions */
@@ -594,12 +594,11 @@
         .map-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
         /* #1467: headings use the library shelf heading look — small, semibold,
            accent — with the grey counters sitting next to them. */
-        .analytics-section-title { margin: 0 0 var(--sp-3) 0; font-size: var(--fs-1); font-weight: 600; color: var(--accent-ink); }
-        .analytics-card-head .analytics-section-title { margin-bottom: 0; }
+        .analytics-card-head .section-title { margin-bottom: 0; }
         /* #1490: the trend heading carries a grey section counter for the long
            periods ("7-day average"), nothing for 7/30 days. */
         .analytics-trend-head { display: flex; align-items: baseline; gap: var(--sp-2); margin-bottom: var(--sp-3); }
-        .analytics-trend-head .analytics-section-title { margin-bottom: 0; }
+        .analytics-trend-head .section-title { margin-bottom: 0; }
         .analytics-trend-counter { font-size: var(--fs-1); font-weight: 600; color: var(--gray-500); }
         .analytics-two-col { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--sp-5); }
 
@@ -718,7 +717,7 @@
         @container (min-width: 1176px) {
             .cal-wrapper { --cal-cell: 15px; }
             .cal-card { display: grid; grid-template-columns: auto minmax(10rem, 1fr); column-gap: var(--sp-5); align-items: start; }
-            .cal-card > .analytics-section-title { grid-column: 1 / -1; }
+            .cal-card > .section-title { grid-column: 1 / -1; }
             .cal-streaks { margin-top: 0; }
         }
 
@@ -1812,8 +1811,6 @@
            switches the items between a photo grid and a compact list, and the
            spent or archived beans sit in a collapsed Empty & archive. */
         .lib-shelf-section { margin-top: var(--sp-4); }
-        .lib-shelf-heading { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); font-weight:600; color: var(--accent-ink); margin: 0 0 var(--sp-2); }
-        .lib-shelf-count { color: var(--gray-500); font-weight:600; }
         .lib-shelf { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: var(--sp-3); }
         .lib-shelf-tile { display:grid; grid-row: span 6; grid-template-rows: subgrid; row-gap: var(--sp-1); align-content:start; min-width:44px; min-height:44px; padding:0; border:none; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; border-radius: var(--radius-sm); }
         .lib-shelf-tile:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
