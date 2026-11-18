@@ -116,7 +116,7 @@ function closeMenu(more: HTMLDetailsElement): void {
 function menuButton(tab: HTMLElement, entry: TopbarMenuEntry): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'lib-sheet-menu-btn';
+    button.className = 'lib-sheet-menu-item';
     button.setAttribute('data-nav-target', entry.target);
     const icon = tab.querySelector<HTMLElement>('.rail-icon-slot');
     if (icon) {

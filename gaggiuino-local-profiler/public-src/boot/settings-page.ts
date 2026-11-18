@@ -388,7 +388,7 @@ export function wireSettingsPage(): void {
     }
     // The button's own handler (boot/settings.ts) ran first; folding the menu
     // here keeps the bar's overflow closed after it was used.
-    if (target?.closest('#settingsMore .lib-sheet-menu-btn')) {
+    if (target?.closest('#settingsMore .lib-sheet-menu-item')) {
       const more = document.getElementById('settingsMore') as HTMLDetailsElement | null;
       if (more) more.open = false;
     }

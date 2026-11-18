@@ -495,7 +495,7 @@
 
         /* Topbar ambient machine icon (#837) — the full animated
            "Instrument" SVG (machine-icon.js), sized into a ~44px square
-           touch target (matching .mobile-drawer-btn below as the reference
+           touch target (matching .mobile-drawer-toggle below as the reference
            tap size) even though the icon's own aspect ratio is much taller
            than wide — height-constrained, not width-stretched, so the body
            silhouette never distorts. */
@@ -519,14 +519,14 @@
 
         /* Mobile burger drawer trigger (#425) — hidden on desktop; the
            max-width:768px block below shows it. */
-        .mobile-drawer-btn {
+        .mobile-drawer-toggle {
             display: none;
             align-items: center; justify-content: center;
             background: transparent; border: none; color: var(--gray-400);
             width: 32px; height: 32px; flex-shrink: 0; padding: 0; cursor: pointer;
             transition: color .2s;
         }
-        .mobile-drawer-btn:hover { color: var(--gray-200); }
+        .mobile-drawer-toggle:hover { color: var(--gray-200); }
 
         /* ── Content topbar (#411) — hosts the relocated multi-machine
            switcher and the shot-sidebar re-expand button; both independently
@@ -1975,9 +1975,9 @@
         .lib-sheet-more > summary:hover, .lib-sheet-more[open] > summary { background: var(--raised); }
         .lib-sheet-more > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .lib-sheet-menu-list { position: absolute; right: 0; top: calc(100% + var(--sp-1)); z-index: var(--z-local-2); min-width: 200px; max-height: min(60vh, 360px); overflow-y: auto; padding: var(--sp-1) 0; background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); box-shadow: 0 8px 24px color-mix(in srgb, var(--scrim) 45%, transparent); }
-        .lib-sheet-menu-btn, .machine-dialog-more .machine-backups-btn { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; padding: 0 var(--sp-3); border: none; background: none; color: var(--gray-200); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
-        .lib-sheet-menu-btn:hover, .machine-dialog-more .machine-backups-btn:hover { background: var(--gray-700); }
-        .lib-sheet-menu-btn.del { color: var(--err); }
+        .lib-sheet-menu-item, .machine-dialog-more .machine-backups-btn { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; padding: 0 var(--sp-3); border: none; background: none; color: var(--gray-200); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
+        .lib-sheet-menu-item:hover, .machine-dialog-more .machine-backups-btn:hover { background: var(--gray-700); }
+        .lib-sheet-menu-item.del { color: var(--err); }
         .lib-sheet-menu-sep { display: block; height: 1px; margin: var(--sp-1) 0; background: var(--gray-700); }
         .lib-sheet-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(0,1fr)); gap: var(--sp-2); margin: var(--sp-3) 0; }
         .lib-sheet-primary { min-height: 44px; padding: 0 var(--sp-2); border: 1px solid var(--gray-700); border-radius: var(--radius-ctl); background: var(--gray-800); color: var(--gray-200); font-size: var(--fs-1); font-weight: 600; cursor: pointer; }
@@ -2595,7 +2595,7 @@
             .topbar-nav-scroll { display: none; }
             #btnSettings { display: none; }
             .topbar-sep { display: none; }
-            .mobile-drawer-btn { display: flex; }
+            .mobile-drawer-toggle { display: flex; }
             /* #410: #sidebar (shot list) is a full-screen alternate of the
                Shots tab now, not a drawer overlay — shown/hidden via plain
                inline display (updateMobileShotSidebarVisibility() in
@@ -2674,7 +2674,7 @@
                 border-top: 1px solid var(--gray-700);
                 padding-bottom: env(safe-area-inset-bottom, 0px);
             }
-            .bottom-nav-btn {
+            .bottom-nav-item {
                 flex: 1;
                 min-height: var(--bottom-nav-h);
                 min-width: 44px;
@@ -2690,16 +2690,16 @@
                 padding: var(--sp-2) var(--sp-1);
                 transition: color .15s;
             }
-            .bottom-nav-btn .bn-icon   { position: relative; display: flex; line-height: 1; padding: var(--sp-2) var(--sp-4); border-radius: var(--radius-full); transition: background .2s; }
-            .bottom-nav-btn .bn-icon .rail-icon { width: 20px; height: 20px; }
-            .bottom-nav-btn .bn-label  { font-size: var(--fs-1); font-weight: 600; }
-            .bottom-nav-btn.active     { color: var(--gray-200); }
+            .bottom-nav-item .bn-icon   { position: relative; display: flex; line-height: 1; padding: var(--sp-2) var(--sp-4); border-radius: var(--radius-full); transition: background .2s; }
+            .bottom-nav-item .bn-icon .rail-icon { width: 20px; height: 20px; }
+            .bottom-nav-item .bn-label  { font-size: var(--fs-1); font-weight: 600; }
+            .bottom-nav-item.active     { color: var(--gray-200); }
             /* #397: same raised-surface pill language the old .mode-btn.active
                used, scoped to the icon (a full-button pill would be too tall
                for a 56px-high bottom nav row). Active color now comes from
                the accent token (#410) instead of a hardcoded white. */
-            .bottom-nav-btn.active .bn-icon  { background: var(--gray-800); color: var(--accent-ink); }
-            .bottom-nav-btn.active .live-dot { background: var(--accent); }
+            .bottom-nav-item.active .bn-icon  { background: var(--gray-800); color: var(--accent-ink); }
+            .bottom-nav-item.active .live-dot { background: var(--accent); }
 
             #more-sheet-backdrop {
                 display: none;

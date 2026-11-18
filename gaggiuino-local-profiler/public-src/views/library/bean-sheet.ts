@@ -127,13 +127,13 @@ function _sheetMenu(b: BeanListRow): Html {
   return html`<details class="lib-sheet-more"${esc(_sheetMoreOpen ? ' open' : '')}>
     <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
     <div class="lib-sheet-menu-list">
-      <button type="button" class="lib-sheet-menu-btn" data-action="create-profile-from-bean" data-id="${esc(b.id)}">${SLIDERS_ICON_SVG} ${tHtml('profile_create_from_bean')}</button>
-      <button type="button" class="lib-sheet-menu-btn" data-action="start-dialin-from-bean" data-id="${esc(b.id)}">${TARGET_ICON_SVG} ${tHtml('dialin_wizard_start_from_bean')}</button>
-      <button type="button" class="lib-sheet-menu-btn" data-action="toggle-bean-qr" data-id="${esc(b.id)}">${ICON_QR} ${tHtml('bean_qr_label')}</button>
+      <button type="button" class="lib-sheet-menu-item" data-action="create-profile-from-bean" data-id="${esc(b.id)}">${SLIDERS_ICON_SVG} ${tHtml('profile_create_from_bean')}</button>
+      <button type="button" class="lib-sheet-menu-item" data-action="start-dialin-from-bean" data-id="${esc(b.id)}">${TARGET_ICON_SVG} ${tHtml('dialin_wizard_start_from_bean')}</button>
+      <button type="button" class="lib-sheet-menu-item" data-action="toggle-bean-qr" data-id="${esc(b.id)}">${ICON_QR} ${tHtml('bean_qr_label')}</button>
       <span class="lib-sheet-menu-sep"></span>
-      <button type="button" class="lib-sheet-menu-btn" data-action="toggle-bean-active" data-id="${esc(b.id)}"${esc(_pendingBeanActiveToggles.has(b.id) ? ' disabled' : '')}>${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}</button>
+      <button type="button" class="lib-sheet-menu-item" data-action="toggle-bean-active" data-id="${esc(b.id)}"${esc(_pendingBeanActiveToggles.has(b.id) ? ' disabled' : '')}>${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}</button>
       <span class="lib-sheet-menu-sep"></span>
-      <button type="button" class="lib-sheet-menu-btn del" data-action="delete-bean" data-id="${esc(b.id)}">${ICON_TRASH} ${tHtml('lib_btn_delete')}</button>
+      <button type="button" class="lib-sheet-menu-item del" data-action="delete-bean" data-id="${esc(b.id)}">${ICON_TRASH} ${tHtml('lib_btn_delete')}</button>
     </div>
   </details>`;
 }
