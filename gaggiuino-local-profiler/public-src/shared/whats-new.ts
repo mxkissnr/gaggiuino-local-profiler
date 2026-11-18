@@ -21,6 +21,9 @@ export interface WhatsNewEntry {
 }
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
+    { version: '3.8.1', date: '2026-11-18', highlights: [
+        'Fixed: GaggiMate shot history keeps syncing when one shot cannot be read, the desktop shot list stays open while you pick shots, and aroma and origin changes on a bean are saved right away.',
+    ] },
     { version: '3.8.0', date: '2026-11-16', highlights: [
         'Settings is now a grouped list like in Home Assistant, with search and sub-pages.',
         'Tag how a shot tasted (sour, bitter, balanced or thin) and the grind advice takes it into account.',
@@ -70,13 +73,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         'AI assistants such as Claude can read your shots, beans and analytics through an optional built-in MCP server, switched on in Settings.',
         'Fixed: GaggiMate machines on firmware v1.9.0 show the profile name, steaming, scale weight and live readings again.',
         'Fixed: changes made at the same moment, such as a milk deduction from an order while you edit a bean, no longer overwrite each other.',
-    ] },
-    { version: '3.2.0', date: '2026-09-26', highlights: [
-        'New kiosk page for a tablet on the table: guests enter their name, pick a drink and place an order, and see the live queue with estimated times.',
-        'Grinders can log a zero-point history, so re-zeroing after cleaning no longer means rewriting past grind settings.',
-        'Add your own maintenance tasks with an optional shots and/or days interval, and disable any task without deleting it.',
-        'Machine profiles can now be duplicated, and a firmware update triggered from the app is recorded in the maintenance log.',
-        'Fixed: shot sync now works with more machines and firmware versions, and shots in the trash are deleted after 30 days again.',
     ] },
 ];
 
