@@ -62,6 +62,15 @@ const RETIRED_BUTTONS = [
   'scan-photo-btn',
 ] as const;
 
+// Classes retired by #2096: section headings are .section-title, input chips
+// are .chip--input, notification dots are named *-dot and navigation items
+// are not named *-btn (docs/DESIGN.md, "Shapes and components"). No rule,
+// markup or code may use them again. Each slice of #2096 adds the classes it
+// retires.
+const RETIRED_2096 = [
+  'analytics-section-title', 'lib-shelf-heading', 'lib-shelf-count',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -115,14 +124,14 @@ describe('shared filter chips (#2093)', () => {
     expect(search).toContain('border-radius: var(--radius-ctl)');
   });
 
-  it('leaves no rule, markup or code using a retired chip, badge or button class', () => {
+  it('leaves no rule, markup or code using a retired class', () => {
     const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
       .filter(name => name.endsWith('.ts') || name.endsWith('.html') || name.endsWith('.css'));
 
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -254,5 +263,19 @@ describe('shared buttons (#2095)', () => {
       expect(text, file).not.toMatch(/lib-save-btn|lib-btn-sm/);
       expect(text, file).toContain('class="btn btn--');
     }
+  });
+});
+
+describe('section titles (#2096)', () => {
+  it('gives the analytics, maintenance, achievements and shelf headings the shared section title', () => {
+    const index = read('index.html');
+    expect(index).toContain('<h3 class="section-title" data-i18n="maint_log_title">');
+    expect(index).toContain('<h3 class="section-title" data-i18n="analytics_trend">');
+    expect(read('views/achievements.ts')).toContain('<h2 class="section-title">');
+    expect(read('views/maintenance-sheet.ts')).toContain('<h3 class="section-title">');
+    const library = read('views/library.ts');
+    expect(library).toContain('<div class="section-title"><span>');
+    expect(library).toContain('<summary class="section-title lib-shelf-archive-summary">');
+    expect(library).toContain('<span class="section-title__count">');
   });
 });
