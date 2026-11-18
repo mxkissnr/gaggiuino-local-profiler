@@ -9,13 +9,11 @@
                and components"): --radius-ctl for everything interactive,
                --radius for cards and containers, --radius-lg for sheets
                and dialogs, --radius-full only for non-interactive status
-               badges, avatars and dots. --radius-sm is the old control
-               radius and goes once its last user has moved to
-               --radius-ctl. Radii do not change with the theme, so they
+               badges, avatars, dots and progress bars. Radii do not
+               change with the theme, so they
                live here only and the light block inherits them. A value
                off this scale is a regression, not a nuance. */
             --radius: 10px;
-            --radius-sm: 4px;
             --radius-lg: 16px;
             --radius-ctl: 8px;
             --radius-full: 999px;

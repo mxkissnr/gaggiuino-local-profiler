@@ -16,7 +16,7 @@ const TOKENS_PATH = join(here, '..', 'public-src', 'tokens.css');
 
 // Measured on dev when #2092 landed. Only ever lower these.
 const PINNED = {
-  literalRadius: 40,
+  literalRadius: 1,
   literalPadding: 4,
   transitionAll: 0,
   pageLookClasses: 16,
@@ -183,5 +183,12 @@ describe('style.css design ratchet (#2091)', () => {
     const light = declarationsOf('[data-theme="light"]');
     expect(light.some((decl) => decl.startsWith('--radius-ctl:'))).toBe(false);
     expect(light.some((decl) => decl.startsWith('--radius-full:'))).toBe(false);
+  });
+
+  it('has retired --radius-sm from the tokens and both stylesheets (#2096)', () => {
+    const kiosk = readFileSync(join(here, '..', 'public-src', 'kiosk.css'), 'utf-8');
+    for (const [name, text] of [['tokens.css', readFileSync(TOKENS_PATH, 'utf-8')], ['style.css', css], ['kiosk.css', kiosk]]) {
+      expect(text, name).not.toContain('--radius-sm');
+    }
   });
 });

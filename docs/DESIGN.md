@@ -37,9 +37,9 @@ The role decides the shape. A page picks a role, never a look.
 | `--radius-ctl` (8 px) | everything interactive: filter chips, buttons, inputs, dropdowns, segments, input chips (flavour/origin) |
 | `--radius` (10 px) | cards and containers |
 | `--radius-lg` (16 px) | bottom sheets and dialogs |
-| `--radius-full` | only non-interactive status badges, avatars, dots |
+| `--radius-full` | only non-interactive status badges, avatars, dots and progress bars |
 
-Round therefore means "status", not "clickable". `--radius-sm` is the old control radius and goes once its last user has moved to `--radius-ctl`.
+Round therefore means "status", not "clickable". Heat map and calendar cells are square.
 
 Four shared components live in one block near the top of the stylesheet. A page class keeps only layout (position, grid area, gap), never colour, radius or padding.
 
