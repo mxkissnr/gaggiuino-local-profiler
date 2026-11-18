@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+## [3.8.1] - 2026-11-18
+
+### Fixed
+- GaggiMate shot history keeps syncing when one shot cannot be read from the machine: that shot is skipped and the shots after it import again.
+- On desktop, the shot list stays open while you pick shots from it. It only folds when a shot is opened from elsewhere or you collapse it. Thanks @m471j4.
+- Adding or removing an aroma or origin while editing a bean is saved right away, and leaving the form no longer asks to discard it.
+
 ## [3.8.0] - 2026-11-16
 
 ### New
