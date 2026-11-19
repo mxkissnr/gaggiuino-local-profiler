@@ -351,7 +351,7 @@ function renderRestore(sheet: SheetState, draft: RestoreDraft, entry: MachineBac
   const blocked = targetId === null || _busy.has(targetId) || _restoreWaits.has(targetId);
   const noConfirm = blocked ? html` disabled` : esc('');
   const parts: Html[] = [html`<section class="mbk-restore">
-    <h3 class="mbk-restore-title">${esc(t('mbk_restore_title', formatBackupDate(entry.createdAt, locale)))}</h3>
+    <h3 class="card-title">${esc(t('mbk_restore_title', formatBackupDate(entry.createdAt, locale)))}</h3>
     <p>${tHtml('mbk_restore_body')}</p>
     <p class="mbk-hint">${tHtml('mbk_restore_before')}</p>`];
   if (firmwareDiffers(entry.firmwareCore, draft.installed)) {
