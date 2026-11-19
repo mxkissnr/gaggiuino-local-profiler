@@ -218,6 +218,55 @@ func TestTaskDone_NoBodyIsNotAnError(t *testing.T) {
 	}
 }
 
+// TestTaskDone_CallsTaskDoneHookAfterSave pins the #2138 hook: every
+// successful mark-done calls the repository's task-done hook once, with the
+// machine and the canonical task, after the task is saved. The maintenance
+// side passes every task on; the machines side decides which ones reach a
+// machine. A rejected request never calls the hook.
+func TestTaskDone_CallsTaskDoneHookAfterSave(t *testing.T) {
+	h, repo, _, _ := newTestHandlers(t)
+	mux := newMux(h)
+	type hookCall struct {
+		machineID int64
+		task      string
+		saved     bool
+	}
+	var calls []hookCall
+	repo.SetOnTaskDone(func(machineID int64, task string) {
+		maint, err := repo.GetMaintenance(machineID)
+		if err != nil {
+			t.Errorf("GetMaintenance inside the hook: %v", err)
+			return
+		}
+		calls = append(calls, hookCall{machineID: machineID, task: task, saved: maint[task]["lastDate"] != nil})
+	})
+
+	for _, task := range []string{"backflush", "grouphead"} {
+		rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/"+task+"/done", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s done: status = %d; body=%s", task, rec.Code, rec.Body.String())
+		}
+	}
+	rec := doJSON(t, mux, http.MethodPost, "/api/maintenance/not-a-real-task/done", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("unknown task: status = %d; want 404", rec.Code)
+	}
+
+	m, err := h.registry.GetDefaultMachine()
+	if err != nil || m == nil {
+		t.Fatalf("GetDefaultMachine: %v", err)
+	}
+	want := []hookCall{{machineID: m.ID, task: "backflush", saved: true}, {machineID: m.ID, task: "grouphead", saved: true}}
+	if len(calls) != len(want) {
+		t.Fatalf("hook calls = %+v; want %+v", calls, want)
+	}
+	for i := range want {
+		if calls[i] != want[i] {
+			t.Errorf("hook call %d = %+v; want %+v", i, calls[i], want[i])
+		}
+	}
+}
+
 func TestTaskThreshold_ClampsAndRejectsOutOfRange(t *testing.T) {
 	h, _, _, _ := newTestHandlers(t)
 	mux := newMux(h)
