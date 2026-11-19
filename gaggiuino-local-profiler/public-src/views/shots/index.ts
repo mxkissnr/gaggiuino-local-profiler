@@ -566,7 +566,7 @@ export async function restoreShot(id: number): Promise<void> {
 }
 
 export async function permanentDeleteShot(id: number): Promise<void> {
-  if (!await confirmDialog(t('confirm_perm_delete', id), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('confirm_perm_delete', id), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   try {
     const r = await deleteShotPermanently(id);
     if (!r.ok) throw new Error(await r.text());

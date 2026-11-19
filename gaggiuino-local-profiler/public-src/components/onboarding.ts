@@ -104,7 +104,7 @@ export async function loadDemoData(): Promise<void> {
 }
 
 export async function endDemo(): Promise<void> {
-  if (!await confirmDialog(t('demo_mode_end_confirm'))) return;
+  if (!await confirmDialog(t('demo_mode_end_confirm'), { destructive: true })) return;
   try {
     const r = await endDemoData();
     if (r.ok) {
