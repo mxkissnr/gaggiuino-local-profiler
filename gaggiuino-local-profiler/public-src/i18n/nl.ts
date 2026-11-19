@@ -463,7 +463,7 @@ const nl: Partial<Translations> = {
     mbk_lbl_warmup:'Opwarmtijd', mbk_lbl_brew_heater:'Vermogen zetverwarming', mbk_lbl_steam_heater:'Vermogen stoomverwarming', mbk_lbl_pump_power:'Pompvermogen', mbk_lbl_idle_power:'Vermogen in rust',
     mbk_lbl_machine_name:'Machinenaam', mbk_lbl_water_temp:'Watertemperatuur', mbk_lbl_dose:'Dosis', mbk_lbl_yield:'Opbrengst', mbk_lbl_stop_weight:'Stoppen bij gewicht',
     settings_machine_control_title:'Machinebediening',
-    settings_machine_control_desc:'Laat GLP een spoeling starten en stoppen en de zetbevestiging van de machine beantwoorden. Alleen GaggiMate met firmware v1.9.0 of nieuwer. Gebruik dit alleen als er iemand bij de machine is.',
+    settings_machine_control_desc:'Laat GLP een spoeling starten en stoppen en de zetbevestiging van de machine beantwoorden. Alleen GaggiMate met firmware v1.9.0 of nieuwer. Vanaf firmware v1.10.0 zet het afronden van terugspoelen of ontkalken ook de teller van de machine terug. Gebruik dit alleen als er iemand bij de machine is.',
     settings_machine_control_enabled:'Machinebediening toestaan',
     settings_restart_setup_wizard:'Installatietour herstarten',
     settings_mqtt_title:'Live-verbinding', settings_mqtt_desc:'Hoe GLP live sensordata van de machine ontvangt.',
