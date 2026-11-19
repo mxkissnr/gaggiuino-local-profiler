@@ -80,6 +80,14 @@ const RETIRED_2096 = [
 // shared chips. No rule, markup or code may use them again.
 const RETIRED_2112 = ['chart-tab'] as const;
 
+// Classes retired by #2120: a card or form title is the shared .card-title
+// or a .section-title, and a dialog's title sits in the sheet header bar
+// (docs/DESIGN.md, "Shapes and components"). No rule, markup or code may
+// use them again. Each slice of #2120 adds the classes it retires.
+const RETIRED_2120 = [
+  'settings-card-title', 'orders-menu-title', 'mbk-restore-title',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -140,7 +148,7 @@ describe('shared filter chips (#2093)', () => {
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -430,5 +438,29 @@ describe('remaining action buttons (#2112)', () => {
     const root = postcss.parse(css);
     expect(declsOf(rulesWith(root, '.lib-add-trigger'))).toEqual(['width: 100%']);
     expect(declsOf(rulesWith(root, '.lib-scan-trigger'))).toEqual(['white-space: nowrap']);
+  });
+});
+
+describe('card titles (#2120)', () => {
+  it('gives the settings cards, the orders cards and the backup restore the shared card title', () => {
+    const index = read('index.html');
+    expect(index.split('<h3 class="card-title"').length - 1).toBe(14);
+    expect(index).toContain('<label for="settingsLang" class="card-title" data-i18n="settings_language">');
+    for (const id of ['ordersMenuTitle', 'ordersStatsTitle', 'ordersNotifyTitle', 'ordersKioskTitle']) {
+      expect(index, id).toContain(`<div class="card-title orders-menu-toggle" id="${id}">`);
+    }
+    expect(read('boot/popups.ts')).toContain('<h3 class="card-title" data-i18n="settings_popups_title">');
+    expect(read('boot/settings-page.ts')).toContain("'.card-title, .settings-row-title, label'");
+    expect(read('components/machine-backups.ts')).toContain('<h3 class="card-title">');
+  });
+
+  it('defines one card title look and leaves the orders toggle only its layout', () => {
+    const root = postcss.parse(read('style.css'));
+    expect(declsOf(rulesWith(root, '.card-title'))).toEqual([
+      'margin: 0', 'font-size: var(--fs-3)', 'font-weight: 600', 'color: var(--gray-200)',
+    ]);
+    expect(declsOf(rulesWith(root, '.orders-menu-toggle'))).toEqual([
+      'display: flex', 'align-items: center', 'justify-content: space-between', 'margin-bottom: var(--sp-4)', 'cursor: pointer',
+    ]);
   });
 });
