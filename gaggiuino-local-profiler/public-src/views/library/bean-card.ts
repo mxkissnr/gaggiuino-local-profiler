@@ -397,7 +397,7 @@ export async function deleteBag(beanId: number, bagId: number): Promise<void> {
   if (!bean || bags.length <= 1) return;
   const { current } = classifyBeanBags(bean);
   if (current?.bg.id === bagId) return;
-  if (!await confirmDialog(t('lib_bag_delete_confirm'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('lib_bag_delete_confirm'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const saved = await libraryApi.deleteBeanBag(beanId, bagId);
   if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const idx = _beanList().findIndex(b => b.id === beanId);
