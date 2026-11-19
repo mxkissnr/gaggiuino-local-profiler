@@ -489,10 +489,6 @@ export async function openFlavorWheel(beanId: unknown): Promise<void> {
   cancelWheelClose(modal);
 
   (document.getElementById('flavorWheelTitle') as HTMLElement).textContent = bean.name as string;
-  // #1350: the bean's photo now sits in the wheel's centre (tapping it zooms
-  // back to the overview), so the small header image stays hidden.
-  const imgEl = document.getElementById('flavorWheelImage') as HTMLImageElement | null;
-  if (imgEl) imgEl.style.display = 'none';
   const centerBtn = document.getElementById('flavorWheelCenter');
   const centerImg = document.getElementById('flavorWheelCenterImg') as HTMLImageElement | null;
   if (centerBtn) {
