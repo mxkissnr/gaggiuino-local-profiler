@@ -144,7 +144,7 @@ function _leaveConnectStep(): void {
 
 function _renderWelcome(): Html {
   return html`<div class="dw-summary">
-    <div class="dw-summary-title">${tHtml('setup_wizard_welcome_title')}</div>
+    <div class="card-title">${tHtml('setup_wizard_welcome_title')}</div>
     <div class="dw-summary-reason">${tHtml('setup_wizard_welcome_body')}</div>
     <div class="dw-actions">
       <button type="button" class="btn btn--primary" data-action="setup-wizard-get-started">${tHtml('setup_wizard_get_started')}</button>
@@ -163,7 +163,7 @@ function _renderConnectShell(): Html {
 
 function _renderDone(): Html {
   return html`<div class="dw-summary">
-    <div class="dw-summary-title">${tHtml('setup_wizard_done_title')}</div>
+    <div class="card-title">${tHtml('setup_wizard_done_title')}</div>
     <div class="dw-summary-reason">${tHtml('setup_wizard_done_body')}</div>
     <div class="dw-actions">
       <button type="button" class="btn btn--primary" data-action="setup-wizard-close">${tHtml('setup_wizard_done_btn')}</button>

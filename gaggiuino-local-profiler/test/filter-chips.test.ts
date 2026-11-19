@@ -80,6 +80,16 @@ const RETIRED_2096 = [
 // shared chips. No rule, markup or code may use them again.
 const RETIRED_2112 = ['chart-tab'] as const;
 
+// Classes retired by #2120: a card or form title is the shared .card-title
+// or a .section-title, and a dialog's title sits in the sheet header bar
+// (docs/DESIGN.md, "Shapes and components"). No rule, markup or code may
+// use them again. Each slice of #2120 adds the classes it retires.
+const RETIRED_2120 = [
+  'settings-card-title', 'orders-menu-title', 'mbk-restore-title',
+  'fw-header', 'fw-close-x', 'fw-bean-image', 'flavorWheelImage', 'dw-summary-title', 'dw-candidate-title',
+    'lib-recipe-steps-header', 'lib-import-settings-title', 'lib-import-settings-subtitle', 'lib-import-extra-recipes-title', 'annotation-title',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -140,7 +150,7 @@ describe('shared filter chips (#2093)', () => {
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -288,9 +298,8 @@ describe('section titles (#2096)', () => {
     expect(library).toContain('<span class="section-title__count">');
   });
 
-  it('gives the dialog titles, orders, licences and bean sheet headings the shared section title', () => {
+  it('gives the orders, licences and bean sheet headings the shared section title', () => {
     const index = read('index.html');
-    expect(index).toContain('<h3 class="section-title" id="guidedMaintTitle">');
     expect(index).toContain('<div class="section-title" data-i18n="orders_queue">');
     expect(index).toContain('<div class="section-title orders-history-header">');
     expect(read('views/orders.ts')).toContain('<p class="section-title">');
@@ -430,5 +439,117 @@ describe('remaining action buttons (#2112)', () => {
     const root = postcss.parse(css);
     expect(declsOf(rulesWith(root, '.lib-add-trigger'))).toEqual(['width: 100%']);
     expect(declsOf(rulesWith(root, '.lib-scan-trigger'))).toEqual(['white-space: nowrap']);
+  });
+});
+
+describe('card titles (#2120)', () => {
+  it('gives the settings cards, the orders cards and the backup restore the shared card title', () => {
+    const index = read('index.html');
+    expect(index.split('<h3 class="card-title"').length - 1).toBe(14);
+    expect(index).toContain('<label for="settingsLang" class="card-title" data-i18n="settings_language">');
+    for (const id of ['ordersMenuTitle', 'ordersStatsTitle', 'ordersNotifyTitle', 'ordersKioskTitle']) {
+      expect(index, id).toContain(`<div class="card-title orders-menu-toggle" id="${id}">`);
+    }
+    expect(read('boot/popups.ts')).toContain('<h3 class="card-title" data-i18n="settings_popups_title">');
+    expect(read('boot/settings-page.ts')).toContain("'.card-title, .settings-row-title, label'");
+    expect(read('components/machine-backups.ts')).toContain('<h3 class="card-title">');
+  });
+
+  it('defines one card title look and leaves the orders toggle only its layout', () => {
+    const root = postcss.parse(read('style.css'));
+    expect(declsOf(rulesWith(root, '.card-title'))).toEqual([
+      'margin: 0', 'font-size: var(--fs-3)', 'font-weight: 600', 'color: var(--gray-200)',
+    ]);
+    expect(declsOf(rulesWith(root, '.orders-menu-toggle'))).toEqual([
+      'display: flex', 'align-items: center', 'justify-content: space-between', 'margin-bottom: var(--sp-4)', 'cursor: pointer',
+    ]);
+  });
+});
+
+// #2120: every dialog's title sits in the shared sheet header bar, which is
+// the dialog's first child: the close button first, then the title.
+const DIALOG_TITLES = [
+  ['guidedMaintModal', 'id="guidedMaintTitle"'],
+  ['profileEditorModal', 'data-i18n="profile_editor_title"'],
+  ['flavorWheelModal', 'id="flavorWheelTitle"'],
+  ['dialinWizardModal', 'data-i18n="dialin_wizard_title"'],
+  ['profileDialinWizardModal', 'data-i18n="profile_dialin_title"'],
+  ['setupWizardModal', 'data-i18n="setup_wizard_title"'],
+  ['gmProfileEditorModal', 'id="gmEditorTitle"'],
+  ['brewConfirmModal', 'id="brewConfirmTitle"'],
+] as const;
+
+describe('dialog titles (#2120)', () => {
+  it.each(DIALOG_TITLES)('%s: close, then the title, in the sheet header bar', (modal, title) => {
+    const index = read('index.html');
+    const start = index.indexOf(`id="${modal}"`);
+    expect(start, modal).toBeGreaterThan(-1);
+    const bar = index.indexOf('<div class="lib-sheet-bar">', start);
+    expect(bar, modal).toBeGreaterThan(start);
+    // overlay line, dialog box line, then the bar: it is the box's first child
+    expect(index.slice(start, bar).split('\n').length, modal).toBe(3);
+    const end = index.indexOf('</div>', bar);
+    const close = index.indexOf('<button type="button" class="lib-sheet-close"', bar);
+    const heading = index.indexOf(`<h3 class="lib-sheet-bar-title" ${title}`, bar);
+    expect(close, modal).toBeGreaterThan(bar);
+    expect(heading, modal).toBeGreaterThan(close);
+    expect(heading, modal).toBeLessThan(end);
+  });
+
+  it('lets the dialogs keep the bar without extra margin and wraps the brew question', () => {
+    const root = postcss.parse(read('style.css'));
+    expect(declsOf(rulesWith(root, '.guided-maint-modal > .lib-sheet-bar'))).toEqual(['flex-shrink: 0', 'margin-bottom: 0']);
+    expect(declsOf(rulesWith(root, '#brewConfirmTitle'))).toEqual(['white-space: normal']);
+  });
+
+  it('gives the wizard results the card title and the candidate shot a section title', () => {
+    expect(read('views/dialin-wizard.ts')).toContain('<div class="card-title">${title}</div>');
+    expect(read('views/profile-dialin-wizard.ts')).toContain('<div class="card-title">${esc(title)}</div>');
+    expect(read('views/setup-wizard.ts').split('<div class="card-title">').length - 1).toBe(2);
+    for (const file of ['views/dialin-wizard.ts', 'views/profile-dialin-wizard.ts']) {
+      expect(read(file), file).toContain('<div class="section-title">${tHtml(');
+    }
+  });
+});
+
+// #2120: closing is the cancel. Guided maintenance and the GaggiMate editor
+// have one cancel, the header close; the brew confirmation keeps its two
+// answers and its header close does the same as Back.
+describe('dialog close (#2120)', () => {
+  it.each(['guided-maint-cancel', 'gm-editor-close'] as const)('%s: the header close is the only cancel', action => {
+    expect(buttons(action)).toEqual([
+      `<button type="button" class="lib-sheet-close" data-action="${action}" data-i18n-aria-label="lib_sheet_close" aria-label="Close">`,
+    ]);
+  });
+
+  it('routes both closes to the close functions the Cancel buttons used', () => {
+    expect(read('boot/delegation.ts')).toContain("case 'guided-maint-cancel': closeGuidedMaint(); break;");
+    expect(read('views/gaggimate-profile-editor.ts')).toContain("case 'gm-editor-close': closeGaggiMateEditor(); break;");
+  });
+
+  it('keeps both answers in the brew confirmation', () => {
+    const back = buttons('brew-confirm-cancel');
+    expect(back.length).toBe(2);
+    expect(back[0]).toContain('class="lib-sheet-close"');
+    expect(back[1]).toContain('class="btn btn--quiet"');
+    expect(buttons('brew-confirm-start').length).toBe(1);
+  });
+});
+
+describe('form headings (#2120)', () => {
+  it('gives the step lists, the import settings and the annotation panel the shared section title', () => {
+    const index = read('index.html');
+    expect(index.split('<div class="section-title">').length - 1).toBe(2);
+    expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_title">');
+    expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_custom_label">');
+    expect(index).toContain('<span class="section-title" data-i18n="ann_title">');
+    expect(read('views/gaggimate-profile-editor.ts').split('<div class="section-title">').length - 1).toBe(2);
+    expect(read('views/library/import.ts')).toContain('<div class="section-title">${esc(t(');
+  });
+
+  it('keeps only layout in the step list head and the annotation row', () => {
+    const root = postcss.parse(read('style.css'));
+    expect(declsOf(rulesWith(root, '.lib-recipe-steps-section > .section-title'))).toEqual(['justify-content: space-between', 'align-items: center']);
+    expect(declsOf(rulesWith(root, '.annotation-header .section-title'))).toEqual(['margin-bottom: 0']);
   });
 });

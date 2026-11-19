@@ -213,7 +213,7 @@ export function renderPopupSettings(): void {
   if (!card.dataset.ready) {
     card.dataset.ready = '1';
     card.innerHTML = html`
-      <h3 class="settings-card-title" data-i18n="settings_popups_title">${tHtml('settings_popups_title')}</h3>
+      <h3 class="card-title" data-i18n="settings_popups_title">${tHtml('settings_popups_title')}</h3>
       <p class="settings-card-desc" data-i18n="settings_popups_desc">${tHtml('settings_popups_desc')}</p>
       <div class="orders-broadcast-row" style="min-height:44px"><label class="toggle-switch"><input type="checkbox" id="popupsEnabled"><span class="toggle-track"></span></label><label for="popupsEnabled" data-i18n="settings_popups_enabled">${tHtml('settings_popups_enabled')}</label></div>
       <div class="orders-broadcast-row" style="min-height:44px"><label class="toggle-switch"><input type="checkbox" id="popupsWhatsNew"><span class="toggle-track"></span></label><label for="popupsWhatsNew" data-i18n="settings_popups_whats_new">${tHtml('settings_popups_whats_new')}</label></div>

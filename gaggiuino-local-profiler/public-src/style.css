@@ -171,6 +171,16 @@
         /* An icon in front of the title sits on the text's centre line. */
         .section-title > svg { align-self: center; }
 
+        /* #2120: the title of a card or form (a settings card, an orders
+           card, the result at the end of a wizard). A group inside it is a
+           .section-title; a dialog's own title sits in the sheet header bar. */
+        .card-title {
+            margin: 0;
+            font-size: var(--fs-3);
+            font-weight: 600;
+            color: var(--gray-200);
+        }
+
         /* ── Sidebar ── */
         #sidebar {
             width: 320px;
@@ -936,7 +946,6 @@
         }
         .settings-more .lib-sheet-menu-list { z-index: var(--z-dropdown); }
         .settings-card { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); display:flex; flex-direction:column; gap: var(--sp-3); }
-        .settings-card-title { margin: 0; font-size: var(--fs-3); font-weight:600; color:var(--gray-200); }
         .settings-card-desc { margin: 0; font-size: var(--fs-1); color:var(--gray-500); line-height:1.5; }
         /* A lone button in a card keeps its own width instead of stretching. */
         .settings-card > .btn { align-self: flex-start; }
@@ -990,7 +999,7 @@
         /* #2038: a settings card moved into a detail sheet: the sheet bar
            carries the title, so the card drops its own chrome. */
         .detail-sheet-body > .settings-card { background: none; padding: 0; }
-        .detail-sheet-body > .settings-card > .settings-card-title:first-child { display: none; }
+        .detail-sheet-body > .settings-card > .card-title:first-child { display: none; }
         /* #1878: the machine backups sheet (components/machine-backups.ts), opened
            from a Gaggiuino row's Backups action; wider than the default popover
            so a row's date, chip and actions fit on one line from 900px. */
@@ -1017,7 +1026,6 @@
         .mbk-select, .mbk-input { min-height:44px; padding: 0 var(--sp-3); background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-2); }
         .mbk-restore, .mbk-cmp { display:flex; flex-direction:column; gap: var(--sp-3); }
         .mbk-restore p { margin:0; font-size: var(--fs-2); color:var(--gray-300); }
-        .mbk-restore-title { margin:0; font-size: var(--fs-3); color:var(--gray-200); }
         .mbk-restore .mbk-hint { font-size: var(--fs-1); color:var(--gray-400); }
         .mbk-restore .mbk-warn { font-size: var(--fs-1); color:var(--warn); }
         .mbk-cmp-list { margin:0; padding-left: var(--sp-4); display:flex; flex-direction:column; gap: var(--sp-2); font-size: var(--fs-2); color:var(--gray-200); overflow-wrap:anywhere; }
@@ -1301,7 +1309,7 @@
             margin-top: var(--sp-6);
         }
         .annotation-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); }
-        .annotation-title  { font-size: var(--fs-1); color: var(--gray-400); font-weight: 600; }
+        .annotation-header .section-title { margin-bottom: 0; }
 
         .star-rating { display: flex; gap: var(--sp-1); }
         .star { cursor: pointer; color: var(--gray-700); transition: color .12s; user-select: none; line-height: 0; border:none; background:none; padding:0; }
@@ -1677,7 +1685,7 @@
         .lib-form-grid select { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-2); padding: var(--sp-2) var(--sp-3); outline: none; width: 100%; }
         .lib-form-grid select:focus { border-color: var(--gray-600); }
         .lib-recipe-steps-section { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--gray-800); }
-        .lib-recipe-steps-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-2); font-size: var(--fs-1); font-weight: 600; color: var(--gray-400); }
+        .lib-recipe-steps-section > .section-title { justify-content: space-between; align-items: center; }
         .lib-step-row { display: flex; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-2); }
         .lib-step-num { font-size: var(--fs-1); color: var(--gray-600); min-width: 18px; text-align: right; flex-shrink: 0; }
         .lib-step-text { flex: 1; background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); outline: none; }
@@ -1766,13 +1774,10 @@
         /* Opt-in Brew Guide recipe candidates (#451) — e.g. "Milky Espresso"
            blocks discarded from the bean's own brewTempC/brewRatio fields. */
         .lib-import-extra-recipes { margin-bottom: var(--sp-3); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-2) var(--sp-3); }
-        .lib-import-extra-recipes-title { font-size: var(--fs-1); color:var(--gray-300); margin-bottom: var(--sp-1); }
         .lib-import-extra-recipe-row { display:flex; align-items:flex-start; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-200); padding: var(--sp-1) 0; cursor:pointer; }
         .lib-import-extra-recipe-row input { accent-color: var(--accent); margin-top: 2px; }
         .lib-import-extra-recipe-sub { color:var(--gray-500); }
         .lib-import-settings { flex-direction:column; gap: var(--sp-2); margin-top: var(--sp-2); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-3) var(--sp-3); }
-        .lib-import-settings-title { font-size: var(--fs-1); color:var(--gray-200); font-weight:600; }
-        .lib-import-settings-subtitle { font-size: var(--fs-1); color:var(--gray-400); margin-top: var(--sp-2); }
         .lib-import-settings-provider { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-200); padding: var(--sp-1) 0; cursor:pointer; }
         .lib-import-settings-provider input { accent-color: var(--accent); }
         .lib-import-settings-host { color:var(--gray-500); }
@@ -2886,6 +2891,12 @@
         /* Guided maintenance walkthrough */
         .guided-maint-overlay { position:fixed; top: var(--dev-banner-h, 0px); left:0; right:0; bottom:0; background:color-mix(in srgb, var(--scrim) 60%, transparent); display:flex; align-items:center; justify-content:center; z-index: var(--z-modal); padding: var(--sp-4); }
         .guided-maint-modal { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); max-width:440px; width:100%; max-height:85vh; overflow-y:auto; display:flex; flex-direction:column; gap: var(--sp-3); }
+        /* #2120: a dialog's title sits in the shared sheet header bar. The
+           dialog is a flex column with its own gap, so the bar drops its
+           bottom margin, and the fixed-height dialogs never squeeze it. */
+        .guided-maint-modal > .lib-sheet-bar { flex-shrink: 0; margin-bottom: 0; }
+        /* The brew question wraps instead of being cut off on a phone. */
+        #brewConfirmTitle { white-space: normal; }
         .guided-maint-step { display:flex; align-items:flex-start; gap: var(--sp-3); padding: var(--sp-2) var(--sp-2); border-bottom:1px solid var(--gray-800); cursor:pointer; font-size: var(--fs-2); color:var(--gray-300); }
         .guided-maint-step:last-child { border-bottom:none; }
         .guided-maint-step input[type="checkbox"] { width:16px; height:16px; margin-top: 1px; accent-color:var(--ok); cursor:pointer; flex-shrink:0; }
@@ -2966,7 +2977,6 @@
         .dw-grind-display { font-size: var(--fs-6); font-weight:700; color:var(--gray-100); text-align:center; padding: var(--sp-4) 0; }
         .dw-waiting { text-align:center; color:var(--gray-500); font-size: var(--fs-2); padding: var(--sp-4) 0; }
         .dw-candidate { background:var(--gray-800); border-radius:var(--radius); padding: var(--sp-3); display:flex; flex-direction:column; gap: var(--sp-2); }
-        .dw-candidate-title { font-size: var(--fs-1); font-weight:600; color:var(--gray-200); }
         .dw-candidate-actions { display:flex; gap: var(--sp-2); flex-wrap:wrap; }
         .dw-score-row { display:flex; align-items:center; gap: var(--sp-3); }
         .dw-score-meta { font-size: var(--fs-1); color:var(--gray-400); }
@@ -2976,16 +2986,11 @@
         .dw-override-row input { flex:1 1 auto; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); }
         .dw-chip-strip { display:flex; flex-wrap:wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
         .dw-summary { display:flex; flex-direction:column; gap: var(--sp-3); }
-        .dw-summary-title { font-size: var(--fs-3); font-weight:700; color:var(--gray-100); }
         .dw-summary-reason { font-size: var(--fs-2); color:var(--gray-400); }
         .dw-summary-best { display:flex; align-items:center; gap: var(--sp-3); }
         .pdw-profile-name { font-size: var(--fs-3); font-weight:700; color:var(--gray-100); text-align:center; padding: var(--sp-2) 0; }
         .pdw-symptom-label { font-size: var(--fs-1); color:var(--gray-500); font-weight:700; }
         .pdw-symptom-row { display:flex; flex-wrap:wrap; gap: var(--sp-2); }
-        .fw-header { display:flex; align-items:center; gap: var(--sp-3); flex-shrink:0; }
-        .fw-close-x { margin-left: auto; background:none; border:none; color:var(--gray-400); font-size: var(--fs-3); line-height:1; padding: var(--sp-2); cursor:pointer; flex-shrink:0; }
-        .fw-close-x:hover, .fw-close-x:focus-visible { color:var(--gray-200); }
-        .fw-bean-image { width:44px; height:44px; border-radius:var(--radius); object-fit:cover; flex-shrink:0; }
         .fw-breadcrumb { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-1); font-size: var(--fs-1); flex-shrink:0; min-height: calc(var(--fs-1) * 1.6); }
         .fw-crumb { background:none; border:none; color:var(--gray-400); cursor:pointer; padding: var(--sp-1); border-radius:var(--radius); font-size:inherit; font-weight:600; }
         .fw-crumb:last-child { color:var(--gray-200); }
@@ -3222,7 +3227,7 @@
         .orders-history-list { display:flex; flex-direction:column; gap: var(--sp-2); }
         .orders-section { display:flex; flex-direction:column; gap: 0; }
         .orders-menu-section { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); }
-        .orders-menu-title { font-size: var(--fs-2); font-weight:700; color:var(--gray-200); margin-bottom: var(--sp-4); cursor:pointer; display:flex; align-items:center; justify-content:space-between; }
+        .orders-menu-toggle { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); cursor: pointer; }
         .orders-menu-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
         .orders-menu-item { display:flex; flex-direction:column; gap: var(--sp-1); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
         .orders-menu-item-top { display:flex; align-items:center; gap: var(--sp-3); }

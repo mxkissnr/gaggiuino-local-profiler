@@ -343,7 +343,7 @@
             <div class="annotation-panel" id="annotationPanel">
                 <div class="annotation-header">
                     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-                        <span class="annotation-title" data-i18n="ann_title">Notizen & Bewertung</span>
+                        <span class="section-title" data-i18n="ann_title">Notizen & Bewertung</span>
                         <button type="button" class="btn btn--tonal" id="quickCloneBtn" data-i18n="ann_clone_btn" title="">↩ Letzten</button>
                     </div>
                     <div class="star-rating" id="starRating" role="group" aria-label="Rating" data-i18n-aria-label="sort_rating">
@@ -468,11 +468,13 @@
         <!-- Guided maintenance walkthrough -->
         <div id="guidedMaintModal" class="guided-maint-overlay" style="display:none">
             <div class="guided-maint-modal">
-                <h3 class="section-title" id="guidedMaintTitle"></h3>
+                <div class="lib-sheet-bar">
+                    <button type="button" class="lib-sheet-close" data-action="guided-maint-cancel" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                    <h3 class="lib-sheet-bar-title" id="guidedMaintTitle"></h3>
+                </div>
                 <div id="guidedMaintSteps"></div>
                 <div class="maint-log-form-actions">
                     <button class="btn btn--primary" id="guidedMaintDoneBtn" data-action="guided-maint-done" disabled></button>
-                    <button class="btn btn--quiet" data-action="guided-maint-cancel" data-i18n="lib_cancel">Abbrechen</button>
                 </div>
             </div>
         </div>
@@ -511,7 +513,7 @@
             <div class="orders-history-list" id="orders-history-list"></div>
         </div>
         <div class="orders-menu-section">
-            <div class="orders-menu-title" id="ordersMenuTitle">
+            <div class="card-title orders-menu-toggle" id="ordersMenuTitle">
                 <span data-i18n="orders_menu_title">Menü verwalten</span>
                 <span id="ordersMenuToggle">▾</span>
             </div>
@@ -525,7 +527,7 @@
             </div>
         </div>
         <div class="orders-menu-section" id="ordersStatsSection">
-            <div class="orders-menu-title" id="ordersStatsTitle">
+            <div class="card-title orders-menu-toggle" id="ordersStatsTitle">
                 <span data-i18n="orders_stats_title">Kunden-Statistik</span>
                 <span id="ordersStatsToggle">▸</span>
             </div>
@@ -534,14 +536,14 @@
             </div>
         </div>
         <div class="orders-menu-section" id="ordersNotifySection">
-            <div class="orders-menu-title" id="ordersNotifyTitle">
+            <div class="card-title orders-menu-toggle" id="ordersNotifyTitle">
                 <span data-i18n="orders_notify_title">Push-Benachrichtigungen</span>
                 <span id="ordersNotifyToggle">▸</span>
             </div>
             <div id="ordersNotifyBody" style="display:none"></div>
         </div>
         <div class="orders-menu-section" id="ordersKioskSection">
-            <div class="orders-menu-title" id="ordersKioskTitle">
+            <div class="card-title orders-menu-toggle" id="ordersKioskTitle">
                 <span data-i18n="orders_kiosk_link_title">Kiosk-Link</span>
                 <span id="ordersKioskToggle">▸</span>
             </div>
@@ -752,10 +754,10 @@
                         </div>
                     </div>
                     <div class="lib-import-settings" id="importSettingsRow" style="display:none">
-                        <div class="lib-import-settings-title" data-i18n="lib_import_settings_title">Import-Quellen</div>
+                        <div class="section-title" data-i18n="lib_import_settings_title">Import-Quellen</div>
                         <div id="importSettingsProviders"></div>
                         <div class="lib-import-settings-custom">
-                            <div class="lib-import-settings-subtitle" data-i18n="lib_import_settings_custom_label">Eigene Shopify-Shops</div>
+                            <div class="section-title" data-i18n="lib_import_settings_custom_label">Eigene Shopify-Shops</div>
                             <div id="importSettingsCustomList"></div>
                             <div class="lib-import-settings-add">
                                 <input type="text" id="importSettingsDomainInput" aria-label="Shop domain" data-i18n-aria-label="lib_import_settings_add_domain_ph" data-i18n-placeholder="lib_import_settings_add_domain_ph" placeholder="shop.example.com">
@@ -887,7 +889,7 @@
                             </div>
                         </div>
                         <div class="lib-recipe-steps-section">
-                            <div class="lib-recipe-steps-header">
+                            <div class="section-title">
                                 <span data-i18n="lib_recipe_steps">Workflow-Schritte</span>
                                 <button type="button" class="btn btn--tonal" id="addRecipeStepBtn" data-i18n="lib_recipe_add_step">+ Schritt</button>
                             </div>
@@ -1037,9 +1039,9 @@
     <!-- Machine profile editor modal (#307) -->
     <div id="profileEditorModal" class="guided-maint-overlay" style="display:none">
         <div class="guided-maint-modal profile-editor-modal">
-            <div class="fw-header">
-                <h3 class="section-title" data-i18n="profile_editor_title" style="margin:0">Profil-Editor</h3>
-                <button type="button" class="fw-close-x" id="closeProfileFormBtn" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <div class="lib-sheet-bar">
+                <button type="button" class="lib-sheet-close" id="closeProfileFormBtn" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <h3 class="lib-sheet-bar-title" data-i18n="profile_editor_title">Profil-Editor</h3>
             </div>
             <div class="pe-scroll">
                 <div class="lib-form-grid">
@@ -1069,7 +1071,7 @@
                     </div>
                 </div>
                 <div class="lib-recipe-steps-section">
-                    <div class="lib-recipe-steps-header">
+                    <div class="section-title">
                         <span data-i18n="profile_phases_title">Phasen</span>
                         <button type="button" class="btn btn--tonal" id="profileApplySuggestionBtn" data-i18n="profile_apply_suggestion" style="display:none">Bohnen-Vorschlag anwenden</button>
                         <button type="button" class="btn btn--tonal" id="addProfilePhaseBtn" data-i18n="profile_add_phase">+ Phase</button>
@@ -1090,10 +1092,9 @@
     <!-- Flavor wheel modal -->
     <div id="flavorWheelModal" class="guided-maint-overlay" style="display:none">
         <div class="guided-maint-modal flavor-wheel-modal">
-            <div class="fw-header">
-                <img id="flavorWheelImage" class="fw-bean-image" style="display:none">
-                <h3 class="section-title" id="flavorWheelTitle" style="margin:0"></h3>
-                <button type="button" class="fw-close-x" data-action="close-flavor-wheel" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <div class="lib-sheet-bar">
+                <button type="button" class="lib-sheet-close" data-action="close-flavor-wheel" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <h3 class="lib-sheet-bar-title" id="flavorWheelTitle"></h3>
             </div>
             <div class="fw-body">
                 <div class="fw-main">
@@ -1481,9 +1482,9 @@
     <!-- Guided Dial-In wizard modal (#310) -->
     <div id="dialinWizardModal" class="guided-maint-overlay" style="display:none">
         <div class="guided-maint-modal dialin-wizard-modal">
-            <div class="fw-header">
-                <h3 class="section-title" data-i18n="dialin_wizard_title" style="margin:0">Geführtes Einwählen</h3>
-                <button type="button" class="fw-close-x" data-action="dialin-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <div class="lib-sheet-bar">
+                <button type="button" class="lib-sheet-close" data-action="dialin-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <h3 class="lib-sheet-bar-title" data-i18n="dialin_wizard_title">Geführtes Einwählen</h3>
             </div>
             <div id="dwBody" class="dw-body"></div>
         </div>
@@ -1492,9 +1493,9 @@
     <!-- Profile Dial-In wizard modal (#313) -->
     <div id="profileDialinWizardModal" class="guided-maint-overlay" style="display:none">
         <div class="guided-maint-modal dialin-wizard-modal">
-            <div class="fw-header">
-                <h3 class="section-title" data-i18n="profile_dialin_title" style="margin:0">Profil-Dial-In</h3>
-                <button type="button" class="fw-close-x" data-action="profile-dialin-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <div class="lib-sheet-bar">
+                <button type="button" class="lib-sheet-close" data-action="profile-dialin-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <h3 class="lib-sheet-bar-title" data-i18n="profile_dialin_title">Profil-Dial-In</h3>
             </div>
             <div id="pdwBody" class="dw-body"></div>
         </div>
@@ -1503,9 +1504,9 @@
     <!-- First-run setup wizard (#744) -->
     <div id="setupWizardModal" class="guided-maint-overlay" style="display:none">
         <div class="guided-maint-modal dialin-wizard-modal">
-            <div class="fw-header">
-                <h3 class="section-title" data-i18n="setup_wizard_title" style="margin:0">Willkommen bei GLP</h3>
-                <button type="button" class="fw-close-x" data-action="setup-wizard-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <div class="lib-sheet-bar">
+                <button type="button" class="lib-sheet-close" data-action="setup-wizard-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+                <h3 class="lib-sheet-bar-title" data-i18n="setup_wizard_title">Willkommen bei GLP</h3>
             </div>
             <div id="swBody" class="dw-body"></div>
         </div>
@@ -1551,13 +1552,13 @@
                 </section>
                 <section class="settings-page" data-settings-page="appearance">
         <div class="settings-card">
-            <h3 class="settings-card-title" data-i18n="settings_theme">Theme</h3>
+            <h3 class="card-title" data-i18n="settings_theme">Theme</h3>
             <div class="theme-toggle-group" id="themeToggleGroup">
                 <button type="button" class="chip" data-theme-val="dark" aria-pressed="false"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg> <span data-i18n="theme_dark">Dark</span></button>
                 <button type="button" class="chip" data-theme-val="light" aria-pressed="false"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></svg> <span data-i18n="theme_light">Light</span></button>
                 <button type="button" class="chip" data-theme-val="auto" aria-pressed="false"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg> <span data-i18n="theme_auto">Auto</span></button>
             </div>
-            <h3 class="settings-card-title" style="margin-top:14px" data-i18n="settings_accent">Farbschema</h3>
+            <h3 class="card-title" style="margin-top:14px" data-i18n="settings_accent">Farbschema</h3>
             <!-- #1019: shown when the ACTIVE machine (topbar switcher) has its
                  own colour theme (see machines-settings.js's
                  applyActiveMachineAccentTheme()) — that theme drives the
@@ -1578,12 +1579,12 @@
              (mandatory, always slot 1); further checkboxes get disabled once
              4 are selected rather than silently bumping an older choice. -->
         <div class="settings-card">
-            <h3 class="settings-card-title" data-i18n="settings_bottom_nav">Mobile Navigationsleiste</h3>
+            <h3 class="card-title" data-i18n="settings_bottom_nav">Mobile Navigationsleiste</h3>
             <p class="settings-card-desc" data-i18n="settings_bottom_nav_desc">Wähle bis zu 4 Ziele für die untere Navigationsleiste auf dem Handy. Alles andere landet unter "Mehr".</p>
             <div id="bottomNavConfigList" class="bottom-nav-config-list"></div>
         </div>
         <div class="settings-card">
-            <label for="settingsLang" class="settings-card-title" data-i18n="settings_language">Sprache</label>
+            <label for="settingsLang" class="card-title" data-i18n="settings_language">Sprache</label>
             <select id="settingsLang" class="machine-form-input">
                 <option value="de">Deutsch</option>
                 <option value="en">English</option>
@@ -1605,7 +1606,7 @@
              the same /api/orders/settings blob as the Orders panel's
              remaining 3 order-specific toggles (components/notify-settings.js). -->
         <div class="settings-card">
-            <h3 class="settings-card-title" data-i18n="settings_notify_title">Benachrichtigungen</h3>
+            <h3 class="card-title" data-i18n="settings_notify_title">Benachrichtigungen</h3>
             <p class="settings-card-desc" data-i18n="settings_notify_desc">Welche automatischen Benachrichtigungen der Maschine und der Kaffee-Bibliothek sollen gesendet werden?</p>
             <div class="orders-broadcast-list" id="notifySettingsList">
                 <div class="orders-broadcast-row">
@@ -1632,7 +1633,7 @@
              S.coffeeLibrary/S.drinkMenu already loaded for the annotation
              panel itself (components/shot-defaults-settings.js). -->
         <div class="settings-card">
-            <h3 class="settings-card-title" data-i18n="settings_shot_defaults_title">Standardwerte für Shot-Notizen</h3>
+            <h3 class="card-title" data-i18n="settings_shot_defaults_title">Standardwerte für Shot-Notizen</h3>
             <p class="settings-card-desc" data-i18n="settings_shot_defaults_desc">Werden beim Öffnen eines neuen, noch nicht bewerteten Shots automatisch vorausgefüllt — bleiben dabei jederzeit änderbar.</p>
             <label for="sdDrinkType" class="machine-form-label" data-i18n="ann_drink_type">Getränk</label>
             <select id="sdDrinkType" class="machine-form-input"></select>
@@ -1658,7 +1659,7 @@
              settings.ts); the bindings are numeric so a bad value cannot be
              typed in the first place, and Save still validates. -->
         <div class="settings-card" id="beanFreshnessCard">
-            <h3 class="settings-card-title" data-i18n="bf_title">Bohnen-Frische</h3>
+            <h3 class="card-title" data-i18n="bf_title">Bohnen-Frische</h3>
             <p class="settings-card-desc" data-i18n="bf_desc">Ab welchem Alter eine Röstung als degasend, optimal oder alt gilt — und ab wie vielen Gramm eine Packung als fast leer gemeldet wird.</p>
             <label for="bfLevel" class="machine-form-label" data-i18n="bf_level">Röstgrad</label>
             <select id="bfLevel" class="machine-form-input">
@@ -1696,7 +1697,7 @@
              #mqttConnFields); host/port/user/pass are pre-filled from
              Supervisor auto-discovery when available, editable either way. -->
         <div class="settings-card" id="mqttSettingsCard">
-            <h3 class="settings-card-title" data-i18n="settings_mqtt_title">Live-Verbindung</h3>
+            <h3 class="card-title" data-i18n="settings_mqtt_title">Live-Verbindung</h3>
             <p class="settings-card-desc" data-i18n="settings_mqtt_desc">Wie GLP Live-Sensordaten von der Maschine bezieht.</p>
             <div class="theme-toggle-group" id="mqttTransportToggle">
                 <button type="button" class="chip" data-mqtt-transport="websocket" aria-pressed="false" data-i18n="settings_mqtt_transport_ws">WebSocket (Standard)</button>
@@ -1736,7 +1737,7 @@
             </button>
         </div>
         <div class="settings-card" id="machineFormCard" style="display:none">
-            <h3 class="settings-card-title" id="machineFormTitle" data-i18n="settings_machines_add">Maschine hinzufügen</h3>
+            <h3 class="card-title" id="machineFormTitle" data-i18n="settings_machines_add">Maschine hinzufügen</h3>
             <input type="hidden" id="machineFormId">
             <label for="machineFormName" class="machine-form-label" data-i18n="settings_machine_name">Name</label>
             <input type="text" id="machineFormName" class="machine-form-input">
@@ -1788,7 +1789,7 @@
              only appear while this is on. Saving is immediate (change event),
              there is no Save button. -->
         <div class="settings-card" id="machineControlSettingsCard">
-            <h3 class="settings-card-title" data-i18n="settings_machine_control_title">Maschinensteuerung</h3>
+            <h3 class="card-title" data-i18n="settings_machine_control_title">Maschinensteuerung</h3>
             <p class="settings-card-desc" data-i18n="settings_machine_control_desc">Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Nur nutzen, wenn jemand an der Maschine ist.</p>
             <div class="orders-broadcast-list">
                 <div class="orders-broadcast-row">
@@ -1803,7 +1804,7 @@
         </section>
         <section class="settings-page" data-settings-page="data" hidden>
         <div class="settings-card">
-            <h3 class="settings-card-title" data-i18n="backup_title">Backup & Restore</h3>
+            <h3 class="card-title" data-i18n="backup_title">Backup & Restore</h3>
             <p class="settings-card-desc" data-i18n="backup_desc">Die komplette Datenbank (Shots, Bibliothek, Wartung, Bestellungen, Maschinen, Einstellungen) als ZIP-Datei sichern oder wiederherstellen. API-Token und MQTT-Login sind nur verschlüsselt mit einem selbst gewählten Passwort enthalten.</p>
             <button id="backupDownloadBtn" type="button" class="btn btn--tonal" data-i18n="backup_download">Backup herunterladen</button>
             <!-- Translation text must live in its own span: applyTranslations sets
@@ -1822,7 +1823,7 @@
              is off and this session isn't Ingress (#803) -- see main.ts's
              renderApiTokenCard() for which of the two states is displayed. -->
         <div class="settings-card" id="apiTokenCard" style="display:none">
-            <h3 class="settings-card-title" data-i18n="settings_api_token">API Token</h3>
+            <h3 class="card-title" data-i18n="settings_api_token">API Token</h3>
             <p class="settings-card-desc" data-i18n="settings_api_token_desc">Für Integrationen wie die Order Card im Direkt-URL-Modus (ohne HA Ingress) benötigst du diesen Token als glp_token in der YAML-Konfiguration.</p>
             <div class="api-token-row" id="apiTokenRow">
                 <code id="apiTokenValue" class="api-token-value"></code>
@@ -1838,7 +1839,7 @@
              it without GLP_DEV_BUILD set -- this hidden-by-default markup is
              just UI hygiene, not the actual safety mechanism. -->
         <div class="settings-card" id="devToolsCard" style="display:none">
-            <h3 class="settings-card-title" data-i18n="settings_devtools_title">Dev Tools</h3>
+            <h3 class="card-title" data-i18n="settings_devtools_title">Dev Tools</h3>
             <p class="settings-card-desc" data-i18n="settings_devtools_desc">GLP DEV channel only — never available on a real install.</p>
             <!-- #1922: dev-channel only; wired by components/dev-score-settings.ts -->
             <label for="devScoreModel" class="machine-form-label" data-i18n="settings_devtools_score_model">Score-Modell</label>
@@ -1866,7 +1867,7 @@
              MCP server's toggles. The developer-tools row is revealed by
              loadMcpSettingsCard() only when the build offers it (GLP_DEV_BUILD). -->
         <div class="settings-card" id="mcpSettingsCard">
-            <h3 class="settings-card-title" data-i18n="settings_mcp_title">KI-Assistenten (MCP)</h3>
+            <h3 class="card-title" data-i18n="settings_mcp_title">KI-Assistenten (MCP)</h3>
             <p class="settings-card-desc" data-i18n="settings_mcp_desc">Erlaube KI-Assistenten wie Claude, über den eingebauten MCP-Server deine Shots, Bohnen und Analysen zu lesen.</p>
             <div class="orders-broadcast-list" id="mcpSettingsList">
                 <div class="orders-broadcast-row">
@@ -1900,7 +1901,7 @@
                     </div>
                     <!-- #2123: help links. Each URL is written only here; every row opens in a new tab. -->
                     <div class="settings-card settings-row-card">
-                        <h3 class="settings-card-title" data-i18n="settings_help_title">Hilfe</h3>
+                        <h3 class="card-title" data-i18n="settings_help_title">Hilfe</h3>
                         <a class="settings-row" href="https://github.com/mxkissnr/gaggiuino-local-profiler/wiki" target="_blank" rel="noopener">
                             <span class="settings-row-text"><span class="settings-row-title" data-i18n="settings_help_docs">Dokumentation</span><span class="settings-row-sub" data-i18n="settings_help_docs_sub">Einrichtung, Funktionen und Antworten im Wiki</span></span>
                             <span class="settings-chev" aria-hidden="true"></span>
@@ -1928,15 +1929,14 @@
      below for the same working pattern. -->
 <div id="gmProfileEditorModal" class="guided-maint-overlay" style="display:none">
     <div class="guided-maint-modal profile-editor-modal">
-        <div class="fw-header">
-            <h3 class="section-title" id="gmEditorTitle" style="margin:0">GaggiMate Profil</h3>
-            <button type="button" class="fw-close-x" data-action="gm-editor-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <div class="lib-sheet-bar">
+            <button type="button" class="lib-sheet-close" data-action="gm-editor-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <h3 class="lib-sheet-bar-title" id="gmEditorTitle">GaggiMate Profil</h3>
         </div>
         <div class="pe-scroll" id="gmEditorBody">
             <!-- rendered by gaggimate-profile-editor.js -->
         </div>
         <div class="lib-form-actions">
-            <button type="button" class="btn btn--quiet" data-action="gm-editor-close" data-i18n="lib_cancel">Abbrechen</button>
             <button type="button" class="btn btn--primary" data-action="gm-editor-save" data-i18n="gm_editor_save_to_machine">Auf Maschine speichern</button>
         </div>
     </div>
@@ -2019,7 +2019,10 @@
      Shown/hidden by components/machine-control.js. -->
 <div id="brewConfirmModal" class="guided-maint-overlay" style="display:none" role="dialog" aria-modal="true" aria-labelledby="brewConfirmTitle">
     <div class="guided-maint-modal">
-        <h3 class="section-title" id="brewConfirmTitle" data-i18n="brew_confirm_title">Bezug trotzdem starten?</h3>
+        <div class="lib-sheet-bar">
+            <button type="button" class="lib-sheet-close" data-action="brew-confirm-cancel" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <h3 class="lib-sheet-bar-title" id="brewConfirmTitle" data-i18n="brew_confirm_title">Bezug trotzdem starten?</h3>
+        </div>
         <p class="settings-card-desc" data-i18n="brew_confirm_desc">Die Maschine meldet diese Warnungen:</p>
         <ul id="brewConfirmWarnings"></ul>
         <div class="lib-form-actions">

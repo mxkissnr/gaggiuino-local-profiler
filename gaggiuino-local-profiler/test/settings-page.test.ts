@@ -377,7 +377,7 @@ describe('About: help card (#2123)', () => {
             expect(en[link.titleKey], link.titleKey).toBeTypeOf('string');
             expect(en[link.subKey], link.subKey).toBeTypeOf('string');
         }
-        expect(about).toContain('<h3 class="settings-card-title" data-i18n="settings_help_title">');
+        expect(about).toContain('<h3 class="card-title" data-i18n="settings_help_title">');
     });
 
     it('puts the help card after the version card and drops the old setup help row', () => {

@@ -355,7 +355,7 @@ function _renderRound(s: ProfileDialinSession): Html {
     <div class="pdw-profile-name">${esc(s.profileName)}</div>
     ${candidate ? html`
       <div class="dw-candidate">
-        <div class="dw-candidate-title">${tHtml('dialin_wizard_candidate_title')}</div>
+        <div class="section-title">${tHtml('dialin_wizard_candidate_title')}</div>
         ${_miniShotChart(candidate)}
         <div class="dw-candidate-actions">
           <button type="button" class="btn btn--primary" data-action="profile-dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="1">${tHtml('dialin_wizard_candidate_confirm')}</button>
@@ -372,7 +372,7 @@ function _renderSummary(s: ProfileDialinSession): Html {
   const title = s.status === 'converged' ? t('dialin_wizard_converged_title') : t('dialin_wizard_summary_title');
   const reasonText = s.status === 'converged' && s.rounds.length ? t(profileDialinConvergenceReason(s.rounds)) : '';
   return html`<div class="dw-summary">
-    <div class="dw-summary-title">${esc(title)}</div>
+    <div class="card-title">${esc(title)}</div>
     ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}
     ${best ? html`<div class="dw-summary-best">
       <div class="${esc(scoreBadgeClass(best.score))}">${esc(best.score)}</div>

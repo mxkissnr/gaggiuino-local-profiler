@@ -303,7 +303,7 @@ function _collectSettingsItems(): SettingsSearchItem[] {
   if (!view) return items;
   for (const page of Array.from(view.querySelectorAll<HTMLElement>('.settings-page'))) {
     const group = page.dataset.settingsPage ?? '';
-    const labels = page.querySelectorAll<HTMLElement>('.settings-card-title, .settings-row-title, label');
+    const labels = page.querySelectorAll<HTMLElement>('.card-title, .settings-row-title, label');
     for (const el of Array.from(labels)) {
       const label = el.textContent?.trim() ?? '';
       if (!label) continue;

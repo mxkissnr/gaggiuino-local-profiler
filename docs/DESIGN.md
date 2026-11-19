@@ -41,7 +41,7 @@ The role decides the shape. A page picks a role, never a look.
 
 Round therefore means "status", not "clickable". Heat map and calendar cells are square.
 
-Four shared components live in one block near the top of the stylesheet. A page class keeps only layout (position, grid area, gap), never colour, radius or padding.
+The shared components live in one block near the top of the stylesheet. A page class keeps only layout (position, grid area, gap), never colour, radius or padding.
 
 Chips, buttons, and the search fields and dropdowns that share a row with chips have one height, `--ctl-height`: 44 px on touch devices (`pointer: coarse`), 36 px with a fine pointer. Input chips with a remove button (flavour, origin, order menu variants) and the aroma chips are `.chip--input`; their page class only sets the tint.
 
@@ -52,10 +52,13 @@ Chips, buttons, and the search fields and dropdowns that share a row with chips 
 | Status badge | `.badge` | neutral (no modifier), `.badge--ok`, `.badge--warn`, `.badge--err`, `.badge--info`, `.badge--accent`; the score scale `.badge--score-great`, `.badge--score-good`, `.badge--score-ok`, `.badge--score-low`, `.badge--score-bad`; `.badge--scrim` for a badge on a photo | none; a badge is never clickable, a clickable status is a `.btn` or a `.chip` |
 | Input chip | `.chip--input`, on its own, never with `.chip` | the tint through `--input-chip-c` (background, border) and `--input-chip-ink` (text) | none |
 | Section title | `.section-title` | optional counter in `.section-title__count` | none |
+| Card title | `.card-title` | none | none |
 
 Every status label is a `.badge`. A page class next to it only places it (margin, grid area, position); a badge never has a border or its own tint.
 
 Every action button outside the navigation is a `.btn` with exactly one of the four variants, and a view has at most one `.btn--primary`. The icon buttons in a sheet header keep their 44 px size with `--radius-ctl`; top bar tabs and the bottom navigation are not buttons in this sense. Sync and the machine power toggle in the top bar are actions, so they are `.btn--quiet` (the power toggle as `.btn--icon`, coloured by the machine's on/off state).
+
+A card or form names itself with a `.card-title`: a settings card, an orders card, the result at the end of a wizard. A group inside a card or form is headed by a `.section-title`. A dialog or bottom sheet uses neither for its own title: the title sits in the sheet header bar (`lib-sheet-bar`, the close button first, then `lib-sheet-bar-title`), see "One sheet header".
 
 The ordering kiosk is the one page with its own controls. It is a separate page for guests at a wall tablet or an e-ink screen and loads only the tokens, not the app stylesheet: its main actions are 56 px tall for a standing user, its drinks are large tiles, a press scales the control instead of a hover, and the e-ink mode redraws every control in black and white with a 3 px border. Colours, spacing, radii and fonts still come from the tokens; `.btn` and `.chip` are not used there.
 
@@ -79,7 +82,7 @@ The same kind of control behaves the same way on every page.
 - [ ] Verdict first.
 - [ ] No bare title bar; a top app bar only for back, search or overflow; filter chips first if the page filters.
 - [ ] Lists are cards of rows (icon, title, subtitle, value, chevron), not card stacks or tile grids.
-- [ ] Chips, buttons, badges and section titles use the shared components only.
+- [ ] Chips, buttons, badges, section titles and card titles use the shared components only; a dialog's title sits in the sheet header.
 - [ ] No number twice.
 - [ ] Screenshot at 390 px and at 1280 px attached.
 - [ ] Every clickable row opens its details: a dialog on desktop, a bottom sheet on phones, close top left and no extra Cancel.
