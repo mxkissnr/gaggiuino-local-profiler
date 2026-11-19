@@ -201,7 +201,7 @@ async function _storeBasketPhoto(id: number, r: Response): Promise<void> {
 }
 
 export async function deleteBasket(id: number): Promise<void> {
-  if (!await confirmDialog(t('lib_confirm_delete_basket'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('lib_confirm_delete_basket'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await libraryApi.deleteBasketById(id);
   if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.baskets = (_state().coffeeLibrary.baskets || []).filter(b => b.id !== id);

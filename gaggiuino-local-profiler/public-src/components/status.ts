@@ -313,7 +313,7 @@ export async function exportDevDb(): Promise<void> {
 // after a manual restart of the add-on, which this tells the user about.
 export async function importDevDb(file: File): Promise<void> {
   if (!file) return;
-  if (!await confirmDialog(t('settings_devtools_import_db_confirm'))) return;
+  if (!await confirmDialog(t('settings_devtools_import_db_confirm'), { destructive: true })) return;
   const input = document.getElementById('devImportDbInput') as HTMLInputElement | null;
   const label = (document.querySelector('#devToolsCard label span[data-i18n="settings_devtools_import_db"]')
     || { textContent: '', disabled: false }) as ProgressButton;

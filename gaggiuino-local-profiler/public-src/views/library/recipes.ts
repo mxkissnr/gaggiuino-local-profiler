@@ -272,7 +272,7 @@ export async function saveRecipe(): Promise<void> {
 }
 
 export async function deleteRecipe(id: number): Promise<void> {
-  if (!await confirmDialog(t('lib_confirm_delete_recipe'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('lib_confirm_delete_recipe'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await libraryApi.deleteRecipePermanently(id);
   if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.recipes = (_state().coffeeLibrary.recipes || []).filter(r => r.id !== id);

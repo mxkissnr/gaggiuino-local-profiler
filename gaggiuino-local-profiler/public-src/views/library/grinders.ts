@@ -330,7 +330,7 @@ async function _storeGrinderPhoto(id: number, r: Response): Promise<void> {
 }
 
 export async function deleteGrinder(id: number): Promise<void> {
-  if (!await confirmDialog(t('lib_confirm_delete_grinder'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('lib_confirm_delete_grinder'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await libraryApi.deleteGrinderPermanently(id);
   if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   S.coffeeLibrary.grinders = S.coffeeLibrary.grinders.filter(g => g.id !== id);

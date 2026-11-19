@@ -15,7 +15,7 @@ const el = {
   querySelector: (): null => null, querySelectorAll: (): [] => [],
 };
 g.document = { getElementById: (id: string) => (id === 'mbkSheet' ? el : null) };
-const confirmMock = vi.fn<(msg: string, opts?: { confirmLabel?: string }) => Promise<boolean>>();
+const confirmMock = vi.fn<(msg: string, opts?: { confirmLabel?: string; destructive?: boolean }) => Promise<boolean>>();
 
 type Api = typeof import('../public-src/api/machine-backups.js');
 type Result = Awaited<ReturnType<Api['backUpMachineNow']>>;
@@ -279,7 +279,7 @@ describe('machine backups sheet (#1878)', () => {
     const message = 'The backup before the update failed, so the update did not start.\n\nUpdate the firmware without a backup now?';
     confirmMock.mockResolvedValue(true);
     await expect(confirmUpdateWithoutBackup()).resolves.toBe(true);
-    expect(confirmMock).toHaveBeenLastCalledWith(message);
+    expect(confirmMock).toHaveBeenLastCalledWith(message, { destructive: true });
     confirmMock.mockResolvedValue(false);
     await expect(confirmUpdateWithoutBackup()).resolves.toBe(false);
     expect(toast.show).not.toHaveBeenCalled();

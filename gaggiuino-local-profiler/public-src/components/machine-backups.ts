@@ -314,7 +314,7 @@ export function machineBackupsButtonHtml(): Html {
  *  deliberate "update without a backup" (Max decision 1); slice W resends with skipBackup.
  *  The app dialog, not a native confirm (#1962). */
 export function confirmUpdateWithoutBackup(): Promise<boolean> {
-  return confirmDialog(`${t('mbk_preupdate_failed')}\n\n${t('mbk_preupdate_confirm')}`);
+  return confirmDialog(`${t('mbk_preupdate_failed')}\n\n${t('mbk_preupdate_confirm')}`, { destructive: true });
 }
 
 /** Trimmed note, or undefined when the user typed nothing (then no note is sent). 200 code points. */
@@ -740,7 +740,7 @@ async function backUpNow(machineId: number, note: string | undefined): Promise<v
 }
 
 async function deleteBackup(machineId: number, id: number): Promise<void> {
-  if (!await confirmDialog(t('mbk_delete_confirm'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('mbk_delete_confirm'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await deleteMachineBackup(id);
   if (r.ok) showToast(t('mbk_deleted'));
   else showToast(backupErrorText(r, 'delete'), 6000);

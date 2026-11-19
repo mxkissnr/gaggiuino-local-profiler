@@ -248,7 +248,7 @@ describe('shared buttons (#2095)', () => {
     expect(sticker).toContain("themedButton('chip sticker-mode-add',");
     expect(sticker).toContain("themedButton('chip sticker-original',");
     expect(sticker).toContain("themedButton('btn btn--primary crop-editor-apply sticker-apply',");
-    expect(read('components/confirm-dialog.ts')).toContain("accept.className = 'btn btn--primary';");
+    expect(read('components/confirm-dialog.ts')).toContain("accept.className = opts.destructive === true ? 'btn btn--danger' : 'btn btn--primary';");
     expect(read('components/image-crop.ts')).toContain('class="btn btn--primary crop-editor-apply"');
     expect(read('views/library/bean-form-sheet.ts')).toContain("discard.className = 'btn btn--danger';");
   });
@@ -362,5 +362,36 @@ describe('inline styles (#2096)', () => {
   it('shows the firmware version and the recipe shot count as shared badges', () => {
     expect(read('index.html')).toContain('<span id="firmwareVersionBadge" class="badge" style="display:none"></span>');
     expect(read('views/library/recipes.ts')).toContain('<span class="badge lib-recipe-shots">');
+  });
+});
+
+// #2111: a confirmation that deletes, replaces or overwrites data, or skips
+// the safety backup, shows its confirm button as .btn--danger. Every delete
+// confirmation passes the lib_btn_delete label; the four others are ending the
+// demo (deletes the demo data), the raw database import (replaces the
+// database), sending a profile (overwrites the machine's values) and a
+// firmware update without a backup.
+const DESTRUCTIVE_CONFIRM_KEYS = [
+  'lib_btn_delete', 'demo_mode_end_confirm', 'settings_devtools_import_db_confirm',
+  'profile_confirm_send', 'mbk_preupdate_confirm',
+] as const;
+
+describe('destructive confirmations (#2111)', () => {
+  it('marks every delete, replace and overwrite confirmation as destructive', () => {
+    const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
+      .filter(name => name.endsWith('.ts'));
+
+    const calls: string[] = [];
+    const unmarked: string[] = [];
+    for (const file of files) {
+      read(file).split('\n').forEach((line, i) => {
+        if (!line.includes('confirmDialog(')) return;
+        if (!DESTRUCTIVE_CONFIRM_KEYS.some(key => line.includes(`'${key}'`))) return;
+        calls.push(`${file}:${i + 1}`);
+        if (!line.includes('destructive: true')) unmarked.push(`${file}:${i + 1}: ${line.trim()}`);
+      });
+    }
+    expect(unmarked).toEqual([]);
+    expect(calls.length).toBeGreaterThanOrEqual(19);
   });
 });

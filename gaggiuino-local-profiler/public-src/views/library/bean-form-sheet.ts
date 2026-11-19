@@ -686,7 +686,7 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
 }
 
 export async function deleteBean(id: number): Promise<void> {
-  if (!await confirmDialog(t('lib_confirm_delete_bean'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('lib_confirm_delete_bean'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await libraryApi.deleteBeanPermanently(id);
   if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   S.coffeeLibrary.beans = S.coffeeLibrary.beans.filter(b => b.id !== id);
