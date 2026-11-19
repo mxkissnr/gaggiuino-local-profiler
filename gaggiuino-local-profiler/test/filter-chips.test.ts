@@ -87,6 +87,7 @@ const RETIRED_2112 = ['chart-tab'] as const;
 const RETIRED_2120 = [
   'settings-card-title', 'orders-menu-title', 'mbk-restore-title',
   'fw-header', 'fw-close-x', 'fw-bean-image', 'flavorWheelImage', 'dw-summary-title', 'dw-candidate-title',
+    'lib-recipe-steps-header', 'lib-import-settings-title', 'lib-import-settings-subtitle', 'lib-import-extra-recipes-title', 'annotation-title',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -532,5 +533,23 @@ describe('dialog close (#2120)', () => {
     expect(back[0]).toContain('class="lib-sheet-close"');
     expect(back[1]).toContain('class="btn btn--quiet"');
     expect(buttons('brew-confirm-start').length).toBe(1);
+  });
+});
+
+describe('form headings (#2120)', () => {
+  it('gives the step lists, the import settings and the annotation panel the shared section title', () => {
+    const index = read('index.html');
+    expect(index.split('<div class="section-title">').length - 1).toBe(2);
+    expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_title">');
+    expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_custom_label">');
+    expect(index).toContain('<span class="section-title" data-i18n="ann_title">');
+    expect(read('views/gaggimate-profile-editor.ts').split('<div class="section-title">').length - 1).toBe(2);
+    expect(read('views/library/import.ts')).toContain('<div class="section-title">${esc(t(');
+  });
+
+  it('keeps only layout in the step list head and the annotation row', () => {
+    const root = postcss.parse(read('style.css'));
+    expect(declsOf(rulesWith(root, '.lib-recipe-steps-section > .section-title'))).toEqual(['justify-content: space-between', 'align-items: center']);
+    expect(declsOf(rulesWith(root, '.annotation-header .section-title'))).toEqual(['margin-bottom: 0']);
   });
 });
