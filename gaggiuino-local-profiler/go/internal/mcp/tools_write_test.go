@@ -451,6 +451,48 @@ func TestMarkMaintenanceDoneLogsAndRejectsUnknownTask(t *testing.T) {
 	}
 }
 
+// TestMarkMaintenanceDoneCallsTaskDoneHook is the MCP half of #2138: the tool
+// goes through the same task-done hook as the REST route (both run
+// maintenance.MarkTaskDone on the shared repository), once per successful
+// call and never on a rejected one.
+func TestMarkMaintenanceDoneCallsTaskDoneHook(t *testing.T) {
+	ts, _, _, maintRepo, registry := newWriteServer(t, true)
+	if err := registry.EnsureDefaultMachine(); err != nil {
+		t.Fatalf("EnsureDefaultMachine: %v", err)
+	}
+	defaultMachine, err := registry.GetDefaultMachine()
+	if err != nil || defaultMachine == nil {
+		t.Fatalf("GetDefaultMachine: %v", err)
+	}
+	type hookCall struct {
+		machineID int64
+		task      string
+	}
+	var mu sync.Mutex
+	var calls []hookCall
+	maintRepo.SetOnTaskDone(func(machineID int64, task string) {
+		mu.Lock()
+		defer mu.Unlock()
+		calls = append(calls, hookCall{machineID: machineID, task: task})
+	})
+	session := connect(t, ts.URL+Path)
+
+	if res := call(t, session, "mark_maintenance_done", map[string]any{"task": "backflush"}); res.IsError {
+		t.Fatalf("mark_maintenance_done failed: %s", errorText(t, res))
+	}
+	if res := call(t, session, "mark_maintenance_done", map[string]any{"task": "bogus"}); !res.IsError {
+		t.Fatalf("expected isError for an unknown task")
+	}
+
+	mu.Lock()
+	got := append([]hookCall(nil), calls...)
+	mu.Unlock()
+	want := []hookCall{{machineID: defaultMachine.ID, task: "backflush"}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("task-done hook calls = %+v, want %+v", got, want)
+	}
+}
+
 // dataChangedRecorder collects the (kind, id) pairs the write tools publish
 // through Deps.OnDataChanged, so a test can assert the exact sequence. The MCP
 // handler runs on its own goroutine, so access is mutex-guarded for -race.

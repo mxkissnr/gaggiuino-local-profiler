@@ -24,7 +24,8 @@ var ErrUnknownTask = errors.New("unknown maintenance task")
 // any caller gets the exact same maintenance_log side effect without
 // silently missing it — the same service-layer-extraction fix applied to
 // internal/orders' AcceptOrder/CompleteOrder/DeclineOrder (see that
-// package's service.go).
+// package's service.go). After the save it calls the repository's task-done
+// hook (SetOnTaskDone, #2138), so both callers share it.
 func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *library.Repository, registry *machines.Registry, rawTask, notes string, machineID int64) (map[string]Stat, error) {
 	maint, err := repo.GetMaintenance(machineID)
 	if err != nil {
@@ -54,6 +55,9 @@ func MarkTaskDone(repo *Repository, shotsRepo *shots.Repository, libRepo *librar
 	if _, err := repo.AddMaintenanceLogEntry(task, notes, machineHostname(registry), ShotCountFor(shotsRepo, task, machineID), machineID, time.Now()); err != nil {
 		return nil, err
 	}
+	// The task is saved: run the host's task-done hook (#2138, a GaggiMate
+	// counter reset). It returns at once and cannot fail marking done.
+	repo.notifyTaskDone(machineID, task)
 	return ComputeMaintenanceStats(shotsRepo, libRepo, maint, machineID)
 }
 

@@ -634,6 +634,14 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// internal/library/doc.go).
 	libraryHandlers.SetOnGrinderDeleted(maintenanceRepo.DeleteGrinderTask)
 
+	// #2138: marking backflush or descaling done (the REST route and the MCP
+	// tool mark_maintenance_done both run maintenance.MarkTaskDone) also asks a
+	// GaggiMate on firmware v1.10.0+ to reset its own counter, only through the
+	// opt-in machine-control gate. A callback because the live GaggiMate session
+	// lives on machinesHandlers. Best effort: it returns at once and never fails
+	// or delays marking done.
+	maintenanceRepo.SetOnTaskDone(machinesHandlers.ResetMaintenanceCounter)
+
 	// #1136: a firmware update triggered from the app shows up in the
 	// machine's maintenance log. Wired as a callback (not a direct import)
 	// for the same import-cycle reason as the grinder-delete hook above --
