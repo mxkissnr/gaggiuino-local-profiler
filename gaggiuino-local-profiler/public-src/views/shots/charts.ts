@@ -32,8 +32,8 @@ function _xyCurve(shot: ChartShot): ShotSeries {
 
 export function switchChartTab(tab: string): void {
   S.currentChartTab = tab;
-  (document.getElementById('tabZeit') as HTMLElement).classList.toggle('active', tab === 'zeit');
-  (document.getElementById('tabPQ') as HTMLElement).classList.toggle('active',   tab === 'pq');
+  (document.getElementById('tabZeit') as HTMLElement).setAttribute('aria-pressed', String(tab === 'zeit'));
+  (document.getElementById('tabPQ') as HTMLElement).setAttribute('aria-pressed', String(tab === 'pq'));
   (document.getElementById('zeitContainer') as HTMLElement).style.display = tab === 'zeit' ? '' : 'none';
   (document.getElementById('pqContainer') as HTMLElement).style.display   = tab === 'pq'   ? '' : 'none';
   if (tab === 'pq') updatePQChart();
@@ -115,8 +115,8 @@ export function openChartFullscreen(): void {
   (document.getElementById('chartFullscreen') as HTMLElement).classList.add('open');
   document.body.style.overflow = 'hidden';
   S.currentFsTab = S.currentChartTab;
-  (document.getElementById('fsTabZeit') as HTMLElement).classList.toggle('active', S.currentFsTab === 'zeit');
-  (document.getElementById('fsTabPQ') as HTMLElement).classList.toggle('active',   S.currentFsTab === 'pq');
+  (document.getElementById('fsTabZeit') as HTMLElement).setAttribute('aria-pressed', String(S.currentFsTab === 'zeit'));
+  (document.getElementById('fsTabPQ') as HTMLElement).setAttribute('aria-pressed', String(S.currentFsTab === 'pq'));
   (screen.orientation as unknown as { lock?: (o: string) => Promise<void> } | undefined)?.lock?.('landscape').catch(() => {});
   renderFsChart();
 }
@@ -130,8 +130,8 @@ export function closeChartFullscreen(): void {
 
 export function switchFsTab(tab: string): void {
   S.currentFsTab = tab;
-  (document.getElementById('fsTabZeit') as HTMLElement).classList.toggle('active', tab === 'zeit');
-  (document.getElementById('fsTabPQ') as HTMLElement).classList.toggle('active',   tab === 'pq');
+  (document.getElementById('fsTabZeit') as HTMLElement).setAttribute('aria-pressed', String(tab === 'zeit'));
+  (document.getElementById('fsTabPQ') as HTMLElement).setAttribute('aria-pressed', String(tab === 'pq'));
   renderFsChart();
 }
 

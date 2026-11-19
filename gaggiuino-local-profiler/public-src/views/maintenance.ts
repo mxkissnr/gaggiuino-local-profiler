@@ -728,7 +728,7 @@ export function openMaintLogForm(anchor: HTMLElement | null = null): void {
   openDetailSheet({
     title: t('maint_log_add'),
     body: maintLogFormBody(_maintLogTaskOptions(_lastActiveTiles), todayIsoDate()),
-    actions: html`<button type="button" class="lib-sheet-save" data-action="submit-maint-log">${tHtml('maint_log_save')}</button>`,
+    actions: html`<button type="button" class="btn btn--primary lib-sheet-save" data-action="submit-maint-log">${tHtml('maint_log_save')}</button>`,
     anchor,
   });
 }
@@ -746,7 +746,7 @@ export function openMaintCustomForm(anchor: HTMLElement | null = null): void {
   openDetailSheet({
     title: t('maint_custom_add_summary'),
     body: maintCustomFormBody(),
-    actions: html`<button type="button" class="lib-sheet-save" data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">${tHtml('maint_custom_add')}</button>`,
+    actions: html`<button type="button" class="btn btn--primary lib-sheet-save" data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">${tHtml('maint_custom_add')}</button>`,
     anchor,
   });
 }

@@ -156,8 +156,8 @@
                  and layout. updatePowerButton() in the status component keeps #powerBtn
                  hidden until a switch entity is configured. -->
             <span id="syncTime">kein Sync</span>
-            <button id="powerBtn" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
-            <button id="syncBtn" data-i18n-title="btn_sync" title="↻ Sync">↻ Sync</button>
+            <button id="powerBtn" type="button" class="btn btn--quiet btn--icon" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
+            <button id="syncBtn" type="button" class="btn btn--quiet" data-i18n-title="btn_sync" title="↻ Sync">↻ Sync</button>
             <select id="machineSwitcher" class="machine-switcher" aria-label="Machine" data-i18n-aria-label="machine_switcher_title" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
         </div>
     </div>
@@ -294,9 +294,9 @@
             </div>
 
             <div class="chart-tabs tabs-scroll">
-                <button class="chart-tab active" id="tabZeit" data-i18n-html="tab_time"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg> Zeit</button>
-                <button class="chart-tab" id="tabPQ" data-i18n="tab_pq">P·Q Kurve</button>
-                <button id="expandChartBtn" data-i18n-title="btn_fullscreen_tooltip" title="Vollbild">⤢</button>
+                <button type="button" class="chip" aria-pressed="true" id="tabZeit" data-i18n-html="tab_time"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg> Zeit</button>
+                <button type="button" class="chip" aria-pressed="false" id="tabPQ" data-i18n="tab_pq">P·Q Kurve</button>
+                <button id="expandChartBtn" type="button" class="btn btn--quiet btn--icon" data-i18n-title="btn_fullscreen_tooltip" title="Vollbild">⤢</button>
             </div>
             <div id="zeitContainer" class="chart-container">
                 <canvas id="espressoShotChart"></canvas>
@@ -309,10 +309,10 @@
             <div id="chartFullscreen">
                 <div class="fs-header">
                     <div class="fs-tabs tabs-scroll">
-                        <button class="chart-tab active" id="fsTabZeit" data-i18n-html="tab_time"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg> Zeit</button>
-                        <button class="chart-tab" id="fsTabPQ" data-i18n="tab_pq">P·Q Kurve</button>
+                        <button type="button" class="chip" aria-pressed="true" id="fsTabZeit" data-i18n-html="tab_time"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg> Zeit</button>
+                        <button type="button" class="chip" aria-pressed="false" id="fsTabPQ" data-i18n="tab_pq">P·Q Kurve</button>
                     </div>
-                    <button id="closeFullscreenBtn" data-i18n-html="btn_fullscreen_close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg> Schließen</button>
+                    <button id="closeFullscreenBtn" type="button" class="btn btn--quiet" data-i18n-html="btn_fullscreen_close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg> Schließen</button>
                 </div>
                 <div class="fs-body">
                     <canvas id="espressoShotChartFs" style="width:100%;height:100%"></canvas>
@@ -729,10 +729,10 @@
                         </div>
                     </div>
                     <div class="lib-trigger-row">
-                        <button class="lib-add-trigger" id="beanAddTrigger" data-i18n="lib_add_bean">+ Bohne hinzufügen</button>
-                        <button class="lib-scan-trigger" id="openScanModalBtn" data-i18n-html="lib_scan_barcode"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14"/></svg> Scan</button>
-                        <button class="lib-scan-trigger" id="toggleUrlImportBtn" data-i18n-html="lib_url_import"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.5 12.5 5a3.5 3.5 0 0 1 5 5L16 11.5"/><path d="M13 17.5 11.5 19a3.5 3.5 0 0 1-5-5L8 12.5"/></svg> URL</button>
-                        <button class="lib-scan-trigger" id="toggleImportSettingsBtn" data-i18n-html="lib_import_settings_btn"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M11.05 5.27L10.54 1.6A10.5 10.5 0 0 1 13.46 1.6L12.95 5.27A6.8 6.8 0 0 1 16.09 6.57L18.32 3.61A10.5 10.5 0 0 1 20.39 5.68L17.43 7.91A6.8 6.8 0 0 1 18.73 11.05L22.4 10.54A10.5 10.5 0 0 1 22.4 13.46L18.73 12.95A6.8 6.8 0 0 1 17.43 16.09L20.39 18.32A10.5 10.5 0 0 1 18.32 20.39L16.09 17.43A6.8 6.8 0 0 1 12.95 18.73L13.46 22.4A10.5 10.5 0 0 1 10.54 22.4L11.05 18.73A6.8 6.8 0 0 1 7.91 17.43L5.68 20.39A10.5 10.5 0 0 1 3.61 18.32L6.57 16.09A6.8 6.8 0 0 1 5.27 12.95L1.6 13.46A10.5 10.5 0 0 1 1.6 10.54L5.27 11.05A6.8 6.8 0 0 1 6.57 7.91L3.61 5.68A10.5 10.5 0 0 1 5.68 3.61L7.91 6.57A6.8 6.8 0 0 1 11.05 5.27Z"/></svg> Quellen</button>
+                        <button type="button" class="btn btn--tonal lib-add-trigger" id="beanAddTrigger" data-i18n="lib_add_bean">+ Bohne hinzufügen</button>
+                        <button type="button" class="btn btn--quiet lib-scan-trigger" id="openScanModalBtn" data-i18n-html="lib_scan_barcode"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5v14M8 5v14M11 5v14M13 5v14M17 5v14M20 5v14"/></svg> Scan</button>
+                        <button type="button" class="btn btn--quiet lib-scan-trigger" id="toggleUrlImportBtn" data-i18n-html="lib_url_import"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M9.5 14.5 14.5 9.5"/><path d="M11 6.5 12.5 5a3.5 3.5 0 0 1 5 5L16 11.5"/><path d="M13 17.5 11.5 19a3.5 3.5 0 0 1-5-5L8 12.5"/></svg> URL</button>
+                        <button type="button" class="btn btn--quiet lib-scan-trigger" id="toggleImportSettingsBtn" data-i18n-html="lib_import_settings_btn"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M11.05 5.27L10.54 1.6A10.5 10.5 0 0 1 13.46 1.6L12.95 5.27A6.8 6.8 0 0 1 16.09 6.57L18.32 3.61A10.5 10.5 0 0 1 20.39 5.68L17.43 7.91A6.8 6.8 0 0 1 18.73 11.05L22.4 10.54A10.5 10.5 0 0 1 22.4 13.46L18.73 12.95A6.8 6.8 0 0 1 17.43 16.09L20.39 18.32A10.5 10.5 0 0 1 18.32 20.39L16.09 17.43A6.8 6.8 0 0 1 12.95 18.73L13.46 22.4A10.5 10.5 0 0 1 10.54 22.4L11.05 18.73A6.8 6.8 0 0 1 7.91 17.43L5.68 20.39A10.5 10.5 0 0 1 3.61 18.32L6.57 16.09A6.8 6.8 0 0 1 5.27 12.95L1.6 13.46A10.5 10.5 0 0 1 1.6 10.54L5.27 11.05A6.8 6.8 0 0 1 6.57 7.91L3.61 5.68A10.5 10.5 0 0 1 5.68 3.61L7.91 6.57A6.8 6.8 0 0 1 11.05 5.27Z"/></svg> Quellen</button>
                     </div>
                     <div class="lib-url-row" id="urlImportRow" style="display:none">
                         <input class="lib-url-input" id="urlImportInput" aria-label="Import from URL" data-i18n-aria-label="lib_url_placeholder" data-i18n-placeholder="lib_url_placeholder" placeholder="kaffeebraun.com/…">
@@ -814,7 +814,7 @@
                             <button type="button" class="btn btn--primary" id="saveGrinderBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="grinderAddTrigger" data-i18n="lib_add_grinder">+ Mühle hinzufügen</button>
+                    <button type="button" class="btn btn--tonal lib-add-trigger" id="grinderAddTrigger" data-i18n="lib_add_grinder">+ Mühle hinzufügen</button>
                 </div>
                 <!-- Recipes -->
                 <div class="lib-section" id="libSectionRecipes">
@@ -898,7 +898,7 @@
                             <button type="button" class="btn btn--primary" id="saveRecipeBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="recipeAddTrigger" data-i18n="lib_add_recipe">+ Rezept hinzufügen</button>
+                    <button type="button" class="btn btn--tonal lib-add-trigger" id="recipeAddTrigger" data-i18n="lib_add_recipe">+ Rezept hinzufügen</button>
                 </div>
                 <!-- Milk -->
                 <div class="lib-section" id="libSectionMilk">
@@ -923,7 +923,7 @@
                             <button type="button" class="btn btn--primary" id="saveMilkBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="milkAddTrigger" data-i18n="lib_add_milk">+ Milch hinzufügen</button>
+                    <button type="button" class="btn btn--tonal lib-add-trigger" id="milkAddTrigger" data-i18n="lib_add_milk">+ Milch hinzufügen</button>
                 </div>
                 <!-- Baskets (#635) -->
                 <div class="lib-section" id="libSectionBaskets">
@@ -979,7 +979,7 @@
                             <button type="button" class="btn btn--primary" id="saveBasketBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="basketAddTrigger" data-i18n="lib_add_basket">+ Sieb hinzufügen</button>
+                    <button type="button" class="btn btn--tonal lib-add-trigger" id="basketAddTrigger" data-i18n="lib_add_basket">+ Sieb hinzufügen</button>
                 </div>
                 <!-- Puck Screens (#635) -->
                 <div class="lib-section" id="libSectionPuckScreens">
@@ -1023,12 +1023,12 @@
                             <button type="button" class="btn btn--primary" id="savePuckScreenBtn" data-i18n="lib_save">Speichern</button>
                         </div>
                     </div>
-                    <button class="lib-add-trigger" id="puckScreenAddTrigger" data-i18n="lib_add_puckscreen">+ Puck Screen hinzufügen</button>
+                    <button type="button" class="btn btn--tonal lib-add-trigger" id="puckScreenAddTrigger" data-i18n="lib_add_puckscreen">+ Puck Screen hinzufügen</button>
                 </div>
                 <!-- Profiles -->
                 <div class="lib-section" id="libSectionProfiles">
                     <div class="lib-list" id="profileListUI"></div>
-                    <button class="lib-add-trigger" id="profileAddTrigger" data-i18n="lib_add_profile">+ Neues Profil</button>
+                    <button type="button" class="btn btn--tonal lib-add-trigger" id="profileAddTrigger" data-i18n="lib_add_profile">+ Neues Profil</button>
                 </div>
             </div>
         </div>

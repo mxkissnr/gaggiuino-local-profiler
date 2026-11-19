@@ -55,7 +55,9 @@ Chips, buttons, and the search fields and dropdowns that share a row with chips 
 
 Every status label is a `.badge`. A page class next to it only places it (margin, grid area, position); a badge never has a border or its own tint.
 
-Every action button outside the navigation is a `.btn` with exactly one of the four variants, and a view has at most one `.btn--primary`. The icon buttons in a sheet header keep their 44 px size with `--radius-ctl`; top bar tabs and the bottom navigation are not buttons in this sense.
+Every action button outside the navigation is a `.btn` with exactly one of the four variants, and a view has at most one `.btn--primary`. The icon buttons in a sheet header keep their 44 px size with `--radius-ctl`; top bar tabs and the bottom navigation are not buttons in this sense. Sync and the machine power toggle in the top bar are actions, so they are `.btn--quiet` (the power toggle as `.btn--icon`, coloured by the machine's on/off state).
+
+The ordering kiosk is the one page with its own controls. It is a separate page for guests at a wall tablet or an e-ink screen and loads only the tokens, not the app stylesheet: its main actions are 56 px tall for a standing user, its drinks are large tiles, a press scales the control instead of a hover, and the e-ink mode redraws every control in black and white with a 3 px border. Colours, spacing, radii and fonts still come from the tokens; `.btn` and `.chip` are not used there.
 
 A guard test fails on any literal radius, literal px padding, `transition: all` or page class named `*-chip`, `*-badge`, `*-pill`, `*-tag` or `*-btn` that sets colour, background, border or radius, and on radius or padding in an inline style that a view or component writes. Navigation items, menu entries and notification dots are not buttons or badges, so their classes say what they are (`bottom-nav-item`, `lib-sheet-menu-item`, `maint-dot`).
 

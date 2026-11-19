@@ -76,6 +76,10 @@ const RETIRED_2096 = [
   'lib-recipe-shots-badge',
 ] as const;
 
+// Classes retired by #2112: the chart's time / P·Q switch is a pair of
+// shared chips. No rule, markup or code may use them again.
+const RETIRED_2112 = ['chart-tab'] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -136,7 +140,7 @@ describe('shared filter chips (#2093)', () => {
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -393,5 +397,38 @@ describe('destructive confirmations (#2111)', () => {
     }
     expect(unmarked).toEqual([]);
     expect(calls.length).toBeGreaterThanOrEqual(19);
+  });
+});
+
+describe('remaining action buttons (#2112)', () => {
+  it('gives the top bar actions and the chart controls the shared components', () => {
+    const index = read('index.html');
+    expect(index).toContain('<button id="powerBtn" type="button" class="btn btn--quiet btn--icon"');
+    expect(index).toContain('<button id="syncBtn" type="button" class="btn btn--quiet"');
+    expect(index).toContain('<button id="expandChartBtn" type="button" class="btn btn--quiet btn--icon"');
+    expect(index).toContain('<button id="closeFullscreenBtn" type="button" class="btn btn--quiet"');
+    for (const [id, pressed] of [['tabZeit', 'true'], ['tabPQ', 'false'], ['fsTabZeit', 'true'], ['fsTabPQ', 'false']] as const) {
+      expect(index, id).toContain(`<button type="button" class="chip" aria-pressed="${pressed}" id="${id}"`);
+    }
+    const charts = read('views/shots/charts.ts');
+    expect(charts).toContain("setAttribute('aria-pressed', String(tab === 'zeit'))");
+    expect(charts).not.toContain("classList.toggle('active'");
+    expect(read('components/status.ts')).toContain("const POWER_BTN_CLASS = 'btn btn--quiet btn--icon';");
+  });
+
+  it('gives the library triggers and the sheet saves a shared button variant', () => {
+    const index = read('index.html');
+    expect(index).not.toContain('<button class="lib-add-trigger"');
+    expect(index).not.toContain('<button class="lib-scan-trigger"');
+    expect(index.split('<button type="button" class="btn btn--tonal lib-add-trigger"').length - 1).toBe(7);
+    expect(index.split('<button type="button" class="btn btn--quiet lib-scan-trigger"').length - 1).toBe(3);
+    expect(read('views/library/bean-form-sheet.ts')).toContain("save.className = 'btn btn--tonal lib-sheet-save';");
+    expect(read('views/maintenance.ts').split('class="btn btn--primary lib-sheet-save"').length - 1).toBe(2);
+
+    const css = read('style.css');
+    expect(css).not.toContain('.lib-sheet-save');
+    const root = postcss.parse(css);
+    expect(declsOf(rulesWith(root, '.lib-add-trigger'))).toEqual(['width: 100%']);
+    expect(declsOf(rulesWith(root, '.lib-scan-trigger'))).toEqual(['white-space: nowrap']);
   });
 });
