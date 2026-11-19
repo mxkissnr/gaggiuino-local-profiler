@@ -171,6 +171,16 @@
         /* An icon in front of the title sits on the text's centre line. */
         .section-title > svg { align-self: center; }
 
+        /* #2120: the title of a card or form (a settings card, an orders
+           card, the result at the end of a wizard). A group inside it is a
+           .section-title; a dialog's own title sits in the sheet header bar. */
+        .card-title {
+            margin: 0;
+            font-size: var(--fs-3);
+            font-weight: 600;
+            color: var(--gray-200);
+        }
+
         /* ── Sidebar ── */
         #sidebar {
             width: 320px;
@@ -936,7 +946,6 @@
         }
         .settings-more .lib-sheet-menu-list { z-index: var(--z-dropdown); }
         .settings-card { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); display:flex; flex-direction:column; gap: var(--sp-3); }
-        .settings-card-title { margin: 0; font-size: var(--fs-3); font-weight:600; color:var(--gray-200); }
         .settings-card-desc { margin: 0; font-size: var(--fs-1); color:var(--gray-500); line-height:1.5; }
         /* A lone button in a card keeps its own width instead of stretching. */
         .settings-card > .btn { align-self: flex-start; }
@@ -990,7 +999,7 @@
         /* #2038: a settings card moved into a detail sheet: the sheet bar
            carries the title, so the card drops its own chrome. */
         .detail-sheet-body > .settings-card { background: none; padding: 0; }
-        .detail-sheet-body > .settings-card > .settings-card-title:first-child { display: none; }
+        .detail-sheet-body > .settings-card > .card-title:first-child { display: none; }
         /* #1878: the machine backups sheet (components/machine-backups.ts), opened
            from a Gaggiuino row's Backups action; wider than the default popover
            so a row's date, chip and actions fit on one line from 900px. */
@@ -1017,7 +1026,6 @@
         .mbk-select, .mbk-input { min-height:44px; padding: 0 var(--sp-3); background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-2); }
         .mbk-restore, .mbk-cmp { display:flex; flex-direction:column; gap: var(--sp-3); }
         .mbk-restore p { margin:0; font-size: var(--fs-2); color:var(--gray-300); }
-        .mbk-restore-title { margin:0; font-size: var(--fs-3); color:var(--gray-200); }
         .mbk-restore .mbk-hint { font-size: var(--fs-1); color:var(--gray-400); }
         .mbk-restore .mbk-warn { font-size: var(--fs-1); color:var(--warn); }
         .mbk-cmp-list { margin:0; padding-left: var(--sp-4); display:flex; flex-direction:column; gap: var(--sp-2); font-size: var(--fs-2); color:var(--gray-200); overflow-wrap:anywhere; }
@@ -3222,7 +3230,7 @@
         .orders-history-list { display:flex; flex-direction:column; gap: var(--sp-2); }
         .orders-section { display:flex; flex-direction:column; gap: 0; }
         .orders-menu-section { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); }
-        .orders-menu-title { font-size: var(--fs-2); font-weight:700; color:var(--gray-200); margin-bottom: var(--sp-4); cursor:pointer; display:flex; align-items:center; justify-content:space-between; }
+        .orders-menu-toggle { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); cursor: pointer; }
         .orders-menu-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
         .orders-menu-item { display:flex; flex-direction:column; gap: var(--sp-1); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
         .orders-menu-item-top { display:flex; align-items:center; gap: var(--sp-3); }
