@@ -510,3 +510,27 @@ describe('dialog titles (#2120)', () => {
     }
   });
 });
+
+// #2120: closing is the cancel. Guided maintenance and the GaggiMate editor
+// have one cancel, the header close; the brew confirmation keeps its two
+// answers and its header close does the same as Back.
+describe('dialog close (#2120)', () => {
+  it.each(['guided-maint-cancel', 'gm-editor-close'] as const)('%s: the header close is the only cancel', action => {
+    expect(buttons(action)).toEqual([
+      `<button type="button" class="lib-sheet-close" data-action="${action}" data-i18n-aria-label="lib_sheet_close" aria-label="Close">`,
+    ]);
+  });
+
+  it('routes both closes to the close functions the Cancel buttons used', () => {
+    expect(read('boot/delegation.ts')).toContain("case 'guided-maint-cancel': closeGuidedMaint(); break;");
+    expect(read('views/gaggimate-profile-editor.ts')).toContain("case 'gm-editor-close': closeGaggiMateEditor(); break;");
+  });
+
+  it('keeps both answers in the brew confirmation', () => {
+    const back = buttons('brew-confirm-cancel');
+    expect(back.length).toBe(2);
+    expect(back[0]).toContain('class="lib-sheet-close"');
+    expect(back[1]).toContain('class="btn btn--quiet"');
+    expect(buttons('brew-confirm-start').length).toBe(1);
+  });
+});
