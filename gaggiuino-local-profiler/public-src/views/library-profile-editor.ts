@@ -158,7 +158,7 @@ export async function duplicateProfile(id: string): Promise<void> {
 }
 
 export async function deleteMachineProfile(id: string): Promise<void> {
-  if (!await confirmDialog(t('profile_confirm_delete'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('profile_confirm_delete'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await machinesApi.deleteMachineProfile(id, S.activeMachineId ?? '');
   if (!r.ok) { window.showToast?.(t('profile_send_error')); return; }
   await loadMachineProfileList();
@@ -383,7 +383,7 @@ export async function sendProfileToMachine(): Promise<void> {
   const profile = _collectProfile();
   if (!profile.name) { markFieldInvalid(document.getElementById('profileFormName')); return; }
   if (!profile.phases.length) { window.showToast?.(t('profile_no_phases_error')); return; }
-  if (!await confirmDialog(t('profile_confirm_send'))) return;
+  if (!await confirmDialog(t('profile_confirm_send'), { destructive: true })) return;
 
   // Target the machine the form was opened for, not whatever is active now
   // (#1605). With none captured, send no machineId so the backend uses the
