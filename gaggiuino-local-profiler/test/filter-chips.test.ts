@@ -415,4 +415,20 @@ describe('remaining action buttons (#2112)', () => {
     expect(charts).not.toContain("classList.toggle('active'");
     expect(read('components/status.ts')).toContain("const POWER_BTN_CLASS = 'btn btn--quiet btn--icon';");
   });
+
+  it('gives the library triggers and the sheet saves a shared button variant', () => {
+    const index = read('index.html');
+    expect(index).not.toContain('<button class="lib-add-trigger"');
+    expect(index).not.toContain('<button class="lib-scan-trigger"');
+    expect(index.split('<button type="button" class="btn btn--tonal lib-add-trigger"').length - 1).toBe(7);
+    expect(index.split('<button type="button" class="btn btn--quiet lib-scan-trigger"').length - 1).toBe(3);
+    expect(read('views/library/bean-form-sheet.ts')).toContain("save.className = 'btn btn--tonal lib-sheet-save';");
+    expect(read('views/maintenance.ts').split('class="btn btn--primary lib-sheet-save"').length - 1).toBe(2);
+
+    const css = read('style.css');
+    expect(css).not.toContain('.lib-sheet-save');
+    const root = postcss.parse(css);
+    expect(declsOf(rulesWith(root, '.lib-add-trigger'))).toEqual(['width: 100%']);
+    expect(declsOf(rulesWith(root, '.lib-scan-trigger'))).toEqual(['white-space: nowrap']);
+  });
 });
