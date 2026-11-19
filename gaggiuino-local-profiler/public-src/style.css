@@ -74,6 +74,26 @@
             color: color-mix(in srgb, var(--accent-ink) 80%, var(--gray-100));
         }
 
+        /* An input chip: a value the user added (flavour, origin, an order
+           menu variant) or a flavour that highlights the wheel, with an
+           optional remove button. Used on its own, never together with
+           .chip. A page class only sets the tint: --input-chip-c for the
+           background and border, --input-chip-ink for the text. */
+        .chip--input {
+            --input-chip-c: var(--flavor-tint);
+            --input-chip-ink: var(--flavor-ink);
+            display: inline-flex; align-items: center; gap: var(--sp-1);
+            max-width: 100%;
+            padding: var(--sp-1) var(--sp-2);
+            border: 1px solid color-mix(in srgb, var(--input-chip-c) 30%, transparent);
+            border-radius: var(--radius-ctl);
+            background: color-mix(in srgb, var(--input-chip-c) 12%, transparent);
+            color: var(--input-chip-ink);
+            font-size: var(--fs-1);
+            font-weight: 600;
+            overflow-wrap: break-word;
+        }
+
         .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: var(--sp-2);
             min-height: var(--ctl-height);
@@ -148,6 +168,8 @@
             color: var(--gray-500);
         }
         .section-title__count { font-weight: 400; color: var(--gray-600); }
+        /* An icon in front of the title sits on the text's centre line. */
+        .section-title > svg { align-self: center; }
 
         /* ── Sidebar ── */
         #sidebar {
@@ -174,7 +196,7 @@
             /* #405: was a hardcoded #fff — unreadable on the light/Crema
                themes, where this surface is near-white. --gray-200 is the
                same "brightest text" token the rest of the app uses (e.g.
-               .analytics-section-title), themed correctly in both modes. */
+               .lib-item-name), themed correctly in both modes. */
             color: var(--gray-200);
             background: color-mix(in srgb, var(--paper) 2%, transparent);
         }
@@ -233,7 +255,7 @@
         }
         /* #405: was a hardcoded #fff, unreadable on the light/Crema themes —
            --gray-200 is the same themed "brightest text" token used
-           elsewhere (e.g. #sidebar h2 above, .analytics-section-title). */
+           elsewhere (e.g. #sidebar h2 above, .lib-item-name). */
         .profile-name-sidebar { font-size: var(--fs-2); font-weight: 600; color: var(--gray-200); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .shot-line2 { font-size: var(--fs-1); color: var(--gray-500); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         /* #502: the same "on ice" blue as the library's frozen portions */
@@ -323,7 +345,7 @@
             padding: var(--sp-1) var(--sp-3);
             cursor: pointer;
             font-size: var(--fs-1);
-            transition: all .2s;
+            transition: background-color .2s, color .2s;
             flex-shrink: 0;
             white-space: nowrap;
         }
@@ -340,11 +362,11 @@
             color: var(--gray-400);
             border: 1px solid transparent;
             border-radius: var(--radius);
-            padding: 2px var(--sp-1);
+            padding: var(--sp-1);
             cursor: pointer;
             align-items: center;
             justify-content: center;
-            transition: all .2s;
+            transition: background-color .2s, color .2s, border-color .2s;
             flex-shrink: 0;
         }
         #powerBtn:hover       { background: var(--gray-800); color: var(--gray-200); }
@@ -415,9 +437,9 @@
         .topbar-nav-more > summary::-webkit-details-marker { display: none; }
         .topbar-nav-more[open] > summary { color: var(--gray-200); background: color-mix(in srgb, var(--paper) 4%, transparent); }
         /* A badge on a tab inside the menu must still be visible from the
-           closed row: a dot at the icon's top right, in the .maint-badge
+           closed row: a dot at the icon's top right, in the .maint-dot
            background colour (that rule paints it with var(--err) too). */
-        .topbar-nav-more.has-badge .rail-icon-slot::after {
+        .topbar-nav-more.has-dot .rail-icon-slot::after {
             content: "";
             position: absolute; top: -1px; right: -1px;
             width: 6px; height: 6px; border-radius: 50%;
@@ -473,7 +495,7 @@
 
         /* Topbar ambient machine icon (#837) — the full animated
            "Instrument" SVG (machine-icon.js), sized into a ~44px square
-           touch target (matching .mobile-drawer-btn below as the reference
+           touch target (matching .mobile-drawer-toggle below as the reference
            tap size) even though the icon's own aspect ratio is much taller
            than wide — height-constrained, not width-stretched, so the body
            silhouette never distorts. */
@@ -497,14 +519,14 @@
 
         /* Mobile burger drawer trigger (#425) — hidden on desktop; the
            max-width:768px block below shows it. */
-        .mobile-drawer-btn {
+        .mobile-drawer-toggle {
             display: none;
             align-items: center; justify-content: center;
             background: transparent; border: none; color: var(--gray-400);
             width: 32px; height: 32px; flex-shrink: 0; padding: 0; cursor: pointer;
             transition: color .2s;
         }
-        .mobile-drawer-btn:hover { color: var(--gray-200); }
+        .mobile-drawer-toggle:hover { color: var(--gray-200); }
 
         /* ── Content topbar (#411) — hosts the relocated multi-machine
            switcher and the shot-sidebar re-expand button; both independently
@@ -594,12 +616,11 @@
         .map-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
         /* #1467: headings use the library shelf heading look — small, semibold,
            accent — with the grey counters sitting next to them. */
-        .analytics-section-title { margin: 0 0 var(--sp-3) 0; font-size: var(--fs-1); font-weight: 600; color: var(--accent-ink); }
-        .analytics-card-head .analytics-section-title { margin-bottom: 0; }
+        .analytics-card-head .section-title { margin-bottom: 0; }
         /* #1490: the trend heading carries a grey section counter for the long
            periods ("7-day average"), nothing for 7/30 days. */
         .analytics-trend-head { display: flex; align-items: baseline; gap: var(--sp-2); margin-bottom: var(--sp-3); }
-        .analytics-trend-head .analytics-section-title { margin-bottom: 0; }
+        .analytics-trend-head .section-title { margin-bottom: 0; }
         .analytics-trend-counter { font-size: var(--fs-1); font-weight: 600; color: var(--gray-500); }
         .analytics-two-col { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: var(--sp-5); }
 
@@ -665,12 +686,12 @@
         /* Coffee year: one column per week, Monday at the top (#1467). Real CSS
            grid instead of measuring the wrapper, so the fixed cell size keeps
            the whole year scrollable on phones. */
-        .cal-wrapper { --cal-cell: 12px; overflow-x: auto; padding-bottom: var(--sp-1); }
-        .cal-grid { display: grid; grid-auto-flow: column; grid-template-columns: 26px; grid-template-rows: repeat(7, var(--cal-cell)); grid-auto-columns: var(--cal-cell); gap: 3px; width: max-content; margin-right: var(--sp-3); }
-        .cal-weekday { font-size: .6rem; line-height: var(--cal-cell); color: var(--gray-600); text-align: right; padding-right: 2px; }
-        .cal-months { display: grid; grid-auto-flow: column; grid-auto-columns: var(--cal-cell); gap: 3px; padding-left: calc(26px + 3px); padding-right: var(--sp-3); margin-bottom: 3px; width: max-content; }
+        .cal-wrapper { --cal-cell: 12px; --cal-label: 26px; --cal-gap: 3px; overflow-x: auto; padding-bottom: var(--sp-1); }
+        .cal-grid { display: grid; grid-auto-flow: column; grid-template-columns: var(--cal-label); grid-template-rows: repeat(7, var(--cal-cell)); grid-auto-columns: var(--cal-cell); gap: var(--cal-gap); width: max-content; margin-right: var(--sp-3); }
+        .cal-weekday { font-size: .6rem; line-height: var(--cal-cell); color: var(--gray-600); text-align: right; }
+        .cal-months { display: grid; grid-auto-flow: column; grid-auto-columns: var(--cal-cell); gap: var(--cal-gap); padding-left: calc(var(--cal-label) + var(--cal-gap)); padding-right: var(--sp-3); margin-bottom: 3px; width: max-content; }
         .cal-month { font-size: .65rem; color: var(--gray-600); white-space: nowrap; overflow: visible; }
-        .cal-day { border: none; padding: 0; border-radius: 2px; background: var(--gray-800); cursor: default; }
+        .cal-day { border: none; padding: 0; border-radius: 0; background: var(--gray-800); cursor: default; }
         button.cal-day { cursor: pointer; font: inherit; }
         .cal-day-link:hover { filter: brightness(1.35); }
         .cal-0 { background: var(--gray-800); }
@@ -718,7 +739,7 @@
         @container (min-width: 1176px) {
             .cal-wrapper { --cal-cell: 15px; }
             .cal-card { display: grid; grid-template-columns: auto minmax(10rem, 1fr); column-gap: var(--sp-5); align-items: start; }
-            .cal-card > .analytics-section-title { grid-column: 1 / -1; }
+            .cal-card > .section-title { grid-column: 1 / -1; }
             .cal-streaks { margin-top: 0; }
         }
 
@@ -727,7 +748,7 @@
         .wh-row { display: flex; gap: 2px; align-items: center; }
         .wh-label { width: 30px; flex-shrink: 0; font-size: var(--fs-1); color: var(--gray-500); text-align: right; padding-right: var(--sp-1); text-transform: capitalize; }
         .wh-hourlabel { width: 15px; flex-shrink: 0; font-size: var(--fs-1); color: var(--gray-600); text-align: center; }
-        .wh-cell { width: 15px; height: 15px; border-radius: 2px; flex-shrink: 0; }
+        .wh-cell { width: 15px; height: 15px; border-radius: 0; flex-shrink: 0; }
         .wh-l0 { background: var(--gray-800); }
         .wh-l1 { background: color-mix(in srgb, var(--accent) 25%, transparent); }
         .wh-l2 { background: color-mix(in srgb, var(--accent) 50%, transparent); }
@@ -762,7 +783,7 @@
         .bests-row:last-child { border-bottom: none; }
         .bests-lbl   { font-size: var(--fs-1); color: var(--gray-500); flex-shrink: 0; }
         .bests-val   { font-size: var(--fs-2); color: var(--gray-200); font-weight: 600; text-align: right; }
-        .bests-link  { background: transparent; border: 1px solid var(--gray-700); color: var(--gray-400); border-radius:var(--radius); padding: 2px var(--sp-2); cursor: pointer; font-size: var(--fs-1); margin-left: var(--sp-2); transition: all .15s; }
+        .bests-link  { background: transparent; border: 1px solid var(--gray-700); color: var(--gray-400); border-radius:var(--radius); padding: var(--sp-1) var(--sp-2); cursor: pointer; font-size: var(--fs-1); margin-left: var(--sp-2); transition: color .15s, border-color .15s; }
         .bests-link:hover { color: var(--gray-200); border-color: var(--gray-500); }
 
         /* Bean cards */
@@ -782,7 +803,7 @@
         .analytics-shelf-count { font-size: var(--fs-1); color: var(--gray-500); font-weight: 600; }
         .analytics-shelf { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-3); }
         .analytics-shelf + .analytics-shelf { margin-top: var(--sp-3); }
-        .analytics-shelf-tile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); min-width: 44px; min-height: 44px; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
+        .analytics-shelf-tile { display: flex; flex-direction: column; align-items: flex-start; gap: var(--sp-1); min-width: 44px; min-height: 44px; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: var(--radius-ctl); }
         .analytics-shelf-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .analytics-shelf-rank { font-size: var(--fs-1); font-weight: 700; color: var(--gray-500); font-variant-numeric: tabular-nums; }
         .analytics-shelf-rank.top { color: var(--accent-ink); }
@@ -808,8 +829,8 @@
         .analytics-fact-icon svg { width: 24px; height: 24px; }
         .analytics-fact-big { font-size: var(--fs-5); font-weight: 700; color: var(--gray-100); line-height: 1.1; font-variant-numeric: tabular-nums; }
         .analytics-fact-text { font-size: var(--fs-1); color: var(--gray-400); line-height: 1.45; }
-        .analytics-fact-gauge { display: block; width: 100%; margin-top: auto; height: 4px; border-radius: 2px; background: var(--gray-700); overflow: hidden; }
-        .analytics-fact-gauge-fill { display: block; height: 100%; border-radius: 2px; background: var(--accent); }
+        .analytics-fact-gauge { display: block; width: 100%; margin-top: auto; height: 4px; border-radius: var(--radius-full); background: var(--gray-700); overflow: hidden; }
+        .analytics-fact-gauge-fill { display: block; height: 100%; border-radius: var(--radius-full); background: var(--accent); }
         .analytics-fact.night { background: linear-gradient(160deg, var(--night-from), var(--gray-800) 70%); }
         .analytics-fact-star { position: absolute; width: 2px; height: 2px; border-radius: 50%; background: var(--night-star); pointer-events: none; }
         @media (min-width: 900px) {
@@ -905,8 +926,7 @@
         .settings-row-value { flex:0 0 auto; font-size: var(--fs-1); color: var(--gray-400); font-variant-numeric: tabular-nums; }
         .settings-chev { flex:0 0 auto; width:8px; height:8px; border-right:2px solid var(--gray-500); border-bottom:2px solid var(--gray-500); transform: rotate(-45deg); }
         /* #2080: open-source licenses sheet */
-        .licenses-heading { display:flex; gap: var(--sp-2); margin: var(--sp-4) 0 var(--sp-2); font-size: var(--fs-1); font-weight:600; color: var(--gray-500); }
-        .licenses-count { font-weight:400; font-variant-numeric: tabular-nums; }
+        .licenses-heading { margin-top: var(--sp-4); }
         .licenses-row .settings-row-title, .licenses-row .settings-row-sub, .licenses-text .settings-row-sub { white-space: normal; overflow-wrap: anywhere; }
         .licenses-licence { font-size: var(--fs-1); color: var(--gray-400); }
         .licenses-text + .licenses-text { border-top: 1px solid var(--gray-800); }
@@ -1073,8 +1093,8 @@
 
         /* ── Degassing tracker ── */
         .degassing-bar-wrap { margin-top: var(--sp-2); }
-        .degassing-bar-track { height:6px; border-radius:3px; background:var(--gray-800); position:relative; overflow:visible; }
-        .degassing-bar-fill  { height:100%; border-radius:3px; transition:width .3s; }
+        .degassing-bar-track { height:6px; border-radius:var(--radius-full); background:var(--gray-800); position:relative; overflow:visible; }
+        .degassing-bar-fill  { height:100%; border-radius:var(--radius-full); transition:width .3s; }
         .degassing-label { font-size: var(--fs-1); margin-top: var(--sp-1); }
         .bean-age-hint { font-size: var(--fs-1); color:var(--gray-500); margin-top: var(--sp-1); display: inline-flex; align-items: center; gap: var(--sp-1); }
 
@@ -1087,7 +1107,7 @@
         .dialin-layout { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }
         .dialin-verdict[hidden] { display:none; }
         .dialin-score-bars { display:flex; align-items:flex-end; gap: var(--sp-1); height:48px; margin-top: var(--sp-4); }
-        .dialin-score-bars i { flex:1 1 0; max-width:40px; min-height:4px; background: currentColor; border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+        .dialin-score-bars i { flex:1 1 0; max-width:40px; min-height:4px; background: currentColor; border-radius: 0; }
         .dialin-score-bars .dialin-bar-none { color: var(--gray-700); }
         .dialin-grind { font-size: var(--fs-1); font-weight:600; color: var(--gray-200); font-variant-numeric: tabular-nums; }
         .dialin-grind-dir { margin-left:1px; font-size: .85em; color: var(--gray-400); }
@@ -1162,7 +1182,7 @@
         }
         #glpDemoBadge button {
             background: none; border: 1px solid var(--accent); color: var(--accent-ink);
-            border-radius:var(--radius); font-size: var(--fs-1); padding: 2px var(--sp-2); cursor: pointer; }
+            border-radius:var(--radius); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); cursor: pointer; }
 
         #chart-area { display: flex; flex-direction: column; padding: var(--sp-6) var(--sp-6) var(--sp-6); }
 
@@ -1313,7 +1333,7 @@
 
         .star-rating { display: flex; gap: var(--sp-1); }
         .star { cursor: pointer; color: var(--gray-700); transition: color .12s; user-select: none; line-height: 0; border:none; background:none; padding:0; }
-        .star:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:2px; }
+        .star:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius: var(--radius-ctl); }
         .star .star-glyph { width: 22px; height: 22px; fill: none; }
         .star.active, .star:hover { color: var(--accent-ink); }
         .star.active .star-glyph, .star:hover .star-glyph { fill: currentColor; }
@@ -1375,7 +1395,7 @@
             margin-top: var(--sp-4);
             background: var(--gray-900);
             border: 1px solid var(--gray-700);
-            border-radius: 12px;
+            border-radius: var(--radius);
             overflow: hidden;
             /* overflow:hidden clears min-size in flex layout, allowing the panel
                to shrink to 0. flex-shrink:0 when open prevents this so all
@@ -1480,7 +1500,7 @@
         .lib-tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--gray-500); font-size: var(--fs-1); font-weight: 500; padding: var(--sp-2) var(--sp-3); cursor: pointer; transition: color .15s; }
         .lib-tab { position: relative; }
         .lib-tab.active { color: var(--accent-ink); border-bottom-color: transparent; }
-        .lib-tab.active::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px; background: var(--accent); border-radius:1px; }
+        .lib-tab.active::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px; background: var(--accent); border-radius: var(--radius-full); }
         .lib-body { flex: 1; overflow-y: auto; padding: var(--sp-4) var(--sp-5); }
         .lib-section { display: none; }
         .lib-section.active { display: block; }
@@ -1490,6 +1510,7 @@
         .lib-item-name { font-size: var(--fs-2); color: var(--gray-200); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .lib-item-name .serif-display { font-size: var(--fs-3); font-weight: 600; }
         .lib-item-name .badge { margin-right: var(--sp-1); }
+        .lib-item-name .lib-recipe-shots { margin-left: var(--sp-1); }
         /* Machine-profile list (library-profile-editor.js renderProfileList):
            name + optional utility badge on one row — badge sits outside the
            name's own ellipsis-truncation so it never gets clipped away. */
@@ -1520,8 +1541,8 @@
         /* ── Inventory block (Material 3 linear progress indicator) ─────────── */
         .lib-inv-block { margin-top: var(--sp-2); display: flex; flex-direction: column; gap: var(--sp-1); }
         .lib-inv-bar-row { display: flex; align-items: center; gap: var(--sp-2); }
-        .lib-stock-bar-md { flex: 1; height: 6px; border-radius: 999px; background: var(--gray-700); overflow: hidden; }
-        .lib-stock-bar-fill-md { height: 100%; border-radius: 999px; background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
+        .lib-stock-bar-md { flex: 1; height: 6px; border-radius: var(--radius-full); background: var(--gray-700); overflow: hidden; }
+        .lib-stock-bar-fill-md { height: 100%; border-radius: var(--radius-full); background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
         .lib-stock-bar-fill-md.low { background: var(--err); }
         .lib-inv-pct { font-size: var(--fs-1); font-weight: 600; color: var(--gray-500); min-width: 3ch; text-align: right; }
         .lib-inv-pct.low { color: var(--err); }
@@ -1553,21 +1574,19 @@
            flavour chip list always contains its input, so it is unaffected). */
         #beanFormOriginChips:empty { display: none; }
         .flavor-chips-wrap input { background: transparent; border: none; outline: none; color: var(--gray-200); font-size: var(--fs-1); flex: 1; min-width: 110px; padding: var(--sp-1) 0; }
-        .flavor-chip { display: inline-flex; align-items: center; gap: var(--sp-1); background: color-mix(in srgb, var(--flavor-tint) 12%, transparent); border: 1px solid color-mix(in srgb, var(--flavor-tint) 30%, transparent); color: var(--flavor-ink); border-radius: var(--radius-ctl); padding: 2px var(--sp-2); font-size: var(--fs-1); font-weight: 600; overflow-wrap: break-word; max-width: 100%; }
         .flavor-chip-x { background: none; border: none; color: inherit; cursor: pointer; font-size: var(--fs-1); padding: 0; opacity: .7; }
         .flavor-chip-x:hover { opacity: 1; }
         /* #404: read-only display pills (bean cards) go quiet-outline
            instead of the filled badge the editable form's chips still use —
            .flavor-chip-static is only ever rendered without a .flavor-chip-x
            remove button, so this never touches the editor. */
-        .flavor-chip-static { padding: 1px var(--sp-2); font-size: var(--fs-1); background: transparent; border-color: var(--gray-700); color: var(--gray-500); }
-        .origin-chip { background: color-mix(in srgb, var(--ice) 12%, transparent); border-color: color-mix(in srgb, var(--ice) 30%, transparent); color: var(--ice); }
-        .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: color-mix(in srgb, var(--paper) 8%, transparent); border-radius: 3px; padding: 1px 2px; -moz-appearance: textfield; }
+        .flavor-chip-static { padding: 0 var(--sp-2); font-size: var(--fs-1); background: transparent; border-color: var(--gray-700); color: var(--gray-500); }
+        .origin-chip { --input-chip-c: var(--ice); --input-chip-ink: var(--ice); }
+        .flavor-chips-wrap .origin-chip-percent { width: 34px; min-width: 0; flex: none; text-align: center; background: color-mix(in srgb, var(--paper) 8%, transparent); border-radius: var(--radius-ctl); padding: 0 var(--sp-1); -moz-appearance: textfield; }
         .origin-chip-percent::-webkit-outer-spin-button, .origin-chip-percent::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         /* #1350: "Aromas" block in the bean detail sheet — the inline mini
            wheel next to highlight chips coloured from each flavour's segment. */
         .lib-sheet-aromas { margin-top: var(--sp-2); }
-        .lib-sheet-aromas-title { font-size: var(--fs-1); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gray-500); margin-bottom: var(--sp-2); }
         .lib-sheet-aromas-body { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
         /* #1963 slice 3: proven/suggested profile rows under the Aromas block.
            Same quiet sheet styling — plain rows, no card of their own. */
@@ -1588,7 +1607,7 @@
         /* #1543: the note's own colour as text was unreadable for dark notes
            (e.g. Molasses) on the dark theme -- keep it as the border/background
            tint only and use the theme's primary text colour for readability. */
-        .flavor-chip.lib-aroma-chip { background: color-mix(in srgb, var(--chip-color) 18%, transparent); border-color: color-mix(in srgb, var(--chip-color) 45%, transparent); color: var(--gray-100); cursor: pointer; }
+        .lib-aroma-chip { --input-chip-c: var(--chip-color); --input-chip-ink: var(--gray-100); cursor: pointer; }
         @media (prefers-reduced-motion: no-preference) {
             .lib-aroma-seg.is-pulse { animation: aroma-pulse 500ms ease-out; }
             @keyframes aroma-pulse { 0% { filter: brightness(1); } 45% { filter: brightness(1.7); } 100% { filter: brightness(1); } }
@@ -1620,7 +1639,7 @@
            an underline that thickens/accents on focus, instead of a plain
            all-round outlined box. Used by both the new/edit-bag dialog and
            the per-bag "Bestand anpassen" quick-edit row. */
-        .lib-new-bag-input { background: var(--gray-900); border: none; border-bottom: 2px solid var(--gray-700); border-radius: var(--radius-sm) var(--radius-sm) 0 0; color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); outline: none; flex: 1; min-width: 120px; transition: border-color .15s, background .15s; }
+        .lib-new-bag-input { background: var(--gray-900); border: none; border-bottom: 2px solid var(--gray-700); border-radius: var(--radius-ctl) var(--radius-ctl) 0 0; color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); outline: none; flex: 1; min-width: 120px; transition: border-color .15s, background .15s; }
         .lib-new-bag-input:hover { background: var(--gray-800); }
         .lib-new-bag-input:focus { border-bottom-color: var(--accent); background: var(--gray-800); }
         /* ── Bag history cards (Material Design) ──────────────────────────── */
@@ -1654,7 +1673,7 @@
            scroll gesture from fighting the drag on mobile. Rounded hover
            state layer gives it the same "this is a control" affordance as
            the icon buttons below, not just a static glyph. */
-        .lib-bag-drag-handle { cursor: grab; color: var(--gray-600); font-size: 16px; line-height: 1; touch-action: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; transition: background .15s, color .15s; }
+        .lib-bag-drag-handle { cursor: grab; color: var(--gray-600); font-size: 16px; line-height: 1; touch-action: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; transition: background .15s, color .15s; }
         .lib-bag-drag-handle:hover { background: color-mix(in srgb, var(--paper) 6%, transparent); color: var(--gray-400); }
         .lib-bag-drag-handle:active { cursor: grabbing; }
         .lib-bag-drag-list { display: flex; flex-direction: column; gap: var(--sp-2); }
@@ -1669,7 +1688,7 @@
            a proper chip-style row (chevron rotates via transform, count as
            a tonal badge) instead of the old plain text-link button with a
            hand-swapped ▸/▾ character. */
-        .lib-bag-history-toggle { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; padding: var(--sp-2) var(--sp-3); border:0; background:none; border-radius: 999px; margin-top: var(--sp-2); color: var(--gray-400); font-family:inherit; font-size: var(--fs-1); font-weight: 600; transition: background .15s, color .15s; }
+        .lib-bag-history-toggle { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; padding: var(--sp-2) var(--sp-3); border:0; background:none; border-radius: var(--radius-ctl); margin-top: var(--sp-2); color: var(--gray-400); font-family:inherit; font-size: var(--fs-1); font-weight: 600; transition: background .15s, color .15s; }
         .lib-bag-history-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
         .lib-bag-history-toggle:hover { background: color-mix(in srgb, var(--paper) 5%, transparent); color: var(--gray-200); }
         .lib-bag-history-toggle .lib-bag-chevron { transition: transform .2s ease; }
@@ -1733,7 +1752,7 @@
         .autocomplete-item {
             display: flex; align-items: center;
             min-height: 44px; padding: var(--sp-2) var(--sp-3);
-            border-radius: calc(var(--radius) - 2px);
+            border-radius: var(--radius-ctl);
             color: var(--gray-200); font-size: var(--fs-1);
             cursor: pointer;
         }
@@ -1795,8 +1814,8 @@
         .lib-milk-item { display:flex; flex-direction:column; gap: var(--sp-2); padding: var(--sp-3) 0; border-bottom:1px solid var(--gray-800); }
         .lib-milk-top { display:flex; align-items:center; gap: var(--sp-3); }
         .lib-milk-name { flex:1; font-size: var(--fs-2); color:var(--gray-200); font-weight:600; }
-        .lib-milk-stock-bar-wrap { height:5px; background:var(--gray-800); border-radius:3px; overflow:hidden; }
-        .lib-milk-stock-bar { height:100%; border-radius:3px; transition:width .3s; }
+        .lib-milk-stock-bar-wrap { height:5px; background:var(--gray-800); border-radius:var(--radius-full); overflow:hidden; }
+        .lib-milk-stock-bar { height:100%; border-radius:var(--radius-full); transition:width .3s; }
         .lib-milk-stock-bar.ok   { background:var(--ok); }
         .lib-milk-stock-bar.low  { background:var(--warn); }
         .lib-milk-stock-bar.empty{ background:var(--err); }
@@ -1805,23 +1824,21 @@
         .lib-milk-restock-row { display:flex; gap: var(--sp-2); align-items:center; }
         .lib-milk-restock-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; width:80px; }
         .lib-milk-restock-input:focus { border-color:var(--gray-600); }
-        .lib-milk-del { background:none; border:none; color:var(--gray-700); cursor:pointer; font-size: var(--fs-2); padding: 2px var(--sp-1); transition:color .15s; }
+        .lib-milk-del { background:none; border:none; color:var(--gray-700); cursor:pointer; font-size: var(--fs-2); padding: var(--sp-1); transition:color .15s; }
         .lib-milk-del:hover { color:var(--err); }
         /* ── Bean shelf (#1329, one shelf #1330) ───────────────────────────────────────
            One shelf of stock; the beans being drunk stand first. The toolbar
            switches the items between a photo grid and a compact list, and the
            spent or archived beans sit in a collapsed Empty & archive. */
         .lib-shelf-section { margin-top: var(--sp-4); }
-        .lib-shelf-heading { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); font-weight:600; color: var(--accent-ink); margin: 0 0 var(--sp-2); }
-        .lib-shelf-count { color: var(--gray-500); font-weight:600; }
         .lib-shelf { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: var(--sp-3); }
-        .lib-shelf-tile { display:grid; grid-row: span 6; grid-template-rows: subgrid; row-gap: var(--sp-1); align-content:start; min-width:44px; min-height:44px; padding:0; border:none; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; border-radius: var(--radius-sm); }
+        .lib-shelf-tile { display:grid; grid-row: span 6; grid-template-rows: subgrid; row-gap: var(--sp-1); align-content:start; min-width:44px; min-height:44px; padding:0; border:none; background:none; color:inherit; font:inherit; text-align:left; cursor:pointer; border-radius: var(--radius-ctl); }
         .lib-shelf-tile:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
         @supports not (grid-template-rows: subgrid) {
             .lib-shelf-tile { display:flex; flex-direction:column; align-items:stretch; gap: var(--sp-1); }
         }
         .lib-shelf-bag { position:relative; display:block; }
-        .lib-shelf-bag::after { content:''; display:block; height:3px; margin-top:2px; border-radius:2px; background: var(--gray-700); }
+        .lib-shelf-bag::after { content:''; display:block; height:3px; margin-top:2px; border-radius:var(--radius-full); background: var(--gray-700); }
         /* Icicles hang from the shelf board (the bag's ::after), so they
            start at the bag's bottom edge and stay clear of the photo. */
         .lib-shelf-bag.has-icicles { margin-bottom: 30px; }
@@ -1830,22 +1847,22 @@
         /* The open word is announced but not drawn (the badge left the
            photo); same off-screen technique as .lib-sheet-close. */
         .lib-shelf-open-label { position:absolute; width:1px; height:1px; overflow:hidden; clip-path: inset(50%); white-space:nowrap; }
-        .lib-shelf-img, .lib-shelf-ph { position:relative; z-index: var(--z-local-1); display:block; aspect-ratio:3/4; width:100%; object-fit:cover; border-radius: var(--radius-sm); background: var(--gray-800); }
+        .lib-shelf-img, .lib-shelf-ph { position:relative; z-index: var(--z-local-1); display:block; aspect-ratio:3/4; width:100%; object-fit:cover; border-radius: var(--radius-ctl); background: var(--gray-800); }
         .lib-shelf-img.is-sticker, .lib-bean-thumb.is-sticker { object-fit: contain; background: transparent; filter: drop-shadow(0 0 1px var(--gray-100)) drop-shadow(0 2px 3px color-mix(in srgb, var(--scrim) 35%, transparent)); }
         .lib-shelf-ph { display:flex; align-items:center; justify-content:center; background: var(--raised); color: var(--gray-500); font-size: var(--fs-3); font-weight:600; letter-spacing:.05em; }
         .lib-shelf-name { font-size: var(--fs-1); color: var(--gray-200); font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .lib-shelf-roaster { font-size: var(--fs-1); color: var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         /* Bag stack: up to two card-coloured copies peek out behind the photo. */
         .lib-shelf-stack { position:absolute; inset:0; z-index: var(--z-base); pointer-events:none; }
-        .lib-shelf-stack-layer { position:absolute; inset:0; border-radius: var(--radius-sm); background: var(--gray-800); border:1px solid var(--gray-700); }
+        .lib-shelf-stack-layer { position:absolute; inset:0; border-radius: var(--radius-ctl); background: var(--gray-800); border:1px solid var(--gray-700); }
         .lib-shelf-stack-layer:nth-child(1) { transform: translate(4px,-4px); }
         .lib-shelf-stack-layer:nth-child(2) { transform: translate(8px,-8px); }
         .lib-shelf-mark-top, .lib-shelf-mark-bottom { position:absolute; z-index: var(--z-local-2); }
         .lib-shelf-mark-top { top: var(--sp-1); right: var(--sp-1); }
         .lib-shelf-mark-bottom { bottom: var(--sp-1); left: var(--sp-1); }
         /* Thin stock bar, same look as the full card's .lib-stock-bar-md. */
-        .lib-shelf-bar { display:block; height:6px; border-radius:999px; background: var(--gray-700); overflow:hidden; }
-        .lib-shelf-bar-fill { display:block; height:100%; border-radius:999px; background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
+        .lib-shelf-bar { display:block; height:6px; border-radius:var(--radius-full); background: var(--gray-700); overflow:hidden; }
+        .lib-shelf-bar-fill { display:block; height:100%; border-radius:var(--radius-full); background: var(--accent); transition: width .3s cubic-bezier(.4,0,.2,1); }
         .lib-shelf-bar-fill.low { background: var(--err); }
         .lib-shelf-stock-line { font-size: var(--fs-1); color: var(--gray-400); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .lib-shelf-sealed { margin-left: var(--sp-1); color: var(--gray-500); }
@@ -1885,7 +1902,7 @@
         .lib-shelf-search-row .lib-shelf-search { flex:1 1 auto; }
         .lib-shelf-views { display:flex; flex:0 0 auto; gap: var(--sp-1); }
         .lib-shelf-chips { display:flex; flex-wrap:wrap; gap: var(--sp-1); }
-        .lib-shelf-sort { min-height:44px; padding: 0 var(--sp-2); background: var(--gray-900); border:1px solid var(--gray-700); border-radius: var(--radius-sm); color: var(--gray-200); font-size: var(--fs-1); }
+        .lib-shelf-sort { min-height:44px; padding: 0 var(--sp-2); background: var(--gray-900); border:1px solid var(--gray-700); border-radius: var(--radius-ctl); color: var(--gray-200); font-size: var(--fs-1); }
         .lib-shelf-sort:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
         .lib-shelf-no-match { color: var(--gray-500); font-size: var(--fs-1); padding: var(--sp-3) 0; }
         .lib-shelf-full-note { color: var(--gray-500); font-size: var(--fs-1); margin-bottom: var(--sp-2); }
@@ -1912,14 +1929,14 @@
         .lib-sheet-bar.is-scrolled { border-bottom-color: var(--gray-700); }
         .lib-sheet-bar-title { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--fs-3); font-weight: 600; color: var(--gray-100); }
         .lib-sheet-bar-actions { display: flex; align-items: center; gap: var(--sp-1); justify-self: end; }
-        .lib-sheet-save { min-height: 36px; padding: 0 var(--sp-3); border: none; border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-text); font: inherit; font-size: var(--fs-2); font-weight: 600; cursor: pointer; }
+        .lib-sheet-save { min-height: 36px; padding: 0 var(--sp-3); border: none; border-radius: var(--radius-ctl); background: var(--accent); color: var(--accent-text); font: inherit; font-size: var(--fs-2); font-weight: 600; cursor: pointer; }
         .lib-sheet-save:hover { filter: brightness(1.05); }
         .lib-sheet-save:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .lib-sheet-hero { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: var(--sp-3); align-items: start; }
         /* #1374: the grab pill drags the sheet down to close it on phones. It
            sits in the sticky bar's top padding, so it needs its own z-index to
            stay painted above the bar's background. */
-        .lib-sheet-grab { position: relative; z-index: var(--z-local-4); width: 36px; height: 4px; margin: 0 auto var(--sp-3); border-radius: 999px; background: var(--gray-600); }
+        .lib-sheet-grab { position: relative; z-index: var(--z-local-4); width: 36px; height: 4px; margin: 0 auto var(--sp-3); border-radius: var(--radius-full); background: var(--gray-600); }
         /* Shared detail popover/sheet (#1467). On phones the host keeps the
            bottom-sheet look; from 900px up an anchored open gets .detail-pop
            and floats next to the anchor instead. */
@@ -1942,7 +1959,7 @@
         @media (max-width: 899px) {
             .lib-sheet-grab, .lib-sheet-bar { touch-action: none; }
         }
-        .lib-sheet-photo { width: 96px; aspect-ratio: 3/4; border-radius: var(--radius-sm); overflow: hidden; background: var(--gray-800); }
+        .lib-sheet-photo { width: 96px; aspect-ratio: 3/4; border-radius: var(--radius-ctl); overflow: hidden; background: var(--gray-800); }
         .lib-sheet-photo .lib-bean-thumb { display: block; width: 100%; height: 100%; object-fit: cover; }
         .lib-sheet-photo .lib-bean-thumb.is-sticker { object-fit: contain; background: transparent; }
         .lib-sheet-initials { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; color: var(--gray-500); font-size: var(--fs-3); font-weight: 600; letter-spacing: .05em; }
@@ -1959,12 +1976,12 @@
         .lib-sheet-more > summary:hover, .lib-sheet-more[open] > summary { background: var(--raised); }
         .lib-sheet-more > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .lib-sheet-menu-list { position: absolute; right: 0; top: calc(100% + var(--sp-1)); z-index: var(--z-local-2); min-width: 200px; max-height: min(60vh, 360px); overflow-y: auto; padding: var(--sp-1) 0; background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); box-shadow: 0 8px 24px color-mix(in srgb, var(--scrim) 45%, transparent); }
-        .lib-sheet-menu-btn, .machine-dialog-more .machine-backups-btn { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; padding: 0 var(--sp-3); border: none; background: none; color: var(--gray-200); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
-        .lib-sheet-menu-btn:hover, .machine-dialog-more .machine-backups-btn:hover { background: var(--gray-700); }
-        .lib-sheet-menu-btn.del { color: var(--err); }
+        .lib-sheet-menu-item { display: flex; align-items: center; gap: var(--sp-2); width: 100%; min-height: 44px; padding: 0 var(--sp-3); border: none; background: none; color: var(--gray-200); font: inherit; font-size: var(--fs-2); text-align: left; cursor: pointer; }
+        .lib-sheet-menu-item:hover { background: var(--gray-700); }
+        .lib-sheet-menu-item.del { color: var(--err); }
         .lib-sheet-menu-sep { display: block; height: 1px; margin: var(--sp-1) 0; background: var(--gray-700); }
         .lib-sheet-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(0,1fr)); gap: var(--sp-2); margin: var(--sp-3) 0; }
-        .lib-sheet-primary { min-height: 44px; padding: 0 var(--sp-2); border: 1px solid var(--gray-700); border-radius: var(--radius-sm); background: var(--gray-800); color: var(--gray-200); font-size: var(--fs-1); font-weight: 600; cursor: pointer; }
+        .lib-sheet-primary { min-height: 44px; padding: 0 var(--sp-2); border: 1px solid var(--gray-700); border-radius: var(--radius-ctl); background: var(--gray-800); color: var(--gray-200); font-size: var(--fs-1); font-weight: 600; cursor: pointer; }
         .lib-sheet-primary:hover { border-color: var(--accent); color: var(--accent-ink); }
         .lib-sheet-body .lib-item-in-sheet { display: block; background: none; padding: 0; }
         /* Bean form in a sheet (#1349): the same static form, moved in. */
@@ -2017,11 +2034,10 @@
         .lib-form-hint-staged { color: var(--ok); }
 
         .orders-milk-section { margin-top: var(--sp-4); }
-        .orders-milk-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); margin: 0 0 var(--sp-2); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .orders-milk-row { display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-1) 0; border-bottom:1px solid var(--gray-800); font-size: var(--fs-1); }
         .orders-milk-emoji { font-size: var(--fs-3); }
         .orders-milk-name { flex:1; color:var(--gray-200); }
-        .orders-menu-milk-row { display:flex; align-items:center; gap: var(--sp-2); padding-left: 2px; font-size: var(--fs-1); color:var(--gray-500); }
+        .orders-menu-milk-row { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-500); }
         .orders-menu-milk-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; width:60px; }
         .orders-menu-milk-input:focus { border-color:var(--gray-600); }
 
@@ -2081,7 +2097,7 @@
             }
             #backupModal .backup-modal-card::before {
                 content:''; width:36px; height:4px; margin: 0 auto var(--sp-3);
-                border-radius:999px; background: var(--gray-600);
+                border-radius:var(--radius-full); background: var(--gray-600);
             }
         }
         .backup-modal-sections { display:flex; flex-direction:column; gap: 2px; }
@@ -2117,30 +2133,6 @@
         }
 
         #live-header h1 { font-size: var(--fs-5); font-weight: 600; color: var(--gray-200); margin: 0; }
-
-        #live-status-badge {
-            display: flex;
-            align-items: center;
-            gap: var(--sp-2);
-            font-size: var(--fs-1);
-            font-weight: 600;
-            color: var(--gray-600);
-        }
-
-        #live-status-badge.brewing     { color: var(--err); }
-        #live-status-badge.ready       { color: var(--ok); }
-        #live-status-badge.error       { color: var(--err); }
-        #live-status-badge.unreachable { color: var(--err); }
-        /* #902/#983: steaming/flushing/descaling get their own accent color,
-           distinct from brewing's --err red -- an active-but-not-a-shot
-           process. */
-        #live-status-badge.steaming,
-        #live-status-badge.flushing,
-        #live-status-badge.descaling   { color: var(--accent-ink); }
-        /* #1541: the idle badge mirrors the idle title's standby/warming
-           states instead of always reading as "Ready". */
-        #live-status-badge.standby     { color: var(--gray-500); }
-        #live-status-badge.warming     { color: var(--accent-ink); }
 
         #live-status-badge .badge-dot {
             width: 8px; height: 8px;
@@ -2278,7 +2270,7 @@
         #preheat-ready-badge {
             display: inline-flex; align-items: center; gap: var(--sp-2);
             background: color-mix(in srgb, var(--ok) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
-            color: var(--ok); border-radius: 24px; padding: var(--sp-3) var(--sp-6);
+            color: var(--ok); border-radius: var(--radius-full); padding: var(--sp-3) var(--sp-6);
             font-size: var(--fs-3); font-weight: 600; letter-spacing: .04em;
         }
         #preheat-warming-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
@@ -2288,13 +2280,13 @@
         #preheat-status-text { font-size: var(--fs-2); color: var(--gray-400); font-weight: 600; }
         #preheat-bar-bg {
             width: 100%; height: 6px;
-            background: color-mix(in srgb, var(--paper) 8%, transparent); border-radius: 3px; overflow: hidden;
+            background: color-mix(in srgb, var(--paper) 8%, transparent); border-radius: var(--radius-full); overflow: hidden;
             margin: var(--sp-3) 0 var(--sp-2);
         }
         #preheat-bar-fill {
             height: 100%; width: 0%;
             background: var(--accent);
-            border-radius: 3px; transition: width .8s ease;
+            border-radius: var(--radius-full); transition: width .8s ease;
         }
         #preheat-countdown { font-size: var(--fs-1); color: var(--gray-500); }
 
@@ -2323,7 +2315,7 @@
         .bean-filter-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .bean-filter-clear {
             background: none; border: none; color: var(--accent-ink); cursor: pointer;
-            font-size: var(--fs-1); line-height: 1; padding: 2px var(--sp-1); border-radius: var(--radius);
+            font-size: var(--fs-1); line-height: 1; padding: var(--sp-1); border-radius: var(--radius);
         }
         .bean-filter-clear:hover { background: color-mix(in srgb, var(--amber) 15%, transparent); }
 
@@ -2338,7 +2330,7 @@
             font-size: var(--fs-1);
             font-weight: 700;
             border-radius:var(--radius);
-            padding: 1px var(--sp-2);
+            padding: 0 var(--sp-2);
             margin-left: var(--sp-2);
             vertical-align: middle;
         }
@@ -2351,7 +2343,7 @@
             flex-wrap: wrap;
         }
         /* ── Freshness badge ── */
-        #freshnessBadge { margin-left: var(--sp-2); vertical-align: middle; }
+        #freshnessBadge, #firmwareVersionBadge { margin-left: var(--sp-2); vertical-align: middle; }
 
         /* Shot-detail header photo thumbnail (#448) — originally the mobile
            fallback for the space next to machine/freshness text. #850 made
@@ -2432,7 +2424,7 @@
             border: 1px solid var(--gray-700); border-radius:var(--radius);
             padding: var(--sp-1) var(--sp-4); cursor: pointer;
             font-size: var(--fs-1); font-weight: 600;
-            transition: all .2s;
+            transition: color .2s, border-color .2s;
             display: inline-flex; align-items: center; gap: var(--sp-1);
         }
         .chart-tab:hover  { color: var(--gray-200); border-color: var(--gray-500); }
@@ -2441,7 +2433,7 @@
             margin-left: auto; background: transparent; color: var(--gray-600);
             border: 1px solid var(--gray-700); border-radius:var(--radius);
             padding: var(--sp-1) var(--sp-2); cursor: pointer; font-size: var(--fs-2); line-height: 1;
-            transition: all .2s;
+            transition: color .2s, border-color .2s;
         }
         #expandChartBtn:hover { color: var(--gray-200); border-color: var(--gray-500); }
 
@@ -2462,7 +2454,7 @@
         #closeFullscreenBtn {
             background: transparent; border: 1px solid var(--gray-700); border-radius:var(--radius);
             color: var(--gray-400); padding: var(--sp-1) var(--sp-3); cursor: pointer; font-size: var(--fs-2);
-            transition: all .2s;
+            transition: color .2s, border-color .2s;
         }
         #closeFullscreenBtn:hover { color: var(--gray-200); border-color: var(--gray-500); }
         #chartFullscreen .fs-body { flex: 1; position: relative; min-height: 0; padding: var(--sp-2); }
@@ -2528,6 +2520,15 @@
         #trash-toggle:hover { color: var(--gray-400); }
         #trash-toggle .badge { margin-left: auto; }
         #trash-list { overflow-y: auto; max-height: 220px; }
+        /* ── Fixed top banners and the toast (#2096) ── The components build
+           them in code and keep position and colours inline; spacing and
+           shape live here, where the design guard sees them. */
+        .app-banner { padding: var(--sp-2) var(--sp-4); }
+        .app-banner-action { padding: var(--sp-1) var(--sp-3); border-radius: var(--radius-ctl); }
+        .app-banner-close { padding: 0 var(--sp-1); }
+        .demo-banner { padding: var(--sp-1) var(--sp-3); }
+        .demo-banner-link { padding: 0; }
+        .glp-toast { padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); }
         /* ── Toast action (#1716, e.g. Undo after trashing a shot) ── */
         .glp-toast-action {
             background: none; border: none; border-radius: var(--radius);
@@ -2604,7 +2605,7 @@
             .topbar-nav-scroll { display: none; }
             #btnSettings { display: none; }
             .topbar-sep { display: none; }
-            .mobile-drawer-btn { display: flex; }
+            .mobile-drawer-toggle { display: flex; }
             /* #410: #sidebar (shot list) is a full-screen alternate of the
                Shots tab now, not a drawer overlay — shown/hidden via plain
                inline display (updateMobileShotSidebarVisibility() in
@@ -2629,7 +2630,7 @@
             /* #540: #shots is the scroll container for the shot list — its
                last row could sit underneath the fixed #bottom-nav (56px +
                safe-area-inset). Same fix/value as #main below. */
-            #shots             { padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px) + var(--sp-3)); }
+            #shots             { padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--sp-3)); }
             #collapseBtn       { display: none; }
             /* Safety net: the desktop collapse class can only be toggled via
                #collapseBtn, hidden above — but a browser window resized
@@ -2655,7 +2656,7 @@
                    on mobile (below), so whichever of #sidebar/#shots ends up
                    the actual scroller on a given device still clears
                    #bottom-nav at the bottom of its content. */
-                padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px) + var(--sp-3));
+                padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + var(--sp-3));
             }
             #sidebar.sidebar-drawer-mode.sidebar-drawer-open { transform: translateX(0); }
             /* Overrides the always-on #sidebar > * { min-width: 320px; }
@@ -2670,7 +2671,7 @@
             }
             #sidebar-drawer-backdrop.visible { display: block; }
             /* #2053: dev-banner.ts moves #main/#sidebar down by the banner's height (inline top); shrink them by the same amount so their bottom stays at the viewport's bottom. 0px on real installs. */
-            #main              { position: fixed; inset: 0; z-index: var(--z-main); height: calc(100vh - var(--dev-banner-h, 0px)); min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)); }
+            #main              { position: fixed; inset: 0; z-index: var(--z-main); height: calc(100vh - var(--dev-banner-h, 0px)); min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px)); }
             #chart-area, #live-view { padding: var(--sp-4); }
             #expandSidebarBtn  { display: none !important; }
 
@@ -2683,9 +2684,9 @@
                 border-top: 1px solid var(--gray-700);
                 padding-bottom: env(safe-area-inset-bottom, 0px);
             }
-            .bottom-nav-btn {
+            .bottom-nav-item {
                 flex: 1;
-                min-height: 56px;
+                min-height: var(--bottom-nav-h);
                 min-width: 44px;
                 display: flex;
                 flex-direction: column;
@@ -2696,19 +2697,19 @@
                 border: none;
                 color: var(--gray-500);
                 cursor: pointer;
-                padding: var(--sp-2) 2px;
+                padding: var(--sp-2) var(--sp-1);
                 transition: color .15s;
             }
-            .bottom-nav-btn .bn-icon   { position: relative; display: flex; line-height: 1; padding: var(--sp-2) var(--sp-4); border-radius: 999px; transition: background .2s; }
-            .bottom-nav-btn .bn-icon .rail-icon { width: 20px; height: 20px; }
-            .bottom-nav-btn .bn-label  { font-size: var(--fs-1); font-weight: 600; }
-            .bottom-nav-btn.active     { color: var(--gray-200); }
+            .bottom-nav-item .bn-icon   { position: relative; display: flex; line-height: 1; padding: var(--sp-2) var(--sp-4); border-radius: var(--radius-full); transition: background .2s; }
+            .bottom-nav-item .bn-icon .rail-icon { width: 20px; height: 20px; }
+            .bottom-nav-item .bn-label  { font-size: var(--fs-1); font-weight: 600; }
+            .bottom-nav-item.active     { color: var(--gray-200); }
             /* #397: same raised-surface pill language the old .mode-btn.active
                used, scoped to the icon (a full-button pill would be too tall
                for a 56px-high bottom nav row). Active color now comes from
                the accent token (#410) instead of a hardcoded white. */
-            .bottom-nav-btn.active .bn-icon  { background: var(--gray-800); color: var(--accent-ink); }
-            .bottom-nav-btn.active .live-dot { background: var(--accent); }
+            .bottom-nav-item.active .bn-icon  { background: var(--gray-800); color: var(--accent-ink); }
+            .bottom-nav-item.active .live-dot { background: var(--accent); }
 
             #more-sheet-backdrop {
                 display: none;
@@ -2721,7 +2722,7 @@
                 flex-direction: column;
                 position: fixed;
                 right: 8px;
-                bottom: calc(56px + env(safe-area-inset-bottom, 0px) + 8px);
+                bottom: calc(var(--bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 8px);
                 background: var(--gray-900);
                 border: 1px solid var(--gray-700);
                 border-radius: var(--radius);
@@ -2874,15 +2875,15 @@
             text-align: left; font: inherit; color: inherit; cursor: pointer;
         }
         .maint-row:last-child { border-bottom: none; }
-        .maint-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-sm); }
+        .maint-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--radius-ctl); }
         .maint-row-icon { grid-area: icon; display: inline-flex; width: 16px; height: 16px; align-self: start; color: var(--accent-ink); }
         .maint-row-icon svg { width: 16px; height: 16px; }
         .maint-row-title { grid-area: title; font-size: var(--fs-2); font-weight: 600; color: var(--gray-100); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .maint-row:hover .maint-row-title { color: var(--accent-ink); }
         .maint-row-status { grid-area: chip; flex-shrink: 0; }
         .maint-row-meta { grid-area: meta; font-size: var(--fs-1); color: var(--gray-500); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
-        .maint-row-bar { grid-area: bar; display: block; position: relative; height: 4px; margin-top: var(--sp-1); background: var(--gray-800); border-radius: 2px; overflow: hidden; }
-        .maint-row-fill { display: block; height: 100%; border-radius: 2px; background: var(--ok); }
+        .maint-row-bar { grid-area: bar; display: block; position: relative; height: 4px; margin-top: var(--sp-1); background: var(--gray-800); border-radius: var(--radius-full); overflow: hidden; }
+        .maint-row-fill { display: block; height: 100%; border-radius: var(--radius-full); background: var(--ok); }
         .maint-row-fill.due   { background: var(--err); }
         .maint-row-fill.soon  { background: var(--accent); }
         .maint-row-fill.never { background: var(--gray-700); }
@@ -2898,7 +2899,7 @@
         .maint-cup .rail-icon { width: 28px; height: 28px; stroke-width: 1.5; }
         .maint-steam {
             position: absolute; top: -10px; width: 2px; height: 10px;
-            border-radius: 2px; background: currentColor; opacity: 0;
+            border-radius: var(--radius-full); background: currentColor; opacity: 0;
         }
         .maint-steam:nth-of-type(1) { left: 10px; }
         .maint-steam:nth-of-type(2) { left: 16px; }
@@ -2924,7 +2925,7 @@
         .maint-threshold-inputs { display:flex; gap:12px; flex-wrap:wrap; }
         .maint-threshold-field { display:flex; align-items:center; gap:6px; font-size:var(--fs-1); color:var(--gray-500); }
         .maint-threshold-field span { white-space:nowrap; }
-        .maint-threshold-field input { width:72px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size:var(--fs-1); padding:4px 8px; text-align:center; outline:none; }
+        .maint-threshold-field input { width:72px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size:var(--fs-1); padding: var(--sp-1) var(--sp-2); text-align:center; outline:none; }
         .maint-threshold-field input:focus { border-color:var(--gray-500); }
         /* Disabled tasks section */
         .maint-disabled-section { margin-top: var(--sp-4); }
@@ -2988,6 +2989,10 @@
         .gm-phase { background:var(--gray-800); border-radius:var(--radius); padding:var(--sp-3); margin-bottom:var(--sp-2); }
         .gm-phase-nav { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
         .gm-phase-nav span { flex:0 0 auto; font-size:var(--fs-1); color:var(--gray-400); }
+        .gm-render-error { padding: var(--sp-4); color: var(--err); }
+        .gm-note { text-align: center; padding: var(--sp-2); opacity: .6; }
+        .gm-phase-sep { text-align: center; padding: var(--sp-1); opacity: .4; }
+        .gm-empty { padding: var(--sp-2); opacity: .5; }
         .gm-dropdown { position:relative; display:inline-block; }
         /* This is a <ul> — list-style/margin were never reset, so its
            default browser bullet/indent showed next to every item (2026-
@@ -3033,7 +3038,7 @@
         .fw-close-x:hover, .fw-close-x:focus-visible { color:var(--gray-200); }
         .fw-bean-image { width:44px; height:44px; border-radius:var(--radius); object-fit:cover; flex-shrink:0; }
         .fw-breadcrumb { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-1); font-size: var(--fs-1); flex-shrink:0; min-height: calc(var(--fs-1) * 1.6); }
-        .fw-crumb { background:none; border:none; color:var(--gray-400); cursor:pointer; padding: 2px var(--sp-1); border-radius:var(--radius); font-size:inherit; font-weight:600; }
+        .fw-crumb { background:none; border:none; color:var(--gray-400); cursor:pointer; padding: var(--sp-1); border-radius:var(--radius); font-size:inherit; font-weight:600; }
         .fw-crumb:last-child { color:var(--gray-200); }
         .fw-crumb:hover, .fw-crumb:focus-visible { background:var(--gray-800); color:var(--gray-200); }
         .fw-crumb-sep { color:var(--gray-600); }
@@ -3096,7 +3101,7 @@
         /* Bean-photo preview (#1346): 3:4 with a crimped top edge like a coffee
            bag. Preview-guide only — the exported JPEG keeps the flat frame. */
         .crop-editor-canvas-portrait {
-            border-radius: var(--radius-sm) var(--radius-sm) var(--radius) var(--radius);
+            border-radius: 0 0 var(--radius) var(--radius);
             clip-path: polygon(
                 0 4%, 6% 0, 12% 4%, 18% 0, 24% 4%, 30% 0, 36% 4%, 42% 0,
                 48% 4%, 54% 0, 60% 4%, 66% 0, 72% 4%, 78% 0, 84% 4%, 90% 0,
@@ -3124,8 +3129,8 @@
         .sticker-hint-zoom { display:block; color: var(--gray-500); }
         .sticker-tap-marker { position:absolute; width:24px; height:24px; border-radius:50%; border:2px solid var(--accent); border-top-color: transparent; transform: translate(-50%,-50%); pointer-events:none; }
         .sticker-brush-preview { position:absolute; top:50%; left:50%; transform: translate(-50%,-50%); border-radius:50%; border:2px solid var(--gray-100); pointer-events:none; }
-        .sticker-progress { height:6px; width:100%; border-radius:999px; background:var(--gray-800); overflow:hidden; }
-        .sticker-progress-fill { height:100%; width:0; border-radius:999px; background:var(--accent); }
+        .sticker-progress { height:6px; width:100%; border-radius:var(--radius-full); background:var(--gray-800); overflow:hidden; }
+        .sticker-progress-fill { height:100%; width:0; border-radius:var(--radius-full); background:var(--accent); }
         .sticker-overlay.sticker-busy { cursor:progress; }
         /* Phones: the sheet fills the screen and the viewport takes the slack. */
         @media (max-width: 600px) {
@@ -3154,7 +3159,6 @@
         .fw-unmatched-label { font-size: var(--fs-1); color:var(--gray-500); margin-bottom: var(--sp-1); }
         .fw-unmatched-chips { display:flex; flex-wrap:wrap; gap: var(--sp-1); max-height:15vh; overflow-y:auto; flex-shrink:0; }
         .fw-credit { font-size: var(--fs-1); color:var(--gray-600); text-align:center; flex-shrink:0; }
-        .maint-section-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); margin: var(--sp-2) 0 var(--sp-1); grid-column:1/-1; }
         /* Maintenance Log */
         .maint-log-sec { display:flex; flex-direction:column; gap: var(--sp-3); }
         /* #1923: the log-entry and custom-task forms are sheet bodies */
@@ -3204,7 +3208,7 @@
         .maint-sheet-footer { display:flex; justify-content:flex-end; gap: var(--sp-2); }
         .maint-guide { align-self: flex-start; }
 
-        .maint-badge {
+        .maint-dot {
             display:inline-block; width:7px; height:7px; background:var(--err);
             border-radius:50%; margin-left: var(--sp-1); vertical-align:middle;
             animation:pulse 1.2s infinite;
@@ -3214,7 +3218,6 @@
         #orders-view { display:none; flex-direction:column; flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding: var(--sp-5); gap: var(--sp-5); }
         .orders-columns { display:grid; grid-template-columns:1fr 1fr; gap: var(--sp-4); align-items:start; }
         @media(max-width:700px){ .orders-columns { grid-template-columns:1fr; } }
-        .orders-col-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); margin-bottom: var(--sp-3); }
         .orders-history-header { display:flex; align-items:center; justify-content:space-between; }
         .order-history-right { display:flex; align-items:center; gap: var(--sp-2); }
         .order-hist-del { background:none; border:none; border-radius:var(--radius); color:var(--gray-700); padding: var(--sp-1); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:background .15s,color .15s; flex-shrink:0; }
@@ -3252,6 +3255,7 @@
         .orders-stats-global-item { display:flex; flex-direction:column; gap: 2px; }
         .orders-stats-global-label { font-size: var(--fs-1); color:var(--gray-600); }
         .orders-stats-global-val   { font-size: var(--fs-3); font-weight:700; color:var(--gray-200); }
+        .orders-stats-empty { color: var(--gray-600); font-size: var(--fs-1); padding: var(--sp-2) 0; }
         .orders-toggle-row { display:flex; align-items:center; gap: var(--sp-3); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4) var(--sp-4); }
         .orders-toggle-label { font-size: var(--fs-2); font-weight:600; color:var(--gray-200); flex:1; }
         .orders-toggle-state { font-size: var(--fs-1); font-weight:600; min-width:54px; text-align:right; }
@@ -3274,16 +3278,16 @@
         .orders-menu-item { display:flex; flex-direction:column; gap: var(--sp-1); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
         .orders-menu-item-top { display:flex; align-items:center; gap: var(--sp-3); }
         .orders-menu-item-name { flex:1; font-size: var(--fs-2); color:var(--gray-200); }
-        .orders-menu-del { background:none; border:none; color:var(--gray-600); font-size: var(--fs-3); cursor:pointer; padding: 2px var(--sp-2); transition:color .15s; }
+        .orders-menu-del { background:none; border:none; color:var(--gray-600); font-size: var(--fs-3); cursor:pointer; padding: var(--sp-1) var(--sp-2); transition:color .15s; }
         .orders-menu-del:hover { color:var(--err); }
-        .orders-menu-variants { display:flex; flex-wrap:wrap; gap: var(--sp-1); align-items:center; padding-left: 2px; }
-        .orders-menu-variant-chip { display:inline-flex; align-items:center; gap: var(--sp-1); background:var(--gray-800); border-radius:var(--radius); font-size: var(--fs-1); color:var(--gray-300); padding: 2px var(--sp-1) 2px var(--sp-2); }
-        .orders-menu-variant-del { background:none; border:none; color:var(--gray-600); cursor:pointer; font-size: var(--fs-1); padding: 0 1px; line-height:1; transition:color .15s; }
+        .orders-menu-variants { display:flex; flex-wrap:wrap; gap: var(--sp-1); align-items:center; }
+        .orders-menu-variant-chip { --input-chip-c: var(--gray-500); --input-chip-ink: var(--gray-300); }
+        .orders-menu-variant-del { background:none; border:none; color:var(--gray-600); cursor:pointer; font-size: var(--fs-1); padding: 0; line-height:1; transition:color .15s; }
         .orders-menu-variant-del:hover { color:var(--err); }
         .orders-menu-variant-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; width:100px; }
         .orders-menu-variant-input:focus { border-color:var(--gray-600); }
         .order-variant { font-size: var(--fs-1); color:var(--gray-400); font-weight:400; }
-        .orders-use-beans-note { font-size: var(--fs-1); color:var(--gray-500); font-style:italic; padding-left: 2px; display:inline-flex; align-items:center; gap: var(--sp-1); }
+        .orders-use-beans-note { font-size: var(--fs-1); color:var(--gray-500); font-style:italic; display:inline-flex; align-items:center; gap: var(--sp-1); }
 
         .ann-ordered-by { display:flex; flex-direction:column; gap: 2px; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); background:color-mix(in srgb, var(--paper) 3%, transparent); border:1px solid var(--gray-800); border-radius:var(--radius); }
         .ann-ordered-by-label { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); display:inline-flex; align-items:center; gap: var(--sp-1); }
@@ -3301,7 +3305,6 @@
         .orders-notify-select:focus { border-color:var(--gray-600); }
         .orders-notify-actions { display:flex; justify-content:flex-end; }
         .orders-broadcast-section { margin-bottom: var(--sp-4); padding-bottom: var(--sp-4); border-bottom:1px solid var(--gray-800); }
-        .orders-broadcast-title { font-size: var(--fs-1); font-weight:700; color:var(--gray-400); margin: 0 0 var(--sp-2); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .orders-broadcast-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
         .orders-broadcast-row { display:flex; align-items:center; gap: var(--sp-2); }
         .orders-broadcast-row label { font-size: var(--fs-2); color:var(--gray-200); cursor:pointer; }
@@ -3317,7 +3320,7 @@
         .sync-progress-track {
             width: 100px;
             height: 4px;
-            border-radius: 2px;
+            border-radius: var(--radius-full);
             background: var(--gray-700);
             overflow: hidden;
         }
@@ -3325,7 +3328,7 @@
             display: block; /* the firmware panel's fill is a <span>; inline boxes ignore width/height */
             height: 100%;
             width: 0%;
-            border-radius: 2px;
+            border-radius: var(--radius-full);
             background: var(--accent);
             transition: width .2s ease;
         }
@@ -3521,7 +3524,7 @@
         }
         .easter-egg-panel-card {
             position: relative; z-index: var(--z-local-1);
-            background: var(--gray-950); border: 1px solid var(--gray-700); border-radius: var(--radius-lg, var(--radius));
+            background: var(--gray-950); border: 1px solid var(--gray-700); border-radius: var(--radius-lg);
             padding: var(--sp-6) var(--sp-5) var(--sp-5);
             max-width: min(720px, 100%); width: 100%;
             max-height: min(92vh, 760px); overflow-y: auto;
@@ -3582,13 +3585,13 @@
         .coffee-history-shelf {
             display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end;
             gap: 8px; width: 100%; max-width: 640px; min-height: 36px;
-            padding: 6px 8px;
+            padding: var(--sp-1) var(--sp-2);
             border: 1px solid var(--gray-700); border-bottom-width: 3px;
             border-radius: var(--radius); background: var(--gray-900);
         }
         .coffee-history-bag {
             position: relative; width: 30px; height: 44px;
-            border-radius: 3px 3px 2px 2px;
+            border-radius: 0;
             background: linear-gradient(180deg, var(--gray-600), var(--gray-700));
             overflow: hidden;
         }
@@ -3633,15 +3636,15 @@
             --ach-stamp-ink: #8c3f27;
             position:relative; width:100%; max-width:660px;
             background:var(--ach-paper); color:var(--ach-ink);
-            border-radius:7px; padding:26px 26px 20px;
+            border-radius: var(--radius); padding: var(--sp-5) var(--sp-5) var(--sp-4);
             box-shadow:0 1px 0 color-mix(in srgb, var(--paper) 50%, transparent) inset, 0 2px 0 color-mix(in srgb, var(--scrim) 22%, transparent), 0 16px 34px color-mix(in srgb, var(--scrim) 34%, transparent);
         }
-        .ach-frame { position:absolute; inset:9px; border:1px solid color-mix(in srgb, var(--ach-ink) 26%, transparent); border-radius:4px; pointer-events:none; }
-        .ach-head { display:flex; flex-direction:column; align-items:center; gap:2px; padding-bottom:16px; }
+        .ach-frame { position:absolute; inset:9px; border:1px solid color-mix(in srgb, var(--ach-ink) 26%, transparent); border-radius: 0; pointer-events:none; }
+        .ach-head { display:flex; flex-direction:column; align-items:center; gap:2px; padding-bottom: var(--sp-4); }
         .ach-brand { font-size:.6875rem; letter-spacing:.16em; color:color-mix(in srgb, var(--ach-ink) 72%, var(--ach-paper)); }
         .ach-title { font-weight:600; font-size:1.45rem; line-height:1.1; }
         .ach-grid {
-            padding-top:18px; padding-bottom:18px; margin-top:2px;
+            padding-top: var(--sp-4); padding-bottom: var(--sp-4); margin-top:2px;
             border-top:1px dashed color-mix(in srgb, var(--ach-ink) 32%, transparent);
             border-bottom:1px dashed color-mix(in srgb, var(--ach-ink) 32%, transparent);
         }
@@ -3666,7 +3669,7 @@
             display:flex; flex-direction:column; align-items:center; gap:2px;
             font-family:'Fraunces', Georgia, serif; font-weight:600; font-size:2.4rem; letter-spacing:.1em;
             color:var(--ach-stamp-ink); opacity:.32; pointer-events:none;
-            border:5px solid var(--ach-stamp-ink); border-radius:8px; padding:2px 22px 6px;
+            border:5px solid var(--ach-stamp-ink); border-radius: var(--radius); padding: 0 var(--sp-5) var(--sp-1);
             filter:url(#ach-rough-ink); white-space:nowrap;
         }
         .ach-overprint-date { font-family:'Figtree', sans-serif; font-size:.8125rem; letter-spacing:.04em; }
@@ -3682,8 +3685,8 @@
         .ach-layout[data-ach-filter="got"] .ach-field:not(.ach-got),
         .ach-layout[data-ach-filter="open"] .ach-field.ach-got { opacity:.28; filter:saturate(.3); transition:opacity .15s; }
         @media (prefers-reduced-motion: reduce) { .ach-layout .ach-field { transition:none; } }
-        .ach-bar { display:block; height:4px; margin-top: var(--sp-2); border-radius:2px; background: var(--gray-800); overflow:hidden; }
-        .ach-bar i { display:block; height:100%; border-radius:2px; background: var(--accent); }
+        .ach-bar { display:block; height:4px; margin-top: var(--sp-2); border-radius:var(--radius-full); background: var(--gray-800); overflow:hidden; }
+        .ach-bar i { display:block; height:100%; border-radius:var(--radius-full); background: var(--accent); }
         .ach-sheet-desc { margin:0; color: var(--gray-200); }
         .ach-sheet-meta { margin: var(--sp-2) 0 0; font-size: var(--fs-1); color: var(--gray-500); font-variant-numeric: tabular-nums; }
         .ach-side { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }

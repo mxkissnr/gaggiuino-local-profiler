@@ -359,11 +359,11 @@ export function achPageHtml(
       </div>
       <div class="ach-side"${sideHidden ? html` hidden` : html``}>
         <section class="ach-soon-sec"${soonHidden ? html` hidden` : html``}>
-          <h2 class="analytics-section-title">${tHtml('ach_soon')}</h2>
+          <h2 class="section-title">${tHtml('ach_soon')}</h2>
           <div class="settings-group">${soonRows}</div>
         </section>
         <section class="ach-recent-sec"${recentHidden ? html` hidden` : html``}>
-          <h2 class="analytics-section-title">${tHtml('ach_recent')}</h2>
+          <h2 class="section-title">${tHtml('ach_recent')}</h2>
           <div class="settings-group">${recentRows}</div>
         </section>
       </div>

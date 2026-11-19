@@ -181,7 +181,7 @@ describe('the machine dialog (#2038)', () => {
     const markup = host.innerHTML;
     expect(markup).toContain('Gaggia');
     expect(markup).toContain('machine-dialog-more');
-    const backups = markup.indexOf('class="machine-backups-btn"');
+    const backups = markup.indexOf('class="lib-sheet-menu-item machine-backups-btn"');
     const setDefault = markup.indexOf('machine-set-default-btn');
     const del = markup.indexOf('machine-delete-btn');
     expect(backups).toBeGreaterThanOrEqual(0);

@@ -97,7 +97,7 @@ function _history(tile: MaintTile, history: MaintLogEntry[]): Html {
   const locale = localeFor(S.currentLang);
   const rows = history.filter(e => _entryBelongsToTile(e, tile));
   return html`<div class="maint-hist">
-    <h3 class="analytics-section-title">${tHtml('maint_log_title')}</h3>
+    <h3 class="section-title">${tHtml('maint_log_title')}</h3>
     ${rows.length ? joinHtml(rows.map(e => _historyRow(e, locale))) : html`<p class="empty-note">${tHtml('maint_log_empty')}</p>`}
   </div>`;
 }

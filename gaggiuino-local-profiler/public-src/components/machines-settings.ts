@@ -977,8 +977,8 @@ export function machineDialogActionsHtml(m: MachineView): Html {
   <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
   <div class="lib-sheet-menu-list">
     ${m.type === 'gaggiuino' ? machineBackupsButtonHtml() : html``}
-    ${!m.isDefault ? html`<button type="button" class="lib-sheet-menu-btn machine-set-default-btn">${tHtml('settings_machine_set_default')}</button>` : html``}
-    <button type="button" class="lib-sheet-menu-btn del machine-delete-btn">${tHtml('settings_machine_delete')}</button>
+    ${!m.isDefault ? html`<button type="button" class="lib-sheet-menu-item machine-set-default-btn">${tHtml('settings_machine_set_default')}</button>` : html``}
+    <button type="button" class="lib-sheet-menu-item del machine-delete-btn">${tHtml('settings_machine_delete')}</button>
   </div>
 </details>`;
 }

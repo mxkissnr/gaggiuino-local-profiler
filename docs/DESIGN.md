@@ -13,7 +13,7 @@ The app runs inside Home Assistant, so every page follows Home Assistant's inter
 7. **Settings are a grouped list** that leads to sub-pages, like Home Assistant's settings. On desktop the list sits on the left and the open sub-page on the right; on a phone the sub-page replaces the list and has a back arrow. A sub-page is a list of rows with the control on the right: a switch, pills, a dropdown, or a value with a chevron that opens a dialog.
 8. **Rarely used things are folded away.** Like "Empty & archive" in the library.
 
-Statistics (#1467), maintenance (#1923) and the coffee library's shelf still follow the earlier style: one sticky toolbar with search and chips, boxless sections under an accent heading, sticker tiles, and details in a popover next to the target on desktop. Their verdict, folds and two-column desktop layout already match these rules; the rest moves over in a later pass. Until then, a change to those pages keeps their current style rather than mixing the two.
+Statistics (#1467), maintenance (#1923) and the coffee library's shelf still follow the earlier style: one sticky toolbar with search and chips, boxless sections under a section title, sticker tiles, and details in a popover next to the target on desktop. Their verdict, folds and two-column desktop layout already match these rules; the rest moves over in a later pass. Until then, a change to those pages keeps their current style rather than mixing the two.
 
 ## Rules
 
@@ -37,26 +37,27 @@ The role decides the shape. A page picks a role, never a look.
 | `--radius-ctl` (8 px) | everything interactive: filter chips, buttons, inputs, dropdowns, segments, input chips (flavour/origin) |
 | `--radius` (10 px) | cards and containers |
 | `--radius-lg` (16 px) | bottom sheets and dialogs |
-| `--radius-full` | only non-interactive status badges, avatars, dots |
+| `--radius-full` | only non-interactive status badges, avatars, dots and progress bars |
 
-Round therefore means "status", not "clickable". `--radius-sm` is the old control radius and goes once its last user has moved to `--radius-ctl`.
+Round therefore means "status", not "clickable". Heat map and calendar cells are square.
 
 Four shared components live in one block near the top of the stylesheet. A page class keeps only layout (position, grid area, gap), never colour, radius or padding.
 
-Chips, buttons, and the search fields and dropdowns that share a row with chips have one height, `--ctl-height`: 44 px on touch devices (`pointer: coarse`), 36 px with a fine pointer. Input chips with a remove button (flavour, origin) and the aroma chips keep their own class and colour tint but use `--radius-ctl`.
+Chips, buttons, and the search fields and dropdowns that share a row with chips have one height, `--ctl-height`: 44 px on touch devices (`pointer: coarse`), 36 px with a fine pointer. Input chips with a remove button (flavour, origin, order menu variants) and the aroma chips are `.chip--input`; their page class only sets the tint.
 
 | Role | Class | Variants | Active state |
 |---|---|---|---|
 | Filter chip, single-choice pills | `.chip` | none | `aria-pressed="true"`: accent tint and accent border; never an `.active` class |
 | Button | `.btn` | `.btn--primary` (the one main action of a view), `.btn--tonal` (positive secondary action), `.btn--quiet` (neutral secondary action), `.btn--danger` (destructive); `.btn--icon` makes any of them an icon-only square | none; a control that stays on is a chip |
 | Status badge | `.badge` | neutral (no modifier), `.badge--ok`, `.badge--warn`, `.badge--err`, `.badge--info`, `.badge--accent`; the score scale `.badge--score-great`, `.badge--score-good`, `.badge--score-ok`, `.badge--score-low`, `.badge--score-bad`; `.badge--scrim` for a badge on a photo | none; a badge is never clickable, a clickable status is a `.btn` or a `.chip` |
+| Input chip | `.chip--input`, on its own, never with `.chip` | the tint through `--input-chip-c` (background, border) and `--input-chip-ink` (text) | none |
 | Section title | `.section-title` | optional counter in `.section-title__count` | none |
 
 Every status label is a `.badge`. A page class next to it only places it (margin, grid area, position); a badge never has a border or its own tint.
 
 Every action button outside the navigation is a `.btn` with exactly one of the four variants, and a view has at most one `.btn--primary`. The icon buttons in a sheet header keep their 44 px size with `--radius-ctl`; top bar tabs and the bottom navigation are not buttons in this sense.
 
-A guard test counts literal radii, literal px paddings, `transition: all` and page classes named `*-chip`, `*-badge`, `*-pill`, `*-tag` or `*-btn` that still set colour, background, border or radius. The counts may only go down.
+A guard test fails on any literal radius, literal px padding, `transition: all` or page class named `*-chip`, `*-badge`, `*-pill`, `*-tag` or `*-btn` that sets colour, background, border or radius, and on radius or padding in an inline style that a view or component writes. Navigation items, menu entries and notification dots are not buttons or badges, so their classes say what they are (`bottom-nav-item`, `lib-sheet-menu-item`, `maint-dot`).
 
 ## Interaction rules
 

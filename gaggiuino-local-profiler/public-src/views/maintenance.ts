@@ -284,7 +284,7 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
     ${_maintVerdictHtml(verdict)}
     <section class="analytics-sec maint-tasks-sec">
       <div class="analytics-card-head">
-        <h3 class="analytics-section-title">${esc(t('maint_tasks_title'))}</h3>
+        <h3 class="section-title">${esc(t('maint_tasks_title'))}</h3>
         <span class="analytics-shelf-count">${esc(active.length)}</span>
       </div>
       <div class="maint-rows" id="maintGrid"></div>

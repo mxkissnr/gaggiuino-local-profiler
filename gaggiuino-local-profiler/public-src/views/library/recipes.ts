@@ -88,7 +88,7 @@ export function renderRecipeList(): void {
       ? (scoredShots.reduce((sum, s) => sum + (s.score ?? 0), 0) / scoredShots.length).toFixed(1)
       : null;
     const shotsBadge  = shotCount > 0
-      ? html`<span class="lib-recipe-shots-badge">${tHtml('lib_recipe_shots', shotCount)}${avgScore !== null ? html` · Ø ${esc(avgScore)}` : html``}</span>`
+      ? html`<span class="badge lib-recipe-shots">${tHtml('lib_recipe_shots', shotCount)}${avgScore !== null ? html` · Ø ${esc(avgScore)}` : html``}</span>`
       : html``;
     const sourceHref = safeHttpUrl(r.sourceUrl);
     return html`<div class="lib-item">

@@ -1,7 +1,7 @@
 // Configurable mobile bottom navigation (#443) — replaces the 8 hand-authored
 // bnShots/bnLive/.../bnSettings buttons that used to be split hardcoded
 // across #bottom-nav (4 main-bar buttons) and #moreSheet (4 "Mehr" buttons)
-// in index.html. Same 8 DOM ids, same icons, same #bottom-nav-btn/
+// in index.html. Same 8 DOM ids, same icons, same #bottom-nav-item/
 // .more-sheet-item classes — only WHERE each id ends up (main bar vs. Mehr
 // sheet) is now driven by a user-chosen, localStorage-persisted order
 // instead of being fixed in markup. mode.ts's active-state toggling and
@@ -120,7 +120,7 @@ function buildIcon(item: NavItem, sizeClass: string): Html {
 
 function buildMainBarButton(item: NavItem): HTMLButtonElement {
   const btn = document.createElement('button');
-  btn.className = 'bottom-nav-btn';
+  btn.className = 'bottom-nav-item';
   btn.id = bnDomId(item.id);
   if (item.hiddenByDefault) btn.style.display = 'none';
   btn.innerHTML = html`<span class="bn-icon" aria-hidden="true">${buildIcon(item, 'rail-icon')}</span><span class="bn-label" data-i18n="${esc(item.i18nKey)}">${tHtml(item.i18nKey)}</span>`;
@@ -207,7 +207,7 @@ export function renderBottomNav(): void {
     if (item) bar.appendChild(buildMainBarButton(item));
   });
   const moreBtn = document.createElement('button');
-  moreBtn.className = 'bottom-nav-btn';
+  moreBtn.className = 'bottom-nav-item';
   moreBtn.id = 'bnMore';
   moreBtn.setAttribute('aria-haspopup', 'true');
   moreBtn.setAttribute('aria-expanded', 'false');

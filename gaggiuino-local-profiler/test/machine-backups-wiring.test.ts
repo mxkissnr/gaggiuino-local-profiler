@@ -205,7 +205,7 @@ describe('the Backups action in the machine dialog (#1878, #2038)', () => {
     if (!gaggiuino || !gaggimate) throw new Error('expected two machines');
 
     const gMarkup = machineDialogActionsHtml(gaggiuino);
-    const backups = gMarkup.indexOf('class="machine-backups-btn">Backups</button>');
+    const backups = gMarkup.indexOf('class="lib-sheet-menu-item machine-backups-btn">Backups</button>');
     expect(backups).toBeGreaterThanOrEqual(0);
     expect(gMarkup.indexOf('machine-delete-btn')).toBeGreaterThan(backups);
     expect(gMarkup).not.toContain('machine-set-default-btn');

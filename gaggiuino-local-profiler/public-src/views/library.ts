@@ -136,7 +136,7 @@ export function resetShelfPrefs(keepQuery = false): void {
 }
 
 function _shelfHeading(key: string, count?: number): Html {
-  return html`<div class="lib-shelf-heading"><span>${tHtml(key)}</span>${count != null ? html`<span class="lib-shelf-count">${esc(count)}</span>` : esc('')}</div>`;
+  return html`<div class="section-title"><span>${tHtml(key)}</span>${count != null ? html`<span class="section-title__count">${esc(count)}</span>` : esc('')}</div>`;
 }
 
 function renderShelfToolbar(prefs: ShelfPrefs): Html {
@@ -251,7 +251,7 @@ function renderShelfSections(): void {
 
   const archiveHtml: Html = archiveRows.length
     ? html`<details class="lib-shelf-archive"${esc(_shelfArchiveOpen ? ' open' : '')}>
-        <summary class="lib-shelf-heading lib-shelf-archive-summary"><span>${tHtml('lib_shelf_archive')}</span><span class="lib-shelf-count">${esc(archiveRows.length)}</span></summary>
+        <summary class="section-title lib-shelf-archive-summary"><span>${tHtml('lib_shelf_archive')}</span><span class="section-title__count">${esc(archiveRows.length)}</span></summary>
         ${items(archiveRows, true)}</details>`
     : esc('');
 

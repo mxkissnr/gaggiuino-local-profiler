@@ -62,6 +62,20 @@ const RETIRED_BUTTONS = [
   'scan-photo-btn',
 ] as const;
 
+// Classes retired by #2096: section headings are .section-title, input chips
+// are .chip--input, notification dots are named *-dot and navigation items
+// are not named *-btn (docs/DESIGN.md, "Shapes and components"). No rule,
+// markup or code may use them again. Each slice of #2096 adds the classes it
+// retires.
+const RETIRED_2096 = [
+  'analytics-section-title', 'lib-shelf-heading', 'lib-shelf-count',
+  'maint-section-title', 'orders-col-title', 'orders-milk-title', 'orders-broadcast-title',
+  'lib-sheet-aromas-title', 'lib-sheet-profiles-title', 'licenses-count',
+  'flavor-chip', 'has-badge', 'maint-badge',
+  'mobile-drawer-btn', 'bottom-nav-btn', 'lib-sheet-menu-btn',
+  'lib-recipe-shots-badge',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -115,14 +129,14 @@ describe('shared filter chips (#2093)', () => {
     expect(search).toContain('border-radius: var(--radius-ctl)');
   });
 
-  it('leaves no rule, markup or code using a retired chip, badge or button class', () => {
+  it('leaves no rule, markup or code using a retired class', () => {
     const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
       .filter(name => name.endsWith('.ts') || name.endsWith('.html') || name.endsWith('.css'));
 
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -254,5 +268,99 @@ describe('shared buttons (#2095)', () => {
       expect(text, file).not.toMatch(/lib-save-btn|lib-btn-sm/);
       expect(text, file).toContain('class="btn btn--');
     }
+  });
+});
+
+describe('section titles (#2096)', () => {
+  it('gives the analytics, maintenance, achievements and shelf headings the shared section title', () => {
+    const index = read('index.html');
+    expect(index).toContain('<h3 class="section-title" data-i18n="maint_log_title">');
+    expect(index).toContain('<h3 class="section-title" data-i18n="analytics_trend">');
+    expect(read('views/achievements.ts')).toContain('<h2 class="section-title">');
+    expect(read('views/maintenance-sheet.ts')).toContain('<h3 class="section-title">');
+    const library = read('views/library.ts');
+    expect(library).toContain('<div class="section-title"><span>');
+    expect(library).toContain('<summary class="section-title lib-shelf-archive-summary">');
+    expect(library).toContain('<span class="section-title__count">');
+  });
+
+  it('gives the dialog titles, orders, licences and bean sheet headings the shared section title', () => {
+    const index = read('index.html');
+    expect(index).toContain('<h3 class="section-title" id="guidedMaintTitle">');
+    expect(index).toContain('<div class="section-title" data-i18n="orders_queue">');
+    expect(index).toContain('<div class="section-title orders-history-header">');
+    expect(read('views/orders.ts')).toContain('<p class="section-title">');
+    expect(read('components/licenses-sheet.ts')).toContain('<h3 class="section-title licenses-heading">');
+    expect(read('views/library/bean-card.ts')).toContain('<div class="section-title">');
+  });
+});
+
+describe('input chips (#2096)', () => {
+  it('renders flavour, origin, aroma and order menu variant chips as shared input chips', () => {
+    const form = read('views/library/bean-form-chips.ts');
+    expect(form).toContain("chip.className = 'chip--input';");
+    expect(form).toContain('<span class="chip--input origin-chip">');
+    expect(read('components/flavor-mini-wheel.ts')).toContain('<button type="button" class="chip--input lib-aroma-chip"');
+    expect(read('views/orders.ts')).toContain('<span class="chip--input orders-menu-variant-chip">');
+  });
+
+  it('lets the input chip page classes set only the tint', () => {
+    const root = postcss.parse(read('style.css'));
+    for (const selector of ['.origin-chip', '.lib-aroma-chip', '.orders-menu-variant-chip']) {
+      const decls = declsOf(rulesWith(root, selector));
+      expect(decls.length, selector).toBeGreaterThan(0);
+      for (const decl of decls) expect(decl, selector).toMatch(/^(?:--input-chip-c|--input-chip-ink|cursor):/);
+    }
+  });
+});
+
+describe('notification dots and the live status (#2096)', () => {
+  it('names the notification dots *-dot and gives the live status the shared badge', () => {
+    const index = read('index.html');
+    expect(index).toContain('<span id="maintBadge" class="maint-dot"');
+    expect(index).toContain('<span id="ordersBadge" class="maint-dot"');
+    expect(index).toContain('<div id="live-status-badge" class="badge">');
+  });
+});
+
+describe('navigation and menu items (#2096)', () => {
+  it('names the drawer toggle, the bottom navigation and the menu entries as items, not buttons', () => {
+    const index = read('index.html');
+    expect(index).toContain('class="mobile-drawer-toggle"');
+    expect(index).toContain('class="lib-sheet-menu-item"');
+    expect(read('components/bottom-nav.ts')).toContain("className = 'bottom-nav-item'");
+    expect(read('components/machine-backups.ts')).toContain('<button type="button" class="lib-sheet-menu-item machine-backups-btn">');
+  });
+});
+
+// #2096: radius and padding live in style.css, where the design ratchet sees
+// them, never in an inline style that a view or component writes: a style
+// attribute, a style object with a string value or a cssText entry. Offsets
+// measured at runtime (body.style.paddingTop below a fixed banner) are no
+// authored style and stay allowed.
+const INLINE_RADIUS_OR_PADDING = [
+  /style="[^"]*\b(?:padding|border-radius)/,
+  /\b(?:padding(?:Top|Right|Bottom|Left|Inline|Block)?|borderRadius)\s*:\s*['"`]/,
+  /['"`;]\s*(?:padding|border-radius)[\w-]*\s*:/,
+] as const;
+
+describe('inline styles (#2096)', () => {
+  it('leaves no radius or padding in an inline style', () => {
+    const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
+      .filter(name => name.endsWith('.ts') || name.endsWith('.html'));
+
+    const hits: string[] = [];
+    for (const file of files) {
+      const lines = read(file).split('\n');
+      lines.forEach((line, i) => {
+        if (INLINE_RADIUS_OR_PADDING.some(re => re.test(line))) hits.push(`${file}:${i + 1}: ${line.trim()}`);
+      });
+    }
+    expect(hits).toEqual([]);
+  });
+
+  it('shows the firmware version and the recipe shot count as shared badges', () => {
+    expect(read('index.html')).toContain('<span id="firmwareVersionBadge" class="badge" style="display:none"></span>');
+    expect(read('views/library/recipes.ts')).toContain('<span class="badge lib-recipe-shots">');
   });
 });
