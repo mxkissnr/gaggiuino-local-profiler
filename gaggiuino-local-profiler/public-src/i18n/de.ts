@@ -463,7 +463,7 @@ const de: Partial<Translations> = {
     mbk_lbl_warmup:'Aufheizzeit', mbk_lbl_brew_heater:'Leistung Brühheizung', mbk_lbl_steam_heater:'Leistung Dampfheizung', mbk_lbl_pump_power:'Pumpenleistung', mbk_lbl_idle_power:'Leistung im Leerlauf',
     mbk_lbl_machine_name:'Maschinenname', mbk_lbl_water_temp:'Wassertemperatur', mbk_lbl_dose:'Dosis', mbk_lbl_yield:'Yield', mbk_lbl_stop_weight:'Stopp bei Gewicht',
     settings_machine_control_title:'Maschinensteuerung',
-    settings_machine_control_desc:'Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Nur nutzen, wenn jemand an der Maschine ist.',
+    settings_machine_control_desc:'Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Ab Firmware v1.10.0 setzt das Erledigen von Backflush oder Entkalken auch den Zähler der Maschine zurück. Nur nutzen, wenn jemand an der Maschine ist.',
     settings_machine_control_enabled:'Maschinensteuerung erlauben',
     settings_restart_setup_wizard:'Setup-Tour neu starten',
     settings_mqtt_title:'Live-Verbindung', settings_mqtt_desc:'Wie GLP Live-Sensordaten von der Maschine bezieht.',

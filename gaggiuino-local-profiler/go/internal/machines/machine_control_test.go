@@ -3,6 +3,8 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -20,9 +22,10 @@ import (
 // fakeControlGaggiMate is a fake GaggiMate controller for the opt-in
 // machine-control tests (#1324). It records every received frame, answers
 // req:ota-settings with a configurable displayVersion (empty = no answer),
-// pushes a configurable evt:status every ~10ms, and answers
+// pushes a configurable evt:status every ~10ms, answers
 // req:flush:start / req:flush:stop with res:* echoing the rid as the received
-// number (the shape the real firmware sends).
+// number (the shape the real firmware sends), and answers
+// req:cleaning:<task>:complete per cleaningReply (#2138).
 type fakeControlGaggiMate struct {
 	*httptest.Server
 
@@ -30,6 +33,9 @@ type fakeControlGaggiMate struct {
 	version  string
 	status   map[string]any
 	received []map[string]any
+	// cleaningReply selects the answer to req:cleaning:<task>:complete: ""
+	// answers success true, "reject" success false, "silent" nothing.
+	cleaningReply string
 	// wsConn is the most recently accepted connection, so a test can push
 	// arbitrary frames (e.g. evt:brew:confirm) or drop it to force a reconnect.
 	wsConn *websocket.Conn
@@ -58,6 +64,17 @@ func (f *fakeControlGaggiMate) setStatus(s map[string]any) {
 	f.mu.Lock()
 	f.status = s
 	f.mu.Unlock()
+}
+
+func (f *fakeControlGaggiMate) setCleaningReply(r string) {
+	f.mu.Lock()
+	f.cleaningReply = r
+	f.mu.Unlock()
+}
+
+// cleaningFrames counts every req:cleaning:<task>:complete frame received.
+func (f *fakeControlGaggiMate) cleaningFrames() int {
+	return len(f.framesOfType("req:cleaning:backflush:complete")) + len(f.framesOfType("req:cleaning:descaling:complete"))
 }
 
 // receivedType reports whether any frame of this tp has been received.
@@ -169,6 +186,19 @@ func (f *fakeControlGaggiMate) handleWS(w http.ResponseWriter, r *http.Request) 
 				"tp":      "res:" + tp[len("req:"):],
 				"rid":     msg["rid"],
 				"success": true,
+			})
+			_ = conn.Write(ctx, websocket.MessageText, b)
+		case "req:cleaning:backflush:complete", "req:cleaning:descaling:complete":
+			f.mu.Lock()
+			reply := f.cleaningReply
+			f.mu.Unlock()
+			if reply == "silent" {
+				continue
+			}
+			b, _ := json.Marshal(map[string]any{
+				"tp":      "res:" + tp[len("req:"):],
+				"rid":     msg["rid"],
+				"success": reply != "reject",
 			})
 			_ = conn.Write(ctx, websocket.MessageText, b)
 		}
@@ -754,4 +784,204 @@ func TestGaggiMateGetStatus_FlushIsNotABrew(t *testing.T) {
 		st, err := a.GetStatus(context.Background(), m)
 		return err == nil && st.Brewing
 	})
+}
+
+// ── Maintenance counter reset (#2138) ────────────────────────────────────
+
+func TestGaggiMateCleaningFirmware(t *testing.T) {
+	for v, want := range map[string]bool{
+		"v1.10.0": true, "1.10.2": true, "v1.10.0-3-gabc": true, "v1.11": true, "v2.0.0": true,
+		"v1.9.9": false, "v1.9.0": false, "v1.8.1": false, "": false, "nightly": false,
+	} {
+		if got := gaggiMateCleaningFirmware(v); got != want {
+			t.Errorf("gaggiMateCleaningFirmware(%q) = %v, want %v", v, got, want)
+		}
+	}
+}
+
+// counterResetLog captures counterResetLogf for one test; the reset runs on
+// its own goroutine, so access is mutex-guarded.
+type counterResetLog struct {
+	mu    sync.Mutex
+	lines []string
+}
+
+func recordCounterResetLog(t *testing.T) *counterResetLog {
+	t.Helper()
+	l := &counterResetLog{}
+	prev := counterResetLogf.set(func(format string, args ...any) {
+		l.mu.Lock()
+		l.lines = append(l.lines, fmt.Sprintf(format, args...))
+		l.mu.Unlock()
+	})
+	t.Cleanup(func() { counterResetLogf.set(prev) })
+	return l
+}
+
+func (l *counterResetLog) snapshot() []string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return append([]string(nil), l.lines...)
+}
+
+func (l *counterResetLog) contains(sub string) bool {
+	for _, line := range l.snapshot() {
+		if strings.Contains(line, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// newCounterResetFixture builds Handlers with one fake GaggiMate machine on
+// firmware version, a warmed live session, and the machine-control setting
+// stored as enabled.
+func newCounterResetFixture(t *testing.T, version string, enabled bool) (*Handlers, *fakeControlGaggiMate, *Machine) {
+	t.Helper()
+	allowLoopbackMachineHost(t)
+	h, registry, sqlDB := newTestHandlers(t)
+	fake := newFakeControlGaggiMate()
+	fake.setVersion(version)
+	t.Cleanup(fake.Close)
+	t.Cleanup(h.gaggimateLive.DisconnectAll)
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	warmControlSession(t, h.gaggimateLive, fake.URL, version)
+	if err := db.SetKVBool(sqlDB, machineControlKVKey, enabled); err != nil {
+		t.Fatalf("SetKVBool: %v", err)
+	}
+	return h, fake, machine
+}
+
+// TestResetMaintenanceCounter_SendsOneFramePerTask: with machine control on
+// and a connected GaggiMate on v1.10.0, each task sends exactly one matching
+// complete frame over the existing connection, and GLP never starts a
+// cleaning profile.
+func TestResetMaintenanceCounter_SendsOneFramePerTask(t *testing.T) {
+	logs := recordCounterResetLog(t)
+	h, fake, machine := newCounterResetFixture(t, "v1.10.0", true)
+
+	h.ResetMaintenanceCounter(machine.ID, "backflush")
+	waitUntil(t, 2*time.Second, func() bool { return logs.contains("backflush counter reset on the machine") })
+	h.ResetMaintenanceCounter(machine.ID, "descaling")
+	waitUntil(t, 2*time.Second, func() bool { return logs.contains("descaling counter reset on the machine") })
+
+	backflush := fake.framesOfType("req:cleaning:backflush:complete")
+	if len(backflush) != 1 {
+		t.Fatalf("backflush complete frames = %d, want 1", len(backflush))
+	}
+	if backflush[0]["rid"] == nil {
+		t.Fatalf("backflush complete frame has no rid: %v", backflush[0])
+	}
+	if n := len(fake.framesOfType("req:cleaning:descaling:complete")); n != 1 {
+		t.Fatalf("descaling complete frames = %d, want 1", n)
+	}
+	if fake.receivedType("req:cleaning:backflush:start") || fake.receivedType("req:cleaning:descaling:start") {
+		t.Fatal("GLP sent a cleaning start request")
+	}
+	if n := fake.conns.Load(); n != 1 {
+		t.Fatalf("connections = %d, want 1 (the reset reuses the live session)", n)
+	}
+}
+
+// TestResetMaintenanceCounter_GateClosedSendsNothing: machine control off,
+// firmware v1.9.x, any other task, no connected session and a Gaggiuino
+// machine send nothing, open no connection and log nothing.
+func TestResetMaintenanceCounter_GateClosedSendsNothing(t *testing.T) {
+	ctx := context.Background()
+
+	hOff, fakeOff, mOff := newCounterResetFixture(t, "v1.10.0", false)
+	if err := hOff.sendCounterReset(ctx, mOff.ID, "backflush"); !errors.Is(err, ErrMachineControlDisabled) {
+		t.Fatalf("setting off: err = %v, want ErrMachineControlDisabled", err)
+	}
+
+	hOld, fakeOld, mOld := newCounterResetFixture(t, "v1.9.2", true)
+	if err := hOld.sendCounterReset(ctx, mOld.ID, "descaling"); !errors.Is(err, errCounterResetUnsupported) {
+		t.Fatalf("v1.9.2: err = %v, want errCounterResetUnsupported", err)
+	}
+
+	hOn, fakeOn, mOn := newCounterResetFixture(t, "v1.10.0", true)
+	for _, task := range []string{"grouphead", "gaskets", "waterfilter", "grinder_1", "custom_line"} {
+		if err := hOn.sendCounterReset(ctx, mOn.ID, task); !errors.Is(err, errCounterResetUnsupported) {
+			t.Fatalf("task %s: err = %v, want errCounterResetUnsupported", task, err)
+		}
+	}
+
+	allowLoopbackMachineHost(t)
+	h, registry, sqlDB := newTestHandlers(t)
+	if err := db.SetKVBool(sqlDB, machineControlKVKey, true); err != nil {
+		t.Fatalf("SetKVBool: %v", err)
+	}
+	idle := newFakeControlGaggiMate()
+	idle.setVersion("v1.10.0")
+	t.Cleanup(idle.Close)
+	mIdle, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Idle"), Type: strPtr("gaggimate"), Host: strPtr(idle.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if err := h.sendCounterReset(ctx, mIdle.ID, "backflush"); !errors.Is(err, ErrMachineControlUnavailable) {
+		t.Fatalf("no session: err = %v, want ErrMachineControlUnavailable", err)
+	}
+	if n := idle.conns.Load(); n != 0 {
+		t.Fatalf("the reset opened %d connections, want 0", n)
+	}
+	gm, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Gaggiuino"), Type: strPtr("gaggiuino"), Host: strPtr("http://127.0.0.1:1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine gaggiuino: %v", err)
+	}
+	if err := h.sendCounterReset(ctx, gm.ID, "backflush"); !errors.Is(err, ErrMachineControlUnsupported) {
+		t.Fatalf("Gaggiuino: err = %v, want ErrMachineControlUnsupported", err)
+	}
+
+	for name, f := range map[string]*fakeControlGaggiMate{"off": fakeOff, "v1.9.2": fakeOld, "other tasks": fakeOn, "no session": idle} {
+		if n := f.cleaningFrames(); n != 0 {
+			t.Fatalf("%s: %d cleaning frames sent, want 0", name, n)
+		}
+	}
+
+	logs := recordCounterResetLog(t)
+	for _, err := range []error{ErrMachineControlUnsupported, ErrMachineControlDisabled, ErrMachineControlUnavailable, errCounterResetUnsupported} {
+		logCounterReset(mOn.ID, "backflush", err)
+	}
+	if got := logs.snapshot(); len(got) != 0 {
+		t.Fatalf("a closed gate logged %v, want nothing", got)
+	}
+}
+
+// TestResetMaintenanceCounter_RejectedOrUnansweredIsLogged: success false and
+// a missing answer are logged as failed, and neither is retried.
+func TestResetMaintenanceCounter_RejectedOrUnansweredIsLogged(t *testing.T) {
+	logs := recordCounterResetLog(t)
+	h, fake, machine := newCounterResetFixture(t, "v1.10.0", true)
+
+	fake.setCleaningReply("reject")
+	h.ResetMaintenanceCounter(machine.ID, "backflush")
+	waitUntil(t, 2*time.Second, func() bool { return logs.contains("backflush counter reset failed") })
+	if n := len(fake.framesOfType("req:cleaning:backflush:complete")); n != 1 {
+		t.Fatalf("frames after a rejected reset = %d, want 1 (no retry)", n)
+	}
+
+	fake.setCleaningReply("silent")
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	err := h.sendCounterReset(ctx, machine.ID, "descaling")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("unanswered reset: err = %v, want context.DeadlineExceeded", err)
+	}
+	logCounterReset(machine.ID, "descaling", err)
+	if !logs.contains("descaling counter reset failed") {
+		t.Fatalf("an unanswered reset was not logged: %v", logs.snapshot())
+	}
+	waitUntil(t, time.Second, func() bool { return len(fake.framesOfType("req:cleaning:descaling:complete")) == 1 })
+	if logs.contains("counter reset on the machine") {
+		t.Fatalf("a failed reset was logged as a success: %v", logs.snapshot())
+	}
 }

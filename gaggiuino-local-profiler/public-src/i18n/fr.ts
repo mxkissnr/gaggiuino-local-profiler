@@ -463,7 +463,7 @@ const fr: Partial<Translations> = {
     mbk_lbl_warmup:'Temps de chauffe', mbk_lbl_brew_heater:'Puissance chauffe café', mbk_lbl_steam_heater:'Puissance chauffe vapeur', mbk_lbl_pump_power:'Puissance de la pompe', mbk_lbl_idle_power:'Puissance au repos',
     mbk_lbl_machine_name:'Nom de la machine', mbk_lbl_water_temp:'Température de l\'eau', mbk_lbl_dose:'Dose', mbk_lbl_yield:'Rendement', mbk_lbl_stop_weight:'Arrêt au poids',
     settings_machine_control_title:'Commande de la machine',
-    settings_machine_control_desc:'Permet à GLP de lancer et d\'arrêter un rinçage et de répondre à la confirmation d\'extraction de la machine. GaggiMate avec firmware v1.9.0 ou plus récent uniquement. À utiliser seulement si quelqu\'un est près de la machine.',
+    settings_machine_control_desc:'Permet à GLP de lancer et d\'arrêter un rinçage et de répondre à la confirmation d\'extraction de la machine. GaggiMate avec firmware v1.9.0 ou plus récent uniquement. Avec le firmware v1.10.0 ou plus récent, marquer le backflush ou le détartrage comme fait remet aussi à zéro le compteur de la machine. À utiliser seulement si quelqu\'un est près de la machine.',
     settings_machine_control_enabled:'Autoriser la commande de la machine',
     settings_restart_setup_wizard:'Relancer la visite guidée',
     settings_mqtt_title:'Connexion en direct', settings_mqtt_desc:'Comment GLP reçoit les données de capteurs en direct depuis la machine.',

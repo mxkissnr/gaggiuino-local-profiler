@@ -463,7 +463,7 @@ const en: Translations = {
     mbk_lbl_warmup:'Warm-up time', mbk_lbl_brew_heater:'Brew heater power', mbk_lbl_steam_heater:'Steam heater power', mbk_lbl_pump_power:'Pump power', mbk_lbl_idle_power:'Idle power',
     mbk_lbl_machine_name:'Machine name', mbk_lbl_water_temp:'Water temperature', mbk_lbl_dose:'Dose', mbk_lbl_yield:'Yield', mbk_lbl_stop_weight:'Stop at weight',
     settings_machine_control_title:'Machine control',
-    settings_machine_control_desc:'Lets GLP start and stop a flush and answer the machine\'s brew confirmation. GaggiMate firmware v1.9.0 or newer only. Only use it when someone is at the machine.',
+    settings_machine_control_desc:'Lets GLP start and stop a flush and answer the machine\'s brew confirmation. GaggiMate firmware v1.9.0 or newer only. On firmware v1.10.0 or newer, marking backflush or descaling done also resets the machine\'s own counter. Only use it when someone is at the machine.',
     settings_machine_control_enabled:'Allow machine control',
     settings_restart_setup_wizard:'Restart setup tour',
     settings_mqtt_title:'Live connection', settings_mqtt_desc:'How GLP gets live sensor data from the machine.',

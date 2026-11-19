@@ -463,7 +463,7 @@ const es: Partial<Translations> = {
     mbk_lbl_warmup:'Tiempo de calentamiento', mbk_lbl_brew_heater:'Potencia de la resistencia de café', mbk_lbl_steam_heater:'Potencia de la resistencia de vapor', mbk_lbl_pump_power:'Potencia de la bomba', mbk_lbl_idle_power:'Potencia en reposo',
     mbk_lbl_machine_name:'Nombre de la máquina', mbk_lbl_water_temp:'Temperatura del agua', mbk_lbl_dose:'Dosis', mbk_lbl_yield:'Rendimiento', mbk_lbl_stop_weight:'Parar al alcanzar el peso',
     settings_machine_control_title:'Control de la máquina',
-    settings_machine_control_desc:'Permite a GLP iniciar y detener un purgado y responder a la confirmación de extracción de la máquina. Solo GaggiMate con firmware v1.9.0 o posterior. Úsalo solo cuando haya alguien junto a la máquina.',
+    settings_machine_control_desc:'Permite a GLP iniciar y detener un purgado y responder a la confirmación de extracción de la máquina. Solo GaggiMate con firmware v1.9.0 o posterior. Con firmware v1.10.0 o posterior, marcar el backflush o la descalcificación como hechos también reinicia el contador de la propia máquina. Úsalo solo cuando haya alguien junto a la máquina.',
     settings_machine_control_enabled:'Permitir el control de la máquina',
     settings_restart_setup_wizard:'Reiniciar el tour de configuración',
     settings_mqtt_title:'Conexión en vivo', settings_mqtt_desc:'Cómo obtiene GLP los datos de sensores en vivo desde la máquina.',
