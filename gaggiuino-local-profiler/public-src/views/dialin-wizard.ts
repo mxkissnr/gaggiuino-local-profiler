@@ -499,7 +499,7 @@ function _renderRound(s: DialinSession): Html {
     <div class="dw-grind-display">${esc(String(s.pendingGrind ?? ''))}</div>
     ${candidate ? html`
       <div class="dw-candidate">
-        <div class="dw-candidate-title">${tHtml('dialin_wizard_candidate_title')}</div>
+        <div class="section-title">${tHtml('dialin_wizard_candidate_title')}</div>
         ${_miniShotChart(candidate)}
         <div class="dw-candidate-actions">
           <button type="button" class="btn btn--primary" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="1">${tHtml('dialin_wizard_candidate_confirm')}</button>
@@ -517,7 +517,7 @@ function _renderSummary(s: DialinSession): Html {
   const reasonText = s.status === 'converged' && s.rounds.length
     ? t(calcNextGrindSuggestion(s.rounds, _sessionScale(s)).reason) : '';
   return html`<div class="dw-summary">
-    <div class="dw-summary-title">${title}</div>
+    <div class="card-title">${title}</div>
     ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}
     ${best ? html`<div class="dw-summary-best">
       <div class="${esc(scoreBadgeClass(best.score))}">${esc(best.score)}</div>

@@ -550,7 +550,7 @@ function _renderStandardPhases(phases: GmPhase[]): Html {
   const rows = joinHtml(phases.map((ph, i) => (i ? html`${sep}${_renderStandardPhase(ph, i)}` : _renderStandardPhase(ph, i))));
   return html`
     <div class="lib-recipe-steps-section">
-      <div class="lib-recipe-steps-header">
+      <div class="section-title">
         <span>${tHtml('gm_phases_header')}</span>
         <button type="button" class="btn btn--tonal" data-action="gm-add-phase">${tHtml('gm_add_phase')}</button>
       </div>
@@ -629,7 +629,7 @@ function _renderProPhases(phases: GmPhase[]): Html {
   `;
   return html`
     <div class="lib-recipe-steps-section">
-      <div class="lib-recipe-steps-header"><span>${tHtml('gm_phases_pro_header')}</span></div>
+      <div class="section-title"><span>${tHtml('gm_phases_pro_header')}</span></div>
       ${nav}
       <div id="gmProPhaseDetail">
         ${ph ? _renderProPhase(ph, i) : html`<div class="gm-empty">${tHtml('gm_no_phases_add')}</div>`}

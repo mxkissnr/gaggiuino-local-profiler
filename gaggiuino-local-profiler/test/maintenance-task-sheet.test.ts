@@ -17,6 +17,7 @@ let openMaintTaskSheet: SheetModule['openMaintTaskSheet'];
 let _maintCountText: MaintView['_maintCountText'];
 let AUTO_SYNCED_NOTE: MaintView['AUTO_SYNCED_NOTE'];
 let openGuidedMaint: MaintView['openGuidedMaint'];
+let closeGuidedMaint: MaintView['closeGuidedMaint'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -28,7 +29,7 @@ beforeAll(async () => {
     configurable: true, writable: true,
   });
   ({ maintTaskSheetBody, maintTaskSheetActions, openMaintTaskSheet } = await import('../public-src/views/maintenance-sheet.js'));
-  ({ _maintCountText, AUTO_SYNCED_NOTE, openGuidedMaint } = await import('../public-src/views/maintenance.js'));
+  ({ _maintCountText, AUTO_SYNCED_NOTE, openGuidedMaint, closeGuidedMaint } = await import('../public-src/views/maintenance.js'));
 });
 
 interface TaskOverrides {
@@ -390,6 +391,18 @@ describe('openGuidedMaint closes the task sheet (#1928)', () => {
 
     expect(host.innerHTML).toBe('open sheet');
     expect(nodes.modal.style.display).toBeUndefined();
+  });
+});
+
+describe('the header close ends the guided checklist (#2120)', () => {
+  it('hides the checklist, as the removed Cancel did', () => {
+    const nodes = installGuidedDom(makeHost(), false);
+
+    openGuidedMaint('backflush', 1);
+    expect(nodes.modal.style.display).toBe('flex');
+
+    closeGuidedMaint();
+    expect(nodes.modal.style.display).toBe('none');
   });
 });
 
