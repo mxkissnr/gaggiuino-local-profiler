@@ -335,6 +335,10 @@ export async function importDevDb(file: File): Promise<void> {
   }
 }
 
+// #2112: the power toggle is a shared quiet icon button; only its on/off
+// class changes with the switch state.
+const POWER_BTN_CLASS = 'btn btn--quiet btn--icon';
+
 export function updatePowerButton(sw: SwitchPayload): void {
   const btn = document.getElementById('powerBtn') as HTMLButtonElement;
   const liveBtn = document.getElementById('btnLive') as HTMLButtonElement;
@@ -350,8 +354,8 @@ export function updatePowerButton(sw: SwitchPayload): void {
   }
   btn.style.display = '';
   S.machinePowerState = sw.state ?? null;
-  btn.className = sw.state === true  ? 'machine-on'
-                : sw.state === false ? 'machine-off' : '';
+  btn.className = sw.state === true  ? `${POWER_BTN_CLASS} machine-on`
+                : sw.state === false ? `${POWER_BTN_CLASS} machine-off` : POWER_BTN_CLASS;
   btn.title = sw.state === true  ? t('power_btn_on_title')
             : sw.state === false ? t('power_btn_off_title')
             : t('power_btn_unknown_title');

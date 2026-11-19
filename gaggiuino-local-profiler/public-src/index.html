@@ -156,8 +156,8 @@
                  and layout. updatePowerButton() in the status component keeps #powerBtn
                  hidden until a switch entity is configured. -->
             <span id="syncTime">kein Sync</span>
-            <button id="powerBtn" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
-            <button id="syncBtn" data-i18n-title="btn_sync" title="↻ Sync">↻ Sync</button>
+            <button id="powerBtn" type="button" class="btn btn--quiet btn--icon" style="display:none" title=""><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v8"/><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/></svg></button>
+            <button id="syncBtn" type="button" class="btn btn--quiet" data-i18n-title="btn_sync" title="↻ Sync">↻ Sync</button>
             <select id="machineSwitcher" class="machine-switcher" aria-label="Machine" data-i18n-aria-label="machine_switcher_title" style="display:none" data-action="switch-machine" data-i18n-title="machine_switcher_title" title="Maschine"></select>
         </div>
     </div>
@@ -294,9 +294,9 @@
             </div>
 
             <div class="chart-tabs tabs-scroll">
-                <button class="chart-tab active" id="tabZeit" data-i18n-html="tab_time"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg> Zeit</button>
-                <button class="chart-tab" id="tabPQ" data-i18n="tab_pq">P·Q Kurve</button>
-                <button id="expandChartBtn" data-i18n-title="btn_fullscreen_tooltip" title="Vollbild">⤢</button>
+                <button type="button" class="chip" aria-pressed="true" id="tabZeit" data-i18n-html="tab_time"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg> Zeit</button>
+                <button type="button" class="chip" aria-pressed="false" id="tabPQ" data-i18n="tab_pq">P·Q Kurve</button>
+                <button id="expandChartBtn" type="button" class="btn btn--quiet btn--icon" data-i18n-title="btn_fullscreen_tooltip" title="Vollbild">⤢</button>
             </div>
             <div id="zeitContainer" class="chart-container">
                 <canvas id="espressoShotChart"></canvas>
@@ -309,10 +309,10 @@
             <div id="chartFullscreen">
                 <div class="fs-header">
                     <div class="fs-tabs tabs-scroll">
-                        <button class="chart-tab active" id="fsTabZeit" data-i18n-html="tab_time"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg> Zeit</button>
-                        <button class="chart-tab" id="fsTabPQ" data-i18n="tab_pq">P·Q Kurve</button>
+                        <button type="button" class="chip" aria-pressed="true" id="fsTabZeit" data-i18n-html="tab_time"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.5 2"/></svg> Zeit</button>
+                        <button type="button" class="chip" aria-pressed="false" id="fsTabPQ" data-i18n="tab_pq">P·Q Kurve</button>
                     </div>
-                    <button id="closeFullscreenBtn" data-i18n-html="btn_fullscreen_close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg> Schließen</button>
+                    <button id="closeFullscreenBtn" type="button" class="btn btn--quiet" data-i18n-html="btn_fullscreen_close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg> Schließen</button>
                 </div>
                 <div class="fs-body">
                     <canvas id="espressoShotChartFs" style="width:100%;height:100%"></canvas>

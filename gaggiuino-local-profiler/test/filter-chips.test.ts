@@ -76,6 +76,10 @@ const RETIRED_2096 = [
   'lib-recipe-shots-badge',
 ] as const;
 
+// Classes retired by #2112: the chart's time / P·Q switch is a pair of
+// shared chips. No rule, markup or code may use them again.
+const RETIRED_2112 = ['chart-tab'] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -136,7 +140,7 @@ describe('shared filter chips (#2093)', () => {
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -393,5 +397,22 @@ describe('destructive confirmations (#2111)', () => {
     }
     expect(unmarked).toEqual([]);
     expect(calls.length).toBeGreaterThanOrEqual(19);
+  });
+});
+
+describe('remaining action buttons (#2112)', () => {
+  it('gives the top bar actions and the chart controls the shared components', () => {
+    const index = read('index.html');
+    expect(index).toContain('<button id="powerBtn" type="button" class="btn btn--quiet btn--icon"');
+    expect(index).toContain('<button id="syncBtn" type="button" class="btn btn--quiet"');
+    expect(index).toContain('<button id="expandChartBtn" type="button" class="btn btn--quiet btn--icon"');
+    expect(index).toContain('<button id="closeFullscreenBtn" type="button" class="btn btn--quiet"');
+    for (const [id, pressed] of [['tabZeit', 'true'], ['tabPQ', 'false'], ['fsTabZeit', 'true'], ['fsTabPQ', 'false']] as const) {
+      expect(index, id).toContain(`<button type="button" class="chip" aria-pressed="${pressed}" id="${id}"`);
+    }
+    const charts = read('views/shots/charts.ts');
+    expect(charts).toContain("setAttribute('aria-pressed', String(tab === 'zeit'))");
+    expect(charts).not.toContain("classList.toggle('active'");
+    expect(read('components/status.ts')).toContain("const POWER_BTN_CLASS = 'btn btn--quiet btn--icon';");
   });
 });

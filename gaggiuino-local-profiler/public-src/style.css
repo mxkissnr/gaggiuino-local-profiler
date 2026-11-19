@@ -335,43 +335,15 @@
         .status-dot.error   { background: var(--err); }
         .status-dot.unknown { background: var(--gray-600); }
 
-        /* #397: buttons live on fill + hover instead of a persistent 1px
-           border. */
-        #syncBtn {
-            background: var(--gray-800);
-            color: var(--gray-400);
-            border: 1px solid transparent;
-            border-radius:var(--radius);
-            padding: var(--sp-1) var(--sp-3);
-            cursor: pointer;
-            font-size: var(--fs-1);
-            transition: background-color .2s, color .2s;
-            flex-shrink: 0;
-            white-space: nowrap;
-        }
-        #syncBtn:hover    { background: var(--gray-800); color: var(--gray-200); }
-        #syncBtn:disabled { opacity: .4; cursor: not-allowed; }
+        /* #2112: Sync is an action, so it is a .btn--quiet; this rule only
+           keeps it on one line in the top bar. */
+        #syncBtn { flex-shrink: 0; white-space: nowrap; }
 
         /* #914, #2056: the one power toggle sits in the topbar on every
            layout (it used to live in the shot list footer, with a phone-only
            topbar copy). updatePowerButton() in the status component hides it via inline
-           style while no switch entity is configured. */
-        #powerBtn {
-            display: flex;
-            background: transparent;
-            color: var(--gray-400);
-            border: 1px solid transparent;
-            border-radius: var(--radius);
-            padding: var(--sp-1);
-            cursor: pointer;
-            align-items: center;
-            justify-content: center;
-            transition: background-color .2s, color .2s, border-color .2s;
-            flex-shrink: 0;
-        }
-        #powerBtn:hover       { background: var(--gray-800); color: var(--gray-200); }
-        #powerBtn:disabled    { opacity: .4; cursor: not-allowed; }
-        #powerBtn.machine-on  { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+           style while no switch entity is configured. It is a .btn--quiet .btn--icon (#2112); only its on/off colour is set here. */
+        #powerBtn.machine-on  { color: var(--ok); }
         #powerBtn.machine-off { color: var(--gray-600); }
         #syncTime { flex-shrink: 0; white-space: nowrap; }
 
@@ -2419,23 +2391,9 @@
 
         /* ── Chart tabs ── */
         .chart-tabs { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-3); align-items: center; }
-        .chart-tab {
-            background: transparent; color: var(--gray-500);
-            border: 1px solid var(--gray-700); border-radius:var(--radius);
-            padding: var(--sp-1) var(--sp-4); cursor: pointer;
-            font-size: var(--fs-1); font-weight: 600;
-            transition: color .2s, border-color .2s;
-            display: inline-flex; align-items: center; gap: var(--sp-1);
-        }
-        .chart-tab:hover  { color: var(--gray-200); border-color: var(--gray-500); }
-        .chart-tab.active { color: var(--gray-200); border-color: var(--accent-ink); font-weight: 600; }
-        #expandChartBtn {
-            margin-left: auto; background: transparent; color: var(--gray-600);
-            border: 1px solid var(--gray-700); border-radius:var(--radius);
-            padding: var(--sp-1) var(--sp-2); cursor: pointer; font-size: var(--fs-2); line-height: 1;
-            transition: color .2s, border-color .2s;
-        }
-        #expandChartBtn:hover { color: var(--gray-200); border-color: var(--gray-500); }
+        /* #2112: the time / P·Q switch is a pair of shared chips; the expand
+           button is a .btn--quiet .btn--icon pushed to the end of the row. */
+        #expandChartBtn { margin-left: auto; }
 
         /* ── Fullscreen chart overlay ── */
         #chartFullscreen {
@@ -2451,12 +2409,6 @@
             padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--gray-700); flex-shrink: 0;
         }
         #chartFullscreen .fs-tabs { display: flex; gap: var(--sp-2); flex: 1; }
-        #closeFullscreenBtn {
-            background: transparent; border: 1px solid var(--gray-700); border-radius:var(--radius);
-            color: var(--gray-400); padding: var(--sp-1) var(--sp-3); cursor: pointer; font-size: var(--fs-2);
-            transition: color .2s, border-color .2s;
-        }
-        #closeFullscreenBtn:hover { color: var(--gray-200); border-color: var(--gray-500); }
         #chartFullscreen .fs-body { flex: 1; position: relative; min-height: 0; padding: var(--sp-2); }
 
         /* ── Share-card format picker ── */
