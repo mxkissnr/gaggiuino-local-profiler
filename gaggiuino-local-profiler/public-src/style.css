@@ -2894,6 +2894,12 @@
         /* Guided maintenance walkthrough */
         .guided-maint-overlay { position:fixed; top: var(--dev-banner-h, 0px); left:0; right:0; bottom:0; background:color-mix(in srgb, var(--scrim) 60%, transparent); display:flex; align-items:center; justify-content:center; z-index: var(--z-modal); padding: var(--sp-4); }
         .guided-maint-modal { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); max-width:440px; width:100%; max-height:85vh; overflow-y:auto; display:flex; flex-direction:column; gap: var(--sp-3); }
+        /* #2120: a dialog's title sits in the shared sheet header bar. The
+           dialog is a flex column with its own gap, so the bar drops its
+           bottom margin, and the fixed-height dialogs never squeeze it. */
+        .guided-maint-modal > .lib-sheet-bar { flex-shrink: 0; margin-bottom: 0; }
+        /* The brew question wraps instead of being cut off on a phone. */
+        #brewConfirmTitle { white-space: normal; }
         .guided-maint-step { display:flex; align-items:flex-start; gap: var(--sp-3); padding: var(--sp-2) var(--sp-2); border-bottom:1px solid var(--gray-800); cursor:pointer; font-size: var(--fs-2); color:var(--gray-300); }
         .guided-maint-step:last-child { border-bottom:none; }
         .guided-maint-step input[type="checkbox"] { width:16px; height:16px; margin-top: 1px; accent-color:var(--ok); cursor:pointer; flex-shrink:0; }
@@ -2974,7 +2980,6 @@
         .dw-grind-display { font-size: var(--fs-6); font-weight:700; color:var(--gray-100); text-align:center; padding: var(--sp-4) 0; }
         .dw-waiting { text-align:center; color:var(--gray-500); font-size: var(--fs-2); padding: var(--sp-4) 0; }
         .dw-candidate { background:var(--gray-800); border-radius:var(--radius); padding: var(--sp-3); display:flex; flex-direction:column; gap: var(--sp-2); }
-        .dw-candidate-title { font-size: var(--fs-1); font-weight:600; color:var(--gray-200); }
         .dw-candidate-actions { display:flex; gap: var(--sp-2); flex-wrap:wrap; }
         .dw-score-row { display:flex; align-items:center; gap: var(--sp-3); }
         .dw-score-meta { font-size: var(--fs-1); color:var(--gray-400); }
@@ -2984,16 +2989,11 @@
         .dw-override-row input { flex:1 1 auto; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); }
         .dw-chip-strip { display:flex; flex-wrap:wrap; gap: var(--sp-2); margin-top: var(--sp-1); }
         .dw-summary { display:flex; flex-direction:column; gap: var(--sp-3); }
-        .dw-summary-title { font-size: var(--fs-3); font-weight:700; color:var(--gray-100); }
         .dw-summary-reason { font-size: var(--fs-2); color:var(--gray-400); }
         .dw-summary-best { display:flex; align-items:center; gap: var(--sp-3); }
         .pdw-profile-name { font-size: var(--fs-3); font-weight:700; color:var(--gray-100); text-align:center; padding: var(--sp-2) 0; }
         .pdw-symptom-label { font-size: var(--fs-1); color:var(--gray-500); font-weight:700; }
         .pdw-symptom-row { display:flex; flex-wrap:wrap; gap: var(--sp-2); }
-        .fw-header { display:flex; align-items:center; gap: var(--sp-3); flex-shrink:0; }
-        .fw-close-x { margin-left: auto; background:none; border:none; color:var(--gray-400); font-size: var(--fs-3); line-height:1; padding: var(--sp-2); cursor:pointer; flex-shrink:0; }
-        .fw-close-x:hover, .fw-close-x:focus-visible { color:var(--gray-200); }
-        .fw-bean-image { width:44px; height:44px; border-radius:var(--radius); object-fit:cover; flex-shrink:0; }
         .fw-breadcrumb { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-1); font-size: var(--fs-1); flex-shrink:0; min-height: calc(var(--fs-1) * 1.6); }
         .fw-crumb { background:none; border:none; color:var(--gray-400); cursor:pointer; padding: var(--sp-1); border-radius:var(--radius); font-size:inherit; font-weight:600; }
         .fw-crumb:last-child { color:var(--gray-200); }
