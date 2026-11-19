@@ -364,3 +364,34 @@ describe('inline styles (#2096)', () => {
     expect(read('views/library/recipes.ts')).toContain('<span class="badge lib-recipe-shots">');
   });
 });
+
+// #2111: a confirmation that deletes, replaces or overwrites data, or skips
+// the safety backup, shows its confirm button as .btn--danger. Every delete
+// confirmation passes the lib_btn_delete label; the four others are ending the
+// demo (deletes the demo data), the raw database import (replaces the
+// database), sending a profile (overwrites the machine's values) and a
+// firmware update without a backup.
+const DESTRUCTIVE_CONFIRM_KEYS = [
+  'lib_btn_delete', 'demo_mode_end_confirm', 'settings_devtools_import_db_confirm',
+  'profile_confirm_send', 'mbk_preupdate_confirm',
+] as const;
+
+describe('destructive confirmations (#2111)', () => {
+  it('marks every delete, replace and overwrite confirmation as destructive', () => {
+    const files = readdirRecursive(SRC, { recursive: true, encoding: 'utf8' })
+      .filter(name => name.endsWith('.ts'));
+
+    const calls: string[] = [];
+    const unmarked: string[] = [];
+    for (const file of files) {
+      read(file).split('\n').forEach((line, i) => {
+        if (!line.includes('confirmDialog(')) return;
+        if (!DESTRUCTIVE_CONFIRM_KEYS.some(key => line.includes(`'${key}'`))) return;
+        calls.push(`${file}:${i + 1}`);
+        if (!line.includes('destructive: true')) unmarked.push(`${file}:${i + 1}: ${line.trim()}`);
+      });
+    }
+    expect(unmarked).toEqual([]);
+    expect(calls.length).toBeGreaterThanOrEqual(19);
+  });
+});
