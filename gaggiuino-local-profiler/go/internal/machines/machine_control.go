@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"regexp"
 	"strconv"
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/db"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 )
 
 // machine_control.go is the opt-in machine-control surface (#1324): flush
@@ -25,6 +27,9 @@ import (
 //   - Control frames carry a short TTL (gaggimateControlFrameTTL). A command
 //     queued while the WS connection is down is dropped rather than written
 //     after a later reconnect, so a stale flush can never fire later.
+//   - Marking backflush or descaling done in GLP may send the matching
+//     req:cleaning:<task>:complete (#2138, firmware v1.10.0+), through the
+//     same ControlStateFor gate. GLP never sends req:cleaning:<task>:start.
 
 // ControlState is the snapshot the UI reads before offering the flush control
 // and after every command.
@@ -262,6 +267,146 @@ func (a *GaggiMateAdapter) CancelBrewConfirm(ctx context.Context, m *Machine) er
 	}
 	a.live.clearBrewConfirm(baseURL)
 	return nil
+}
+
+// ── Maintenance counter reset (#2138) ────────────────────────────────────
+//
+// GaggiMate v1.10.0+ tracks backflush and descaling itself and warns when
+// they are due. When the user marks one of them done in GLP (maintenance
+// page or the MCP tool), ResetMaintenanceCounter sends the matching
+// req:cleaning:<task>:complete so the machine resets its own counter too.
+// It goes through ControlStateFor like every other control action, never
+// opens a connection, never retries, and never makes marking done wait or
+// fail.
+
+// cleaningCompleteRequests maps a GLP maintenance task to the GaggiMate
+// request that resets the machine's own counter for it.
+var cleaningCompleteRequests = map[string]string{
+	"backflush": "req:cleaning:backflush:complete",
+	"descaling": "req:cleaning:descaling:complete",
+}
+
+// counterResetTimeout bounds one counter reset: the control frame TTL plus
+// time for the machine's answer.
+const counterResetTimeout = 5 * time.Second
+
+// errCounterResetUnsupported means nothing was sent: the task has no machine
+// counter, or the firmware is older than v1.10.0.
+var errCounterResetUnsupported = errors.New("machine counter reset needs backflush or descaling on GaggiMate firmware v1.10.0 or newer")
+
+// counterResetLogf logs a counter reset's outcome. A guardVar so a test can
+// capture the lines while the reset goroutine writes them.
+var counterResetLogf = newGuardVar[func(format string, args ...any)](log.Printf)
+
+// cleaningCounterResetter is implemented by adapters that can reset a
+// machine's own maintenance counter. GaggiMate does; Gaggiuino does not. It
+// is separate from MachineController so existing implementations of that
+// interface stay valid.
+type cleaningCounterResetter interface {
+	resetCleaningCounter(ctx context.Context, m *Machine, task string) error
+}
+
+var _ cleaningCounterResetter = (*GaggiMateAdapter)(nil)
+
+// gaggiMateCleaningFirmware reports whether v is new enough for the
+// req:cleaning:* requests (>= 1.10.0).
+func gaggiMateCleaningFirmware(v string) bool {
+	maj, min, _, ok := parseGaggiMateVersion(v)
+	if !ok {
+		return false
+	}
+	if maj != 1 {
+		return maj > 1
+	}
+	return min >= 10
+}
+
+// resetCleaningCounter sends req:cleaning:<task>:complete through the
+// existing, connected live session and reads success from the answer.
+// Nothing is sent for a task without a machine counter or on firmware older
+// than v1.10.0 (errCounterResetUnsupported).
+func (a *GaggiMateAdapter) resetCleaningCounter(ctx context.Context, m *Machine, task string) error {
+	reqType, ok := cleaningCompleteRequests[task]
+	if !ok {
+		return errCounterResetUnsupported
+	}
+	baseURL, err := BaseURLFor(ctx, m)
+	if err != nil {
+		return err
+	}
+	_, version, _, ok := a.live.controlSnapshot(baseURL)
+	if !ok {
+		return ErrMachineControlUnavailable
+	}
+	if !gaggiMateCleaningFirmware(version) {
+		return errCounterResetUnsupported
+	}
+	res, err := a.live.controlRequest(ctx, baseURL, reqType)
+	if err != nil {
+		return err
+	}
+	if success, _ := res["success"].(bool); !success {
+		return fmt.Errorf("machine rejected %s", reqType)
+	}
+	return nil
+}
+
+// ResetMaintenanceCounter is the task-done hook cmd/server wires into the
+// maintenance repository (#2138): after backflush or descaling was marked
+// done in GLP, it asks a GaggiMate on firmware v1.10.0+ to reset its own
+// counter for that task. It returns at once; the request runs in the
+// background, bounded by counterResetTimeout. Every other task and a closed
+// machine-control gate (Gaggiuino, the setting off, no connected session,
+// older firmware) send nothing. A rejected or unanswered reset is logged and
+// never retried; the machine's own warning then stays visible.
+func (h *Handlers) ResetMaintenanceCounter(machineID int64, task string) {
+	if _, ok := cleaningCompleteRequests[task]; !ok {
+		return
+	}
+	httputil.SafeGo("machines: maintenance counter reset", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), counterResetTimeout)
+		defer cancel()
+		logCounterReset(machineID, task, h.sendCounterReset(ctx, machineID, task))
+	})
+}
+
+// sendCounterReset is ResetMaintenanceCounter's synchronous body: resolve the
+// machine and its adapter, run the ControlStateFor gate, then send.
+func (h *Handlers) sendCounterReset(ctx context.Context, machineID int64, task string) error {
+	m, err := h.registry.GetMachine(machineID)
+	if err != nil {
+		return err
+	}
+	if m == nil {
+		return ErrUnknownMachine
+	}
+	adapter, err := h.GetAdapter(m)
+	if err != nil {
+		return err
+	}
+	if _, err := ControlStateFor(h.registry, adapter, m); err != nil {
+		return err
+	}
+	r, ok := adapter.(cleaningCounterResetter)
+	if !ok {
+		return ErrMachineControlUnsupported
+	}
+	return r.resetCleaningCounter(ctx, m, task)
+}
+
+// logCounterReset logs one counter reset's outcome. A closed gate is
+// expected and stays silent, because nothing was sent.
+func logCounterReset(machineID int64, task string, err error) {
+	logf := counterResetLogf.get()
+	switch {
+	case err == nil:
+		logf("machines: machine %d: %s counter reset on the machine", machineID, task)
+	case errors.Is(err, ErrMachineControlUnsupported), errors.Is(err, ErrMachineControlDisabled),
+		errors.Is(err, ErrMachineControlUnavailable), errors.Is(err, errCounterResetUnsupported):
+		// Nothing was sent: the opt-in gate is closed on purpose.
+	default:
+		logf("machines: machine %d: %s counter reset failed, the machine keeps its own warning: %v", machineID, task, err)
+	}
 }
 
 func (h *Handlers) registerMachineControlRoutes(mux *http.ServeMux) {
