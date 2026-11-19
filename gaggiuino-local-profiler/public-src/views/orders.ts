@@ -490,7 +490,7 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
   });
   list.querySelectorAll<HTMLElement>('[data-menu-del]').forEach(btn => {
     _onAsync(btn, 'click', async () => {
-      if (!await confirmDialog(t('orders_confirm_delete_item'), { confirmLabel: t('lib_btn_delete') })) return;
+      if (!await confirmDialog(t('orders_confirm_delete_item'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
       await deleteMenuItem(btn.dataset.menuDel as string);
       void loadOrdersView();
     });
@@ -589,7 +589,7 @@ export async function deleteOrder(id: string): Promise<void> {
 }
 
 export async function clearOrderHistory(): Promise<void> {
-  if (!await confirmDialog(t('orders_confirm_clear_history'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('orders_confirm_clear_history'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await deleteOrderHistory();
   if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();

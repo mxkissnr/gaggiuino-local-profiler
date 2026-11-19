@@ -618,7 +618,7 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
 }
 
 export async function deleteCustomMaintTask(task: string, machineId?: string | number | null): Promise<void> {
-  if (!await confirmDialog(t('maint_confirm_delete_custom', task.replace('custom_', '')), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('maint_confirm_delete_custom', task.replace('custom_', '')), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   try {
     const r = await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
@@ -767,7 +767,7 @@ export async function submitMaintLogEntry(): Promise<void> {
 }
 
 export async function deleteMaintLogEntry(id: number | string): Promise<void> {
-  if (!await confirmDialog(t('maint_log_confirm_delete'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('maint_log_confirm_delete'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   try {
     const r = await deleteMaintenanceLogEntry(id);
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }

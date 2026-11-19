@@ -12,7 +12,7 @@ g.navigator ??= { language: 'en-US' };
 g.window ??= globalThis;
 
 const dialogs = vi.hoisted(() => ({
-  confirmDialog: vi.fn<(message: string, opts?: { confirmLabel?: string }) => Promise<boolean>>(),
+  confirmDialog: vi.fn<(message: string, opts?: { confirmLabel?: string; destructive?: boolean }) => Promise<boolean>>(),
 }));
 
 vi.mock('../public-src/components/confirm-dialog.js', () => ({ confirmDialog: dialogs.confirmDialog }));
@@ -224,7 +224,7 @@ describe('the machine dialog (#2038)', () => {
     root.querySelector('.machine-delete-btn').handlers.click?.();
 
     expect(menu.open).toBe(false);
-    expect(dialogs.confirmDialog).toHaveBeenCalledWith(t('settings_machine_delete_confirm'), { confirmLabel: t('lib_btn_delete') });
+    expect(dialogs.confirmDialog).toHaveBeenCalledWith(t('settings_machine_delete_confirm'), { confirmLabel: t('lib_btn_delete'), destructive: true });
   });
 
   it('hides Set as default once the machine became the default', () => {

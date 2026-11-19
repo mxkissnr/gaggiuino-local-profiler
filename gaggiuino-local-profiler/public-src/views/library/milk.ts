@@ -92,7 +92,7 @@ export async function restockMilk(id: number): Promise<void> {
 }
 
 export async function deleteMilk(id: number): Promise<void> {
-  if (!await confirmDialog(t('lib_milk_delete') + '?', { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('lib_milk_delete') + '?', { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await libraryApi.deleteMilkById(id);
   if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.milks = (_state().coffeeLibrary.milks || []).filter(m => m.id !== id);

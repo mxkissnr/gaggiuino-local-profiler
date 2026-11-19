@@ -201,6 +201,22 @@ describe('confirmDialog() (#1962)', () => {
     await expect(pending).resolves.toBe(true);
   });
 
+  it('renders the confirm button as the primary action by default', () => {
+    void confirmDialog('Reset the counter?');
+    expect(confirmButton().className).toBe('btn btn--primary');
+    expect(cancelButton().className).toBe('btn btn--quiet');
+  });
+
+  it('renders the confirm button as a danger button for a destructive action (#2111)', async () => {
+    const pending = confirmDialog('Delete this?', { confirmLabel: 'Delete', destructive: true });
+    expect(confirmButton().className).toBe('btn btn--danger');
+    expect(confirmButton().textContent).toBe('Delete');
+    expect(cancelButton().className).toBe('btn btn--quiet');
+    expect(lastKeyboardCall().initialFocus).toBe(cancelButton());
+    confirmButton().fire('click');
+    await expect(pending).resolves.toBe(true);
+  });
+
   it('sets the message as text, never as markup', () => {
     void confirmDialog('Server said <img src=x onerror=alert(1)>');
     expect(text().textContent).toBe('Server said <img src=x onerror=alert(1)>');
