@@ -86,6 +86,7 @@ const RETIRED_2112 = ['chart-tab'] as const;
 // use them again. Each slice of #2120 adds the classes it retires.
 const RETIRED_2120 = [
   'settings-card-title', 'orders-menu-title', 'mbk-restore-title',
+  'fw-header', 'fw-close-x', 'fw-bean-image', 'flavorWheelImage', 'dw-summary-title', 'dw-candidate-title',
 ] as const;
 
 function declsOf(rules: Rule[]): string[] {
@@ -296,9 +297,8 @@ describe('section titles (#2096)', () => {
     expect(library).toContain('<span class="section-title__count">');
   });
 
-  it('gives the dialog titles, orders, licences and bean sheet headings the shared section title', () => {
+  it('gives the orders, licences and bean sheet headings the shared section title', () => {
     const index = read('index.html');
-    expect(index).toContain('<h3 class="section-title" id="guidedMaintTitle">');
     expect(index).toContain('<div class="section-title" data-i18n="orders_queue">');
     expect(index).toContain('<div class="section-title orders-history-header">');
     expect(read('views/orders.ts')).toContain('<p class="section-title">');
@@ -462,5 +462,51 @@ describe('card titles (#2120)', () => {
     expect(declsOf(rulesWith(root, '.orders-menu-toggle'))).toEqual([
       'display: flex', 'align-items: center', 'justify-content: space-between', 'margin-bottom: var(--sp-4)', 'cursor: pointer',
     ]);
+  });
+});
+
+// #2120: every dialog's title sits in the shared sheet header bar, which is
+// the dialog's first child: the close button first, then the title.
+const DIALOG_TITLES = [
+  ['guidedMaintModal', 'id="guidedMaintTitle"'],
+  ['profileEditorModal', 'data-i18n="profile_editor_title"'],
+  ['flavorWheelModal', 'id="flavorWheelTitle"'],
+  ['dialinWizardModal', 'data-i18n="dialin_wizard_title"'],
+  ['profileDialinWizardModal', 'data-i18n="profile_dialin_title"'],
+  ['setupWizardModal', 'data-i18n="setup_wizard_title"'],
+  ['gmProfileEditorModal', 'id="gmEditorTitle"'],
+  ['brewConfirmModal', 'id="brewConfirmTitle"'],
+] as const;
+
+describe('dialog titles (#2120)', () => {
+  it.each(DIALOG_TITLES)('%s: close, then the title, in the sheet header bar', (modal, title) => {
+    const index = read('index.html');
+    const start = index.indexOf(`id="${modal}"`);
+    expect(start, modal).toBeGreaterThan(-1);
+    const bar = index.indexOf('<div class="lib-sheet-bar">', start);
+    expect(bar, modal).toBeGreaterThan(start);
+    // overlay line, dialog box line, then the bar: it is the box's first child
+    expect(index.slice(start, bar).split('\n').length, modal).toBe(3);
+    const end = index.indexOf('</div>', bar);
+    const close = index.indexOf('<button type="button" class="lib-sheet-close"', bar);
+    const heading = index.indexOf(`<h3 class="lib-sheet-bar-title" ${title}`, bar);
+    expect(close, modal).toBeGreaterThan(bar);
+    expect(heading, modal).toBeGreaterThan(close);
+    expect(heading, modal).toBeLessThan(end);
+  });
+
+  it('lets the dialogs keep the bar without extra margin and wraps the brew question', () => {
+    const root = postcss.parse(read('style.css'));
+    expect(declsOf(rulesWith(root, '.guided-maint-modal > .lib-sheet-bar'))).toEqual(['flex-shrink: 0', 'margin-bottom: 0']);
+    expect(declsOf(rulesWith(root, '#brewConfirmTitle'))).toEqual(['white-space: normal']);
+  });
+
+  it('gives the wizard results the card title and the candidate shot a section title', () => {
+    expect(read('views/dialin-wizard.ts')).toContain('<div class="card-title">${title}</div>');
+    expect(read('views/profile-dialin-wizard.ts')).toContain('<div class="card-title">${esc(title)}</div>');
+    expect(read('views/setup-wizard.ts').split('<div class="card-title">').length - 1).toBe(2);
+    for (const file of ['views/dialin-wizard.ts', 'views/profile-dialin-wizard.ts']) {
+      expect(read(file), file).toContain('<div class="section-title">${tHtml(');
+    }
   });
 });
