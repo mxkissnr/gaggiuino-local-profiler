@@ -142,7 +142,9 @@ function _beanFormSheetHost(): HTMLElement | null {
   // (#1962, #2098). The create action row keeps "save without bag" available.
   const save = document.createElement('button');
   save.type = 'button';
-  save.className = 'lib-sheet-save';
+  // #2112: tonal, because the form's "Save and add bag" button is this view's
+  // one primary action and runs the same save.
+  save.className = 'btn btn--tonal lib-sheet-save';
   save.setAttribute('aria-label', t('lib_save'));
   save.textContent = t('lib_save');
   save.setAttribute('data-i18n-aria-label', 'lib_save');

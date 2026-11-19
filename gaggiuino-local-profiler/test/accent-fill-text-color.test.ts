@@ -37,8 +37,8 @@ describe('accent fill pairs with --accent-text (#1531)', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('gives .lib-sheet-save the --accent-text colour it shares with .btn--primary', () => {
-    const rule = CSS_NO_COMMENTS.match(/\.lib-sheet-save\s*\{[^}]*\}/)?.[0] ?? '';
+  it('gives the shared .btn--primary the --accent-text colour (#2112: the sheet save uses it)', () => {
+    const rule = CSS_NO_COMMENTS.match(/\.btn--primary\s*\{[^}]*\}/)?.[0] ?? '';
     expect(rule).toContain('background: var(--accent)');
     expect(rule).toContain('color: var(--accent-text)');
     expect(rule).not.toContain('color: var(--accent-ink)');
