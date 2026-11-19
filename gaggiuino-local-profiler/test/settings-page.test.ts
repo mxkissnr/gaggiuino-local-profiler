@@ -359,3 +359,44 @@ describe('SETTINGS_DIALOG_ROWS table (slice 5)', () => {
         expect(reloads.freshness).toHaveBeenCalledTimes(1);
     });
 });
+
+describe('About: help card (#2123)', () => {
+    const about = chunks.find(c => c.includes('data-settings-page="about"')) ?? '';
+    const HELP_LINKS = [
+        { href: 'https://github.com/mxkissnr/gaggiuino-local-profiler/wiki', titleKey: 'settings_help_docs', subKey: 'settings_help_docs_sub' },
+        { href: 'https://discord.gg/CbPtWXKRev', titleKey: 'settings_help_discord', subKey: 'settings_help_discord_sub' },
+        { href: 'https://github.com/mxkissnr/gaggiuino-local-profiler/issues/new/choose', titleKey: 'settings_help_issues', subKey: 'settings_help_issues_sub' },
+    ] as const;
+
+    it('links the documentation, Discord and the issue forms, each in a new tab', () => {
+        const anchors = about.match(/<a [^>]*>/g) ?? [];
+        expect(anchors).toEqual(HELP_LINKS.map(link => `<a class="settings-row" href="${link.href}" target="_blank" rel="noopener">`));
+        for (const link of HELP_LINKS) {
+            expect(about).toContain(`<span class="settings-row-title" data-i18n="${link.titleKey}">`);
+            expect(about).toContain(`<span class="settings-row-sub" data-i18n="${link.subKey}">`);
+            expect(en[link.titleKey], link.titleKey).toBeTypeOf('string');
+            expect(en[link.subKey], link.subKey).toBeTypeOf('string');
+        }
+        expect(about).toContain('<h3 class="settings-card-title" data-i18n="settings_help_title">');
+    });
+
+    it('puts the help card after the version card and drops the old setup help row', () => {
+        expect(about.indexOf('id="settingsVersion"')).toBeGreaterThan(-1);
+        expect(about.indexOf('id="settingsVersion"')).toBeLessThan(about.indexOf('data-i18n="settings_help_title"'));
+        expect(about.indexOf('data-settings-licenses')).toBeLessThan(about.indexOf('data-i18n="settings_help_title"'));
+        expect(indexHtml).not.toContain('data-i18n="onboarding_wiki_link"');
+        expect(occurrences(indexHtml, 'href="https://github.com/mxkissnr/gaggiuino-local-profiler/wiki"')).toBe(1);
+    });
+
+    it('lets the settings search find the help rows by their titles', () => {
+        const items = [...HELP_LINKS.map(link => link.titleKey), 'settings_help_title']
+            .map(key => ({ group: 'about', label: String(en[key]), el: null }));
+        expect(filterSettingsItems(items, 'discord').map(item => item.label)).toEqual(['Community on Discord']);
+        expect(filterSettingsItems(items, 'bug').map(item => item.label)).toEqual(['Report a bug or suggest a feature']);
+        expect(filterSettingsItems(items, 'help').map(item => item.label)).toEqual(['Help']);
+    });
+
+    it('names help in the About group subtitle', () => {
+        expect(en['settings_group_about_sub']).toBe('Version, help, open-source licenses');
+    });
+});
