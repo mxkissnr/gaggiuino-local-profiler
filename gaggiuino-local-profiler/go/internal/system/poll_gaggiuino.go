@@ -369,6 +369,7 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 	if s.SteamOn != nil {
 		steamOn = *s.SteamOn
 	}
+	systemState, systemErrorCode := machineSystemState(m["sys"])
 	return RawStatus{
 		WaterLevel:        waterLevel,
 		UpTime:            upTime,
@@ -384,6 +385,8 @@ func rawStatusFrom(s machines.Status, hasWaterSensor bool) RawStatus {
 		SteamSwitchState:  steamOn,
 		Warnings:          activeMachineWarnings(m["warn"]),
 		UpdateAvailable:   m["up"] == true,
+		SystemState:       systemState,
+		SystemErrorCode:   systemErrorCode,
 	}
 }
 
@@ -415,6 +418,42 @@ func activeMachineWarnings(v any) []string {
 		}
 	}
 	return out
+}
+
+// machineSystemStates are the GaggiMate display system states (evt:status
+// sys.s, firmware v1.9.0+) the Live tab shows instead of "Machine ready"
+// (#2139). "ready" and any value not listed here (a newer firmware's state)
+// are left out, so the Live tab keeps its usual title for them.
+var machineSystemStates = map[string]bool{
+	"starting":   true,
+	"waiting":    true,
+	"updating":   true,
+	"autotuning": true,
+	"mismatch":   true,
+	"error":      true,
+}
+
+// machineSystemState reads a GaggiMate evt:status `sys` object: the state
+// when it is one of machineSystemStates, and the controller error code sys.c
+// only for "error" and only when it is a positive int32 (else 0). The
+// display's free-text message sys.m is never read. A missing or malformed
+// sys (every Gaggiuino status) yields "", 0.
+func machineSystemState(v any) (string, int) {
+	sys, ok := v.(map[string]any)
+	if !ok {
+		return "", 0
+	}
+	s, _ := sys["s"].(string)
+	if !machineSystemStates[s] {
+		return "", 0
+	}
+	code := 0
+	if s == "error" {
+		if c, ok := jsNumberToInt64(sys["c"]); ok && c > 0 && c <= math.MaxInt32 {
+			code = int(c)
+		}
+	}
+	return s, code
 }
 
 func derefFloat(v *float64) float64 {

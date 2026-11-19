@@ -4903,6 +4903,13 @@ export interface paths {
                             stale?: boolean;
                             /** @description Unix ms the status was last pushed, present only when available */
                             updatedAt?: number;
+                            /**
+                             * @description #2139: GaggiMate display system state when it is not ready; absent when ready, without a sys object and for Gaggiuino
+                             * @enum {string}
+                             */
+                            systemState?: "starting" | "waiting" | "updating" | "autotuning" | "mismatch" | "error";
+                            /** @description #2139: controller error code when systemState is error; absent otherwise */
+                            systemErrorCode?: number;
                         } & {
                             [key: string]: unknown;
                         };
@@ -9134,6 +9141,13 @@ export interface components {
             machineWarnings: string[];
             /** @description #1409: GaggiMate reports a firmware update; always false for Gaggiuino */
             machineUpdateAvailable: boolean;
+            /**
+             * @description #2139: the GaggiMate display's system state (sys.s, firmware v1.9.0+) when it is not ready; empty when ready, without a sys object and for Gaggiuino
+             * @enum {string}
+             */
+            machineSystemState: "" | "starting" | "waiting" | "updating" | "autotuning" | "mismatch" | "error";
+            /** @description #2139: the controller error code (sys.c) when machineSystemState is error, else 0 */
+            machineSystemErrorCode: number;
             machineControl: components["schemas"]["MachineControlState"] | null;
         };
         BackupBundle: {
