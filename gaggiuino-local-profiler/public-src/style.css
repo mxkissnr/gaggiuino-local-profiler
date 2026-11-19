@@ -1309,7 +1309,7 @@
             margin-top: var(--sp-6);
         }
         .annotation-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); }
-        .annotation-title  { font-size: var(--fs-1); color: var(--gray-400); font-weight: 600; }
+        .annotation-header .section-title { margin-bottom: 0; }
 
         .star-rating { display: flex; gap: var(--sp-1); }
         .star { cursor: pointer; color: var(--gray-700); transition: color .12s; user-select: none; line-height: 0; border:none; background:none; padding:0; }
@@ -1685,7 +1685,7 @@
         .lib-form-grid select { background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-2); padding: var(--sp-2) var(--sp-3); outline: none; width: 100%; }
         .lib-form-grid select:focus { border-color: var(--gray-600); }
         .lib-recipe-steps-section { margin-top: var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--gray-800); }
-        .lib-recipe-steps-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--sp-2); font-size: var(--fs-1); font-weight: 600; color: var(--gray-400); }
+        .lib-recipe-steps-section > .section-title { justify-content: space-between; align-items: center; }
         .lib-step-row { display: flex; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-2); }
         .lib-step-num { font-size: var(--fs-1); color: var(--gray-600); min-width: 18px; text-align: right; flex-shrink: 0; }
         .lib-step-text { flex: 1; background: var(--gray-900); border: 1px solid var(--gray-700); border-radius:var(--radius); color: var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); outline: none; }
@@ -1774,13 +1774,10 @@
         /* Opt-in Brew Guide recipe candidates (#451) — e.g. "Milky Espresso"
            blocks discarded from the bean's own brewTempC/brewRatio fields. */
         .lib-import-extra-recipes { margin-bottom: var(--sp-3); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-2) var(--sp-3); }
-        .lib-import-extra-recipes-title { font-size: var(--fs-1); color:var(--gray-300); margin-bottom: var(--sp-1); }
         .lib-import-extra-recipe-row { display:flex; align-items:flex-start; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-200); padding: var(--sp-1) 0; cursor:pointer; }
         .lib-import-extra-recipe-row input { accent-color: var(--accent); margin-top: 2px; }
         .lib-import-extra-recipe-sub { color:var(--gray-500); }
         .lib-import-settings { flex-direction:column; gap: var(--sp-2); margin-top: var(--sp-2); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-3) var(--sp-3); }
-        .lib-import-settings-title { font-size: var(--fs-1); color:var(--gray-200); font-weight:600; }
-        .lib-import-settings-subtitle { font-size: var(--fs-1); color:var(--gray-400); margin-top: var(--sp-2); }
         .lib-import-settings-provider { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-200); padding: var(--sp-1) 0; cursor:pointer; }
         .lib-import-settings-provider input { accent-color: var(--accent); }
         .lib-import-settings-host { color:var(--gray-500); }
