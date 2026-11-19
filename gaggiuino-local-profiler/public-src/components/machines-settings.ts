@@ -1188,7 +1188,7 @@ export async function setDefaultMachine(id: number): Promise<void> {
 // toast pattern in components/status.ts.
 export async function deleteMachine(id: number, isDefault?: boolean): Promise<void> {
   const confirmKey = isDefault ? 'settings_machine_delete_default_confirm' : 'settings_machine_delete_confirm';
-  if (!await confirmDialog(t(confirmKey), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t(confirmKey), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await machinesApi.deleteMachine(id);
   if (r.ok) { closeMachineForm(); void loadMachines(); return; }
   const body = await r.json().catch(() => ({})) as { error?: string };
