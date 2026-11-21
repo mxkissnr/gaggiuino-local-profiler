@@ -96,6 +96,20 @@ const RETIRED_2120 = [
 // them again.
 const RETIRED_2141 = ['crop-editor-title', 'sticker-close'] as const;
 
+// Classes retired by #2148: the Orders page uses grouped rows and the shared
+// buttons, chips, badges and inputs; its page classes only lay out. No rule,
+// markup or code may use them again.
+const RETIRED_2148 = [
+  'order-card', 'order-hist-del', 'order-shot-link', 'order-actions', 'order-queue-hint',
+  'order-eta-suggest', 'order-decline-input', 'orders-empty', 'orders-toggle-row',
+  'orders-toggle-state', 'orders-queue-banner', 'orders-machine-off', 'orders-menu-toggle',
+  'orders-menu-section', 'orders-columns', 'orders-history-header', 'orders-section',
+  'orders-menu-del', 'orders-menu-input', 'orders-notify-select', 'orders-notify-row',
+  'orders-notify-hint', 'orders-notify-customer', 'orders-notify-list', 'orders-stats-card',
+  'orders-stats-grid', 'orders-milk-row', 'orders-milk-emoji', 'orders-milk-name',
+  'orders-broadcast-empty',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -156,7 +170,7 @@ describe('shared filter chips (#2093)', () => {
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120, ...RETIRED_2141]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120, ...RETIRED_2141, ...RETIRED_2148]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -228,8 +242,9 @@ describe('shared buttons (#2095)', () => {
   it('gives the order actions a shared button variant and the ETA picker shared chips', () => {
     const orders = read('views/orders.ts');
     expect(orders).toContain('class="btn btn--tonal" data-order-accept=');
-    expect(orders).toContain('class="btn btn--tonal" data-order-complete=');
-    expect(orders).toContain('class="btn btn--danger" data-order-decline-toggle=');
+    expect(orders).toContain('class="btn btn--tonal" data-order-eta-open=');
+    expect(orders).toContain('class="btn btn--quiet btn--icon" data-order-decline-toggle=');
+    expect(orders).toContain('class="btn btn--danger" data-order-decline-submit=');
     expect(orders).toContain('<button type="button" class="chip" aria-pressed="${esc(selectedEta === m');
     expect(orders).not.toContain("classList.add('selected')");
   });
@@ -306,8 +321,8 @@ describe('section titles (#2096)', () => {
 
   it('gives the orders, licences and bean sheet headings the shared section title', () => {
     const index = read('index.html');
-    expect(index).toContain('<div class="section-title" data-i18n="orders_queue">');
-    expect(index).toContain('<div class="section-title orders-history-header">');
+    expect(index).toContain('<h2 class="section-title" data-i18n="orders_queue">');
+    expect(index).toContain('<h2 class="section-title" data-i18n="orders_inprogress">');
     expect(read('views/orders.ts')).toContain('<p class="section-title">');
     expect(read('components/licenses-sheet.ts')).toContain('<h3 class="section-title licenses-heading">');
     expect(read('views/library/bean-card.ts')).toContain('<div class="section-title">');
@@ -450,26 +465,21 @@ describe('remaining action buttons (#2112)', () => {
 });
 
 describe('card titles (#2120)', () => {
-  it('gives the settings cards, the orders cards and the backup restore the shared card title', () => {
+  it('gives the settings cards and the backup restore the shared card title', () => {
     const index = read('index.html');
     // 14 cards plus the barcode scanner's title (#2141)
     expect(index.split('<h3 class="card-title"').length - 1).toBe(15);
     expect(index).toContain('<label for="settingsLang" class="card-title" data-i18n="settings_language">');
-    for (const id of ['ordersMenuTitle', 'ordersStatsTitle', 'ordersNotifyTitle', 'ordersKioskTitle']) {
-      expect(index, id).toContain(`<div class="card-title orders-menu-toggle" id="${id}">`);
-    }
+    expect(index).not.toContain('orders-menu-toggle'); // #2148: the orders folds became Manage rows
     expect(read('boot/popups.ts')).toContain('<h3 class="card-title" data-i18n="settings_popups_title">');
     expect(read('boot/settings-page.ts')).toContain("'.card-title, .settings-row-title, label'");
     expect(read('components/machine-backups.ts')).toContain('<h3 class="card-title">');
   });
 
-  it('defines one card title look and leaves the orders toggle only its layout', () => {
+  it('defines one card title look', () => {
     const root = postcss.parse(read('style.css'));
     expect(declsOf(rulesWith(root, '.card-title'))).toEqual([
       'margin: 0', 'font-size: var(--fs-3)', 'font-weight: 600', 'color: var(--gray-200)',
-    ]);
-    expect(declsOf(rulesWith(root, '.orders-menu-toggle'))).toEqual([
-      'display: flex', 'align-items: center', 'justify-content: space-between', 'margin-bottom: var(--sp-4)', 'cursor: pointer',
     ]);
   });
 });

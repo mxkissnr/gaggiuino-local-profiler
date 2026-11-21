@@ -171,9 +171,9 @@
         /* An icon in front of the title sits on the text's centre line. */
         .section-title > svg { align-self: center; }
 
-        /* #2120: the title of a card or form (a settings card, an orders
-           card, the result at the end of a wizard). A group inside it is a
-           .section-title; a dialog's own title sits in the sheet header bar. */
+        /* #2120: the title of a card or form (a settings card, the result at
+           the end of a wizard). A group inside it is a .section-title; a
+           dialog's own title sits in the sheet header bar. */
         .card-title {
             margin: 0;
             font-size: var(--fs-3);
@@ -2012,12 +2012,8 @@
         .lib-form-hint-staged { color: var(--ok); }
 
         .orders-milk-section { margin-top: var(--sp-4); }
-        .orders-milk-row { display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-1) 0; border-bottom:1px solid var(--gray-800); font-size: var(--fs-1); }
-        .orders-milk-emoji { font-size: var(--fs-3); }
-        .orders-milk-name { flex:1; color:var(--gray-200); }
-        .orders-menu-milk-row { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-500); }
-        .orders-menu-milk-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; width:60px; }
-        .orders-menu-milk-input:focus { border-color:var(--gray-600); }
+        .orders-menu-milk-row { display:flex; align-items:center; gap: var(--sp-2); }
+        .orders-menu-milk-input { width: 88px; }
 
         /* ── Scan modal ── */
         #scanModal { display:none; position:fixed; inset:0; z-index: var(--z-modal); background:color-mix(in srgb, var(--scrim) 85%, transparent); flex-direction:column; align-items:center; justify-content:center; gap: var(--sp-4); padding: var(--sp-5); }
@@ -3178,52 +3174,34 @@
         }
 
         /* ── Orders view ── */
-        #orders-view { display:none; flex-direction:column; flex:1; min-width:0; overflow-x:hidden; overflow-y:auto; padding: var(--sp-5); gap: var(--sp-5); }
-        .orders-columns { display:grid; grid-template-columns:1fr 1fr; gap: var(--sp-4); align-items:start; }
-        @media(max-width:700px){ .orders-columns { grid-template-columns:1fr; } }
-        .orders-history-header { display:flex; align-items:center; justify-content:space-between; }
-        .order-history-right { display:flex; align-items:center; gap: var(--sp-2); }
-        .order-hist-del { background:none; border:none; border-radius:var(--radius); color:var(--gray-700); padding: var(--sp-1); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:background .15s,color .15s; flex-shrink:0; }
-        .order-hist-del:hover { background:color-mix(in srgb, var(--err) 10%, transparent); color:var(--err); }
-        .order-card { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); display:flex; flex-direction:column; gap: var(--sp-3); margin-bottom: var(--sp-3); }
-        .order-card.status-pending  { border-color:var(--accent); }
-        .order-card.status-accepted { border-color:var(--ok); }
-        .order-card.status-done     { opacity:.6; }
-        .order-card.status-declined { opacity:.5; border-color:var(--err); }
-        .order-card-top { display:flex; align-items:center; justify-content:space-between; gap: var(--sp-2); }
-        .order-item-name { font-size: var(--fs-3); font-weight:700; color:var(--gray-200); }
-        .order-customer  { font-size: var(--fs-1); color:var(--gray-400); }
-        .order-note      { font-size: var(--fs-1); color:var(--gray-500); font-style:italic; }
-        .order-meta      { font-size: var(--fs-1); color:var(--gray-600); }
-        .order-decline-reason { font-size: var(--fs-1); color:var(--err); }
-        .order-shot-link { font-size: var(--fs-1); color:var(--gray-500); cursor:pointer; border:0; border-bottom:1px dotted var(--gray-600); background:none; padding:0; font-family:inherit; }
-        .order-shot-link:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-        .order-shot-link:hover { color:var(--gray-200); border-bottom-color:var(--gray-200); }
-        .order-actions { display:flex; gap: var(--sp-2); flex-wrap:wrap; align-items:center; }
-        .order-eta-picker { display:flex; gap: var(--sp-1); flex-wrap:wrap; align-items:center; }
-        .order-eta-custom { width:52px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); text-align:center; outline:none; }
-        .order-eta-suggest { font-size: var(--fs-1); color:var(--gray-600); align-self:center; }
-        .order-queue-hint { font-size: var(--fs-1); color:var(--gray-600); margin-left: var(--sp-2); }
-        .orders-queue-banner { background:color-mix(in srgb, var(--amber) 7%, transparent); border:1px solid color-mix(in srgb, var(--amber) 20%, transparent); border-radius:var(--radius); padding: var(--sp-2) var(--sp-3); font-size: var(--fs-1); color:var(--warn); margin-bottom: var(--sp-2); display:flex; align-items:center; gap: var(--sp-1); }
-        .order-decline-input { flex:1; min-width:120px; background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; }
-        .order-decline-input:focus { border-color:var(--gray-600); }
-        .orders-empty { color:var(--gray-600); font-size: var(--fs-2); text-align:center; padding: var(--sp-4) 0; }
-        .orders-machine-off { background:color-mix(in srgb, var(--err) 7%, transparent); border:1px solid color-mix(in srgb, var(--err) 20%, transparent); border-radius:var(--radius); color:var(--err); font-size: var(--fs-2); text-align:center; padding: var(--sp-4); }
-        .orders-stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap: var(--sp-3); margin-bottom: var(--sp-4); }
-        .orders-stats-card { background:var(--gray-800); border-radius:var(--radius); padding: var(--sp-3) var(--sp-4); display:flex; flex-direction:column; gap: var(--sp-1); }
-        .orders-stats-name { font-size: var(--fs-1); font-weight:700; color:var(--gray-200); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .orders-stats-row  { font-size: var(--fs-1); color:var(--gray-500); display:flex; justify-content:space-between; gap: var(--sp-2); }
-        .orders-stats-val  { color:var(--gray-400); font-weight:600; }
-        .orders-stats-global { display:flex; gap: var(--sp-5); flex-wrap:wrap; margin-bottom: var(--sp-3); padding-bottom: var(--sp-3); border-bottom:1px solid var(--gray-800); }
-        .orders-stats-global-item { display:flex; flex-direction:column; gap: 2px; }
-        .orders-stats-global-label { font-size: var(--fs-1); color:var(--gray-600); }
-        .orders-stats-global-val   { font-size: var(--fs-3); font-weight:700; color:var(--gray-200); }
-        .orders-stats-empty { color: var(--gray-600); font-size: var(--fs-1); padding: var(--sp-2) 0; }
-        .orders-toggle-row { display:flex; align-items:center; gap: var(--sp-3); background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4) var(--sp-4); }
-        .orders-toggle-label { font-size: var(--fs-2); font-weight:600; color:var(--gray-200); flex:1; }
-        .orders-toggle-state { font-size: var(--fs-1); font-weight:600; min-width:54px; text-align:right; }
-        .orders-toggle-state.on  { color:var(--ok); }
-        .orders-toggle-state.off { color:var(--gray-500); }
+        #orders-view { --settings-pad: var(--sp-5); display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow-x:hidden; overflow-y:auto; padding: var(--settings-pad); gap: var(--sp-4); }
+        @media (max-width: 480px) { #orders-view { --settings-pad: var(--sp-3); } }
+        /* #2148: the Home Assistant page pattern (see the design doc): the settings top
+           app bar with the accept switch, the statistics verdict and grouped rows.
+           Page classes only lay out; the look comes from the shared components. */
+        .orders-accept-label { white-space: nowrap; cursor: pointer; }
+        .orders-layout { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }
+        .orders-side { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }
+        .orders-queue, .orders-progress, .orders-manage { min-width:0; }
+        .orders-panel { display:flex; flex-direction:column; gap: var(--sp-4); min-width:0; }
+        /* Desktop: verdict across the top, the queue left, in progress and manage right. */
+        @media (min-width: 900px) {
+            .orders-layout { display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "verdict verdict" "queue side"; column-gap: var(--sp-6); row-gap: var(--sp-5); align-items:start; }
+            .orders-verdict { grid-area: verdict; }
+            .orders-queue { grid-area: queue; }
+            .orders-side { grid-area: side; }
+        }
+        /* #2148: an order is a grouped row; the accept button and its time sit
+           together as one group, and a phone puts the queue's buttons on their
+           own line. */
+        .order-row { flex-wrap: wrap; }
+        .order-row-actions { display:flex; align-items:center; gap: var(--sp-2); margin-left:auto; }
+        .order-accept { display:inline-flex; gap: 1px; }
+        .order-decline { display:flex; align-items:center; gap: var(--sp-2); flex-basis:100%; }
+        .order-decline .lib-input { flex:1; min-width:0; }
+        .order-eta-picker { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-2); }
+        .order-eta-custom { width: 72px; }
+        @media (max-width: 480px) { #orders-pending-list .order-row-actions { flex-basis:100%; justify-content:flex-end; } }
         .toggle-switch { position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0; }
         .toggle-switch input { opacity:0; width:0; height:0; }
         .toggle-track { position:absolute; inset:0; background:var(--gray-700); border-radius:var(--radius); cursor:pointer; transition:background .2s; }
@@ -3233,45 +3211,25 @@
         .toggle-track:before { content:''; position:absolute; width:18px; height:18px; left:3px; top:3px; background:var(--paper); border-radius:50%; transition:transform .2s; }
         .toggle-switch input:checked + .toggle-track { background:var(--ok); }
         .toggle-switch input:checked + .toggle-track:before { transform:translateX(18px); }
-        .orders-history-list { display:flex; flex-direction:column; gap: var(--sp-2); }
-        .orders-section { display:flex; flex-direction:column; gap: 0; }
-        .orders-menu-section { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); }
-        .orders-menu-toggle { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); cursor: pointer; }
-        .orders-menu-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
-        .orders-menu-item { display:flex; flex-direction:column; gap: var(--sp-1); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
+        .orders-menu-item { flex-direction:column; align-items:stretch; gap: var(--sp-2); }
         .orders-menu-item-top { display:flex; align-items:center; gap: var(--sp-3); }
-        .orders-menu-item-name { flex:1; font-size: var(--fs-2); color:var(--gray-200); }
-        .orders-menu-del { background:none; border:none; color:var(--gray-600); font-size: var(--fs-3); cursor:pointer; padding: var(--sp-1) var(--sp-2); transition:color .15s; }
-        .orders-menu-del:hover { color:var(--err); }
+        .orders-menu-item-name { flex:1; min-width:0; }
         .orders-menu-variants { display:flex; flex-wrap:wrap; gap: var(--sp-1); align-items:center; }
         .orders-menu-variant-chip { --input-chip-c: var(--gray-500); --input-chip-ink: var(--gray-300); }
-        .orders-menu-variant-del { background:none; border:none; color:var(--gray-600); cursor:pointer; font-size: var(--fs-1); padding: 0; line-height:1; transition:color .15s; }
-        .orders-menu-variant-del:hover { color:var(--err); }
-        .orders-menu-variant-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; width:100px; }
-        .orders-menu-variant-input:focus { border-color:var(--gray-600); }
-        .order-variant { font-size: var(--fs-1); color:var(--gray-400); font-weight:400; }
-        .orders-use-beans-note { font-size: var(--fs-1); color:var(--gray-500); font-style:italic; display:inline-flex; align-items:center; gap: var(--sp-1); }
+        .orders-menu-variant-input { width: 120px; }
+        .orders-use-beans-note { display:inline-flex; align-items:center; gap: var(--sp-1); }
 
         .ann-ordered-by { display:flex; flex-direction:column; gap: 2px; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); background:color-mix(in srgb, var(--paper) 3%, transparent); border:1px solid var(--gray-800); border-radius:var(--radius); }
         .ann-ordered-by-label { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .ann-ordered-by-val { font-size: var(--fs-1); color:var(--gray-200); }
         .orders-menu-add-row { display:flex; gap: var(--sp-2); align-items:center; flex-wrap:wrap; }
-        .orders-menu-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); outline:none; }
-        .orders-menu-input:focus { border-color:var(--gray-600); }
-        .orders-menu-input.emoji { width:56px; text-align:center; }
-        .order-item-name .badge { margin-left: var(--sp-2); }
-        .orders-notify-hint { font-size: var(--fs-1); color:var(--gray-500); margin: 0 0 var(--sp-3); }
-        .orders-notify-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
-        .orders-notify-row { display:flex; align-items:center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
-        .orders-notify-customer { flex:1; font-size: var(--fs-2); color:var(--gray-200); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .orders-notify-select { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; cursor:pointer; }
-        .orders-notify-select:focus { border-color:var(--gray-600); }
+        .orders-menu-emoji { width: 56px; text-align: center; }
+        .orders-menu-name, .orders-kiosk-link { flex:1; min-width:0; }
         .orders-notify-actions { display:flex; justify-content:flex-end; }
-        .orders-broadcast-section { margin-bottom: var(--sp-4); padding-bottom: var(--sp-4); border-bottom:1px solid var(--gray-800); }
+        .orders-broadcast-section { display:flex; flex-direction:column; gap: var(--sp-2); }
         .orders-broadcast-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
         .orders-broadcast-row { display:flex; align-items:center; gap: var(--sp-2); }
         .orders-broadcast-row label { font-size: var(--fs-2); color:var(--gray-200); cursor:pointer; }
-        .orders-broadcast-empty { font-size: var(--fs-1); color:var(--gray-600); margin: 0 0 var(--sp-3); }
 
         /* ── Shot-count header (#823: flattened from a mechanical split-flap
            odometer to plain text, matching the redesign prototype's literal

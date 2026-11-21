@@ -483,71 +483,66 @@
     <!-- Achievements view (stamp card, #812) -->
     <div id="achievements-view"></div>
 
-    <!-- Orders view (barista backend) -->
+    <!-- Orders view (#2148): the Home Assistant page pattern — top app bar with the accept
+         switch, verdict, grouped rows; a Manage row opens its panel in the detail sheet -->
     <div id="orders-view">
-        <div class="orders-toggle-row">
-            <span class="orders-toggle-label" data-i18n="orders_accept_toggle">Bestellannahme</span>
+        <div class="settings-bar orders-bar">
+            <h1 class="settings-bar-title" data-i18n="nav_orders">Bestellungen</h1>
+            <label class="orders-accept-label" for="ordersEnabledToggle" data-i18n="orders_accept_toggle">Bestellungen annehmen</label>
             <label class="toggle-switch">
                 <input type="checkbox" id="ordersEnabledToggle">
                 <span class="toggle-track"></span>
             </label>
-            <span id="ordersEnabledLabel" class="orders-toggle-state off">–</span>
         </div>
-        <div id="orders-machine-off-banner" class="orders-machine-off" style="display:none"></div>
-        <div id="orders-milk-stock" class="orders-milk-section" style="display:none"></div>
-        <div class="orders-columns">
-            <div class="orders-section">
-                <div class="section-title" data-i18n="orders_queue">Warteschlange</div>
-                <div id="orders-pending-list"></div>
-            </div>
-            <div class="orders-section">
-                <div class="section-title" data-i18n="orders_inprogress">In Zubereitung</div>
-                <div id="orders-accepted-list"></div>
+        <div class="orders-layout">
+            <section class="analytics-verdict-card orders-verdict" id="ordersVerdict">
+                <div class="analytics-verdict-head">
+                    <div class="analytics-verdict-text">
+                        <h2 class="analytics-verdict-title" id="ordersVerdictTitle"></h2>
+                        <p class="analytics-verdict-sub" id="ordersVerdictSub" hidden></p>
+                    </div>
+                    <div class="analytics-verdict-score">
+                        <span class="analytics-verdict-score-num serif-display" id="ordersWaitingCount">–</span>
+                        <span class="analytics-verdict-score-lbl" id="ordersWaitingLbl"></span>
+                    </div>
+                </div>
+            </section>
+            <section class="orders-queue">
+                <h2 class="section-title" data-i18n="orders_queue">Warteschlange</h2>
+                <div id="orders-pending-list" class="settings-group"></div>
+            </section>
+            <div class="orders-side">
+                <section class="orders-progress" id="ordersProgress">
+                    <h2 class="section-title" data-i18n="orders_inprogress">In Zubereitung</h2>
+                    <div id="orders-accepted-list" class="settings-group"></div>
+                </section>
+                <section class="orders-manage" id="ordersManage"></section>
             </div>
         </div>
-        <div>
-            <div class="section-title orders-history-header">
-              <span data-i18n="orders_history">Verlauf</span>
-              <button type="button" class="btn btn--danger" id="orders-clear-history" data-i18n="orders_clear_history" style="display:none">Verlauf löschen</button>
+        <!-- Manage panels: hidden here, shown while the detail sheet holds one (openOrdersManage) -->
+        <div class="orders-panels" hidden>
+            <div class="orders-panel" id="ordersHistoryPanel">
+                <div class="settings-group" id="orders-history-list"></div>
+                <button type="button" class="btn btn--danger" id="orders-clear-history" data-i18n="orders_clear_history" style="display:none">Verlauf löschen</button>
             </div>
-            <div class="orders-history-list" id="orders-history-list"></div>
-        </div>
-        <div class="orders-menu-section">
-            <div class="card-title orders-menu-toggle" id="ordersMenuTitle">
-                <span data-i18n="orders_menu_title">Menü verwalten</span>
-                <span id="ordersMenuToggle">▾</span>
-            </div>
-            <div id="ordersMenuBody">
-                <div class="orders-menu-list" id="ordersMenuList"></div>
+            <div class="orders-panel" id="ordersMenuPanel">
+                <div class="settings-group" id="ordersMenuList"></div>
                 <div class="orders-menu-add-row">
-                    <input class="orders-menu-input emoji" id="ordersMenuEmoji" aria-label="Emoji" data-i18n-aria-label="lib_milk_emoji" placeholder="☕" maxlength="2">
-                    <input class="orders-menu-input" id="ordersMenuName" aria-label="Name" data-i18n-aria-label="orders_menu_name_ph" style="flex:1" placeholder="Name …" data-i18n-ph="orders_menu_name_ph">
+                    <input class="lib-input orders-menu-emoji" id="ordersMenuEmoji" aria-label="Emoji" data-i18n-aria-label="lib_milk_emoji" placeholder="☕" maxlength="2">
+                    <input class="lib-input orders-menu-name" id="ordersMenuName" aria-label="Name" data-i18n-aria-label="orders_menu_name_ph" placeholder="Name …" data-i18n-ph="orders_menu_name_ph">
                     <button type="button" class="btn btn--tonal" id="addOrderMenuItemBtn" data-i18n="orders_menu_save">Hinzufügen</button>
                 </div>
+                <div id="orders-milk-stock" class="orders-milk-section" style="display:none"></div>
             </div>
-        </div>
-        <div class="orders-menu-section" id="ordersStatsSection">
-            <div class="card-title orders-menu-toggle" id="ordersStatsTitle">
-                <span data-i18n="orders_stats_title">Kunden-Statistik</span>
-                <span id="ordersStatsToggle">▸</span>
-            </div>
-            <div id="ordersStatsBody" style="display:none">
+            <div class="orders-panel" id="ordersGuestsPanel">
                 <div id="ordersStatsContent"></div>
             </div>
-        </div>
-        <div class="orders-menu-section" id="ordersNotifySection">
-            <div class="card-title orders-menu-toggle" id="ordersNotifyTitle">
-                <span data-i18n="orders_notify_title">Push-Benachrichtigungen</span>
-                <span id="ordersNotifyToggle">▸</span>
+            <div class="orders-panel" id="ordersKioskPanel">
+                <h3 class="section-title" data-i18n="orders_kiosk_link_title">Kiosk-Link</h3>
+                <div id="ordersKioskBody"></div>
+                <h3 class="section-title" data-i18n="orders_notify_title">Push-Benachrichtigungen</h3>
+                <div id="ordersNotifyBody"></div>
             </div>
-            <div id="ordersNotifyBody" style="display:none"></div>
-        </div>
-        <div class="orders-menu-section" id="ordersKioskSection">
-            <div class="card-title orders-menu-toggle" id="ordersKioskTitle">
-                <span data-i18n="orders_kiosk_link_title">Kiosk-Link</span>
-                <span id="ordersKioskToggle">▸</span>
-            </div>
-            <div id="ordersKioskBody" style="display:none"></div>
         </div>
     </div>
 
