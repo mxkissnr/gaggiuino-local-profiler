@@ -38,7 +38,6 @@ let _formSheetBody: HTMLElement | null = null;
 let _formSheetBackdrop: HTMLElement | null = null;
 let _formSheetSection: HTMLElement | null = null;
 let _formSheetTitle: HTMLElement | null = null;
-let _formSheetConfirm: HTMLElement | null = null;
 let _formSheetKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 let _formHomeParent: Node | null = null;
 let _formHomeNext: Node | null = null;
@@ -65,6 +64,9 @@ let _resetAutosave: (() => void) | null = null;
 // The sheet bar's action row, kept so the autosave status can sit in the bar:
 // the form's own action row is hidden while editing.
 let _formSheetHeadActions: HTMLElement | null = null;
+// True while the discard question is up (#2144): a second close neither
+// asks twice nor lets the sheet's own keys act under the dialog.
+let _askingDiscard = false;
 
 function _rememberFormHome(): void {
   const form = typeof document !== 'undefined' ? document.getElementById('beanAddForm') : null;
@@ -141,33 +143,6 @@ function _beanFormSheetHost(): HTMLElement | null {
   head.appendChild(headActions);
   section.appendChild(head);
 
-  const confirm = document.createElement('div');
-  confirm.className = 'lib-form-confirm';
-  confirm.setAttribute('hidden', '');
-  const question = document.createElement('span');
-  question.className = 'lib-form-confirm-q';
-  question.textContent = t('lib_form_discard_q');
-  question.setAttribute('data-i18n', 'lib_form_discard_q');
-  confirm.appendChild(question);
-  const confirmActions = document.createElement('div');
-  confirmActions.className = 'lib-form-confirm-actions';
-  const discard = document.createElement('button');
-  discard.type = 'button';
-  discard.className = 'btn btn--danger';
-  discard.textContent = t('lib_form_discard');
-  discard.setAttribute('data-i18n', 'lib_form_discard');
-  discard.addEventListener('click', () => discardBeanForm());
-  confirmActions.appendChild(discard);
-  const keep = document.createElement('button');
-  keep.type = 'button';
-  keep.className = 'btn btn--tonal';
-  keep.textContent = t('lib_form_keep_editing');
-  keep.setAttribute('data-i18n', 'lib_form_keep_editing');
-  keep.addEventListener('click', () => _hideFormConfirm());
-  confirmActions.appendChild(keep);
-  confirm.appendChild(confirmActions);
-  section.appendChild(confirm);
-
   const body = document.createElement('div');
   body.className = 'lib-form-sheet-body';
   section.appendChild(body);
@@ -185,16 +160,7 @@ function _beanFormSheetHost(): HTMLElement | null {
   _formSheetBackdrop = backdrop;
   _formSheetSection = section;
   _formSheetTitle = title;
-  _formSheetConfirm = confirm;
   return host;
-}
-
-function _showFormConfirm(): void {
-  _formSheetConfirm?.removeAttribute('hidden');
-}
-
-function _hideFormConfirm(): void {
-  _formSheetConfirm?.setAttribute('hidden', '');
 }
 
 // One delegated listener: anything the user touches inside the form marks it
@@ -218,7 +184,8 @@ function _formSheetVisible(): boolean {
 }
 
 function _onFormSheetKeydown(e: KeyboardEvent): void {
-  if (!_formSheetVisible()) return;
+  // While the discard question is up, the dialog owns Esc and Tab (#2144).
+  if (!_formSheetVisible() || _askingDiscard) return;
   if (e.key === 'Escape') {
     if (_overlayShieldsSheets()) return;
     const tag = document.activeElement?.tagName?.toLowerCase() || '';
@@ -260,7 +227,6 @@ function _showBeanFormSheet(): void {
   // so both "save without / with a bag" choices stay reachable. Editing saves
   // itself and the bar shows the saved state (#2098).
   _formSheetSection?.classList?.toggle('is-editing', isEdit);
-  _hideFormConfirm();
   const form = document.getElementById('beanAddForm');
   if (form) {
     const photo = document.getElementById('beanFormImageField');
@@ -420,7 +386,6 @@ export function closeBeanForm(): void {
   if (adjustBtn) adjustBtn.style.display = 'none';
   const extraEl = document.getElementById('beanFormExtraRecipes');
   if (extraEl) { extraEl.style.display = 'none'; extraEl.innerHTML = html``; }
-  _hideFormConfirm();
   _restoreFormHome();
   _formSheetHost?.classList?.remove('open');
   _unwireFormSheetKeys();
@@ -444,16 +409,28 @@ function _animateFormSheetOut(done: () => void): void {
   animateSheetOut(section, _formSheetBackdrop, done);
 }
 
-// Dirty-aware close: a form with unsaved edits asks before discarding. A real
-// close (X, backdrop, Esc, swipe, discard) slides the sheet out first. Returns
-// false when it only showed the confirm bar, so a swipe can spring back.
+// Dirty-aware close (X, backdrop, Esc, swipe): an untouched form slides out at
+// once; a form with unsaved edits stays open and asks in the shared confirm
+// dialog (#2144). Returns false while it asks, so a swipe springs back.
 export function requestCloseBeanForm(): boolean {
-  if (_beanFormDirty) { _showFormConfirm(); return false; }
+  if (_beanFormDirty) { void _askDiscardBeanForm(); return false; }
   _animateFormSheetOut(closeBeanForm);
   return true;
 }
 
-// Cancel / confirm-bar discard: an explicit "throw my edits away", no prompt.
+async function _askDiscardBeanForm(): Promise<void> {
+  if (_askingDiscard) return;
+  _askingDiscard = true;
+  try {
+    const discard = await confirmDialog(t('lib_form_discard_q'), { confirmLabel: t('lib_form_discard'), destructive: true });
+    // Nothing to discard once the sheet has closed meanwhile.
+    if (discard && _formSheetVisible()) discardBeanForm();
+  } finally {
+    _askingDiscard = false;
+  }
+}
+
+// The discard question's "Discard": an explicit "throw my edits away".
 export function discardBeanForm(): void {
   _beanFormDirty = false;
   _animateFormSheetOut(closeBeanForm);

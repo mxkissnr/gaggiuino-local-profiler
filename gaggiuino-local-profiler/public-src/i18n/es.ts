@@ -226,7 +226,7 @@ const es: Partial<Translations> = {
     lib_btn_edit:'Editar', lib_btn_delete:'Eliminar',
     lib_btn_archive:'Archivar', lib_btn_restore:'Restaurar',
     lib_sheet_close:'Cerrar', lib_sheet_more:'Más acciones', lib_sheet_shot_log:'Registro de shots', lib_sheet_aromas:'Aromas',
-    lib_form_sheet_new:'Nuevo grano', lib_form_sheet_edit:'Editar grano', lib_form_discard_q:'¿Descartar los cambios?', lib_form_discard:'Descartar', lib_form_keep_editing:'Seguir editando',
+    lib_form_sheet_new:'Nuevo grano', lib_form_sheet_edit:'Editar grano', lib_form_discard_q:'¿Descartar los cambios?', lib_form_discard:'Descartar',
     lib_archived_toast:'Bolsa plegada y guardada.', lib_restored_toast:'De vuelta en el estante.',
     bean_empty_offer_toast:(n)=>`${n} se ha agotado`,
     lib_confirm_delete_bean:'¿Eliminar el grano de la biblioteca?',

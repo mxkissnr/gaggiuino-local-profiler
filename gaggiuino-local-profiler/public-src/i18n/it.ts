@@ -226,7 +226,7 @@ const it: Partial<Translations> = {
     lib_btn_edit:'Modifica', lib_btn_delete:'Elimina',
     lib_btn_archive:'Archivia', lib_btn_restore:'Ripristina',
     lib_sheet_close:'Chiudi', lib_sheet_more:'Altre azioni', lib_sheet_shot_log:'Registro shot', lib_sheet_aromas:'Aromi',
-    lib_form_sheet_new:'Nuovo grano', lib_form_sheet_edit:'Modifica grano', lib_form_discard_q:'Scartare le modifiche?', lib_form_discard:'Scartare', lib_form_keep_editing:'Continua a modificare',
+    lib_form_sheet_new:'Nuovo grano', lib_form_sheet_edit:'Modifica grano', lib_form_discard_q:'Scartare le modifiche?', lib_form_discard:'Scartare',
     lib_archived_toast:'Sacchetto piegato e riposto.', lib_restored_toast:'Di nuovo sullo scaffale.',
     bean_empty_offer_toast:(n)=>`${n} è finito`,
     lib_confirm_delete_bean:'Rimuovere il grano dalla libreria?',

@@ -226,7 +226,7 @@ const de: Partial<Translations> = {
     lib_btn_edit:'Bearbeiten', lib_btn_delete:'Löschen',
     lib_btn_archive:'Archivieren', lib_btn_restore:'Wiederherstellen',
     lib_sheet_close:'Schließen', lib_sheet_more:'Weitere Aktionen', lib_sheet_shot_log:'Shot-Log', lib_sheet_aromas:'Aromen',
-    lib_form_sheet_new:'Neue Bohne', lib_form_sheet_edit:'Bohne bearbeiten', lib_form_discard_q:'Änderungen verwerfen?', lib_form_discard:'Verwerfen', lib_form_keep_editing:'Weiter bearbeiten',
+    lib_form_sheet_new:'Neue Bohne', lib_form_sheet_edit:'Bohne bearbeiten', lib_form_discard_q:'Änderungen verwerfen?', lib_form_discard:'Verwerfen',
     lib_archived_toast:'Beutel gefaltet und weggeräumt.', lib_restored_toast:'Wieder im Regal.',
     bean_empty_offer_toast:(n)=>`${n} ist leer`,
     lib_confirm_delete_bean:'Bohne aus der Bibliothek löschen?',
