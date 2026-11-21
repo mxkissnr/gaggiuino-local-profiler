@@ -139,6 +139,7 @@ const nl: Partial<Translations> = {
     chart_pressure_unit:'Druk (bar)', chart_flow_unit:'Pompstroom (ml/s)',
     chart_time:(s)=>`Tijd: ${s}`,
     delta_vs_shot:(n)=>`vs. Shot ${n}`, chart_prev_suffix:(n)=>` (Shot ${n})`,
+    shot_compare_pick:'Vergelijken met een andere shot', shot_compare_end:'Vergelijking beëindigen', shot_compare_none:'Er is nog geen andere shot om mee te vergelijken.', shot_notes_all:'Alle notities', shot_section_process:'Proces', shot_similar_title:(n)=>`Vergelijkbare shots · ${n}`, shot_verdict_vs_bean:(n)=>`t.o.v. Shot ${n}, de laatste met dit profiel en deze boon`, shot_verdict_vs_profile:(n)=>`t.o.v. Shot ${n}, de laatste met dit profiel`,
     orders_just_now:'zojuist',
     live_idle_text:'Zodra een shot start, verschijnen hier de realtime gegevens.',
     live_time_unit:'min:sec', live_time_label:'Tijd',
