@@ -316,7 +316,7 @@ describe('reference chip (#2153)', () => {
   it('lists the newest 40 shots with a curve in the sheet next to the chip', () => {
     S.shots = Array.from({ length: 45 }, (_, i) => ({
       id: i + 1, timestamp: 1700000000 + i * 60, hasChartData: i + 1 !== 45, profileName: 'Turbo', annotation: {},
-    })) as typeof S.shots;
+    }));
     S.refShotId = 44;
     const anchor = el('refChip');
     live.openRefPicker(anchor as unknown as HTMLElement);
