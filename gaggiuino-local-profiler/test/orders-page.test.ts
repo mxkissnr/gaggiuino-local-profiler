@@ -377,10 +377,10 @@ describe('Manage strings (#2148)', () => {
   });
 
   it('removes the keys the page no longer uses', () => {
-    const dicts = [en, de, es, fr, itLang, nl] as Record<string, unknown>[];
-    for (const dict of dicts) {
+    const dicts = { de, en, es, fr, it: itLang, nl };
+    for (const [name, dict] of Object.entries(dicts)) {
       for (const key of ['orders_accept_on', 'orders_accept_off', 'orders_queue_banner', 'orders_queue_pos']) {
-        expect(dict[key], key).toBeUndefined();
+        expect(dict[key], `${name}:${key}`).toBeUndefined();
       }
     }
   });
