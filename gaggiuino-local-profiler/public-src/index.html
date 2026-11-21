@@ -1944,7 +1944,7 @@
 
 <!-- ── Barcode scan modal ── -->
 <div id="scanModal">
-    <h3 data-i18n="scan_title">Barcode / QR scannen</h3>
+    <h3 class="card-title" data-i18n="scan_title">Barcode / QR scannen</h3>
     <div id="scanViewport">
         <video id="scanVideo" class="scan-video-off" autoplay muted playsinline></video>
         <div class="scan-overlay"><div class="scan-frame"></div></div>
@@ -1983,7 +1983,10 @@
      public-src/components/backup-modal.js for why. -->
 <div id="backupModal" role="dialog" aria-modal="true" aria-labelledby="backupModalTitle" aria-describedby="backupModalDesc">
     <div class="backup-modal-card">
-        <h3 id="backupModalTitle"></h3>
+        <div class="lib-sheet-bar">
+            <button type="button" class="lib-sheet-close" id="backupModalCloseBtn" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <h3 class="lib-sheet-bar-title" id="backupModalTitle"></h3>
+        </div>
         <p id="backupModalDesc" class="settings-card-desc"></p>
 
         <div id="backupModalSections" class="backup-modal-sections"></div>

@@ -2018,7 +2018,6 @@
         /* ── Scan modal ── */
         #scanModal { display:none; position:fixed; inset:0; z-index: var(--z-modal); background:color-mix(in srgb, var(--scrim) 85%, transparent); flex-direction:column; align-items:center; justify-content:center; gap: var(--sp-4); padding: var(--sp-5); }
         #scanModal.open { display:flex; }
-        #scanModal h3 { color:var(--gray-200); font-size: var(--fs-3); font-weight:600; margin: 0; }
         #scanViewport { position:relative; width:100%; max-width:420px; border-radius:var(--radius); overflow:hidden; background:var(--scrim); aspect-ratio:1; }
         #scanViewport video { width:100%; height:100%; object-fit:cover; display:block; }
         .scan-overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
@@ -2058,7 +2057,10 @@
         #backupModal { display:none; position:fixed; inset:0; z-index: var(--z-modal); background:color-mix(in srgb, var(--scrim) 85%, transparent); align-items:center; justify-content:center; padding: var(--sp-5); overflow-y:auto; }
         #backupModal.open { display:flex; }
         .backup-modal-card { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-5); width:100%; max-width:420px; display:flex; flex-direction:column; gap: var(--sp-3); margin: auto; }
-        .backup-modal-card h3 { color:var(--gray-200); font-size: var(--fs-3); font-weight:600; margin: 0; }
+        /* #2141: the backup dialog's title sits in the shared sheet header bar.
+           The card is a flex column with its own gap and --sp-5 padding, so the
+           bar drops its bottom margin and sticks at the card's top edge. */
+        .backup-modal-card > .lib-sheet-bar { flex-shrink: 0; margin-bottom: 0; top: calc(-1 * var(--sp-5)); }
         /* #2038: on a phone the backup dialog is a bottom sheet with a grab
            handle; desktop keeps the centred dialog. */
         @media (max-width: 899px) {
@@ -3047,7 +3049,10 @@
         /* Zoom + pan crop editor modal (#286) */
         .crop-editor-overlay { position:fixed; inset:0; background:color-mix(in srgb, var(--scrim) 70%, transparent); display:flex; align-items:center; justify-content:center; z-index: var(--z-crop); padding: var(--sp-4); }
         .crop-editor-modal { background:var(--gray-900); border-radius:var(--radius); padding: var(--sp-4); max-width:360px; width:100%; display:flex; flex-direction:column; align-items:center; gap: var(--sp-4); }
-        .crop-editor-title { font-size: var(--fs-2); font-weight:600; color:var(--gray-200); margin: 0; }
+        /* #2141: the crop and sticker editors' title sits in the shared sheet
+           header bar. The editor centres its children, so the bar stretches to
+           its full width; the editor's gap replaces the bar's bottom margin. */
+        .crop-editor-modal > .lib-sheet-bar { align-self: stretch; flex-shrink: 0; margin-bottom: 0; }
         .crop-editor-canvas { touch-action:none; cursor:grab; background:var(--gray-950); max-width:100%; height:auto; }
         .crop-editor-canvas:active { cursor:grabbing; }
         .crop-editor-canvas-circle { border-radius:50%; }
