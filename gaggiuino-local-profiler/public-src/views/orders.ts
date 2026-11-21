@@ -16,6 +16,7 @@ import { esc, formatDate, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { localeFor } from '../constants.js';
 import { confirmDialog } from '../components/confirm-dialog.js';
+import { openDetailSheet } from '../components/detail-sheet.js';
 import { showToast } from '../components/toast.js';
 import { textEntryFocused } from '../live-sync.js';
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
@@ -24,7 +25,7 @@ import { textEntryFocused } from '../live-sync.js';
 // BEAN_ICON_SVG now lives in ../icons.ts (also used by boot/annotation.ts's bean-age
 // hint, #419 follow-up); MILK_ICON_SVG moved there too once the library
 // and annotation milk pickers reused it as their no-emoji fallback (#1328).
-import { CLOCK_ICON_SVG, BELL_ICON_SVG, BEAN_ICON_SVG, MILK_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG } from '../icons.js';
+import { BELL_ICON_SVG, BEAN_ICON_SVG, MILK_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG } from '../icons.js';
 
 // Two orders-runtime fields that state/index.ts's OrdersSlice does not
 // declare: they are written and read only by this view, so they get a local
@@ -36,7 +37,7 @@ type OrdersRuntimeState = typeof S & {
 const SO = S as OrdersRuntimeState;
 
 // Hand-built view of GET /api/switch as loadOrdersView reads it.
-interface SwitchState { configured?: boolean; state?: boolean }
+export interface SwitchState { configured?: boolean; state?: boolean }
 
 // S._ordersEtaSelected / S._ordersDeclineOpen are keyed by the order id that
 // arrives as a dataset string — keep the runtime key a string and type the
@@ -86,12 +87,6 @@ async function _getNotifyServicesOrNull(): Promise<NotifyService[] | null> {
   try { return await getNotifyServices(); } catch { return null; }
 }
 
-export function toggleOrdersMenu(): void {
-  S._ordersMenuOpen = !S._ordersMenuOpen;
-  (document.getElementById('ordersMenuBody') as HTMLElement).style.display = S._ordersMenuOpen ? '' : 'none';
-  (document.getElementById('ordersMenuToggle') as HTMLElement).textContent = S._ordersMenuOpen ? '▾' : '▸';
-}
-
 function _playOrderChime(): void {
   try {
     const Ctor = (window.AudioContext
@@ -125,11 +120,18 @@ function _notifyNewOrders(newOrders: Order[]): void {
 // text field focused inside #orders-view, or a decline-reason input left with a
 // value (its row stays open even without focus, so `textEntryFocused()` alone
 // misses it).
+// #2148: or a text field inside an open Manage panel.
 function _ordersDraftOpen(): boolean {
   if (textEntryFocused()) {
-    const view = document.getElementById('orders-view');
     const active = document.activeElement;
+    const view = document.getElementById('orders-view');
     if (view && active && view.contains(active)) return true;
+    // #2148: the Manage panels (menu inputs, kiosk link) sit in the detail
+    // sheet while open, outside #orders-view.
+    for (const row of ORDERS_MANAGE_ROWS) {
+      const panel = document.getElementById(row.panelId);
+      if (panel && active && panel.contains(active)) return true;
+    }
   }
   for (const el of document.querySelectorAll<HTMLInputElement>('[id^="declineReason_"]')) {
     if (el.value.trim() !== '') return true;
@@ -183,6 +185,7 @@ export function _updateOrdersToggleUI(enabled: boolean): void {
 export async function loadOrdersView(): Promise<void> {
   // #1962: only a view that has nothing on screen yet says it is loading, so a
   // background refresh never flashes over the list the user is reading.
+  renderOrdersManage();
   const pendingListEl = document.getElementById('orders-pending-list');
   const listShowedNothing = pendingListEl?.innerHTML === '';
   if (listShowedNothing && pendingListEl) {
@@ -192,9 +195,6 @@ export async function loadOrdersView(): Promise<void> {
     _getSwitchState(),
     _getSettingsOr({ enabled: true }),
   ]);
-  const machineOff = sw.configured && sw.state === false;
-  const banner = document.getElementById('orders-machine-off-banner');
-  if (banner) { banner.style.display = machineOff ? '' : 'none'; banner.textContent = t('orders_machine_off'); }
   _updateOrdersToggleUI(!!settings.enabled);
 
   let ordersFailed = false;
@@ -215,6 +215,7 @@ export async function loadOrdersView(): Promise<void> {
     }
   } else {
     renderOrdersList(orders);
+    renderOrdersVerdict(ordersVerdictText(orders, queueEta, sw));
   }
   renderOrdersMenuAdmin(menu);
   renderMilkStock(milkStock);
@@ -281,18 +282,9 @@ export function renderOrdersList(orders: Order[]): void {
   const clearHistBtn = document.getElementById('orders-clear-history');
   if (!pendingEl) return;
 
-  // Queue banner — only when 2+ orders active
-  const totalActive = pending.length + accepted.length;
-  const totalEta = SO._ordersQueueEta
-    ? Math.ceil((SO._ordersQueueEta.acceptedRemaining || 0) + (SO._ordersQueueEta.pendingCount || 0) * (SO._ordersQueueEta.prepTime || 4))
-    : 0;
-  const queueBanner = totalActive >= 2 && totalEta > 0
-    ? html`<div class="orders-queue-banner">${CLOCK_ICON_SVG} ${tHtml('orders_queue_banner', totalActive, totalEta)}</div>`
-    : html``;
-
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  pendingEl.innerHTML = html`${queueBanner}${pending.length ? joinHtml(pending.map(o => renderOrderCard(o, 'pending'))) :
-    html`<div class="orders-empty">${tHtml('orders_empty')}</div>`}`;
+  pendingEl.innerHTML = pending.length ? joinHtml(pending.map(o => renderOrderCard(o, 'pending'))) :
+    html`<div class="orders-empty">${tHtml('orders_empty')}</div>`;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   (acceptedEl as HTMLElement).innerHTML = accepted.length ? joinHtml(accepted.map(o => renderOrderCard(o, 'accepted'))) :
@@ -546,13 +538,6 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
   });
 }
 
-export function toggleOrdersStats(): void {
-  S._ordersStatsOpen = !S._ordersStatsOpen;
-  (document.getElementById('ordersStatsBody') as HTMLElement).style.display = S._ordersStatsOpen ? '' : 'none';
-  (document.getElementById('ordersStatsToggle') as HTMLElement).textContent = S._ordersStatsOpen ? '▾' : '▸';
-  if (S._ordersStatsOpen) void loadOrdersView();
-}
-
 export function renderOrdersStats(stats: OrderStats | null | undefined): void {
   const el = document.getElementById('ordersStatsContent');
   if (!el) return;
@@ -756,14 +741,108 @@ export async function saveNotifyMapping(): Promise<void> {
   }
 }
 
-export function toggleOrdersNotify(): void {
-  const body = document.getElementById('ordersNotifyBody');
-  const toggle = document.getElementById('ordersNotifyToggle');
-  if (!body || !toggle) return;
-  const open = body.style.display === 'none';
-  body.style.display = open ? '' : 'none';
-  toggle.textContent = open ? '▾' : '▸';
-  if (open) void loadNotifyMappingView();
+// ── Verdict and Manage (#2148) ──────────────────────────────────────────
+
+// Minutes until the whole queue is done: the server's rolling estimate when
+// it answered (accepted orders' remaining time plus one prep time per
+// waiting order), else the same sum from the orders themselves with the
+// server's default of 4 minutes per order.
+export function ordersQueueMinutes(orders: Order[], queueEta: QueueEta | null, now = Date.now()): number {
+  if (queueEta) {
+    return Math.ceil((queueEta.acceptedRemaining || 0) + (queueEta.pendingCount || 0) * (queueEta.prepTime || 4));
+  }
+  let minutes = 0;
+  for (const o of orders) {
+    if (o.status === 'pending') minutes += 4;
+    else if (o.status === 'accepted') {
+      minutes += Math.max(0, Math.ceil(((o.acceptedAt ?? now) + (o.eta ?? 0) * 60000 - now) / 60000));
+    }
+  }
+  return minutes;
+}
+
+export interface OrdersVerdict {
+  count: number;
+  title: string;
+  sub: string;
+}
+
+// The verdict: the big number is the orders waiting; the sentence says how
+// long the queue takes, the sub line whether the machine is off.
+export function ordersVerdictText(orders: Order[], queueEta: QueueEta | null, sw: SwitchState, now = Date.now()): OrdersVerdict {
+  const waiting = orders.filter(o => o.status === 'pending').length;
+  const active = waiting + orders.filter(o => o.status === 'accepted').length;
+  const minutes = ordersQueueMinutes(orders, queueEta, now);
+  // Interim texts until the verdict strings arrive (#2148 slice 3).
+  const title = active > 0 && minutes > 0 ? t('orders_queue_banner', active, minutes) : t('orders_empty');
+  const sub = sw.configured && sw.state === false ? t('orders_machine_off') : '';
+  return { count: waiting, title, sub };
+}
+
+export function renderOrdersVerdict(v: OrdersVerdict): void {
+  const count = document.getElementById('ordersWaitingCount');
+  const title = document.getElementById('ordersVerdictTitle');
+  const sub = document.getElementById('ordersVerdictSub');
+  if (count) count.textContent = String(v.count);
+  if (title) title.textContent = v.title;
+  if (sub) {
+    sub.textContent = v.sub;
+    sub.hidden = v.sub === '';
+  }
+}
+
+// The Manage group: each row opens its panel — static markup under
+// .orders-panels, so every existing id and handler stays — in the shared
+// detail sheet, the way the settings page opens its form cards (#2038).
+export interface OrdersManageRow {
+  id: string;
+  titleKey: string;
+  panelId: string;
+}
+
+export const ORDERS_MANAGE_ROWS: readonly OrdersManageRow[] = [
+  { id: 'history', titleKey: 'orders_history', panelId: 'ordersHistoryPanel' },
+  { id: 'menu', titleKey: 'orders_menu_title', panelId: 'ordersMenuPanel' },
+  { id: 'guests', titleKey: 'orders_stats_title', panelId: 'ordersGuestsPanel' },
+  { id: 'kiosk', titleKey: 'orders_kiosk_link_title', panelId: 'ordersKioskPanel' },
+];
+
+// The data-i18n spans hold text only, so a language switch relabels them.
+export function ordersManageHtml(): Html {
+  return html`<div class="settings-group">${joinHtml(ORDERS_MANAGE_ROWS.map(row => html`<button type="button" class="settings-row" data-orders-manage="${esc(row.id)}" aria-haspopup="dialog">
+      <span class="settings-row-text"><span class="settings-row-title" data-i18n="${esc(row.titleKey)}">${tHtml(row.titleKey)}</span></span>
+      <span class="settings-chev" aria-hidden="true"></span>
+    </button>`))}</div>`;
+}
+
+// Rendered once: the 10 s poll must not take the focus off a row.
+export function renderOrdersManage(): void {
+  const el = document.getElementById('ordersManage');
+  if (!el || el.innerHTML !== '') return;
+  // codeql[js/xss-through-dom] false positive: esc()/html already applied, see #760
+  el.innerHTML = ordersManageHtml();
+}
+
+export function openOrdersManage(id: string): void {
+  const row = ORDERS_MANAGE_ROWS.find(r => r.id === id);
+  if (!row) return;
+  const panel = document.getElementById(row.panelId);
+  if (!panel) return;
+  if (id === 'guests') {
+    S._ordersStatsOpen = true;
+    getOrdersStats().then(renderOrdersStats).catch(() => {});
+  }
+  if (id === 'kiosk') {
+    void loadKioskLinkView();
+    void loadNotifyMappingView();
+  }
+  openDetailSheet({
+    title: t(row.titleKey),
+    dialog: true,
+    body: html``,
+    content: panel,
+    onClose: () => { if (id === 'guests') S._ordersStatsOpen = false; },
+  });
 }
 
 // ── Kiosk link (#1731) ───────────────────────────────────────────────────
@@ -828,16 +907,6 @@ export async function loadKioskLinkView(): Promise<void> {
     const message = err instanceof Error ? err.message : String(err);
     section.innerHTML = html`<p class="orders-notify-hint">${esc(t('error_generic', message))}</p>`;
   }
-}
-
-export function toggleOrdersKiosk(): void {
-  const body = document.getElementById('ordersKioskBody');
-  const toggle = document.getElementById('ordersKioskToggle');
-  if (!body || !toggle) return;
-  const open = body.style.display === 'none';
-  body.style.display = open ? '' : 'none';
-  toggle.textContent = open ? '▾' : '▸';
-  if (open) void loadKioskLinkView();
 }
 
 export async function addOrderMenuItem(): Promise<void> {
