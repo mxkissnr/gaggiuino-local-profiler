@@ -44,7 +44,6 @@ function makeFakeDocument() {
 
 describe('Live view standby preheat (#1498)', () => {
   let doc: ReturnType<typeof makeFakeDocument>;
-  let badge: FakeElement;
   let wrap: FakeElement;
   let title: FakeElement;
 
@@ -54,18 +53,16 @@ describe('Live view standby preheat (#1498)', () => {
     state.currentLang = 'en';
     state.machines = [{ id: 1, isDefault: true }];
     state.activeMachineId = 1;
-    badge = doc.getElementById('preheat-ready-badge');
     wrap = doc.getElementById('preheat-warming-wrap');
     title = doc.getElementById('liveIdleTitle');
   });
 
-  // #1498 code review: updatePreheatWidget owns only the badge/warming widget;
+  // #1498 code review: updatePreheatWidget owns only the warming widget;
   // the idle title belongs to the live-data handler, so this must not write it.
-  it('hides the ready badge and warming widget without touching the idle title', () => {
+  it('hides the warming widget without touching the idle title', () => {
     title.textContent = 'sentinel';
     updatePreheatWidget({ standby: true, ready: false, remaining: 1200, pct: 0.1 });
 
-    expect(badge.style.display).toBe('none');
     expect(wrap.style.display).toBe('none');
     expect(title.textContent).toBe('sentinel');
   });
@@ -74,7 +71,6 @@ describe('Live view standby preheat (#1498)', () => {
     title.textContent = 'sentinel';
     updatePreheatWidget({ standby: true, ready: true, remaining: 600, pct: 1 });
 
-    expect(badge.style.display).toBe('none');
     expect(wrap.style.display).toBe('none');
     expect(title.textContent).toBe('sentinel');
   });
@@ -106,7 +102,6 @@ describe('Live view standby preheat (#1498)', () => {
     updatePreheatWidget({ standby: false, ready: false, remaining: 1200, pct: 0.1 });
     handleLiveData({ machineReachable: true });
 
-    expect(badge.style.display).toBe('none');
     expect(wrap.style.display).toBe('');
     expect(doc.getElementById('preheat-countdown').textContent).toBe('20:00 remaining');
     expect(title.textContent).toBe('Warming up …');
@@ -115,11 +110,10 @@ describe('Live view standby preheat (#1498)', () => {
   // #1498 follow-up: a last live message that says the machine is unreachable
   // must hide the badge and warming widget even when a stale preheat payload
   // still carries a countdown.
-  it('hides the badge and warming widget when the last live message is unreachable', () => {
+  it('hides the warming widget when the last live message is unreachable', () => {
     handleLiveData({ machineReachable: false });
     updatePreheatWidget({ ready: false, remaining: 1000, pct: 0.1, preheatTime: 20 });
 
-    expect(badge.style.display).toBe('none');
     expect(wrap.style.display).toBe('none');
   });
 
@@ -127,7 +121,6 @@ describe('Live view standby preheat (#1498)', () => {
     handleLiveData({ machineReachable: true });
     updatePreheatWidget({ ready: false, remaining: 1000, pct: 0.1, preheatTime: 20 });
 
-    expect(badge.style.display).toBe('none');
     expect(wrap.style.display).toBe('');
   });
 

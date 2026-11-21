@@ -19,7 +19,7 @@ export function wireViews(): void {
     if (row) openOrdersManage(row.dataset.ordersManage as string);
   });
   document.getElementById('addOrderMenuItemBtn')!.addEventListener('click', () => { void addOrderMenuItem(); });
-  document.getElementById('refShotSelect')!.addEventListener('change', e => onRefShotChange((e.target as HTMLInputElement).value));
+  document.getElementById('refShotSelect')?.addEventListener('change', e => onRefShotChange((e.target as HTMLInputElement).value));
   document.getElementById('refClearBtn')!.addEventListener('click', clearReferenceShot);
 
   // ── Analytics toolbar (#1467): one period + search filter for the whole
