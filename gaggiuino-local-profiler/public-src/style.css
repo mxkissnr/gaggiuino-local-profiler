@@ -1370,46 +1370,8 @@
         .ann-mix-add { margin-top: var(--sp-2); }
         .annotation-actions { display: flex; justify-content: flex-end; align-items: center; gap: var(--sp-3); flex-wrap: wrap; }
 
-        /* ── Live pre-shot setup panel (Material Design card) ─────── */
-        #live-shot-setup {
-            margin-top: var(--sp-4);
-            background: var(--gray-900);
-            border: 1px solid var(--gray-700);
-            border-radius: var(--radius);
-            overflow: hidden;
-            /* overflow:hidden clears min-size in flex layout, allowing the panel
-               to shrink to 0. flex-shrink:0 when open prevents this so all
-               fields remain visible — the parent flex container scrolls instead.
-               min-height ensures the toggle button is always fully visible even
-               when the parent flex container squeezes the closed panel. */
-            min-height: calc(var(--sp-3) * 2 + 1.2 * 0.875rem + 2px);
-        }
-        #live-shot-setup.open { flex-shrink: 0; }
-        #lsToggle {
-            width: 100%;
-            display: flex; align-items: center; gap: var(--sp-3);
-            padding: var(--sp-3) var(--sp-4);
-            background: transparent; border: none;
-            color: var(--gray-300); font-size: var(--fs-2); font-weight: 500;
-            cursor: pointer; text-align: left;
-            transition: background .15s, color .15s;
-        }
-        #lsToggle:hover { background: color-mix(in srgb, var(--paper) 4%, transparent); color: var(--gray-100); }
-        .ls-icon { width: 16px; height: 16px; flex-shrink: 0; color: var(--gray-500); }
-        .ls-chevron { width: 16px; height: 16px; flex-shrink: 0; margin-left: auto; color: var(--gray-600); transition: transform .2s; }
-        #live-shot-setup.open #lsToggle {
-            color: var(--accent-ink);
-            border-bottom: 1px solid var(--gray-700);
-        }
-        #live-shot-setup.open .ls-icon { color: var(--accent-ink); }
-        #live-shot-setup.open .ls-chevron { transform: rotate(180deg); color: var(--accent-ink); }
-        #lsToggle span { flex: 1; }
-
-        #lsFields {
-            display: none;
-            padding: var(--sp-4);
-        }
-        #live-shot-setup.open #lsFields { display: block; }
+        /* #2153: the next shot's fields, shown in the detail sheet
+           (openLiveSetupSheet); every id and listener stays. */
         .ls-fields-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -1420,17 +1382,6 @@
             margin-top: var(--sp-3); padding-top: var(--sp-3);
             border-top: 1px solid var(--gray-800);
         }
-        #lsReset {
-            background: transparent;
-            border: 1px solid var(--gray-700);
-            border-radius: var(--radius);
-            color: var(--gray-500);
-            font-size: var(--fs-1);
-            padding: var(--sp-1) var(--sp-3);
-            cursor: pointer;
-            transition: border-color .15s, color .15s;
-        }
-        #lsReset:hover { border-color: var(--gray-500); color: var(--gray-300); }
         #orderedByBadge { white-space: normal; }
         .autosave-status { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-1); color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
         .autosave-status.visible { opacity: 1; }
@@ -2127,178 +2078,117 @@
         .bean-qr-label { font-size: var(--fs-1); color:var(--gray-600); }
 
 
-        /* ── Live view ── */
+        /* ── Live view (#2153) ──
+           The Home Assistant page pattern: verdict first, the four readings as
+           one figures row, the chart gets the space. Phone: one column in the
+           order verdict, figures, phase bar and chart, next shot (the two
+           wrappers step aside with display: contents). Desktop (900 px and
+           wider): chart left, figures and the next shot right. Page classes
+           only lay out; verdict, rows, chips, badges and buttons are the
+           shared pieces. */
         #live-view {
             display: none;
             flex-direction: column;
             flex: 1;
-            padding: var(--sp-6) var(--sp-6) var(--sp-6);
-        }
-
-        #live-header {
-            display: flex;
-            align-items: baseline;
+            min-width: 0;
             gap: var(--sp-4);
-            margin-bottom: var(--sp-5);
+            padding: var(--sp-6);
         }
+        .live-layout { display: flex; flex-direction: column; gap: var(--sp-5); min-width: 0; }
+        .live-main, .live-side { display: contents; }
+        #live-content, #live-idle { order: 1; min-width: 0; }
+        .live-figures { order: 2; }
+        .live-chart-area { order: 3; display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
+        .live-next { order: 4; min-width: 0; }
 
-        #live-header h1 { font-size: var(--fs-5); font-weight: 600; color: var(--gray-200); margin: 0; }
-
+        .live-run-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-3); }
+        .live-run-head .live-verdict { flex: 1 1 320px; min-width: 0; }
+        .live-verdict .analytics-verdict-text { flex: 1; }
+        .live-verdict .badge { margin-bottom: var(--sp-2); }
+        .live-verdict .analytics-verdict-score-num { font-variant-numeric: tabular-nums; }
         #live-status-badge .badge-dot {
             width: 8px; height: 8px;
             border-radius: 50%;
             background: currentColor;
         }
-        #live-status-badge.brewing .badge-dot,
-        #live-status-badge.steaming .badge-dot,
-        #live-status-badge.flushing .badge-dot,
-        #live-status-badge.descaling .badge-dot { animation: pulse 1.2s infinite; }
-
-        #live-meta {
-            display: flex;
-            font-size: var(--fs-1);
-            color: var(--gray-500);
-            gap: var(--sp-2);
-            margin-bottom: var(--sp-5);
-            min-height: 1.2em;
+        @media (prefers-reduced-motion: no-preference) {
+            #live-status-badge.brewing .badge-dot,
+            #live-status-badge.steaming .badge-dot,
+            #live-status-badge.flushing .badge-dot,
+            #live-status-badge.descaling .badge-dot { animation: pulse 1.2s infinite; }
         }
+        .live-ref-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); min-width: 0; }
+        .live-ref-label { font-size: var(--fs-1); color: var(--gray-500); }
+        #refChip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .live-ref-list .settings-row[aria-current="true"] .settings-row-title { color: var(--accent-ink); }
 
-        .live-stats {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: var(--sp-3);
-            margin-bottom: var(--sp-6);
-        }
+        /* The phase bar: one segment per phase of the reference shot, widths
+           set inline from the phase lengths: done, current, still to come. */
+        .live-phases { display: flex; gap: var(--sp-1); }
+        .live-phases[hidden] { display: none; }
+        .live-phase { flex: 1 1 0; min-width: 0; height: 6px; border-radius: var(--radius-full); background: var(--raised); }
+        .live-phase.is-done { background: var(--gray-600); }
+        .live-phase.is-current { background: var(--accent); }
 
-        .live-stat {
-            background: var(--gray-900);
-            border-radius:var(--radius);
-            padding: var(--sp-4);
-            text-align: center;
-        }
+        .live-chart-container { position: relative; width: 100%; height: clamp(320px, 55vh, 480px); }
 
-        .live-stat .stat-val {
-            font-size: var(--fs-5);
-            font-weight: 600;
-            color: var(--gray-100);
-            line-height: 1.1;
-            margin-bottom: var(--sp-1);
-        }
+        /* Figures: a dot in the series colour (the chart's line), the label and
+           the number. The colour is on the dot, not the text, so the labels
+           keep their contrast in both themes. */
+        .live-figures { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--sp-2); }
+        .live-figure { display: flex; flex-direction: column; gap: var(--sp-1); min-width: 0; }
+        .live-figure--pressure { --live-figure-c: var(--stat-pressure); }
+        .live-figure--flow { --live-figure-c: var(--stat-flow); }
+        .live-figure--weight { --live-figure-c: var(--stat-weight); }
+        .live-figure--temp { --live-figure-c: var(--stat-temp); }
+        .live-figure-label { display: flex; align-items: center; gap: var(--sp-1); min-width: 0; font-size: var(--fs-1); color: var(--gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .live-figure-dot { flex: none; width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--live-figure-c); }
+        .live-figure-num { white-space: nowrap; }
+        .live-figure-val { font-size: var(--fs-5); font-weight: 600; color: var(--gray-100); font-variant-numeric: tabular-nums; line-height: 1.1; }
+        .live-figure-unit { font-size: var(--fs-1); color: var(--gray-500); }
 
-        .live-stat .stat-unit { font-size: var(--fs-1); color: var(--gray-500); }
-        .live-stat .stat-label { font-size: var(--fs-1); color: var(--gray-600); margin-top: var(--sp-2); }
-
-        .live-stat.highlight-pressure { border-color: color-mix(in srgb, var(--stat-pressure) 40%, transparent); }
-        .live-stat.highlight-flow     { border-color: color-mix(in srgb, var(--stat-flow) 40%, transparent); }
-        .live-stat.highlight-weight   { border-color: color-mix(in srgb, var(--stat-weight) 40%, transparent); }
-        .live-stat.highlight-temp     { border-color: color-mix(in srgb, var(--stat-temp) 40%, transparent); }
-        .live-stat.highlight-time     { border-color: color-mix(in srgb, var(--stat-time) 40%, transparent); }
-
-        .live-chart-container { position: relative; height: 420px; width: 100%; }
-
-        /* ── Live reference bar ── */
-        #live-ref-bar {
-            display: flex;
-            align-items: center;
-            gap: var(--sp-2);
-            padding: var(--sp-2) var(--sp-4);
-            border-top: 1px solid var(--gray-800);
-            flex-wrap: wrap;
-            flex-shrink: 0;
-        }
-        .live-ref-label { font-size: var(--fs-1); color: var(--gray-500); flex-shrink: 0; }
-        #refShotSelect {
-            flex: 1;
-            min-width: 160px;
-            background: var(--gray-800);
-            border: 1px solid var(--gray-700);
-            border-radius:var(--radius);
-            color: var(--gray-200);
-            font-size: var(--fs-1);
-            padding: var(--sp-1) var(--sp-2);
-            outline: none;
-            }
-        #refShotSelect:focus { border-color: var(--gray-500); }
-        #refClearBtn {
-            background: transparent;
-            border: 1px solid var(--gray-700);
-            border-radius:var(--radius);
-            color: var(--gray-500);
-            font-size: var(--fs-1);
-            padding: var(--sp-1) var(--sp-3);
-            cursor: pointer;
-            flex-shrink: 0;
-            transition: color .2s, border-color .2s;
-        }
-        #refClearBtn:hover { color: var(--gray-200); border-color: var(--gray-500); }
-
-        #live-idle {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            flex: 1;
-            text-align: center;
-            padding: var(--sp-6) var(--sp-6);
-        }
-        /* #414: was a ☕ emoji glyph — same treatment as #empty-state .es-icon. */
-        #live-idle .idle-icon { color: var(--gray-600); margin-bottom: var(--sp-4); }
-        #live-idle .idle-icon .rail-icon { width: 48px; height: 48px; stroke-width: 1.3; }
-        /* #811: the animated machine icon carries no .rail-icon class, so the
-           48px rule above does not reach it and it would render at the
-           container's full width. Sized to read as an illustration in the idle
-           panel without dominating it. */
-        #live-idle #liveMachineIcon { width: 132px; margin-inline: auto; }
-        #live-idle #liveMachineIcon svg { width: 100%; height: auto; display: block; }
-        #live-idle h2 { color: var(--gray-500); font-size: var(--fs-3); margin: 0 0 var(--sp-2); }
-        #live-idle p  { font-size: var(--fs-2); color: var(--gray-600); margin: 0; max-width: 320px; line-height: 1.6; }
-        /* #655: machine-unreachable state reuses the idle layout with the
-           error color, instead of a separate screen. */
-        #live-idle.unreachable .idle-icon { color: var(--err); }
-        #live-idle.unreachable h2         { color: var(--err); }
-
-        /* #902: idle-state stats row (current temp/target, pressure, water
-           level) -- deliberately smaller/muted than .live-stats above, this
-           is a passive readout, not the shot-focused hero stats. */
-        #live-idle-stats {
-            display: flex;
-            gap: var(--sp-5);
-            margin-top: var(--sp-6);
-        }
-        .idle-stat { text-align: center; }
-        .idle-stat-val { font-size: var(--fs-3); font-weight: 600; color: var(--gray-300); }
-        #liveIdleTargetTemp { color: var(--gray-600); }
-        .idle-stat-label { font-size: var(--fs-1); color: var(--gray-600); margin-top: var(--sp-1); }
-        /* #1409: the machine's own warnings (below the stats row) and the
-           quieter firmware-update hint under them. */
-        .live-idle-warn { color: var(--warn); font-size: var(--fs-1); font-weight: 600; margin-top: var(--sp-2); text-align: center; }
-        .live-idle-hint { color: var(--gray-500); font-size: var(--fs-1); margin-top: var(--sp-1); text-align: center; }
-        #liveFlushBtn { margin-top: var(--sp-3); }
-
-        /* ── Preheat widget ── */
-        #preheat-widget { width: 100%; max-width: 320px; margin-bottom: var(--sp-6); text-align: center; }
-        #preheat-ready-badge {
-            display: inline-flex; align-items: center; gap: var(--sp-2);
-            background: color-mix(in srgb, var(--ok) 12%, transparent); border: 1px solid color-mix(in srgb, var(--ok) 35%, transparent);
-            color: var(--ok); border-radius: var(--radius-full); padding: var(--sp-3) var(--sp-6);
-            font-size: var(--fs-3); font-weight: 600; letter-spacing: .04em;
-        }
-        #preheat-warming-wrap { display: flex; flex-direction: column; align-items: center; gap: var(--sp-1); }
-        /* #415: was a 🔥 emoji glyph — inline stroke-SVG (.rail-icon), same treatment as #414. */
-        #preheat-icon { color: var(--accent-ink); margin-bottom: var(--sp-1); display: flex; justify-content: center; }
-        #preheat-icon .rail-icon { width: 28px; height: 28px; stroke-width: 1.5; }
-        #preheat-status-text { font-size: var(--fs-2); color: var(--gray-400); font-weight: 600; }
+        /* Idle: the machine icon, the state and the temperature in the verdict,
+           the warnings as rows, Flush below. #2052: the ID outranks
+           .machine-icon-live's 100% sizing; 64 x 104 keeps the icon's
+           100:162 aspect. */
+        #live-idle { flex-direction: column; gap: var(--sp-4); }
+        .live-verdict-icon { position: relative; flex: none; }
+        #liveMachineIcon { width: 64px; height: 104px; overflow: hidden; }
+        #liveMachineIcon .m-svg { width: auto; height: 100%; display: block; }
+        #live-idle.unreachable .analytics-verdict-title { color: var(--err); }
+        .live-notes .live-note { margin: 0; min-height: 52px; font-size: var(--fs-2); color: var(--gray-200); }
+        .live-notes .live-note--warn { color: var(--warn); font-weight: 600; }
+        #liveFlushBtn { width: 100%; }
+        #preheat-warming-wrap { display: flex; flex-direction: column; gap: var(--sp-1); }
         #preheat-bar-bg {
             width: 100%; height: 6px;
             background: color-mix(in srgb, var(--paper) 8%, transparent); border-radius: var(--radius-full); overflow: hidden;
-            margin: var(--sp-3) 0 var(--sp-2);
+            margin: var(--sp-3) 0 var(--sp-1);
         }
-        #preheat-bar-fill {
-            height: 100%; width: 0%;
-            background: var(--accent);
-            border-radius: var(--radius-full); transition: width .8s ease;
+        #preheat-bar-fill { height: 100%; width: 0%; background: var(--accent); border-radius: var(--radius-full); }
+        @media (prefers-reduced-motion: no-preference) {
+            #preheat-bar-fill { transition: width .8s ease; }
         }
         #preheat-countdown { font-size: var(--fs-1); color: var(--gray-500); }
+
+        /* Next shot: a value (a bean name) may be long, so it shrinks first. */
+        .live-next .settings-row { min-height: 52px; }
+        .live-next .settings-row-value { flex: 0 1 auto; min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+        @media (max-width: 480px) {
+            #liveMachineIcon { width: 48px; height: 78px; }
+        }
+        @media (min-width: 900px) {
+            .live-layout { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(300px, 1fr); column-gap: var(--sp-6); row-gap: var(--sp-5); align-items: start; }
+            .live-main, .live-side { display: flex; flex-direction: column; gap: var(--sp-5); min-width: 0; }
+            .live-chart-container { height: clamp(380px, 62vh, 640px); }
+            .live-figures { grid-template-columns: minmax(0, 1fr); gap: 0; }
+            .live-figure { flex-direction: row; align-items: baseline; justify-content: space-between; gap: var(--sp-3); padding: var(--sp-3) 0; }
+            .live-figure + .live-figure { border-top: 1px solid var(--gray-800); }
+            .live-figure-label { font-size: var(--fs-2); }
+            .live-figure-val { font-size: var(--fs-6); }
+            #liveFlushBtn { width: auto; align-self: flex-start; }
+        }
 
         /* ── Search ── */
         #search-container { padding: var(--sp-2) var(--sp-3); }
@@ -2772,8 +2662,7 @@
             .shot-header-thumb { display: none; }
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
-            .chart-container, .live-chart-container { height: clamp(300px, 50vh, 400px); }
-            .live-stats        { grid-template-columns: repeat(3, 1fr); }
+            .chart-container { height: clamp(300px, 50vh, 400px); }
             /* #385: icon-only machine switcher — the active machine's name is
                already shown in the subtitle line, so on mobile the select
                collapses to its chevron to give the tab bar room. Hover/focus
@@ -2809,7 +2698,6 @@
             gap: var(--sp-5);
         }
         @media (max-width: 480px) {
-            .live-stats { grid-template-columns: repeat(2, 1fr); }
             .sprofiler-header h1 { font-size: var(--fs-3); }
             #analytics-view, #maintenance-view { --analytics-pad: var(--sp-3); }
             #analytics-view, #library-view, #maintenance-view,
@@ -2818,7 +2706,7 @@
             /* #459: was a fixed 240px (half of desktop) — clamp() keeps the
                chart from shrinking on small phones while still leaving room
                for the annotation panel below. */
-            .chart-container, .live-chart-container { height: clamp(280px, 42vh, 360px); }
+            .chart-container { height: clamp(280px, 42vh, 360px); }
             .annotation-panel  { padding: var(--sp-3); }
         }
 

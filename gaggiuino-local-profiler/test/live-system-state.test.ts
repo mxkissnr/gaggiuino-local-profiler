@@ -58,7 +58,6 @@ describe('Live view GaggiMate system state (#2139)', () => {
   let title: FakeElement;
   let badge: FakeElement;
   let badgeText: FakeElement;
-  let readyBadge: FakeElement;
   let wrap: FakeElement;
 
   beforeEach(() => {
@@ -70,7 +69,6 @@ describe('Live view GaggiMate system state (#2139)', () => {
     title = doc.getElementById('liveIdleTitle');
     badge = doc.getElementById('live-status-badge');
     badgeText = doc.getElementById('live-status-text');
-    readyBadge = doc.getElementById('preheat-ready-badge');
     wrap = doc.getElementById('preheat-warming-wrap');
     // The view keeps the last preheat payload and live message between calls,
     // so every case starts from a ready, reachable machine.
@@ -84,7 +82,6 @@ describe('Live view GaggiMate system state (#2139)', () => {
     expect(title.textContent).toBe(label);
     expect(badgeText.textContent).toBe(label);
     expect(badge.className).toContain(variant);
-    expect(readyBadge.style.display).toBe('none');
   });
 
   it('a controller error without a code shows no number', () => {
@@ -95,13 +92,12 @@ describe('Live view GaggiMate system state (#2139)', () => {
     expect(badge.className).toContain('badge--err');
   });
 
-  it('an empty system state keeps "Machine ready" and the ready badge', () => {
+  it('an empty system state keeps "Machine ready"', () => {
     handleLiveData({ machineReachable: true, machineSystemState: '', machineSystemErrorCode: 0 });
 
     expect(title.textContent).toBe('Machine ready');
     expect(badgeText.textContent).toBe('Ready');
     expect(badge.className).toContain('badge--ok');
-    expect(readyBadge.style.display).toBe('');
   });
 
   it('a payload without the field keeps "Machine ready"', () => {
@@ -144,7 +140,7 @@ describe('Live view GaggiMate system state (#2139)', () => {
     handleLiveData({ machineReachable: true, machineSystemState: 'updating' });
     updatePreheatWidget(READY_PREHEAT);
 
-    expect(readyBadge.style.display).toBe('none');
+    expect(wrap.style.display).toBe('none');
     expect(badgeText.textContent).toBe('Updating firmware');
   });
 

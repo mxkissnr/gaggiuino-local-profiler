@@ -3,7 +3,7 @@
 // DOMContentLoaded handler; run through runStep() so a missing element only
 // skips this step.
 import { t } from '../i18n.js';
-import { onRefShotChange, clearReferenceShot } from '../views/live.js';
+import { clearReferenceShot } from '../views/live.js';
 import { getAnalyticsFilter, setAnalyticsFilter, initAnalyticsMoreFold } from '../views/analytics.js';
 import { setOrdersEnabled, addOrderMenuItem, openOrdersManage } from '../views/orders.js';
 import { renderDialin, setDialinBean } from '../views/dialin.js';
@@ -19,7 +19,6 @@ export function wireViews(): void {
     if (row) openOrdersManage(row.dataset.ordersManage as string);
   });
   document.getElementById('addOrderMenuItemBtn')!.addEventListener('click', () => { void addOrderMenuItem(); });
-  document.getElementById('refShotSelect')!.addEventListener('change', e => onRefShotChange((e.target as HTMLInputElement).value));
   document.getElementById('refClearBtn')!.addEventListener('click', clearReferenceShot);
 
   // ── Analytics toolbar (#1467): one period + search filter for the whole
