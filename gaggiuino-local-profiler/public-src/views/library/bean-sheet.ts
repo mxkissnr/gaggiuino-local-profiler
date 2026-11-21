@@ -10,6 +10,7 @@ import { classifyBeanBags } from './bags.js';
 import { shelfStock, beanInitials } from './shelf.js';
 import { renderBeanCard, beanFreshBadge, originDisplay } from './bean-card.js';
 import { _beanList } from './bean-shared.js';
+import { beanCompareMenuItem } from './bean-compare.js';
 import type { BeanListRow } from './bean-shared.js';
 import * as libraryView from '../library.js';
 
@@ -122,6 +123,7 @@ function _sheetBar(b: BeanListRow): Html {
 // Overflow menu: every meta action the old card toolbar offered, now with
 // text labels. Archive/restore replaces the old eye toggle (#1330). Edit and
 // shot log moved to the header bar (#1489).
+// Compare (#2119) picks a second bean and opens the comparison page.
 function _sheetMenu(b: BeanListRow): Html {
   const disabled = b.enabled === false;
   return html`<details class="lib-sheet-more"${esc(_sheetMoreOpen ? ' open' : '')}>
@@ -130,6 +132,7 @@ function _sheetMenu(b: BeanListRow): Html {
       <button type="button" class="lib-sheet-menu-item" data-action="create-profile-from-bean" data-id="${esc(b.id)}">${SLIDERS_ICON_SVG} ${tHtml('profile_create_from_bean')}</button>
       <button type="button" class="lib-sheet-menu-item" data-action="start-dialin-from-bean" data-id="${esc(b.id)}">${TARGET_ICON_SVG} ${tHtml('dialin_wizard_start_from_bean')}</button>
       <button type="button" class="lib-sheet-menu-item" data-action="toggle-bean-qr" data-id="${esc(b.id)}">${ICON_QR} ${tHtml('bean_qr_label')}</button>
+      ${beanCompareMenuItem(b.id)}
       <span class="lib-sheet-menu-sep"></span>
       <button type="button" class="lib-sheet-menu-item" data-action="toggle-bean-active" data-id="${esc(b.id)}"${esc(_pendingBeanActiveToggles.has(b.id) ? ' disabled' : '')}>${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}</button>
       <span class="lib-sheet-menu-sep"></span>

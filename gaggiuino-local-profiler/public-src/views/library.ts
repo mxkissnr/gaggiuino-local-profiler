@@ -27,6 +27,7 @@ import {
   sheetBeanId, renderBeanSheet, closeBeanSheet,
 } from './library/bean-sheet.js';
 import { checkEmptyBeanOffer } from './library/empty-offer.js';
+import { refreshBeanCompare } from './library/bean-compare.js';
 
 // ── Library load ──────────────────────────────────────────────────────────
 // #1962: the view says when it is loading or failed instead of showing the
@@ -280,6 +281,9 @@ function renderShelfSections(): void {
 export function renderBeanList(): void {
   // #1958: every stock change on this page or another device ends up here.
   checkEmptyBeanOffer();
+  // #2119: an open bean comparison follows every library change and closes
+  // itself when one of its beans is gone.
+  refreshBeanCompare();
   const el = document.getElementById('beanListUI');
   if (!el) return;
   const beans = _beanList();
@@ -332,6 +336,7 @@ export function filterShotsByBean(id: number): void {
 // Section symbols moved to ./library/* — re-exported so existing importers
 // of views/library.ts (main.ts et al.) keep working.
 export { openBeanSheet, closeBeanSheet, requestCloseBeanSheet, beanSheetRestoredScroll, toggleBeanActive } from './library/bean-sheet.js';
+export { startBeanCompare, chooseBeanCompare, pickOtherBeanCompare, swapBeanCompare, backFromBeanCompare, beanCompareOpen } from './library/bean-compare.js';
 export { openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean } from './library/bean-form-sheet.js';
 export { renderBeanCard, safeHttpUrl, openNewBagForm, closeNewBagForm, deleteBag, saveNewBag, openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm, toggleBeanQR } from './library/bean-card.js';
 export { stageNewBeanImage, uploadBeanImage, updateStickerButton, cutOutBeanSticker } from './library/bean-sticker.js';
