@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import postcss from 'postcss';
 import type { MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats, OrdersSettings, QueueEta } from '../public-src/api/types.js';
 import type { KioskKey } from '../public-src/api/orders.js';
 import de from '../public-src/i18n/de.js';
@@ -476,5 +477,88 @@ describe('order rows (#2148)', () => {
     expect(history).toContain('data-order-delete="h1"');
     expect(history).toContain('data-action="goto-shot" data-id="42"');
     expect(els['orders-clear-history']?.style.display).toBe('');
+  });
+});
+
+describe('orders page classes only lay out (#2148)', () => {
+  it('sets no colour, background, border, radius, padding or font on an orders class', () => {
+    const css = readFileSync(join(__dirname, '../public-src/style.css'), 'utf8');
+    const layoutProp = /^(?:--[\w-]+|display|flex(?:-[a-z]+)?|grid(?:-[a-z]+)*|gap|row-gap|column-gap|align-[a-z]+|justify-[a-z]+|place-[a-z]+|order|margin(?:-[a-z]+)*|(?:min-|max-)?(?:width|height)|position|top|right|bottom|left|inset|z-index|overflow(?:-[xy])?|white-space|text-overflow|text-align|cursor|container-type)$/;
+    const found: string[] = [];
+    postcss.parse(css).walkRules(rule => {
+      if (!/\.orders?-/.test(rule.selector)) return;
+      // Shared with the Settings cards' checkbox lists, which are the
+      // Settings page's own rules, not the Orders page's.
+      if (/\.orders-broadcast-(?:list|row)\b|\.orders-notify-actions\b/.test(rule.selector)) return;
+      rule.walkDecls(decl => {
+        if (!layoutProp.test(decl.prop)) found.push(`${rule.selector} { ${decl.prop} }`);
+      });
+    });
+    expect(found).toEqual([]);
+  });
+});
+
+describe('Manage sheets on shared components (#2148)', () => {
+  it('lists the milk stock as grouped rows with the status badge', () => {
+    installDoc();
+    orders.renderMilkStock([
+      { id: 1, name: 'Oat', emoji: 'O', stockMl: 500, demand: 50, remaining: 450 },
+      { id: 2, name: 'Whole', emoji: 'W', stockMl: 0, demand: 0, remaining: 0 },
+    ]);
+
+    const markup = els['orders-milk-stock']?.innerHTML ?? '';
+    expect(markup).toContain('<div class="settings-group">');
+    expect(markup).toContain('class="settings-row settings-row-static"');
+    expect(markup).toContain('badge badge--ok');
+    expect(markup).toContain('badge badge--err');
+    expect(markup).not.toContain('style="');
+  });
+
+  it('lists the guests as grouped rows', () => {
+    installDoc();
+    const stats: OrderStats = {
+      total: 3,
+      mostPopular: { item: 'Latte', count: 2 },
+      customers: [{ name: 'Ana', count: 3, favItem: 'Latte', lastAt: Date.now() }],
+      byMachine: null,
+    };
+    orders.renderOrdersStats(stats);
+
+    const markup = els.ordersStatsContent?.innerHTML ?? '';
+    expect(markup.split('<div class="settings-group">').length - 1).toBe(2);
+    expect(markup).toContain('Ana');
+    expect(markup).toContain(`3 ${t('orders_stats_orders')}`);
+  });
+
+  it('gives the menu items shared buttons and inputs', () => {
+    installDoc();
+    orders.renderOrdersMenuAdmin([
+      { id: 'a', name: 'Latte', emoji: 'L', useBeans: false, useMilks: false, trending: false, variants: ['Oat'] },
+    ]);
+
+    const markup = els.ordersMenuList?.innerHTML ?? '';
+    expect(markup).toContain('class="btn btn--quiet btn--icon" data-menu-del="a"');
+    expect(markup).toContain('class="flavor-chip-x orders-menu-variant-del"');
+    expect(markup).toContain('class="lib-input orders-menu-variant-input"');
+    expect(markup).toContain('class="lib-input orders-menu-milk-input"');
+  });
+
+  it('gives the notification settings shared selects and rows', async () => {
+    installDoc();
+    api.getNotifyServices.mockResolvedValue([{ id: 'notify.a', name: 'A' }]);
+    api.getNotifyMapping.mockResolvedValue({ mapping: {}, customers: { u1: 'Ana' } });
+
+    await orders.loadNotifyMappingView();
+
+    const markup = els.ordersNotifyBody?.innerHTML ?? '';
+    expect(markup).toContain('<select class="lib-select" id="ordersBaristaSelect"');
+    expect(markup).toContain('class="lib-select" data-uid="u1"');
+    expect(markup).toContain('<div class="settings-group" id="ordersNotifyList">');
+  });
+
+  it('moves the menu add row onto the shared inputs', () => {
+    expect(panels).toContain('class="lib-input orders-menu-emoji"');
+    expect(panels).toContain('class="lib-input orders-menu-name"');
+    expect(panels).toContain('<div class="settings-group" id="ordersMenuList"></div>');
   });
 });
