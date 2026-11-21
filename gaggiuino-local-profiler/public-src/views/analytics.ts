@@ -5,7 +5,6 @@ import { t, tHtml } from '../i18n.js';
 import { localeFor } from '../constants.js';
 import { esc, formatDate, html, joinHtml, scoreClass, chartColors, themeColor } from '../utils.js';
 import type { Html } from '../utils.js';
-import { _parseGrindNum } from './shots/grind.js';
 import { _equipmentName } from './shots/index.js';
 import { summaryLine } from './analytics-summary.js';
 import type { AnalyticsPageFilter } from './analytics-summary.js';
@@ -13,7 +12,7 @@ import { WARNING_ICON_SVG } from '../icons.js';
 import { openDetailSheet } from '../components/detail-sheet.js';
 import type { DetailAnchorPoint } from '../components/detail-sheet.js';
 import type { ChartConfiguration, TooltipItem } from 'chart.js';
-import { _chartCanvas, _counterPeriod, _counterText, _dateFromKey, _dayKeyNum, _dayKeyOf, _keyFromNum, _libCollection, _machineScopeSuffix, _machines, _mutedTickColor, _pageFilter, _pageShots, _profileNameOf, _saveAnalyticsFilter, _scoreChartColor } from './analytics/shared.js';
+import { _chartCanvas, _counterPeriod, _counterText, _dateFromKey, _dayKeyNum, _dayKeyOf, _keyFromNum, _libCollection, _machineScopeSuffix, _machines, _mutedTickColor, _pageFilter, _pageShots, _profileNameOf, _saveAnalyticsFilter, _scoreChartColor, computeRecipeSummary } from './analytics/shared.js';
 import type { EquipKey, EquipStat, EquipStatEntry, ShotRow } from './analytics/shared.js';
 import { buildCalendar, openCalendarDayDetail } from './analytics/calendar.js';
 import { buildWorldMap } from './analytics/world-map.js';
@@ -22,7 +21,7 @@ import { buildFacts } from './analytics/facts.js';
 import { buildMachineComparison } from './analytics/machine-comparison.js';
 import { buildDialinProgression } from './analytics/dialin-progression.js';
 
-export { getAnalyticsFilter } from './analytics/shared.js';
+export { computeRecipeSummary, getAnalyticsFilter } from './analytics/shared.js';
 export { _MONTH_LABEL_MIN_COLUMNS, _monthLabelsToDraw, _renderCalendar, _renderStreaks, buildCalendar, computeCalendarStats, openCalendarDayDetail } from './analytics/calendar.js';
 export type { CalendarStats, MonthLabelStart } from './analytics/calendar.js';
 export { buildWorldMap, computeMapBoundingCoords, featureBounds, featureLabelPoint, greatCircleKm, homeCountryFromLocale, originFrameCoords, resolveWorldMapColors, splitAntimeridianRing, worldMapTooltipFormatter } from './analytics/world-map.js';
@@ -715,43 +714,6 @@ export function buildTrendChart() {
 }
 
 // ── Your recipe on average ────────────────────────────────────────────────
-export interface RecipeSummary {
-  dose: number | null;
-  yield: number | null;
-  ratio: number | null;
-  time: number | null;
-  grindMin: number | null;
-  grindMax: number | null;
-}
-
-// Pure averages over the shots the trend window shows (#1467). Yield is the
-// list row's weight in tenths of a gram (the /10 the rest of analytics
-// applies); grind goes through _parseGrindNum so string and number settings
-// mix. Any field is null when no shot carries it.
-export function computeRecipeSummary(shots: ShotRow[]): RecipeSummary {
-  const doses: number[] = [], yields: number[] = [], times: number[] = [];
-  let grindMin: number | null = null, grindMax: number | null = null;
-  for (const s of shots) {
-    const dose = s.annotation?.dose;
-    if (typeof dose === 'number' && dose > 0) doses.push(dose);
-    const weight = s.weight;
-    if (typeof weight === 'number' && weight > 0) yields.push(weight / 10);
-    const dur = s.duration;
-    if (typeof dur === 'number' && dur > 0) times.push(dur / 10);
-    const g = _parseGrindNum(s.annotation?.grindSetting);
-    if (g !== null) {
-      grindMin = grindMin === null ? g : Math.min(grindMin, g);
-      grindMax = grindMax === null ? g : Math.max(grindMax, g);
-    }
-  }
-  const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
-  const dose = doses.length ? Math.round(mean(doses) * 10) / 10 : null;
-  const yieldG = yields.length ? Math.round(mean(yields) * 10) / 10 : null;
-  const ratio = dose !== null && dose > 0 && yieldG !== null ? Math.round((yieldG / dose) * 10) / 10 : null;
-  const time = times.length ? Math.round(mean(times)) : null;
-  return { dose, yield: yieldG, ratio, time, grindMin, grindMax };
-}
-
 export function buildRecipeSummary() {
   const el = document.getElementById('recipeRows');
   if (!el) return;
