@@ -16,7 +16,7 @@ import { esc, formatDate, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { localeFor } from '../constants.js';
 import { confirmDialog } from '../components/confirm-dialog.js';
-import { openDetailSheet } from '../components/detail-sheet.js';
+import { closeDetailSheet, openDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
 import { showToast } from '../components/toast.js';
 import { textEntryFocused } from '../live-sync.js';
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
@@ -25,7 +25,7 @@ import { textEntryFocused } from '../live-sync.js';
 // BEAN_ICON_SVG now lives in ../icons.ts (also used by boot/annotation.ts's bean-age
 // hint, #419 follow-up); MILK_ICON_SVG moved there too once the library
 // and annotation milk pickers reused it as their no-emoji fallback (#1328).
-import { BELL_ICON_SVG, BEAN_ICON_SVG, MILK_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG } from '../icons.js';
+import { BELL_ICON_SVG, BEAN_ICON_SVG, MILK_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG, ICON_TRASH } from '../icons.js';
 
 // Two orders-runtime fields that state/index.ts's OrdersSlice does not
 // declare: they are written and read only by this view, so they get a local
@@ -271,7 +271,27 @@ export function renderMilkStock(milks: MilkStock[]): void {
     }))}`;
 }
 
+// #2148: the orders last rendered, so the ETA choice can name its drink.
+let _lastOrders: Order[] = [];
+
+// The minutes an accept sends: the barista's own choice, else the queue's
+// suggestion for this order, else 5 — the same value the row's time shows.
+export function _orderEta(id: string): number {
+  return S._ordersEtaSelected[_idKey(id)] ?? SO._ordersQueueEta?.positions?.[id]?.suggestedEta ?? 5;
+}
+
+function _syncEtaLabel(id: string): void {
+  document.getElementById('orders-pending-list')?.querySelectorAll<HTMLElement>('[data-order-eta-open]').forEach(btn => {
+    if (btn.dataset.orderEtaOpen === id) btn.textContent = `${_orderEta(id)} min`;
+  });
+}
+
+function _emptyRow(key: string): Html {
+  return html`<div class="settings-row settings-row-static"><span class="settings-row-sub">${tHtml(key)}</span></div>`;
+}
+
 export function renderOrdersList(orders: Order[]): void {
+  _lastOrders = orders;
   const pending  = orders.filter(o => o.status === 'pending');
   const accepted = orders.filter(o => o.status === 'accepted');
   const history  = orders.filter(o => ['done', 'declined'].includes(o.status)).slice(0, 20);
@@ -283,136 +303,153 @@ export function renderOrdersList(orders: Order[]): void {
   if (!pendingEl) return;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  pendingEl.innerHTML = pending.length ? joinHtml(pending.map(o => renderOrderCard(o, 'pending'))) :
-    html`<div class="orders-empty">${tHtml('orders_empty')}</div>`;
+  pendingEl.innerHTML = pending.length ? joinHtml(pending.map(o => renderOrderCard(o, 'pending'))) : _emptyRow('orders_empty');
+
+  // #2148: one primary per view — only the first order in progress gets it.
+  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+  (acceptedEl as HTMLElement).innerHTML = joinHtml(accepted.map((o, i) => renderOrderCard(o, 'accepted', i === 0)));
+  const progress = document.getElementById('ordersProgress');
+  if (progress) progress.hidden = accepted.length === 0;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  (acceptedEl as HTMLElement).innerHTML = accepted.length ? joinHtml(accepted.map(o => renderOrderCard(o, 'accepted'))) :
-    html`<div class="orders-empty">${tHtml('orders_empty')}</div>`;
-
-  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  (historyEl as HTMLElement).innerHTML = history.length ? joinHtml(history.map(o => renderOrderCard(o, 'history'))) : html``;
+  (historyEl as HTMLElement).innerHTML = history.length ? joinHtml(history.map(o => renderOrderCard(o, 'history'))) : _emptyRow('orders_stats_no_data');
   if (clearHistBtn) clearHistBtn.style.display = history.length ? '' : 'none';
 
   // Bind buttons after render
   pendingEl.querySelectorAll<HTMLElement>('[data-order-accept]').forEach(btn => {
     btn.addEventListener('click', () => { void acceptOrder(btn.dataset.orderAccept as string); });
   });
-  pendingEl.querySelectorAll<HTMLElement>('[data-order-decline-toggle]').forEach(btn => {
-    btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle as string));
+  pendingEl.querySelectorAll<HTMLElement>('[data-order-eta-open]').forEach(btn => {
+    btn.addEventListener('click', () => openOrderEta(btn.dataset.orderEtaOpen as string, btn));
   });
-  pendingEl.querySelectorAll<HTMLElement>('[data-order-decline-submit]').forEach(btn => {
-    btn.addEventListener('click', () => { void submitDecline(btn.dataset.orderDeclineSubmit as string); });
-  });
-  pendingEl.querySelectorAll<HTMLElement>('[data-eta-btn]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id  = btn.dataset.orderId as string;
-      const val = parseInt(btn.dataset.etaBtn as string);
-      S._ordersEtaSelected[_idKey(id)] = val;
-      btn.closest('.order-eta-picker')?.querySelectorAll('[data-eta-btn]').forEach(b => b.setAttribute('aria-pressed', 'false'));
-      btn.setAttribute('aria-pressed', 'true');
-      const inp = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
-      if (inp) inp.value = String(val);
+  for (const el of [pendingEl, acceptedEl as HTMLElement]) {
+    el.querySelectorAll<HTMLElement>('[data-order-decline-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle as string));
     });
-  });
-  pendingEl.querySelectorAll<HTMLInputElement>('.order-eta-custom').forEach(inp => {
-    inp.addEventListener('input', () => {
-      const id = inp.id.replace('etaCustom_', '');
-      S._ordersEtaSelected[_idKey(id)] = parseInt(inp.value) || 5;
-      inp.closest('.order-eta-picker')?.querySelectorAll('[data-eta-btn]').forEach(b => b.setAttribute('aria-pressed', 'false'));
+    el.querySelectorAll<HTMLElement>('[data-order-decline-submit]').forEach(btn => {
+      btn.addEventListener('click', () => { void submitDecline(btn.dataset.orderDeclineSubmit as string); });
     });
-  });
+  }
   (acceptedEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-complete]').forEach(btn => {
     btn.addEventListener('click', () => { void completeOrder(btn.dataset.orderComplete as string); });
   });
-  (acceptedEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-decline-toggle]').forEach(btn => {
-    btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle as string));
-  });
-  (acceptedEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-decline-submit]').forEach(btn => {
-    btn.addEventListener('click', () => { void submitDecline(btn.dataset.orderDeclineSubmit as string); });
-  });
   (historyEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-delete]').forEach(btn => {
     btn.addEventListener('click', () => { void deleteOrder(btn.dataset.orderDelete as string); });
+  });
+  // The shot link sits in the open History sheet; close it before the
+  // global delegation switches to the shot (a tab switch does not).
+  (historyEl as HTMLElement).querySelectorAll<HTMLElement>('[data-action="goto-shot"]').forEach(btn => {
+    btn.addEventListener('click', () => closeDetailSheet());
   });
   if (clearHistBtn) {
     clearHistBtn.onclick = () => { void clearOrderHistory(); };
   }
 }
 
-export function renderOrderCard(o: Order, ctx: string): Html {
-  const etaBtns    = [2, 5, 10, 15, 20];
-  // Use queue-suggested ETA if barista hasn't manually overridden
-  const queuePos  = SO._ordersQueueEta?.positions?.[String(o.id)];
-  const suggested = queuePos?.suggestedEta ?? 5;
-  const selectedEta = S._ordersEtaSelected[_idKey(String(o.id))] ?? suggested;
-  const isNew = (Date.now() - o.createdAt) < 60000;
+// #2148: one grouped row per order (docs "Cards group list rows").
+function _orderTitle(o: Order, extra: Html = html``): Html {
+  return html`<span class="settings-row-title">${esc(o.item)}${o.variant ? html` · ${esc(o.variant)}` : html``}${extra}</span>`;
+}
+
+function _declineToggle(o: Order): Html {
+  return html`<button type="button" class="btn btn--quiet btn--icon" data-order-decline-toggle="${esc(o.id)}" aria-label="${esc(t('orders_decline'))}" title="${esc(t('orders_decline'))}">${CLOSE_ICON_SVG}</button>`;
+}
+
+function _declineRow(o: Order): Html {
+  if (!S._ordersDeclineOpen[_idKey(String(o.id))]) return html``;
+  return html`<div class="order-decline">
+      <input class="lib-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
+      <button type="button" class="btn btn--danger" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
+    </div>`;
+}
+
+export function renderOrderCard(o: Order, ctx: string, primary = false): Html {
+  const customer = html`${tHtml('orders_for')} ${esc(o.customer)}${o.note ? html` · ${esc(o.note)}` : html``}`;
 
   if (ctx === 'pending') {
-    const declineOpen = S._ordersDeclineOpen[_idKey(String(o.id))];
-    const queueHint = queuePos
-      ? html`<span class="order-queue-hint">${tHtml('orders_queue_pos', queuePos.position, queuePos.suggestedEta)}</span>`
-      : html``;
-    return html`<div class="order-card status-pending">
-      <div class="order-card-top">
-        <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant">· ${esc(o.variant)}</span>` : html``}${isNew ? html`<span class="badge badge--err">${tHtml('orders_new_badge')}</span>` : html``}</span>
-        <span class="order-meta">${_orderTimeAgo(o.createdAt)}${queueHint}</span>
-      </div>
-      <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
-      <div class="order-eta-picker">
-        ${joinHtml(etaBtns.map(m => html`<button type="button" class="chip" aria-pressed="${esc(selectedEta === m ? 'true' : 'false')}" data-order-id="${esc(o.id)}" data-eta-btn="${esc(m)}">${esc(m)} min</button>`))}
-        <input class="order-eta-custom" type="number" min="1" max="60" step="1" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" aria-label="${esc(t('orders_eta_label'))}" placeholder="min">
-        ${queuePos ? html`<span class="order-eta-suggest">${tHtml('orders_suggested_eta', queuePos.suggestedEta)}</span>` : html``}
-      </div>
-      <div class="order-actions">
-        <button type="button" class="btn btn--tonal" data-order-accept="${esc(o.id)}">${tHtml('orders_accept')}</button>
-        <button type="button" class="btn btn--danger" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
-      </div>
-      ${declineOpen ? html`<div class="order-actions">
-        <input class="order-decline-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
-        <button type="button" class="btn btn--danger" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
-      </div>` : html``}
+    const queuePos = SO._ordersQueueEta?.positions?.[String(o.id)];
+    const queueHint = queuePos ? html` · ${tHtml('orders_queue_pos', queuePos.position, queuePos.suggestedEta)}` : html``;
+    const isNew = (Date.now() - o.createdAt) < 60000;
+    return html`<div class="settings-row settings-row-static order-row">
+      <span class="settings-row-text">
+        ${_orderTitle(o, isNew ? html` <span class="badge badge--err">${tHtml('orders_new_badge')}</span>` : html``)}
+        <span class="settings-row-sub">${customer} · ${_orderTimeAgo(o.createdAt)}${queueHint}</span>
+      </span>
+      <span class="order-row-actions">
+        <span class="order-accept" role="group">
+          <button type="button" class="btn btn--tonal" data-order-accept="${esc(o.id)}">${tHtml('orders_accept')}</button>
+          <button type="button" class="btn btn--tonal" data-order-eta-open="${esc(o.id)}" aria-haspopup="dialog" aria-label="${esc(t('orders_eta_label'))}">${esc(_orderEta(String(o.id)))} min</button>
+        </span>
+        ${_declineToggle(o)}
+      </span>
+      ${_declineRow(o)}
     </div>`;
   }
 
   if (ctx === 'accepted') {
     const etaDone  = (o.acceptedAt as number) + (o.eta as number) * 60000;
     const minsLeft = Math.max(0, Math.ceil((etaDone - Date.now()) / 60000));
-    const declineOpen = S._ordersDeclineOpen[_idKey(String(o.id))];
-    return html`<div class="order-card status-accepted">
-      <div class="order-card-top">
-        <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant">· ${esc(o.variant)}</span>` : html``}</span>
-        <span class="badge badge--ok">${tHtml('orders_eta_in', minsLeft)}</span>
-      </div>
-      <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
-      <div class="order-actions">
-        <button type="button" class="btn btn--tonal" data-order-complete="${esc(o.id)}">${CHECK_ICON_SVG} ${tHtml('orders_complete')}</button>
-        <button type="button" class="btn btn--danger" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
-      </div>
-      ${declineOpen ? html`<div class="order-actions">
-        <input class="order-decline-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
-        <button type="button" class="btn btn--danger" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
-      </div>` : html``}
+    return html`<div class="settings-row settings-row-static order-row">
+      <span class="settings-row-text">
+        ${_orderTitle(o)}
+        <span class="settings-row-sub">${customer}</span>
+      </span>
+      <span class="settings-row-value">${tHtml('orders_eta_in', minsLeft)}</span>
+      <span class="order-row-actions">
+        <button type="button" class="btn ${esc(primary ? 'btn--primary' : 'btn--tonal')}" data-order-complete="${esc(o.id)}">${CHECK_ICON_SVG} ${tHtml('orders_complete')}</button>
+        ${_declineToggle(o)}
+      </span>
+      ${_declineRow(o)}
     </div>`;
   }
 
   // history
   const statusLabel = o.status === 'done' ? tHtml('orders_done') : tHtml('orders_declined');
-  return html`<div class="order-card status-${esc(o.status)}">
-    <div class="order-card-top">
-      <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant">· ${esc(o.variant)}</span>` : html``}</span>
-      <span class="order-history-right">
-        <span class="order-meta">${statusLabel} · ${_orderTimeAgo(o.completedAt || o.createdAt)}</span>
-        <button class="order-hist-del" data-order-delete="${esc(o.id)}" title="${tHtml('orders_delete_entry')}"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
-      </span>
-    </div>
-    <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? html` · <span class="order-decline-reason">${esc(o.declineReason)}</span>` : html``}${o.shotId != null ? html` <button type="button" class="order-shot-link" data-action="goto-shot" data-id="${esc(o.shotId)}">${esc(t('orders_shot_link', o.shotId))}</button>` : html``}</div>
+  return html`<div class="settings-row settings-row-static order-row">
+    <span class="settings-row-text">
+      ${_orderTitle(o)}
+      <span class="settings-row-sub">${tHtml('orders_for')} ${esc(o.customer)}${o.declineReason ? html` · ${esc(o.declineReason)}` : html``}</span>
+    </span>
+    <span class="settings-row-value">${statusLabel} · ${_orderTimeAgo(o.completedAt || o.createdAt)}</span>
+    <span class="order-row-actions">
+      ${o.shotId != null ? html`<button type="button" class="btn btn--quiet" data-action="goto-shot" data-id="${esc(o.shotId)}">${esc(t('orders_shot_link', o.shotId))}</button>` : html``}
+      <button type="button" class="btn btn--quiet btn--icon" data-order-delete="${esc(o.id)}" aria-label="${esc(t('orders_delete_entry'))}" title="${esc(t('orders_delete_entry'))}">${ICON_TRASH}</button>
+    </span>
   </div>`;
 }
 
+// #2148: the existing ETA choice, now in the detail sheet next to the time.
+export function openOrderEta(id: string, anchor: HTMLElement | null): void {
+  const o = _lastOrders.find(x => String(x.id) === id);
+  if (!o) return;
+  const selectedEta = _orderEta(id);
+  const queuePos = SO._ordersQueueEta?.positions?.[id];
+  const etaBtns = [2, 5, 10, 15, 20];
+  openDetailSheet({
+    title: o.variant ? `${o.item} · ${o.variant}` : o.item,
+    ...(queuePos ? { sub: t('orders_suggested_eta', queuePos.suggestedEta) } : {}),
+    body: html`<div class="order-eta-picker">
+        ${joinHtml(etaBtns.map(m => html`<button type="button" class="chip" aria-pressed="${esc(selectedEta === m ? 'true' : 'false')}" data-order-id="${esc(o.id)}" data-eta-btn="${esc(m)}">${esc(m)} min</button>`))}
+        <input class="lib-input order-eta-custom" type="number" min="1" max="60" step="1" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" aria-label="${esc(t('orders_eta_label'))}" placeholder="min">
+      </div>`,
+    anchor,
+  });
+  document.getElementById('detailSheet')?.querySelectorAll<HTMLElement>('[data-eta-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      S._ordersEtaSelected[_idKey(id)] = parseInt(btn.dataset.etaBtn as string);
+      _syncEtaLabel(id);
+      requestCloseDetailSheet();
+    });
+  });
+  const inp = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
+  inp?.addEventListener('input', () => {
+    S._ordersEtaSelected[_idKey(id)] = parseInt(inp.value) || 5;
+    _syncEtaLabel(id);
+  });
+}
+
 export async function acceptOrder(id: string): Promise<void> {
-  const etaCustom = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
-  const eta = etaCustom ? (parseInt(etaCustom.value) || S._ordersEtaSelected[_idKey(id)] || 5) : (S._ordersEtaSelected[_idKey(id)] || 5);
-  const r = await postOrderAccept(id, eta);
+  const r = await postOrderAccept(id, _orderEta(id));
   if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
 }
