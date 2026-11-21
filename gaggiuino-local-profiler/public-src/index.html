@@ -721,8 +721,8 @@
                                 </label>
                             </div>
                         </div>
-                        <!-- Kept for callers that host the bean form inline. Inside the library sheet
-                             (.lib-form-sheet) this row is hidden and the sheet header bar's Save is used instead. -->
+                        <!-- The bean form's only save buttons (#2135). Inside the library sheet
+                             (.lib-form-sheet) this row shows while creating and is hidden while editing, which saves itself. -->
                         <div class="lib-form-actions">
                             <button type="button" class="btn btn--quiet" id="closeBeanFormBtn" data-i18n="lib_cancel">Abbrechen</button>
                             <button type="button" class="btn btn--primary" id="saveBeanBtn" data-i18n="lib_save" style="display:none">Speichern</button>
@@ -1790,7 +1790,7 @@
              there is no Save button. -->
         <div class="settings-card" id="machineControlSettingsCard">
             <h3 class="card-title" data-i18n="settings_machine_control_title">Maschinensteuerung</h3>
-            <p class="settings-card-desc" data-i18n="settings_machine_control_desc">Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Nur nutzen, wenn jemand an der Maschine ist.</p>
+            <p class="settings-card-desc" data-i18n="settings_machine_control_desc">Erlaubt GLP, eine Spülung zu starten und zu stoppen und die Bezugsbestätigung der Maschine zu beantworten. Nur GaggiMate ab Firmware v1.9.0. Ab Firmware v1.10.0 setzt das Erledigen von Backflush oder Entkalken auch den Zähler der Maschine zurück. Nur nutzen, wenn jemand an der Maschine ist.</p>
             <div class="orders-broadcast-list">
                 <div class="orders-broadcast-row">
                     <label class="toggle-switch">
