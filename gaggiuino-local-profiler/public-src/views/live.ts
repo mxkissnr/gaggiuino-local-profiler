@@ -15,7 +15,7 @@ import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadou
          resolveMachineIconState, MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
 import { machineWarningLabel, renderMachineControl } from '../components/machine-control.js';
-import { openDetailSheet } from '../components/detail-sheet.js';
+import { openDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
 import { localeFor, buildRecordedGmPhaseRanges } from '../constants.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
          _renderBeanSelect, _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect } from './shots/annotation.js';
@@ -230,10 +230,6 @@ export function renderLiveShotSetupPanel(): void {
 
   if (_lsWired) return;
   _lsWired = true;
-
-  document.getElementById('lsToggle')?.addEventListener('click', () => {
-    document.getElementById('live-shot-setup')?.classList.toggle('open');
-  });
 
   const beanSelect = document.getElementById('lsBean') as HTMLSelectElement | null;
   beanSelect?.addEventListener('change', () => {
@@ -500,29 +496,81 @@ function _syncPhaseBar(elapsed: number | null): void {
   }
 }
 
+// #2153: the reference is a chip in the running view's toolbar that opens
+// the list (openRefPicker). The name stays: the mode switch and the machine
+// switch call it through window to repaint the chip.
 export function populateRefSelector(): void {
-  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
-  if (!sel) return;
-  sel.setAttribute('aria-label', t('ref_label'));
-  const prev = sel.value;
-  sel.innerHTML = html`<option value="">${tHtml('ref_none')}</option>`;
-  S.shots.filter(s => s.hasChartData)
+  renderRefChip();
+}
+
+// One row of the reference list: the newest 40 shots with a curve, the set
+// the old dropdown listed.
+export interface RefShotChoice {
+  id: number;
+  title: string;
+  sub: string;
+  score: number | null;
+}
+
+export function refShotChoices(): RefShotChoice[] {
+  return S.shots.filter(s => s.hasChartData)
     .slice().reverse().slice(0, 40)
-    .forEach(s => {
-      const date    = formatDate(s.timestamp * 1000, localeFor(S.currentLang));
-      const profile = (s.profile as { name?: string } | undefined)?.name || (s.profileName as string | undefined) || '?';
+    .map(s => {
       const ann     = (s.annotation as LiveShotAnnotation | undefined) || {};
-      const score   = ann.score != null ? ` · ${ann.score}` : '';
-      // #1853: a mixed shot names every bean here, like the shot list does;
-      // a single-bean shot keeps its plain coffee name.
-      const beans   = beanLabel(ann);
-      const coffee  = beans ? ` — ${beans}` : '';
-      const opt = document.createElement('option');
-      opt.value       = String(s.id);
-      opt.textContent = `${date} · ${profile}${coffee}${score}`;
-      if (String(s.id) === String(prev)) opt.selected = true;
-      sel.appendChild(opt);
+      const profile = (s.profile as { name?: string } | undefined)?.name || (s.profileName as string | undefined) || '?';
+      return {
+        id: s.id,
+        title: `${formatDate(s.timestamp * 1000, localeFor(S.currentLang))} · ${profile}`,
+        // #1853: a mixed shot names every bean, like the shot list does; a
+        // single-bean shot keeps its plain coffee name.
+        sub: beanLabel(ann),
+        score: ann.score ?? null,
+      };
     });
+}
+
+function _refChipLabel(): string {
+  const id = S.refShotId;
+  if (id == null) return t('ref_none');
+  const shot = S.shots.find(s => s.id === id);
+  if (!shot) return `#${id}`;
+  const score = ((shot.annotation as LiveShotAnnotation | undefined) || {}).score;
+  return `${formatDate(shot.timestamp * 1000, localeFor(S.currentLang))}${score != null ? ` · ${score}` : ''}`;
+}
+
+// The chip names the reference (or says there is none); Clear shows only
+// while there is one.
+export function renderRefChip(): void {
+  const chip  = document.getElementById('refChip');
+  const clear = document.getElementById('refClearBtn');
+  if (chip) {
+    chip.textContent = _refChipLabel();
+    chip.setAttribute('aria-pressed', S.refShotId != null ? 'true' : 'false');
+  }
+  if (clear) clear.style.display = S.refShotId != null ? '' : 'none';
+}
+
+// The chip opens the list in the shared detail sheet: a popover next to
+// the chip on desktop, a bottom sheet on a phone.
+export function openRefPicker(anchor: HTMLElement | null): void {
+  const current = S.refShotId;
+  const rows = refShotChoices().map(c => html`<button type="button" class="settings-row" data-action="live-ref-choose" data-id="${esc(c.id)}" aria-current="${esc(c.id === current ? 'true' : 'false')}">
+      <span class="settings-row-text"><span class="settings-row-title">${esc(c.title)}</span>${c.sub ? html`<span class="settings-row-sub">${esc(c.sub)}</span>` : html``}</span>
+      ${c.score != null ? html`<span class="settings-row-value">${esc(c.score)}</span>` : html``}
+    </button>`);
+  openDetailSheet({
+    title: t('live_ref_title'),
+    body: rows.length
+      ? html`<div class="settings-group live-ref-list">${joinHtml(rows)}</div>`
+      : html`<p class="settings-card-desc">${tHtml('ref_none')}</p>`,
+    anchor,
+  });
+}
+
+// A row of the list: apply that shot and close the sheet.
+export function chooseReferenceShot(id: string): void {
+  requestCloseDetailSheet();
+  onRefShotChange(id);
 }
 
 export function autoApplyRefShot(profileName: string): void {
@@ -532,20 +580,16 @@ export function autoApplyRefShot(profileName: string): void {
   if (!match) return;
   S.refShotId = match.id;
   void _applyRefShotById(match.id);
-  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
-  if (sel) sel.value = String(match.id);
-  const btn = document.getElementById('refClearBtn');
-  if (btn) btn.style.display = '';
+  renderRefChip();
 }
 
 export function onRefShotChange(val: string): void {
   if (!val) { clearReferenceShot(); return; }
   S.refShotId = parseInt(val);
+  renderRefChip();
   const shot = S.shots.find(s => s.id === S.refShotId);
   if (!shot) return;
   void _applyRefShotById(shot.id);
-  const btn = document.getElementById('refClearBtn');
-  if (btn) btn.style.display = '';
 }
 
 export function clearReferenceShot(): void {
@@ -559,10 +603,7 @@ export function clearReferenceShot(): void {
     });
     liveChart.update('none');
   }
-  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
-  if (sel) sel.value = '';
-  const btn = document.getElementById('refClearBtn');
-  if (btn) btn.style.display = 'none';
+  renderRefChip();
 }
 
 function _setDisplay(ids: readonly string[], value: string): void {

@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // #2153: the Live tab in the Home Assistant page pattern. Covers the running
 // and idle states (verdict, figures, chart area), the phase bar taken from
@@ -47,6 +49,8 @@ vi.mock('../public-src/shot-curves.js', async (importOriginal) => ({
 const { S } = await import('../public-src/state/index.js');
 const { t } = await import('../public-src/i18n.js');
 const live = await import('../public-src/views/live.js');
+const { formatDate } = await import('../public-src/utils.js');
+const { localeFor } = await import('../public-src/constants.js');
 
 // The DOM stand-in: only the members the live view reads or writes.
 interface FakeElement {
@@ -291,3 +295,102 @@ describe('warm-up countdown (#2153)', () => {
     expect(el('preheat-ready-badge').style.display).toBeUndefined();
   });
 });
+
+describe('reference chip (#2153)', () => {
+  const SHOT = { id: 7, timestamp: 1700000000, hasChartData: true, profileName: 'Turbo', annotation: { score: 89 } };
+
+  it('names the reference on the chip, or says there is none', () => {
+    S.shots = [SHOT] as typeof S.shots;
+    live.renderRefChip();
+    expect(el('refChip').textContent).toBe(t('ref_none'));
+    expect(el('refChip').attrs['aria-pressed']).toBe('false');
+    expect(el('refClearBtn').style.display).toBe('none');
+
+    S.refShotId = 7;
+    live.renderRefChip();
+    expect(el('refChip').textContent).toBe(`${formatDate(1700000000 * 1000, localeFor('en'))} · 89`);
+    expect(el('refChip').attrs['aria-pressed']).toBe('true');
+    expect(el('refClearBtn').style.display).toBe('');
+  });
+
+  it('lists the newest 40 shots with a curve in the sheet next to the chip', () => {
+    S.shots = Array.from({ length: 45 }, (_, i) => ({
+      id: i + 1, timestamp: 1700000000 + i * 60, hasChartData: i + 1 !== 45, profileName: 'Turbo', annotation: {},
+    })) as typeof S.shots;
+    S.refShotId = 44;
+    const anchor = el('refChip');
+    live.openRefPicker(anchor as unknown as HTMLElement);
+    const opts = sheet.openDetailSheet.mock.calls[0]?.[0];
+    expect(opts?.title).toBe(t('live_ref_title'));
+    expect(opts?.anchor).toBe(anchor);
+    const body = opts?.body ?? '';
+    expect(body.split('data-action="live-ref-choose"').length - 1).toBe(40);
+    expect(body).toContain('data-id="44" aria-current="true"');
+    expect(body).toContain('data-id="43" aria-current="false"');
+    expect(body).not.toContain('data-id="45"');
+    expect(body).not.toContain('data-id="4"');
+    expect(body.indexOf('data-id="44"')).toBeLessThan(body.indexOf('data-id="43"'));
+  });
+
+  it('picking a row applies that shot and closes the sheet', () => {
+    S.shots = [SHOT] as typeof S.shots;
+    live.chooseReferenceShot('7');
+    expect(sheet.requestCloseDetailSheet).toHaveBeenCalledTimes(1);
+    expect(S.refShotId).toBe(7);
+    expect(curve.getShotCurve).toHaveBeenCalledWith(7);
+    expect(el('refChip').attrs['aria-pressed']).toBe('true');
+  });
+
+  it('Clear removes the reference and hides itself', () => {
+    S.shots = [SHOT] as typeof S.shots;
+    live.chooseReferenceShot('7');
+    live.clearReferenceShot();
+    expect(S.refShotId).toBeNull();
+    expect(el('refChip').textContent).toBe(t('ref_none'));
+    expect(el('refClearBtn').style.display).toBe('none');
+  });
+});
+
+describe('Live page markup and wiring (#2153)', () => {
+  const SRC = join(import.meta.dirname, '..', 'public-src');
+  const read = (rel: string): string => readFileSync(join(SRC, rel), 'utf8');
+  const index = read('index.html');
+  const view = index.slice(index.indexOf('<div id="live-view">'), index.indexOf('<!-- #live-view -->'));
+  const css = read('style.css');
+
+  it('has no title bar and one status badge, inside the running verdict', () => {
+    expect(view).not.toContain('data-i18n="live_title"');
+    expect(view).not.toContain('preheat-ready-badge');
+    expect(view.split('id="live-status-badge"').length - 1).toBe(1);
+    expect(view.indexOf('id="live-status-badge"')).toBeGreaterThan(view.indexOf('<div id="live-content">'));
+    expect(view.indexOf('id="live-status-badge"')).toBeLessThan(view.indexOf('id="liveChartArea"'));
+  });
+
+  it('shows the four readings as one figures row and the reference as a chip', () => {
+    expect(view.split('class="live-figure live-figure--').length - 1).toBe(4);
+    expect(view).toContain('<button type="button" class="chip" id="refChip" data-action="live-ref-open" aria-pressed="false" aria-haspopup="dialog"');
+    expect(view).toContain('id="livePhases"');
+    expect(view).not.toContain('refShotSelect');
+    expect(view).not.toMatch(/\blive-stats?\b/);
+  });
+
+  it('lists the next shot as rows that open the fields, kept in a hidden panel', () => {
+    expect(view.split('data-action="live-setup-open"').length - 1).toBe(6);
+    expect(view).toContain('<div class="live-panels" hidden>');
+    expect(view).not.toContain('lsToggle');
+  });
+
+  it('routes the chip, the reference rows and the next-shot rows through the click delegation', () => {
+    const src = read('boot/delegation.ts');
+    expect(src).toContain("case 'live-ref-open':     openRefPicker(el); break;");
+    expect(src).toContain("case 'live-ref-choose':   chooseReferenceShot(strId()); break;");
+    expect(src).toContain("case 'live-setup-open':   openLiveSetupSheet(); break;");
+  });
+
+  it('colours the figures by series and keeps the pulse and the bar still under reduced motion', () => {
+    expect(css).toContain('.live-figure--pressure { --live-figure-c: var(--stat-pressure); }');
+    expect(css).toMatch(/@media \(prefers-reduced-motion: no-preference\) \{\s*#live-status-badge\.brewing \.badge-dot,/);
+    expect(css).toMatch(/@media \(prefers-reduced-motion: no-preference\) \{\s*#preheat-bar-fill \{ transition: width \.8s ease; \}/);
+  });
+});
+
