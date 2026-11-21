@@ -90,6 +90,12 @@ const RETIRED_2120 = [
     'lib-recipe-steps-header', 'lib-import-settings-title', 'lib-import-settings-subtitle', 'lib-import-extra-recipes-title', 'annotation-title',
 ] as const;
 
+// Classes retired by #2141: the crop and sticker editors' title sits in the
+// sheet header bar, whose close is the sticker editor's only way out, so its
+// failure-state Close button is gone too. No rule, markup or code may use
+// them again.
+const RETIRED_2141 = ['crop-editor-title', 'sticker-close'] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -150,7 +156,7 @@ describe('shared filter chips (#2093)', () => {
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120, ...RETIRED_2141]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -446,7 +452,8 @@ describe('remaining action buttons (#2112)', () => {
 describe('card titles (#2120)', () => {
   it('gives the settings cards, the orders cards and the backup restore the shared card title', () => {
     const index = read('index.html');
-    expect(index.split('<h3 class="card-title"').length - 1).toBe(14);
+    // 14 cards plus the barcode scanner's title (#2141)
+    expect(index.split('<h3 class="card-title"').length - 1).toBe(15);
     expect(index).toContain('<label for="settingsLang" class="card-title" data-i18n="settings_language">');
     for (const id of ['ordersMenuTitle', 'ordersStatsTitle', 'ordersNotifyTitle', 'ordersKioskTitle']) {
       expect(index, id).toContain(`<div class="card-title orders-menu-toggle" id="${id}">`);
@@ -478,6 +485,7 @@ const DIALOG_TITLES = [
   ['setupWizardModal', 'data-i18n="setup_wizard_title"'],
   ['gmProfileEditorModal', 'id="gmEditorTitle"'],
   ['brewConfirmModal', 'id="brewConfirmTitle"'],
+  ['backupModal', 'id="backupModalTitle"'],
 ] as const;
 
 describe('dialog titles (#2120)', () => {
@@ -552,5 +560,53 @@ describe('form headings (#2120)', () => {
     const root = postcss.parse(read('style.css'));
     expect(declsOf(rulesWith(root, '.lib-recipe-steps-section > .section-title'))).toEqual(['justify-content: space-between', 'align-items: center']);
     expect(declsOf(rulesWith(root, '.annotation-header .section-title'))).toEqual(['margin-bottom: 0']);
+  });
+});
+
+// #2141: the crop and sticker editors and the backup dialog put their title in
+// the shared sheet header bar; the barcode scanner, a full-screen overlay
+// without a sheet surface, names itself with the shared card title.
+describe('remaining dialog titles (#2141)', () => {
+  it('puts the crop editor title in the sheet header bar, with the close as its only cancel', () => {
+    const crop = read('components/image-crop.ts');
+    const bar = crop.indexOf('<div class="lib-sheet-bar">');
+    const close = crop.indexOf('<button type="button" class="lib-sheet-close crop-editor-cancel"');
+    const title = crop.indexOf('<h3 class="lib-sheet-bar-title" id="cropEditorTitle">');
+    expect(bar).toBeGreaterThan(-1);
+    expect(close).toBeGreaterThan(bar);
+    expect(title).toBeGreaterThan(close);
+    expect(crop).toContain("aria-label=\"${esc(t('lib_sheet_close'))}\">${CLOSE_ICON_SVG}</button>");
+    expect(crop).not.toContain('btn btn--quiet crop-editor-cancel');
+    expect(crop).not.toContain("t('lib_cancel')");
+  });
+
+  it('puts the sticker editor title in the sheet header bar', () => {
+    const sticker = read('components/sticker/editor.ts');
+    expect(sticker).toContain("const bar = element('div', 'lib-sheet-bar');");
+    expect(sticker).toContain("const cancelBtn = element('button', 'lib-sheet-close sticker-cancel');");
+    expect(sticker).toContain("const title = element('h3', 'lib-sheet-bar-title');");
+    expect(sticker).toContain('for (const child of [bar, viewport,');
+    expect(sticker).not.toContain("t('lib_cancel')");
+  });
+
+  it('gives the barcode scanner the shared card title and drops the old title rules', () => {
+    expect(read('index.html')).toContain('<h3 class="card-title" data-i18n="scan_title">');
+    const root = postcss.parse(read('style.css'));
+    for (const selector of ['#scanModal h3', '.backup-modal-card h3', '.crop-editor-title']) {
+      expect(rulesWith(root, selector), selector).toEqual([]);
+    }
+  });
+
+  it('lets the crop editor and the backup dialog hold the bar', () => {
+    const root = postcss.parse(read('style.css'));
+    expect(declsOf(rulesWith(root, '.crop-editor-modal > .lib-sheet-bar'))).toEqual(['align-self: stretch', 'flex-shrink: 0', 'margin-bottom: 0']);
+    expect(declsOf(rulesWith(root, '.backup-modal-card > .lib-sheet-bar'))).toEqual(['flex-shrink: 0', 'margin-bottom: 0', 'top: calc(-1 * var(--sp-5))']);
+  });
+
+  it('keeps both answers in the backup dialog next to its header close', () => {
+    const index = read('index.html');
+    expect(index).toContain('<button type="button" class="lib-sheet-close" id="backupModalCloseBtn" data-i18n-aria-label="lib_sheet_close" aria-label="Close">');
+    expect(index).toContain('<button id="backupModalConfirmBtn" type="button" class="btn btn--primary"></button>');
+    expect(index).toContain('<button id="backupModalCancelBtn" type="button" class="btn btn--quiet" data-i18n="backup_modal_cancel">');
   });
 });
