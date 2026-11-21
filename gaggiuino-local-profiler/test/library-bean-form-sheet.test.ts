@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import postcss from 'postcss';
 
 // library.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
@@ -249,6 +253,12 @@ class FakeDocument {
     const list = this.listeners.get(type);
     if (list) this.listeners.set(type, list.filter(entry => entry !== listener));
   }
+
+  dispatch(type: string, event: FakeEvent = {}): void {
+    for (const listener of [...(this.listeners.get(type) ?? [])]) {
+      listener({ preventDefault: () => {}, ...event });
+    }
+  }
 }
 
 interface LibraryModule {
@@ -417,35 +427,81 @@ describe('bean form sheet (#1349)', () => {
     expect(doc.body.querySelector('#beanSheet')).toBeNull();
   });
 
-  it('asks before discarding a dirty form, and discard closes it', () => {
+  it('asks in the confirm dialog before discarding a dirty form, and Discard closes it (#2144)', async () => {
     const { home, form } = setupHome();
     library.openBeanForm();
     const host = doc.body.querySelector('#beanFormSheet');
-    const confirm = find('lib-form-confirm');
-    expect(confirm?.getAttribute('hidden')).toBe('');
+    // The inline confirm bar is gone.
+    expect(find('lib-form-confirm')).toBeNull();
 
     form.dispatch('input');
-    // Declined: only the confirm bar shows, so a swipe must spring back.
+    // Asking: the sheet stays open, so a swipe must spring back.
     expect(library.requestCloseBeanForm()).toBe(false);
-
     expect(host?.classList.contains('open')).toBe(true);
-    expect(confirm?.getAttribute('hidden')).toBeNull();
     expect(form.parentNode).not.toBe(home);
 
-    library.discardBeanForm();
+    const dialog = find('guided-maint-overlay');
+    expect(dialog).not.toBeNull();
+    const { t } = (await import('../public-src/i18n.js')) as unknown as { t: (key: string) => string };
+    expect(dialog!.querySelector('.settings-card-desc')?.textContent).toBe(t('lib_form_discard_q'));
+    const discard = dialog!.querySelector('.btn--danger');
+    expect(discard?.textContent).toBe(t('lib_form_discard'));
 
-    expect(host?.classList.contains('open')).toBe(false);
+    discard!.dispatch('click');
+    await vi.waitFor(() => expect(host?.classList.contains('open')).toBe(false));
     expect(form.parentNode).toBe(home);
+    expect(find('guided-maint-overlay')).toBeNull();
+  });
+
+  it('Cancel in the dialog keeps the form open and still dirty (#2144)', async () => {
+    const { home, form } = setupHome();
+    library.openBeanForm();
+    const host = doc.body.querySelector('#beanFormSheet');
+    form.dispatch('input');
+    library.requestCloseBeanForm();
+
+    find('guided-maint-overlay')!.querySelector('.btn--quiet')!.dispatch('click');
+    // Let the dialog's answer settle.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(find('guided-maint-overlay')).toBeNull();
+    expect(host?.classList.contains('open')).toBe(true);
+    expect(form.parentNode).not.toBe(home);
+    // Still dirty: the next close asks again.
+    expect(library.requestCloseBeanForm()).toBe(false);
+    expect(find('guided-maint-overlay')).not.toBeNull();
+  });
+
+  it('a second close or Esc while asking opens no second dialog (#2144)', () => {
+    const { form } = setupHome();
+    library.openBeanForm();
+    const host = doc.body.querySelector('#beanFormSheet');
+    form.dispatch('input');
+
+    expect(library.requestCloseBeanForm()).toBe(false);
+    expect(library.requestCloseBeanForm()).toBe(false);
+    expect(doc.body.querySelectorAll('.guided-maint-overlay')).toHaveLength(1);
+
+    // Esc answers the dialog with "no"; the sheet's own Esc stays quiet.
+    doc.dispatch('keydown', { key: 'Escape' });
+    expect(doc.body.querySelectorAll('.guided-maint-overlay')).toHaveLength(0);
+    expect(host?.classList.contains('open')).toBe(true);
+  });
+
+  it('the header close and the backdrop keep the dirty-aware close (#2144)', () => {
+    setupHome();
+    library.openBeanForm();
+    expect(find('lib-sheet-close')?.getAttribute('data-action')).toBe('close-bean-form-sheet');
+    expect(find('lib-sheet-backdrop')?.getAttribute('data-action')).toBe('close-bean-form-sheet');
   });
 
   it('closes an untouched form without asking', () => {
     const { home, form } = setupHome();
     library.openBeanForm();
-    const confirm = find('lib-form-confirm');
 
     expect(library.requestCloseBeanForm()).toBe(true);
 
-    expect(confirm?.getAttribute('hidden')).toBe('');
+    expect(find('guided-maint-overlay')).toBeNull();
     expect(form.parentNode).toBe(home);
   });
 });
@@ -916,5 +972,51 @@ describe('bean sheet autosave state (#2098)', () => {
     expect(status.classList.contains('visible')).toBe(false);
     expect(status.classList.contains('failed')).toBe(false);
     expect(status.innerHTML).toBe('');
+  });
+});
+
+// #2144: the source files are only read, never imported.
+const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public-src');
+const readSrc = (rel: string): string => readFileSync(join(SRC, rel), 'utf8');
+
+// The declarations of every style.css rule with exactly this selector.
+function cssDecls(selector: string): Record<string, string> {
+  const decls: Record<string, string> = {};
+  postcss.parse(readSrc('style.css')).walkRules((rule) => {
+    if (rule.selector !== selector) return;
+    rule.walkDecls((decl) => { decls[decl.prop] = decl.value; });
+  });
+  return decls;
+}
+
+describe('new-bean form: save row in view, no extra Cancel (#2144)', () => {
+  it('the form row holds the two saves and no Cancel', () => {
+    const index = readSrc('index.html');
+    const form = index.slice(index.indexOf('id="beanAddForm"'), index.indexOf('id="beanAddTrigger"'));
+    expect(form).toContain('id="saveBeanNoBagBtn"');
+    expect(form).toContain('id="saveBeanAddBagBtn"');
+    expect(form).not.toContain('closeBeanFormBtn');
+    expect(form).not.toContain('data-i18n="lib_cancel"');
+    expect(readSrc('boot/library.ts')).not.toContain('closeBeanFormBtn');
+  });
+
+  it('pins the create row to the sheet bottom and keeps hiding it while editing', () => {
+    expect(cssDecls('.lib-form-sheet .lib-form-actions')).toMatchObject({ position: 'sticky', bottom: '0' });
+    const creating = cssDecls('.lib-form-sheet:not(.is-editing)');
+    expect(creating['padding-bottom']).toBe('0');
+    expect(creating['scroll-padding-bottom']).toContain('safe-area-inset-bottom');
+    expect(cssDecls('.lib-form-sheet.is-editing .lib-form-actions')).toMatchObject({ display: 'none' });
+    // The inline confirm bar's rules left with the bar.
+    expect(readSrc('style.css')).not.toContain('lib-form-confirm');
+  });
+
+  it('creating shows the two saves in the row', () => {
+    setupHome();
+    library.openBeanForm();
+
+    expect(find('lib-form-sheet')?.classList.contains('is-editing')).toBe(false);
+    expect(doc.getElementById('saveBeanNoBagBtn')?.style.display).toBe('');
+    expect(doc.getElementById('saveBeanAddBagBtn')?.style.display).toBe('');
+    expect(doc.getElementById('saveBeanBtn')?.style.display).toBe('none');
   });
 });
