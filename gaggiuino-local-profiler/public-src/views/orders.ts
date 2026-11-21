@@ -255,19 +255,17 @@ export function renderMilkStock(milks: MilkStock[]): void {
   if (!el) return;
   if (!milks?.length) { el.style.display = 'none'; return; }
   el.style.display = '';
-  el.innerHTML = html`<p class="section-title">${MILK_ICON_SVG} ${tHtml('orders_milk_title')}</p>${joinHtml(
+  el.innerHTML = html`<p class="section-title">${MILK_ICON_SVG} ${tHtml('orders_milk_title')}</p><div class="settings-group">${joinHtml(
     milks.map(m => {
-      const cls = (m.stockMl as number) <= 0 ? 'badge badge--err' : m.remaining < 300 ? 'badge badge--warn' : 'badge badge--ok';
-      const label = (m.stockMl as number) <= 0 ? tHtml('lib_milk_empty')
-        : m.remaining < 300 ? html`${esc(m.remaining)} ml`
-        : html`${esc(m.remaining)} ml`;
-      return html`<div class="orders-milk-row">
-        <span class="orders-milk-emoji">${m.emoji ? esc(m.emoji) : MILK_ICON_SVG}</span>
-        <span class="orders-milk-name">${esc(m.name)}</span>
-        ${m.demand > 0 ? html`<span style="font-size:.72rem;color:var(--gray-500)">${tHtml('lib_milk_demand', m.demand)}</span>` : html``}
+      const empty = (m.stockMl as number) <= 0;
+      const cls = empty ? 'badge badge--err' : m.remaining < 300 ? 'badge badge--warn' : 'badge badge--ok';
+      const label = empty ? tHtml('lib_milk_empty') : html`${esc(m.remaining)} ml`;
+      return html`<div class="settings-row settings-row-static">
+        <span class="settings-row-icon" aria-hidden="true">${m.emoji ? esc(m.emoji) : MILK_ICON_SVG}</span>
+        <span class="settings-row-text"><span class="settings-row-title">${esc(m.name)}</span>${m.demand > 0 ? html`<span class="settings-row-sub">${tHtml('lib_milk_demand', m.demand)}</span>` : html``}</span>
         <span class="${esc(cls)}">${label}</span>
       </div>`;
-    }))}`;
+    }))}</div>`;
 }
 
 // #2148: the orders last rendered, so the ETA choice can name its drink.
@@ -482,29 +480,29 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
     const useBeans   = !!item.useBeans;
     const useMilks   = !!item.useMilks;
     const chipHtml   = joinHtml(variants.map(v =>
-      html`<span class="chip--input orders-menu-variant-chip">${esc(v)}<button class="orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}">×</button></span>`
+      html`<span class="chip--input orders-menu-variant-chip">${esc(v)}<button type="button" class="flavor-chip-x orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}" aria-label="${esc(t('lib_btn_delete'))}">${CLOSE_ICON_SVG}</button></span>`
     ));
     const variantSection = useBeans
-      ? html`<span class="orders-use-beans-note">${BEAN_ICON_SVG} ${tHtml('orders_use_beans_note')}</span>`
+      ? html`<span class="settings-row-sub orders-use-beans-note">${BEAN_ICON_SVG} ${tHtml('orders_use_beans_note')}</span>`
       : useMilks
-      ? html`<span class="orders-use-beans-note">${MILK_ICON_SVG} ${tHtml('orders_use_milks_note')}</span>`
+      ? html`<span class="settings-row-sub orders-use-beans-note">${MILK_ICON_SVG} ${tHtml('orders_use_milks_note')}</span>`
       : html`${chipHtml}
-         <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" aria-label="${esc(t('orders_variant_ph'))}" placeholder="${tHtml('orders_variant_ph')}">
+         <input class="lib-input orders-menu-variant-input" id="variantInput_${esc(item.id)}" aria-label="${esc(t('orders_variant_ph'))}" placeholder="${tHtml('orders_variant_ph')}">
          <button type="button" class="btn btn--tonal" data-variant-add="${esc(item.id)}">${tHtml('orders_variant_add_btn')}</button>`;
     const milkMl = item.milkMl || '';
     return html`
-    <div class="orders-menu-item">
+    <div class="settings-row settings-row-static orders-menu-item">
       <div class="orders-menu-item-top">
-        <span>${esc(item.emoji)}</span>
-        <span class="orders-menu-item-name">${esc(item.name)}</span>
+        <span class="settings-row-icon" aria-hidden="true">${esc(item.emoji)}</span>
+        <span class="settings-row-title orders-menu-item-name">${esc(item.name)}</span>
         <button type="button" class="chip" aria-pressed="${esc(String(useBeans))}" data-menu-use-beans="${esc(item.id)}" title="${tHtml('orders_use_beans_toggle')}">${BEAN_ICON_SVG}</button>
         <button type="button" class="chip" aria-pressed="${esc(String(useMilks))}" data-menu-use-milks="${esc(item.id)}" title="${tHtml('orders_use_milks_toggle')}">${MILK_ICON_SVG}</button>
         <button type="button" class="chip" aria-pressed="${esc(String(!!item.trending))}" data-menu-trend="${esc(item.id)}" title="${tHtml('orders_trending_toggle')}"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></button>
-        <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${tHtml('orders_confirm_delete_item')}">${CLOSE_ICON_SVG}</button>
+        <button type="button" class="btn btn--quiet btn--icon" data-menu-del="${esc(item.id)}" aria-label="${esc(t('orders_confirm_delete_item'))}" title="${tHtml('orders_confirm_delete_item')}">${CLOSE_ICON_SVG}</button>
       </div>
       <div class="orders-menu-variants">${variantSection}</div>
       <div class="orders-menu-milk-row">
-        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" max="5000" step="10" data-milk-ml="${esc(item.id)}" aria-label="${esc(t('orders_milk_per_order'))}"> ${tHtml('orders_milk_per_order')}
+        ${MILK_ICON_SVG} <input class="lib-input orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" max="5000" step="10" data-milk-ml="${esc(item.id)}" aria-label="${esc(t('orders_milk_per_order'))}"> ${tHtml('orders_milk_per_order')}
       </div>
     </div>`;
   }));
@@ -579,29 +577,20 @@ export function renderOrdersStats(stats: OrderStats | null | undefined): void {
   const el = document.getElementById('ordersStatsContent');
   if (!el) return;
   if (!stats?.total) {
-    el.innerHTML = html`<div class="orders-stats-empty">${tHtml('orders_stats_no_data')}</div>`;
+    el.innerHTML = html`<p class="settings-card-desc">${tHtml('orders_stats_no_data')}</p>`;
     return;
   }
 
   const fmtDate = (ts: number | null | undefined): Html => esc(ts ? formatDate(ts, localeFor(S.currentLang)) : '–');
-  const cards = joinHtml((stats.customers || []).map(c => html`<div class="orders-stats-card">
-      <div class="orders-stats-name" title="${esc(c.name)}">${esc(c.name)}</div>
-      <div class="orders-stats-row"><span>${tHtml('orders_stats_total')}</span><span class="orders-stats-val">${esc(c.count)} ${tHtml('orders_stats_orders')}</span></div>
-      <div class="orders-stats-row"><span>${tHtml('orders_stats_fav')}</span><span class="orders-stats-val">${c.favItem ? esc(c.favItem) : html`–`}</span></div>
-      <div class="orders-stats-row"><span>${tHtml('orders_stats_last')}</span><span class="orders-stats-val">${fmtDate(c.lastAt)}</span></div>
+  const summary = (label: Html, value: Html): Html => html`<div class="settings-row settings-row-static"><span class="settings-row-text"><span class="settings-row-title">${label}</span></span><span class="settings-row-value">${value}</span></div>`;
+  const customers = joinHtml((stats.customers || []).map(c => html`<div class="settings-row settings-row-static">
+      <span class="settings-row-text"><span class="settings-row-title">${esc(c.name)}</span><span class="settings-row-sub">${tHtml('orders_stats_fav')}: ${c.favItem ? esc(c.favItem) : html`–`} · ${tHtml('orders_stats_last')}: ${fmtDate(c.lastAt)}</span></span>
+      <span class="settings-row-value">${esc(c.count)} ${tHtml('orders_stats_orders')}</span>
     </div>`));
-  el.innerHTML = html`
-    <div class="orders-stats-global">
-      <div class="orders-stats-global-item">
-        <span class="orders-stats-global-label">${tHtml('orders_stats_total')}</span>
-        <span class="orders-stats-global-val">${esc(stats.total)}</span>
-      </div>
-      <div class="orders-stats-global-item">
-        <span class="orders-stats-global-label">${tHtml('orders_stats_popular')}</span>
-        <span class="orders-stats-global-val">${stats.mostPopular ? html`${esc(stats.mostPopular.item)} ×${esc(stats.mostPopular.count)}` : html`–`}</span>
-      </div>
-    </div>
-    <div class="orders-stats-grid">${cards}</div>`;
+  el.innerHTML = html`<div class="settings-group">
+      ${summary(tHtml('orders_stats_total'), esc(stats.total))}
+      ${summary(tHtml('orders_stats_popular'), stats.mostPopular ? html`${esc(stats.mostPopular.item)} ×${esc(stats.mostPopular.count)}` : html`–`)}
+    </div>${customers ? html`<div class="settings-group">${customers}</div>` : html``}`;
 }
 
 export async function deleteOrder(id: string): Promise<void> {
@@ -628,7 +617,7 @@ export async function loadNotifyMappingView(): Promise<void> {
   ]);
 
   if (services === null) {
-    section.innerHTML = html`<p class="orders-notify-hint">${tHtml('orders_notify_no_ha')}</p>`;
+    section.innerHTML = html`<p class="settings-card-desc">${tHtml('orders_notify_no_ha')}</p>`;
     return;
   }
 
@@ -645,7 +634,7 @@ export async function loadNotifyMappingView(): Promise<void> {
   const typesHtml = html`
     <div class="orders-broadcast-section">
       <p class="section-title">${BELL_ICON_SVG} ${tHtml('orders_types_title')}</p>
-      <p class="orders-notify-hint">${tHtml('orders_types_desc')}</p>
+      <p class="settings-card-desc">${tHtml('orders_types_desc')}</p>
       <div class="orders-broadcast-list" id="ordersTypesList">${typesRows}</div>
       <div class="orders-notify-actions">
         <button type="button" class="btn btn--tonal" id="ordersTypesSaveBtn">${tHtml('orders_types_save')}</button>
@@ -659,12 +648,12 @@ export async function loadNotifyMappingView(): Promise<void> {
           <input type="checkbox" id="bc_${esc(s.id)}" data-svc="${esc(s.id)}"${savedRecipients.includes(s.id) ? html` checked` : html``}>
           <label for="bc_${esc(s.id)}">${esc(s.name)}</label>
         </div>`))
-    : html`<p class="orders-broadcast-empty">${tHtml('orders_notify_no_ha')}</p>`;
+    : html`<p class="settings-card-desc">${tHtml('orders_notify_no_ha')}</p>`;
 
   const broadcastHtml = html`
     <div class="orders-broadcast-section">
       <p class="section-title">${BELL_ICON_SVG} ${tHtml('orders_broadcast_title')}</p>
-      <p class="orders-notify-hint">${tHtml('orders_broadcast_desc')}</p>
+      <p class="settings-card-desc">${tHtml('orders_broadcast_desc')}</p>
       <div class="orders-broadcast-list" id="ordersBroadcastList">${broadcastRows}</div>
       <div class="orders-notify-actions">
         <button type="button" class="btn btn--tonal" id="ordersBroadcastSaveBtn">${tHtml('orders_broadcast_save')}</button>
@@ -678,8 +667,8 @@ export async function loadNotifyMappingView(): Promise<void> {
   const baristaHtml = html`
     <div class="orders-broadcast-section">
       <p class="section-title">${BELL_ICON_SVG} ${tHtml('orders_barista_title')}</p>
-      <p class="orders-notify-hint">${tHtml('orders_barista_desc')}</p>
-      <select class="orders-notify-select" id="ordersBaristaSelect" aria-label="${esc(t('orders_barista_title'))}">${baristaOptions}</select>
+      <p class="settings-card-desc">${tHtml('orders_barista_desc')}</p>
+      <select class="lib-select" id="ordersBaristaSelect" aria-label="${esc(t('orders_barista_title'))}">${baristaOptions}</select>
       <div class="orders-notify-actions">
         <button type="button" class="btn btn--tonal" id="ordersBaristaSaveBtn">${tHtml('orders_barista_save')}</button>
       </div>
@@ -691,12 +680,12 @@ export async function loadNotifyMappingView(): Promise<void> {
     const serviceOptions = joinHtml(services.map(s =>
       html`<option value="${esc(s.id)}">${esc(s.name)}</option>`));
     return html`
-      <p class="orders-notify-hint">${tHtml('orders_notify_desc')}</p>
-      <div class="orders-notify-list" id="ordersNotifyList">
+      <p class="settings-card-desc">${tHtml('orders_notify_desc')}</p>
+      <div class="settings-group" id="ordersNotifyList">
         ${joinHtml(haUserIds.map(uid => html`
-          <div class="orders-notify-row">
-            <span class="orders-notify-customer">${esc(customers[uid])}</span>
-            <select class="orders-notify-select" data-uid="${esc(uid)}" aria-label="${esc(t('orders_notify_desc'))}">
+          <div class="settings-row settings-row-static">
+            <span class="settings-row-text"><span class="settings-row-title">${esc(customers[uid])}</span></span>
+            <select class="lib-select" data-uid="${esc(uid)}" aria-label="${esc(t('orders_notify_desc'))}">
               <option value="">${tHtml('orders_notify_no_service')}</option>
               ${serviceOptions}
             </select>
@@ -705,7 +694,7 @@ export async function loadNotifyMappingView(): Promise<void> {
       <div class="orders-notify-actions">
         <button type="button" class="btn btn--tonal" id="ordersNotifySaveBtn">${tHtml('orders_notify_save')}</button>
       </div>`;
-  })() : html`<p class="orders-notify-hint">${tHtml('orders_notify_no_customers')}</p>`;
+  })() : html`<p class="settings-card-desc">${tHtml('orders_notify_no_customers')}</p>`;
 
   section.innerHTML = joinHtml([typesHtml, broadcastHtml, baristaHtml, perCustomerHtml]);
 
@@ -922,14 +911,14 @@ function renderKioskLink(section: HTMLElement, key: string): void {
   const link = kioskLinkFor(new URL('kiosk.html', document.baseURI).href, key);
   const ingress = servedThroughIngress();
   section.innerHTML = html`
-    <p class="orders-notify-hint">${esc(t('orders_kiosk_link_desc'))}</p>
+    <p class="settings-card-desc">${esc(t('orders_kiosk_link_desc'))}</p>
     <div class="orders-menu-add-row">
-      <input class="orders-menu-input" id="ordersKioskLink" style="flex:1;min-width:0" readonly
+      <input class="lib-input orders-kiosk-link" id="ordersKioskLink" readonly
              aria-label="${esc(t('orders_kiosk_link_title'))}" value="${esc(link)}">
       <button class="btn btn--quiet" id="ordersKioskCopyBtn" type="button">${tHtml('orders_kiosk_link_copy')}</button>
       <button class="btn btn--danger" id="ordersKioskRotateBtn" type="button">${tHtml('orders_kiosk_link_rotate')}</button>
     </div>
-    ${ingress ? html`<p class="orders-notify-hint">${esc(t('orders_kiosk_link_ingress_hint'))}</p>` : html``}`;
+    ${ingress ? html`<p class="settings-card-desc">${esc(t('orders_kiosk_link_ingress_hint'))}</p>` : html``}`;
 
   document.getElementById('ordersKioskCopyBtn')?.addEventListener('click', () => {
     const input = document.getElementById('ordersKioskLink') as HTMLInputElement | null;
@@ -963,7 +952,7 @@ export async function loadKioskLinkView(): Promise<void> {
     renderKioskLink(section, (await getKioskKey()).kioskKey);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    section.innerHTML = html`<p class="orders-notify-hint">${esc(t('error_generic', message))}</p>`;
+    section.innerHTML = html`<p class="settings-card-desc">${esc(t('error_generic', message))}</p>`;
   }
 }
 
