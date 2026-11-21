@@ -4,7 +4,7 @@
 // element only skips this step.
 import { S } from '../state/index.js';
 import { closeFlavorWheel } from '../components/flavor-wheel.js';
-import { switchLibTab, openBeanForm, discardBeanForm, saveBean, saveBeanNoBag, saveBeanAddBag,
+import { switchLibTab, openBeanForm, saveBean, saveBeanNoBag, saveBeanAddBag,
          uploadBeanImage, stageNewBeanImage, cutOutBeanSticker, openGrinderForm, closeGrinderForm,
          saveGrinder, uploadGrinderImage, openRecipeForm, closeRecipeForm, saveRecipe, addRecipeStep,
          toggleUrlImport, importFromUrl, importFromPaste, toggleImportSettings, addCustomShopifyDomain, openScanModal,
@@ -35,8 +35,6 @@ export function wireLibrary(): void {
   document.getElementById('libTabRecipes')!.addEventListener('click', () => switchLibTab('recipes'));
   document.getElementById('libTabMilk')!.addEventListener('click', () => switchLibTab('milk'));
   document.getElementById('libTabProfiles')!.addEventListener('click', () => switchLibTab('profiles'));
-  // Cancel is an explicit discard: close without the unsaved-changes prompt.
-  document.getElementById('closeBeanFormBtn')!.addEventListener('click', discardBeanForm);
   document.getElementById('saveBeanBtn')!.addEventListener('click', () => { void saveBean(); });
   document.getElementById('saveBeanNoBagBtn')!.addEventListener('click', () => { void saveBeanNoBag(); });
   document.getElementById('saveBeanAddBagBtn')!.addEventListener('click', () => { void saveBeanAddBag(); });
