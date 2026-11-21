@@ -249,6 +249,12 @@ class FakeDocument {
     const list = this.listeners.get(type);
     if (list) this.listeners.set(type, list.filter(entry => entry !== listener));
   }
+
+  dispatch(type: string, event: FakeEvent = {}): void {
+    for (const listener of [...(this.listeners.get(type) ?? [])]) {
+      listener({ preventDefault: () => {}, ...event });
+    }
+  }
 }
 
 interface LibraryModule {
@@ -417,35 +423,81 @@ describe('bean form sheet (#1349)', () => {
     expect(doc.body.querySelector('#beanSheet')).toBeNull();
   });
 
-  it('asks before discarding a dirty form, and discard closes it', () => {
+  it('asks in the confirm dialog before discarding a dirty form, and Discard closes it (#2144)', async () => {
     const { home, form } = setupHome();
     library.openBeanForm();
     const host = doc.body.querySelector('#beanFormSheet');
-    const confirm = find('lib-form-confirm');
-    expect(confirm?.getAttribute('hidden')).toBe('');
+    // The inline confirm bar is gone.
+    expect(find('lib-form-confirm')).toBeNull();
 
     form.dispatch('input');
-    // Declined: only the confirm bar shows, so a swipe must spring back.
+    // Asking: the sheet stays open, so a swipe must spring back.
     expect(library.requestCloseBeanForm()).toBe(false);
-
     expect(host?.classList.contains('open')).toBe(true);
-    expect(confirm?.getAttribute('hidden')).toBeNull();
     expect(form.parentNode).not.toBe(home);
 
-    library.discardBeanForm();
+    const dialog = find('guided-maint-overlay');
+    expect(dialog).not.toBeNull();
+    const { t } = (await import('../public-src/i18n.js')) as unknown as { t: (key: string) => string };
+    expect(dialog!.querySelector('.settings-card-desc')?.textContent).toBe(t('lib_form_discard_q'));
+    const discard = dialog!.querySelector('.btn--danger');
+    expect(discard?.textContent).toBe(t('lib_form_discard'));
 
-    expect(host?.classList.contains('open')).toBe(false);
+    discard!.dispatch('click');
+    await vi.waitFor(() => expect(host?.classList.contains('open')).toBe(false));
     expect(form.parentNode).toBe(home);
+    expect(find('guided-maint-overlay')).toBeNull();
+  });
+
+  it('Cancel in the dialog keeps the form open and still dirty (#2144)', async () => {
+    const { home, form } = setupHome();
+    library.openBeanForm();
+    const host = doc.body.querySelector('#beanFormSheet');
+    form.dispatch('input');
+    library.requestCloseBeanForm();
+
+    find('guided-maint-overlay')!.querySelector('.btn--quiet')!.dispatch('click');
+    // Let the dialog's answer settle.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(find('guided-maint-overlay')).toBeNull();
+    expect(host?.classList.contains('open')).toBe(true);
+    expect(form.parentNode).not.toBe(home);
+    // Still dirty: the next close asks again.
+    expect(library.requestCloseBeanForm()).toBe(false);
+    expect(find('guided-maint-overlay')).not.toBeNull();
+  });
+
+  it('a second close or Esc while asking opens no second dialog (#2144)', () => {
+    const { form } = setupHome();
+    library.openBeanForm();
+    const host = doc.body.querySelector('#beanFormSheet');
+    form.dispatch('input');
+
+    expect(library.requestCloseBeanForm()).toBe(false);
+    expect(library.requestCloseBeanForm()).toBe(false);
+    expect(doc.body.querySelectorAll('.guided-maint-overlay')).toHaveLength(1);
+
+    // Esc answers the dialog with "no"; the sheet's own Esc stays quiet.
+    doc.dispatch('keydown', { key: 'Escape' });
+    expect(doc.body.querySelectorAll('.guided-maint-overlay')).toHaveLength(0);
+    expect(host?.classList.contains('open')).toBe(true);
+  });
+
+  it('the header close and the backdrop keep the dirty-aware close (#2144)', () => {
+    setupHome();
+    library.openBeanForm();
+    expect(find('lib-sheet-close')?.getAttribute('data-action')).toBe('close-bean-form-sheet');
+    expect(find('lib-sheet-backdrop')?.getAttribute('data-action')).toBe('close-bean-form-sheet');
   });
 
   it('closes an untouched form without asking', () => {
     const { home, form } = setupHome();
     library.openBeanForm();
-    const confirm = find('lib-form-confirm');
 
     expect(library.requestCloseBeanForm()).toBe(true);
 
-    expect(confirm?.getAttribute('hidden')).toBe('');
+    expect(find('guided-maint-overlay')).toBeNull();
     expect(form.parentNode).toBe(home);
   });
 });
