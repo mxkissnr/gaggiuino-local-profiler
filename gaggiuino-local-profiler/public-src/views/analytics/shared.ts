@@ -2,6 +2,7 @@ import { S } from '../../state/index.js';
 import { t } from '../../i18n.js';
 import { esc, formatDate, html, localDateKey, utcDateKey, scoreColor, themeColor } from '../../utils.js';
 import { resolveBeanForAnnotation } from '../shots/utils.js';
+import { _parseGrindNum } from '../shots/grind.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
 import type { BeanMixPartInput } from '../../shared/bean-mix.js';
 import { filterAnalyticsShots } from '../analytics-summary.js';
@@ -235,4 +236,44 @@ export function _beanGroup(annotation: ShotAnnotation | null | undefined, beans:
   const name = annotation?.coffee;
   if (!name) return null;
   return { key: `name:${name.toLowerCase()}`, label: name, beanId: null };
+}
+
+// ── Your recipe on average ────────────────────────────────────────────────
+// Moved here from views/analytics.ts (#2119) so the bean comparison can use
+// it without importing the analytics page.
+export interface RecipeSummary {
+  dose: number | null;
+  yield: number | null;
+  ratio: number | null;
+  time: number | null;
+  grindMin: number | null;
+  grindMax: number | null;
+}
+
+// Pure averages over the shots the trend window shows (#1467). Yield is the
+// list row's weight in tenths of a gram (the /10 the rest of analytics
+// applies); grind goes through _parseGrindNum so string and number settings
+// mix. Any field is null when no shot carries it.
+export function computeRecipeSummary(shots: ShotRow[]): RecipeSummary {
+  const doses: number[] = [], yields: number[] = [], times: number[] = [];
+  let grindMin: number | null = null, grindMax: number | null = null;
+  for (const s of shots) {
+    const dose = s.annotation?.dose;
+    if (typeof dose === 'number' && dose > 0) doses.push(dose);
+    const weight = s.weight;
+    if (typeof weight === 'number' && weight > 0) yields.push(weight / 10);
+    const dur = s.duration;
+    if (typeof dur === 'number' && dur > 0) times.push(dur / 10);
+    const g = _parseGrindNum(s.annotation?.grindSetting);
+    if (g !== null) {
+      grindMin = grindMin === null ? g : Math.min(grindMin, g);
+      grindMax = grindMax === null ? g : Math.max(grindMax, g);
+    }
+  }
+  const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+  const dose = doses.length ? Math.round(mean(doses) * 10) / 10 : null;
+  const yieldG = yields.length ? Math.round(mean(yields) * 10) / 10 : null;
+  const ratio = dose !== null && dose > 0 && yieldG !== null ? Math.round((yieldG / dose) * 10) / 10 : null;
+  const time = times.length ? Math.round(mean(times)) : null;
+  return { dose, yield: yieldG, ratio, time, grindMin, grindMax };
 }
