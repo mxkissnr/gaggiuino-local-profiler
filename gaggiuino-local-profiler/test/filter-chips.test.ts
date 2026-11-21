@@ -228,8 +228,9 @@ describe('shared buttons (#2095)', () => {
   it('gives the order actions a shared button variant and the ETA picker shared chips', () => {
     const orders = read('views/orders.ts');
     expect(orders).toContain('class="btn btn--tonal" data-order-accept=');
-    expect(orders).toContain('class="btn btn--tonal" data-order-complete=');
-    expect(orders).toContain('class="btn btn--danger" data-order-decline-toggle=');
+    expect(orders).toContain('class="btn btn--tonal" data-order-eta-open=');
+    expect(orders).toContain('class="btn btn--quiet btn--icon" data-order-decline-toggle=');
+    expect(orders).toContain('class="btn btn--danger" data-order-decline-submit=');
     expect(orders).toContain('<button type="button" class="chip" aria-pressed="${esc(selectedEta === m');
     expect(orders).not.toContain("classList.add('selected')");
   });

@@ -150,9 +150,9 @@ const VIEWS: View[] = [
     {
         name: 'Orders',
         nav: '#btnOrders',
-        // loadOrdersView() (views/orders.ts) awaits api/orders/settings
-        // before setting #ordersEnabledLabel's text.
-        ready: () => !!document.getElementById('ordersEnabledLabel')?.textContent,
+        // loadOrdersView() fills the verdict title once the orders have
+        // loaded (#2148).
+        ready: () => !!document.getElementById('ordersVerdictTitle')?.textContent,
     },
     {
         name: 'Settings',
