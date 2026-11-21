@@ -201,8 +201,14 @@ describe('index.html i18n wiring', () => {
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const html = readFileSync(join(__dirname, '../public-src/index.html'), 'utf8');
 
-    it('wires the Live Shot heading to the existing live_title key', () => {
-        expect(html).toMatch(/<h1[^>]*data-i18n="live_title"[^>]*>Live Shot<\/h1>/);
+    it('keeps the Live view title-less and wires the page-pattern keys (#2153)', () => {
+        // #2153: the Live view follows the Home Assistant page pattern, so it
+        // has no bare title bar; its section title, hint and reference chip are
+        // the localized pieces instead.
+        expect(html).not.toMatch(/data-i18n="live_title"/);
+        expect(html).toMatch(/<span data-i18n="live_setup_toggle">/);
+        expect(html).toMatch(/<span class="section-title__count" data-i18n="live_setup_hint">/);
+        expect(html).toMatch(/id="refChip"[^>]*data-i18n-title="live_ref_title"/);
     });
 
     it('wires the idle-state heading to the new machine_ready key', () => {
