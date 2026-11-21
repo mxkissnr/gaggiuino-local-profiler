@@ -182,6 +182,7 @@ describe('orders markup (#2148)', () => {
     expect(bar).toContain('<h1 class="settings-bar-title" data-i18n="nav_orders">');
     expect(bar).toContain('data-i18n="orders_accept_toggle"');
     expect(bar).toContain('id="ordersEnabledToggle"');
+    expect(bar).not.toContain('ordersEnabledLabel');
   });
 
   it('has the verdict, the two grouped lists and the Manage group', () => {
@@ -321,5 +322,98 @@ describe('verdict (#2148)', () => {
     expect(els.ordersWaitingCount?.textContent).toBe('3');
     expect(els.ordersVerdictTitle?.textContent).toBe('T');
     expect(els.ordersVerdictSub?.hidden).toBe(true);
+  });
+});
+
+describe('order rows (#2148)', () => {
+  beforeEach(() => {
+    installDoc();
+    S._ordersEtaSelected = {};
+    S._ordersDeclineOpen = {};
+    (S as unknown as { _ordersQueueEta: QueueEta | null })._ordersQueueEta = {
+      acceptedRemaining: 0, pendingCount: 1, prepTime: 4,
+      positions: { o1: { position: 1, suggestedEta: 10 } },
+    };
+  });
+
+  it('gives only the first order in progress the primary Done', () => {
+    orders.renderOrdersList([
+      order({ id: 'o1', status: 'pending' }),
+      order({ id: 'a', status: 'accepted', acceptedAt: Date.now(), eta: 5 }),
+      order({ id: 'b', status: 'accepted', acceptedAt: Date.now(), eta: 5 }),
+    ]);
+
+    const accepted = els['orders-accepted-list']?.innerHTML ?? '';
+    expect(accepted).toContain('class="btn btn--primary" data-order-complete="a"');
+    expect(accepted).toContain('class="btn btn--tonal" data-order-complete="b"');
+    expect(accepted.split('btn--primary').length - 1).toBe(1);
+    expect(els['orders-pending-list']?.innerHTML).not.toContain('btn--primary');
+    expect(els.ordersProgress?.hidden).toBe(false);
+  });
+
+  it('hides In progress without orders and shows the empty text in the queue', () => {
+    orders.renderOrdersList([]);
+
+    expect(els.ordersProgress?.hidden).toBe(true);
+    expect(els['orders-pending-list']?.innerHTML).toContain(t('orders_empty'));
+  });
+
+  it('shows the suggested time on the accept button and sends it', async () => {
+    orders.renderOrdersList([order({ id: 'o1', status: 'pending' })]);
+
+    expect(els['orders-pending-list']?.innerHTML).toContain('data-order-eta-open="o1" aria-haspopup="dialog"');
+    expect(els['orders-pending-list']?.innerHTML).toContain('>10 min</button>');
+
+    await orders.acceptOrder('o1');
+    expect(api.postOrderAccept).toHaveBeenCalledWith('o1', 10);
+  });
+
+  it('sends the chosen time instead of the suggestion', async () => {
+    orders.renderOrdersList([order({ id: 'o1', status: 'pending' })]);
+    S._ordersEtaSelected.o1 = 15;
+
+    await orders.acceptOrder('o1');
+    expect(api.postOrderAccept).toHaveBeenCalledWith('o1', 15);
+  });
+
+  it('opens the ETA choice in the detail sheet at the time button', () => {
+    orders.renderOrdersList([order({ id: 'o1', status: 'pending' })]);
+    const anchor = fakeEl('anchor');
+    orders.openOrderEta('o1', anchor as unknown as HTMLElement);
+
+    expect(sheet.openDetailSheet).toHaveBeenCalledTimes(1);
+    const opts = sheet.openDetailSheet.mock.calls[0]?.[0] as SheetOptions;
+    expect(opts.title).toBe('Latte');
+    expect(opts.anchor).toBe(anchor);
+    expect(opts.sub).toBe(t('orders_suggested_eta', 10));
+    expect(String(opts.body).split('data-eta-btn=').length - 1).toBe(5);
+    expect(opts.body).toContain('aria-pressed="true" data-order-id="o1" data-eta-btn="10"');
+    expect(opts.body).toContain('id="etaCustom_o1"');
+  });
+
+  it('keeps decline with a reason on queue and in-progress rows', () => {
+    S._ordersDeclineOpen = { o1: true, a: true };
+    orders.renderOrdersList([
+      order({ id: 'o1', status: 'pending' }),
+      order({ id: 'a', status: 'accepted', acceptedAt: Date.now(), eta: 5 }),
+    ]);
+
+    for (const [list, id] of [['orders-pending-list', 'o1'], ['orders-accepted-list', 'a']] as const) {
+      const markup = els[list]?.innerHTML ?? '';
+      expect(markup, list).toContain('data-order-decline-toggle=');
+      expect(markup, list).toContain(`id="declineReason_${id}"`);
+      expect(markup, list).toContain('data-order-decline-submit=');
+    }
+  });
+
+  it('lists a history entry with its shot link and delete button', () => {
+    orders.renderOrdersList([
+      order({ id: 'h1', status: 'done', completedAt: Date.now(), shotId: 42 }),
+    ]);
+
+    const history = els['orders-history-list']?.innerHTML ?? '';
+    expect(history).toContain('data-order-delete="h1"');
+    expect(history).toContain('data-action="goto-shot" data-id="42"');
+    expect(els['orders-clear-history']?.style.display).toBe('');
   });
 });
