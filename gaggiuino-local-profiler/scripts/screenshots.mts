@@ -467,11 +467,11 @@ async function main(): Promise<void> {
     const placedOrders = await seedDemoOrders(baseUrl);
     await openTopbarTab(page, '#btnOrders');
     await page.waitForFunction(
-        () => !!document.getElementById('ordersEnabledLabel')?.textContent,
+        () => !!document.getElementById('ordersVerdictTitle')?.textContent,
         undefined, { timeout: 15000 },
     );
     await page.waitForFunction(
-        (min) => document.querySelectorAll('#orders-pending-list .order-card, #orders-accepted-list .order-card').length >= min,
+        (min) => document.querySelectorAll('#orders-pending-list .order-row, #orders-accepted-list .order-row').length >= min,
         placedOrders, { timeout: 15000 },
     ).catch(() => console.warn('orders: queue did not show all demo orders in 15000ms — capturing anyway'));
     await shootWindow(page, '#orders-view', path.join(outDir, 'orders.png'));

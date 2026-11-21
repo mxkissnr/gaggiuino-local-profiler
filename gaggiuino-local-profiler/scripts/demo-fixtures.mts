@@ -358,7 +358,7 @@ const VIEWS: readonly View[] = [
     {
         name: 'orders',
         nav: '#btnOrders',
-        ready: () => !!document.getElementById('ordersEnabledLabel')?.textContent,
+        ready: () => !!document.getElementById('ordersVerdictTitle')?.textContent,
     },
     {
         name: 'settings',

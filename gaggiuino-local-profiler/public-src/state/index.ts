@@ -110,7 +110,6 @@ export interface LibrarySlice {
 }
 
 export interface OrdersSlice {
-  _ordersMenuOpen: boolean;
   _ordersPollTimer: ReturnType<typeof setInterval> | null;
   // Keyed by order id as a string (the ids arrive as dataset strings); object
   // keys are strings at runtime anyway, so Record<string, …> is the honest type.
@@ -255,7 +254,6 @@ export const S: AppState = {
   _scanStream: null,
   _scanDetector: null,
   _scanActive: false,
-  _ordersMenuOpen: true,
   _ordersPollTimer: null,
   _ordersEtaSelected: {},
   _ordersDeclineOpen: {},
