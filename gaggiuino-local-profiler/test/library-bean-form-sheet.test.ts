@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import postcss from 'postcss';
 
 // library.ts's import chain touches state/index.ts/i18n.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
@@ -968,5 +972,51 @@ describe('bean sheet autosave state (#2098)', () => {
     expect(status.classList.contains('visible')).toBe(false);
     expect(status.classList.contains('failed')).toBe(false);
     expect(status.innerHTML).toBe('');
+  });
+});
+
+// #2144: the source files are only read, never imported.
+const SRC = join(dirname(fileURLToPath(import.meta.url)), '..', 'public-src');
+const readSrc = (rel: string): string => readFileSync(join(SRC, rel), 'utf8');
+
+// The declarations of every style.css rule with exactly this selector.
+function cssDecls(selector: string): Record<string, string> {
+  const decls: Record<string, string> = {};
+  postcss.parse(readSrc('style.css')).walkRules((rule) => {
+    if (rule.selector !== selector) return;
+    rule.walkDecls((decl) => { decls[decl.prop] = decl.value; });
+  });
+  return decls;
+}
+
+describe('new-bean form: save row in view, no extra Cancel (#2144)', () => {
+  it('the form row holds the two saves and no Cancel', () => {
+    const index = readSrc('index.html');
+    const form = index.slice(index.indexOf('id="beanAddForm"'), index.indexOf('id="beanAddTrigger"'));
+    expect(form).toContain('id="saveBeanNoBagBtn"');
+    expect(form).toContain('id="saveBeanAddBagBtn"');
+    expect(form).not.toContain('closeBeanFormBtn');
+    expect(form).not.toContain('data-i18n="lib_cancel"');
+    expect(readSrc('boot/library.ts')).not.toContain('closeBeanFormBtn');
+  });
+
+  it('pins the create row to the sheet bottom and keeps hiding it while editing', () => {
+    expect(cssDecls('.lib-form-sheet .lib-form-actions')).toMatchObject({ position: 'sticky', bottom: '0' });
+    const creating = cssDecls('.lib-form-sheet:not(.is-editing)');
+    expect(creating['padding-bottom']).toBe('0');
+    expect(creating['scroll-padding-bottom']).toContain('safe-area-inset-bottom');
+    expect(cssDecls('.lib-form-sheet.is-editing .lib-form-actions')).toMatchObject({ display: 'none' });
+    // The inline confirm bar's rules left with the bar.
+    expect(readSrc('style.css')).not.toContain('lib-form-confirm');
+  });
+
+  it('creating shows the two saves in the row', () => {
+    setupHome();
+    library.openBeanForm();
+
+    expect(find('lib-form-sheet')?.classList.contains('is-editing')).toBe(false);
+    expect(doc.getElementById('saveBeanNoBagBtn')?.style.display).toBe('');
+    expect(doc.getElementById('saveBeanAddBagBtn')?.style.display).toBe('');
+    expect(doc.getElementById('saveBeanBtn')?.style.display).toBe('none');
   });
 });
