@@ -24,7 +24,8 @@ import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrind
          toggleBagCard, openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
          openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm, editRecipe, deleteRecipe,
          removeRecipeStep, _submitManualScan, restockMilk, deleteMilk, editBasket, deleteBasket,
-         editPuckScreen, deletePuckScreen } from '../views/library.js';
+         editPuckScreen, deletePuckScreen, startBeanCompare, chooseBeanCompare, pickOtherBeanCompare,
+         swapBeanCompare, backFromBeanCompare } from '../views/library.js';
 import { editProfile, duplicateProfile, deleteMachineProfile, createProfileFromBean, removeProfilePhase } from '../views/library-profile-editor.js';
 import { toggleBeanProfilePin } from '../views/library/bean-profiles.js';
 import { openGaggiMateProfileEditor, duplicateGaggiMateProfile, openNewGaggiMateProfile, handleGmEditorAction } from '../views/gaggimate-profile-editor.js';
@@ -92,6 +93,13 @@ export function wireDelegation(): void {
       case 'filter-by-bean':     closeBeanSheet(); filterShotsByBean(numId()); break;
       case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
+      // #2119: compare two beans. The sheet's menu entry opens the bean
+      // picker; a picker row opens or updates the comparison page.
+      case 'compare-bean':       closeBeanSheet(); startBeanCompare(numId()); break;
+      case 'compare-pick-bean':  chooseBeanCompare(numId()); break;
+      case 'compare-pick-other': pickOtherBeanCompare(); break;
+      case 'compare-swap':       swapBeanCompare(); break;
+      case 'compare-back':       backFromBeanCompare(); break;
       // #1500: manual barcode entry in the scan modal submits through this
       // delegation (no inline handler under the CSP); preventDefault keeps
       // the form from navigating the page on click or Enter.
