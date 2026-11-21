@@ -264,7 +264,7 @@ describe('shared buttons (#2095)', () => {
     expect(sticker).toContain("themedButton('btn btn--primary crop-editor-apply sticker-apply',");
     expect(read('components/confirm-dialog.ts')).toContain("accept.className = opts.destructive === true ? 'btn btn--danger' : 'btn btn--primary';");
     expect(read('components/image-crop.ts')).toContain('class="btn btn--primary crop-editor-apply"');
-    expect(read('views/library/bean-form-sheet.ts')).toContain("discard.className = 'btn btn--danger';");
+    expect(read('views/library/bean-form-sheet.ts')).toContain("{ confirmLabel: t('lib_form_discard'), destructive: true }");
   });
 
   it('gives the library forms one primary each and the new bean form one of its two saves', () => {
