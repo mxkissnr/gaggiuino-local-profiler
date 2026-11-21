@@ -242,7 +242,7 @@ describe('phase bar from the reference shot (#2153)', () => {
 
 describe('next shot rows (#2153)', () => {
   it('shows the draft as the rows\' values', () => {
-    S.coffeeLibrary = { beans: [], grinders: [], baskets: [{ id: 2, name: '18 g VST' }], puckScreens: [], recipes: [] } as unknown as typeof S.coffeeLibrary;
+    S.coffeeLibrary = { beans: [], grinders: [], baskets: [{ id: 2, name: '18 g VST' }], puckScreens: [], recipes: [] };
     live.renderLiveSetupSummary({ coffee: 'Guji Hambela', grinder: 'Niche Zero', grindSetting: '13', dose: 18, basketId: 2 });
     expect(el('liveSetupBean').textContent).toBe('Guji Hambela');
     expect(el('liveSetupGrinder').textContent).toBe('Niche Zero · 13');
@@ -254,7 +254,7 @@ describe('next shot rows (#2153)', () => {
   });
 
   it('shows a dash for an empty draft and the recipe row once the library has recipes', () => {
-    S.coffeeLibrary = { beans: [], grinders: [], recipes: [{ id: 5, name: 'Morning' }] } as unknown as typeof S.coffeeLibrary;
+    S.coffeeLibrary = { beans: [], grinders: [], recipes: [{ id: 5, name: 'Morning' }] };
     live.renderLiveSetupSummary({ recipeId: 5 });
     expect(el('liveSetupBean').textContent).toBe('–');
     expect(el('liveSetupGrinder').textContent).toBe('–');
