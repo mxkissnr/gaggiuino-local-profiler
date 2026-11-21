@@ -653,6 +653,19 @@ describe('openStickerEditor overlay', () => {
     expect(resetCutoutMock).toHaveBeenCalledTimes(1);
   });
 
+  it('puts the close and the title in the shared sheet header bar (#2141)', async () => {
+    const { overlay, promise } = await openReady();
+    const bar = overlay.children[0]?.children[0];
+
+    expect(bar?.className).toBe('lib-sheet-bar');
+    expect(bar?.children.map((child) => child.className)).toEqual(['lib-sheet-close sticker-cancel', 'lib-sheet-bar-title']);
+    expect(bar?.children[0]?.getAttribute('aria-label')).toBe('Close');
+    expect(bar?.children[1]?.textContent).toBe('Cut out as sticker');
+
+    node(overlay, '.sticker-cancel').click();
+    await expect(promise).resolves.toBeNull();
+  });
+
   it('resolves with a PNG blob when Apply is pressed', async () => {
     const { overlay, promise } = await openReady();
 
@@ -680,7 +693,7 @@ describe('openStickerEditor overlay', () => {
     expect(bar.style.display).toBe('none');
   });
 
-  it('shows the failure line and only Close when the model fails', async () => {
+  it('shows the failure line and only the header close when the model fails (#2141)', async () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     autoCutoutMock.mockReset();
     autoCutoutMock.mockRejectedValue(new Error('model boom'));
@@ -693,7 +706,11 @@ describe('openStickerEditor overlay', () => {
       expect(overlay?.querySelector('.sticker-failed')?.textContent)
         .toBe('This photo would not peel. You can still use it as it is.');
     });
-    const close = overlay?.querySelector('.sticker-close');
+    // #2141: the header close is the one way out; the action row with Apply
+    // is hidden and there is no second Close button.
+    expect(overlay?.querySelector('.crop-editor-actions')?.style.display).toBe('none');
+    expect(overlay?.querySelector('.sticker-close')).toBeNull();
+    const close = overlay?.querySelector('.sticker-cancel');
     if (!close) throw new Error('close button not found');
     expect(close.style.display).not.toBe('none');
     expect(errorSpy).toHaveBeenCalled();

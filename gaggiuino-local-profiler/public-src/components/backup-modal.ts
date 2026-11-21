@@ -112,6 +112,7 @@ interface BackupEls {
     progressLabel: HTMLElement;
     confirmBtn: HTMLButtonElement;
     cancelBtn: HTMLButtonElement;
+    closeBtn: HTMLButtonElement;
 }
 
 function els(): BackupEls {
@@ -133,13 +134,14 @@ function els(): BackupEls {
         progressLabel: document.getElementById('backupModalProgressLabel') as HTMLElement,
         confirmBtn:   document.getElementById('backupModalConfirmBtn') as HTMLButtonElement,
         cancelBtn:    document.getElementById('backupModalCancelBtn') as HTMLButtonElement,
+        closeBtn:     document.getElementById('backupModalCloseBtn') as HTMLButtonElement,
     };
 }
 
 // Progress row (#960). A null `pct` means "size unknown" — an indeterminate
 // bar (when no X-GLP-Backup-Estimate header is sent; or the server-side
-// restore phase after the upload bytes are all sent). Both the confirm and
-// the cancel button are disabled for the whole transfer (setBusy) so an
+// restore phase after the upload bytes are all sent). The confirm, the cancel
+// and the header close button are disabled for the whole transfer (setBusy) so an
 // in-flight stream/XHR is never orphaned — there is no abort path.
 function showProgress(labelText: string, pct: number | null): void {
     const { progress, progressFill, progressLabel } = els();
@@ -162,9 +164,10 @@ function hideProgress(): void {
 }
 
 function setBusy(on: boolean): void {
-    const { confirmBtn, cancelBtn } = els();
+    const { confirmBtn, cancelBtn, closeBtn } = els();
     confirmBtn.disabled = on;
     cancelBtn.disabled = on;
+    closeBtn.disabled = on;
 }
 
 // Clamped whole-percent for a determinate bar — never shows 100% before the
@@ -301,6 +304,8 @@ export function openBackupExportModal(): void {
 
     els().secretsCb.onchange = () => { passRow.style.display = els().secretsCb.checked ? '' : 'none'; passConfirmRow.style.display = els().secretsCb.checked ? '' : 'none'; };
     cancelBtn.onclick = closeBackupModal;
+    // #2141: the header close is the same answer as Cancel.
+    els().closeBtn.onclick = cancelBtn.onclick;
     confirmBtn.onclick = async () => {
         const sections = checkedSections();
         if (!sections.length) { setError(t('backup_error_no_sections')); return; }
@@ -427,6 +432,8 @@ export async function openBackupRestoreModal(input: HTMLInputElement): Promise<v
     els().secretsCb.onchange = () => { passRow.style.display = els().secretsCb.checked ? '' : 'none'; scheduleRestorePreview(); };
     els().passInput.oninput = scheduleRestorePreview;
     cancelBtn.onclick = () => { input.value = ''; closeBackupModal(); };
+    // #2141: the header close is the same answer as Cancel.
+    els().closeBtn.onclick = cancelBtn.onclick;
     confirmBtn.onclick = async () => {
         const sections = checkedSections();
         if (!sections.length) { setError(t('backup_error_no_sections')); return; }
