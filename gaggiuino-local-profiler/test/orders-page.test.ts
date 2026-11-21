@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import type { KioskKey, MenuItem, MilkStock, NotifyService, Order, OrderStats, OrdersSettings, QueueEta } from '../public-src/api/types.js';
+import type { KioskKey, MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats, OrdersSettings, QueueEta } from '../public-src/api/types.js';
 
 const g = globalThis as unknown as Record<string, unknown>;
 
