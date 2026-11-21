@@ -58,7 +58,7 @@ function shot(o: ShotOpts): Shot {
 }
 
 function bean(id: number, over: Record<string, unknown> = {}): Bean {
-  return { id, name: `Bean ${id}`, bags: [], ...over };
+  return { id, name: `Bean ${id}`, bags: [], ...over } as unknown as Bean;
 }
 
 function statsWith(over: Partial<CompareStats>): CompareStats {
