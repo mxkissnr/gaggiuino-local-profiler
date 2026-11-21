@@ -2012,12 +2012,8 @@
         .lib-form-hint-staged { color: var(--ok); }
 
         .orders-milk-section { margin-top: var(--sp-4); }
-        .orders-milk-row { display:flex; align-items:center; gap: var(--sp-2); padding: var(--sp-1) 0; border-bottom:1px solid var(--gray-800); font-size: var(--fs-1); }
-        .orders-milk-emoji { font-size: var(--fs-3); }
-        .orders-milk-name { flex:1; color:var(--gray-200); }
-        .orders-menu-milk-row { display:flex; align-items:center; gap: var(--sp-2); font-size: var(--fs-1); color:var(--gray-500); }
-        .orders-menu-milk-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; width:60px; }
-        .orders-menu-milk-input:focus { border-color:var(--gray-600); }
+        .orders-menu-milk-row { display:flex; align-items:center; gap: var(--sp-2); }
+        .orders-menu-milk-input { width: 88px; }
 
         /* ── Scan modal ── */
         #scanModal { display:none; position:fixed; inset:0; z-index: var(--z-modal); background:color-mix(in srgb, var(--scrim) 85%, transparent); flex-direction:column; align-items:center; justify-content:center; gap: var(--sp-4); padding: var(--sp-5); }
@@ -3206,16 +3202,6 @@
         .order-eta-picker { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-2); }
         .order-eta-custom { width: 72px; }
         @media (max-width: 480px) { #orders-pending-list .order-row-actions { flex-basis:100%; justify-content:flex-end; } }
-        .orders-stats-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap: var(--sp-3); margin-bottom: var(--sp-4); }
-        .orders-stats-card { background:var(--gray-800); border-radius:var(--radius); padding: var(--sp-3) var(--sp-4); display:flex; flex-direction:column; gap: var(--sp-1); }
-        .orders-stats-name { font-size: var(--fs-1); font-weight:700; color:var(--gray-200); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-        .orders-stats-row  { font-size: var(--fs-1); color:var(--gray-500); display:flex; justify-content:space-between; gap: var(--sp-2); }
-        .orders-stats-val  { color:var(--gray-400); font-weight:600; }
-        .orders-stats-global { display:flex; gap: var(--sp-5); flex-wrap:wrap; margin-bottom: var(--sp-3); padding-bottom: var(--sp-3); border-bottom:1px solid var(--gray-800); }
-        .orders-stats-global-item { display:flex; flex-direction:column; gap: 2px; }
-        .orders-stats-global-label { font-size: var(--fs-1); color:var(--gray-600); }
-        .orders-stats-global-val   { font-size: var(--fs-3); font-weight:700; color:var(--gray-200); }
-        .orders-stats-empty { color: var(--gray-600); font-size: var(--fs-1); padding: var(--sp-2) 0; }
         .toggle-switch { position:relative; display:inline-block; width:42px; height:24px; flex-shrink:0; }
         .toggle-switch input { opacity:0; width:0; height:0; }
         .toggle-track { position:absolute; inset:0; background:var(--gray-700); border-radius:var(--radius); cursor:pointer; transition:background .2s; }
@@ -3225,39 +3211,25 @@
         .toggle-track:before { content:''; position:absolute; width:18px; height:18px; left:3px; top:3px; background:var(--paper); border-radius:50%; transition:transform .2s; }
         .toggle-switch input:checked + .toggle-track { background:var(--ok); }
         .toggle-switch input:checked + .toggle-track:before { transform:translateX(18px); }
-        .orders-menu-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
-        .orders-menu-item { display:flex; flex-direction:column; gap: var(--sp-1); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
+        .orders-menu-item { flex-direction:column; align-items:stretch; gap: var(--sp-2); }
         .orders-menu-item-top { display:flex; align-items:center; gap: var(--sp-3); }
-        .orders-menu-item-name { flex:1; font-size: var(--fs-2); color:var(--gray-200); }
-        .orders-menu-del { background:none; border:none; color:var(--gray-600); font-size: var(--fs-3); cursor:pointer; padding: var(--sp-1) var(--sp-2); transition:color .15s; }
-        .orders-menu-del:hover { color:var(--err); }
+        .orders-menu-item-name { flex:1; min-width:0; }
         .orders-menu-variants { display:flex; flex-wrap:wrap; gap: var(--sp-1); align-items:center; }
         .orders-menu-variant-chip { --input-chip-c: var(--gray-500); --input-chip-ink: var(--gray-300); }
-        .orders-menu-variant-del { background:none; border:none; color:var(--gray-600); cursor:pointer; font-size: var(--fs-1); padding: 0; line-height:1; transition:color .15s; }
-        .orders-menu-variant-del:hover { color:var(--err); }
-        .orders-menu-variant-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; width:100px; }
-        .orders-menu-variant-input:focus { border-color:var(--gray-600); }
-        .orders-use-beans-note { font-size: var(--fs-1); color:var(--gray-500); font-style:italic; display:inline-flex; align-items:center; gap: var(--sp-1); }
+        .orders-menu-variant-input { width: 120px; }
+        .orders-use-beans-note { display:inline-flex; align-items:center; gap: var(--sp-1); }
 
         .ann-ordered-by { display:flex; flex-direction:column; gap: 2px; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); background:color-mix(in srgb, var(--paper) 3%, transparent); border:1px solid var(--gray-800); border-radius:var(--radius); }
         .ann-ordered-by-label { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); display:inline-flex; align-items:center; gap: var(--sp-1); }
         .ann-ordered-by-val { font-size: var(--fs-1); color:var(--gray-200); }
         .orders-menu-add-row { display:flex; gap: var(--sp-2); align-items:center; flex-wrap:wrap; }
-        .orders-menu-input { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); outline:none; }
-        .orders-menu-input:focus { border-color:var(--gray-600); }
-        .orders-menu-input.emoji { width:56px; text-align:center; }
-        .orders-notify-hint { font-size: var(--fs-1); color:var(--gray-500); margin: 0 0 var(--sp-3); }
-        .orders-notify-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-4); }
-        .orders-notify-row { display:flex; align-items:center; gap: var(--sp-3); padding: var(--sp-2) 0; border-bottom:1px solid var(--gray-800); }
-        .orders-notify-customer { flex:1; font-size: var(--fs-2); color:var(--gray-200); min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-        .orders-notify-select { background:var(--gray-800); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); outline:none; cursor:pointer; }
-        .orders-notify-select:focus { border-color:var(--gray-600); }
+        .orders-menu-emoji { width: 56px; text-align: center; }
+        .orders-menu-name, .orders-kiosk-link { flex:1; min-width:0; }
         .orders-notify-actions { display:flex; justify-content:flex-end; }
-        .orders-broadcast-section { margin-bottom: var(--sp-4); padding-bottom: var(--sp-4); border-bottom:1px solid var(--gray-800); }
+        .orders-broadcast-section { display:flex; flex-direction:column; gap: var(--sp-2); }
         .orders-broadcast-list { display:flex; flex-direction:column; gap: var(--sp-2); margin-bottom: var(--sp-3); }
         .orders-broadcast-row { display:flex; align-items:center; gap: var(--sp-2); }
         .orders-broadcast-row label { font-size: var(--fs-2); color:var(--gray-200); cursor:pointer; }
-        .orders-broadcast-empty { font-size: var(--fs-1); color:var(--gray-600); margin: 0 0 var(--sp-3); }
 
         /* ── Shot-count header (#823: flattened from a mechanical split-flap
            odometer to plain text, matching the redesign prototype's literal

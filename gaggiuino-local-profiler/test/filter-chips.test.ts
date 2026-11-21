@@ -96,6 +96,20 @@ const RETIRED_2120 = [
 // them again.
 const RETIRED_2141 = ['crop-editor-title', 'sticker-close'] as const;
 
+// Classes retired by #2148: the Orders page uses grouped rows and the shared
+// buttons, chips, badges and inputs; its page classes only lay out. No rule,
+// markup or code may use them again.
+const RETIRED_2148 = [
+  'order-card', 'order-hist-del', 'order-shot-link', 'order-actions', 'order-queue-hint',
+  'order-eta-suggest', 'order-decline-input', 'orders-empty', 'orders-toggle-row',
+  'orders-toggle-state', 'orders-queue-banner', 'orders-machine-off', 'orders-menu-toggle',
+  'orders-menu-section', 'orders-columns', 'orders-history-header', 'orders-section',
+  'orders-menu-del', 'orders-menu-input', 'orders-notify-select', 'orders-notify-row',
+  'orders-notify-hint', 'orders-notify-customer', 'orders-notify-list', 'orders-stats-card',
+  'orders-stats-grid', 'orders-milk-row', 'orders-milk-emoji', 'orders-milk-name',
+  'orders-broadcast-empty',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -156,7 +170,7 @@ describe('shared filter chips (#2093)', () => {
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120, ...RETIRED_2141]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120, ...RETIRED_2141, ...RETIRED_2148]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
