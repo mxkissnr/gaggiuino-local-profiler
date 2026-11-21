@@ -182,6 +182,7 @@ interface StateLike {
 interface LibraryModule {
   openBeanSheet: (id: number) => void;
   openBeanForm: (bean?: unknown) => void;
+  saveBeanAddBag: () => Promise<void>;
 }
 
 function count(haystack: string, needle: string): number {
@@ -322,11 +323,10 @@ describe('detail sheet header bar (#1489)', () => {
   });
 });
 
-describe('bean form sheet header bar save (#1489)', () => {
+describe('bean form sheet saves (#1489, #2135)', () => {
   let doc: Doc;
   let S: StateLike;
   let library: LibraryModule;
-  let t: (key: string) => string;
 
   function setupHome(): void {
     const home = doc.createElement();
@@ -351,27 +351,21 @@ describe('bean form sheet header bar save (#1489)', () => {
     S = await importState();
     S.beanEditId = null;
     S.coffeeLibrary = { beans: [], recipes: [], grinders: [] };
-    ({ t } = (await import('../public-src/i18n.js')) as unknown as { t: (key: string) => string });
     library = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
   });
 
-  it('bar Save runs the same submit path as the form save button', () => {
+  it('creating shows the two form saves and no bar Save (#2135)', () => {
     setupHome();
     library.openBeanForm();
 
-    const save = doc.body.querySelector('#beanFormSheet')?.querySelector('.lib-sheet-save') ?? null;
-    expect(save).not.toBeNull();
-    // The bar reuses the form's save label.
-    expect(save?.getAttribute('aria-label')).toBe(t('lib_save'));
-
-    // An empty name is create mode's first validation step: the shared submit
-    // handler bails out and focuses the name field. Clearing the focus first
-    // makes that the observable proof the bar wired to that handler.
-    const name = doc.getElementById('beanFormName')!;
-    name.value = '';
-    doc.activeElement = null;
-    save!.dispatch('click');
-    expect(doc.activeElement).toBe(name);
+    const host = doc.body.querySelector('#beanFormSheet');
+    expect(host).not.toBeNull();
+    expect(host!.querySelector('.lib-sheet-save')).toBeNull();
+    // The form's row is the one way to save: two different actions, while
+    // the plain Save stays hidden.
+    expect(doc.getElementById('saveBeanNoBagBtn')!.style.display).toBe('');
+    expect(doc.getElementById('saveBeanAddBagBtn')!.style.display).toBe('');
+    expect(doc.getElementById('saveBeanBtn')!.style.display).toBe('none');
   });
 
   it('keeps the create-mode save choices reachable', () => {
@@ -387,7 +381,7 @@ describe('bean form sheet header bar save (#1489)', () => {
     expect(doc.getElementById('saveBeanAddBagBtn')!.style.display).not.toBe('none');
   });
 
-  it('bar Save asks for the new bag with the roast date filled in (#1933)', async () => {
+  it('"Save and add bag" asks for the new bag with the roast date filled in (#1933)', async () => {
     setupHome();
     const fetchMock = vi.fn(() => Promise.resolve(new Response(
       JSON.stringify({ id: 7, name: 'New Bean', roaster: 'Kaffee Braun', bags: [], flavors: [] }),
@@ -399,17 +393,15 @@ describe('bean form sheet header bar save (#1489)', () => {
     doc.getElementById('beanFormName')!.value = 'New Bean';
     doc.getElementById('beanFormRoastDate')!.value = '2026-03-04';
 
-    const save = doc.body.querySelector('#beanFormSheet')?.querySelector('.lib-sheet-save') ?? null;
-    expect(save).not.toBeNull();
-    save!.dispatch('click');
+    void library.saveBeanAddBag();
 
     // The save resolves only through the stubbed fetch, so waiting for the
-    // painted bag form also proves the bar Save ran the create submit path.
+    // painted bag form also proves the create submit path ran.
     await vi.waitFor(() =>
       expect(doc.body.querySelector('#beanSheet')?.innerHTML).toContain('id="newBagForm7"'));
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
-    // Creating through the bar keeps the "add a bag" path: the fresh bean's
+    // "Save and add bag" keeps the "add a bag" path: the fresh bean's
     // sheet opens with its inline bag form, now holding the roast date.
     expect(doc.body.querySelector('#beanSheet')!.innerHTML).toContain('id="newBagForm7"');
     expect(doc.getElementById('newBagRoastDate7')!.value).toBe('2026-03-04');

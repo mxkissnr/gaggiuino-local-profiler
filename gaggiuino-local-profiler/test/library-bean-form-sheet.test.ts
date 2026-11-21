@@ -368,7 +368,7 @@ describe('bean form sheet (#1349)', () => {
     expect(sheet?.innerHTML).toContain('Yirgacheffe Chelelektu');
   });
 
-  it('creates through the bar Save and opens the new-bag form with the roast date', async () => {
+  it('"save and add bag" creates the bean and opens the new-bag form with the roast date', async () => {
     const { home, form } = setupHome();
     mocks.saveBean.mockResolvedValue({
       id: 7, name: 'New Bean', roaster: 'Kaffee Braun', bags: [], flavors: [],
@@ -379,11 +379,8 @@ describe('bean form sheet (#1349)', () => {
     doc.getElementById('beanFormName')!.value = 'New Bean';
     doc.getElementById('beanFormRoastDate')!.value = '2026-03-04';
 
-    // The form sheet header's Save is the create submit path: it saves the
-    // bean and asks for its bag straight away (#1933).
-    const saveBtn = find('lib-sheet-save');
-    expect(saveBtn).not.toBeNull();
-    saveBtn!.dispatch('click');
+    // "Save and add bag" saves the bean and asks for its bag straight away (#1933).
+    void library.saveBeanAddBag();
 
     await vi.waitFor(() => expect(mocks.saveBean).toHaveBeenCalledTimes(1));
     await vi.waitFor(() => expect(form.parentNode).toBe(home));
@@ -688,7 +685,6 @@ describe('rejected save shows an error (#1761)', () => {
   const saveButtonIds = ['saveBeanBtn', 'saveBeanNoBagBtn', 'saveBeanAddBagBtn'];
 
   function expectSaveButtonsEnabled(): void {
-    expect(find('lib-sheet-save')?.disabled).toBe(false);
     for (const id of saveButtonIds) {
       expect(doc.getElementById(id)?.disabled).toBe(false);
     }
@@ -700,7 +696,7 @@ describe('rejected save shows an error (#1761)', () => {
 
     library.openBeanForm();
     doc.getElementById('beanFormName')!.value = 'Rejected Bean';
-    find('lib-sheet-save')!.dispatch('click');
+    void library.saveBeanAddBag();
 
     await vi.waitFor(() => expect(showToast).toHaveBeenCalledTimes(1));
 
@@ -719,7 +715,7 @@ describe('rejected save shows an error (#1761)', () => {
 
     library.openBeanForm(bean);
     doc.getElementById('beanFormName')!.value = 'Renamed';
-    find('lib-sheet-save')!.dispatch('click');
+    void library.saveBean();
 
     await vi.waitFor(() => expect(showToast).toHaveBeenCalledTimes(1));
 
@@ -836,7 +832,7 @@ describe('roast level and best for use (#1977)', () => {
 });
 
 // #2098: the sheet bar carries the lasting autosave state while editing, in
-// the slot the bar's own Save leaves free.
+// the bar's action slot.
 describe('bean sheet autosave state (#2098)', () => {
   function formWithActions(): FakeElement {
     const { form } = setupHome();
@@ -847,16 +843,26 @@ describe('bean sheet autosave state (#2098)', () => {
     return form;
   }
 
-  it('editing hides the bar Save, creating keeps it', () => {
+  it('the bar has no Save, neither when editing nor when creating (#2135)', () => {
     setupHome();
     const bean = addBean();
 
     library.openBeanForm(bean);
-    expect(find('lib-sheet-save')!.style.display).toBe('none');
+    expect(find('lib-sheet-save')).toBeNull();
 
     library.closeBeanForm();
     library.openBeanForm();
-    expect(find('lib-sheet-save')!.style.display).toBe('');
+    expect(find('lib-sheet-save')).toBeNull();
+  });
+
+  it('editing still shows no save button in the form either (#2135)', () => {
+    setupHome();
+    library.openBeanForm(addBean());
+
+    expect(find('lib-form-sheet')?.classList.contains('is-editing')).toBe(true);
+    for (const id of ['saveBeanBtn', 'saveBeanNoBagBtn', 'saveBeanAddBagBtn']) {
+      expect(doc.getElementById(id)?.style.display, id).toBe('none');
+    }
   });
 
   it('a committed change shows a lasting Saved in the sheet bar', async () => {
