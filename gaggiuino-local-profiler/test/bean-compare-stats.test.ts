@@ -54,11 +54,11 @@ function shot(o: ShotOpts): Shot {
   if (o.rating) annotation.rating = o.rating;
   if (o.mix) annotation.beanMix = [{ beanId: o.bean, coffee: 'Part A', grams: 9 }, { beanId: 99, coffee: 'Part B', grams: 9 }];
   // weight is the final yield in tenths of a gram, duration in tenths of a second.
-  return { id, timestamp: id, score: o.score === undefined ? 85 : o.score, duration: 280, weight: o.weight ?? 360, annotation } as unknown as Shot;
+  return { id, timestamp: id, score: o.score === undefined ? 85 : o.score, duration: 280, weight: o.weight ?? 360, annotation };
 }
 
 function bean(id: number, over: Record<string, unknown> = {}): Bean {
-  return { id, name: `Bean ${id}`, bags: [], ...over } as unknown as Bean;
+  return { id, name: `Bean ${id}`, bags: [], ...over };
 }
 
 function statsWith(over: Partial<CompareStats>): CompareStats {
