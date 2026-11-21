@@ -9,6 +9,12 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import type { MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats, OrdersSettings, QueueEta } from '../public-src/api/types.js';
 import type { KioskKey } from '../public-src/api/orders.js';
+import de from '../public-src/i18n/de.js';
+import en from '../public-src/i18n/en.js';
+import es from '../public-src/i18n/es.js';
+import fr from '../public-src/i18n/fr.js';
+import itLang from '../public-src/i18n/it.js';
+import nl from '../public-src/i18n/nl.js';
 
 const g = globalThis as unknown as Record<string, unknown>;
 
@@ -307,12 +313,35 @@ describe('verdict (#2148)', () => {
       order({ id: 'p2', status: 'pending' }),
       order({ id: 'a1', status: 'accepted', acceptedAt: now, eta: 5 }),
     ];
-    expect(orders.ordersVerdictText(list, null, {}, now).count).toBe(2);
+    expect(orders.ordersVerdictText(list, null, {}, [], now).count).toBe(2);
   });
 
-  it('says when the machine is off', () => {
-    expect(orders.ordersVerdictText([], null, { configured: true, state: false }, now).sub).toBe(t('orders_machine_off'));
-    expect(orders.ordersVerdictText([], null, { configured: true, state: true }, now).sub).toBe('');
+  it('says how long the queue takes', () => {
+    const list = [order({ id: 'p1', status: 'pending' })];
+    const queueEta: QueueEta = { acceptedRemaining: 0, pendingCount: 1, prepTime: 4, positions: {} };
+    expect(orders.ordersVerdictText(list, queueEta, {}, [], now).title).toBe(t('orders_verdict_eta', 4));
+    S.currentLang = 'en';
+    expect(orders.ordersVerdictText(list, queueEta, {}, [], now).title).toBe('Queue done in about 4 min');
+  });
+
+  it('says when there is nothing to make', () => {
+    const verdict = orders.ordersVerdictText([], null, {}, [], now);
+    expect(verdict.count).toBe(0);
+    expect(verdict.title).toBe(t('orders_verdict_idle'));
+  });
+
+  it('says whether the machine is on and how much milk is left', () => {
+    const milks: MilkStock[] = [
+      { id: 1, name: 'Oat', emoji: 'O', stockMl: 500, demand: 50, remaining: 450 },
+      { id: 2, name: 'Whole', emoji: 'W', stockMl: 0, demand: 0, remaining: 0 },
+    ];
+    expect(orders.ordersVerdictText([], null, { configured: true, state: true }, milks, now).sub)
+      .toBe(`${t('orders_machine_on')} · Oat 450 ml · Whole ${t('lib_milk_empty')}`);
+  });
+
+  it('says when the machine is off and leaves the line empty without a switch', () => {
+    expect(orders.ordersVerdictText([], null, { configured: true, state: false }, [], now).sub).toBe(t('orders_machine_off'));
+    expect(orders.ordersVerdictText([], null, {}, [], now).sub).toBe('');
   });
 
   it('writes the verdict into the page', () => {
@@ -320,8 +349,40 @@ describe('verdict (#2148)', () => {
     orders.renderOrdersVerdict({ count: 3, title: 'T', sub: '' });
 
     expect(els.ordersWaitingCount?.textContent).toBe('3');
+    expect(els.ordersWaitingLbl?.textContent).toBe(t('orders_verdict_waiting'));
     expect(els.ordersVerdictTitle?.textContent).toBe('T');
     expect(els.ordersVerdictSub?.hidden).toBe(true);
+  });
+});
+
+describe('Manage strings (#2148)', () => {
+  const now = new Date(2026, 10, 21, 12, 0, 0).getTime();
+
+  it('heads the group and names the kiosk row for both of its parts', () => {
+    const markup = orders.ordersManageHtml();
+    expect(markup).toContain('data-i18n="orders_manage"');
+    expect(markup).toContain('data-i18n="orders_manage_kiosk"');
+    expect(markup).toContain('id="ordersHistorySub"');
+    expect(orders.ORDERS_MANAGE_ROWS.find(r => r.id === 'kiosk')?.titleKey).toBe('orders_manage_kiosk');
+  });
+
+  it('counts the history of today and says when the last order finished', () => {
+    const history = [
+      order({ id: 'h1', status: 'done', completedAt: now - 120000 }),
+      order({ id: 'h2', status: 'done', completedAt: now - 60000 }),
+      order({ id: 'h3', status: 'done', completedAt: now - 2 * 86400000 }),
+    ];
+    expect(orders.ordersHistorySub(history, now)).toBe(`${t('orders_history_today', 2)} · ${t('orders_ago', 1)}`);
+    expect(orders.ordersHistorySub([], now)).toBe(t('orders_stats_no_data'));
+  });
+
+  it('removes the keys the page no longer uses', () => {
+    const dicts = [en, de, es, fr, itLang, nl] as Record<string, unknown>[];
+    for (const dict of dicts) {
+      for (const key of ['orders_accept_on', 'orders_accept_off', 'orders_queue_banner', 'orders_queue_pos']) {
+        expect(dict[key], key).toBeUndefined();
+      }
+    }
   });
 });
 

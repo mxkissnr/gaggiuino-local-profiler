@@ -174,12 +174,7 @@ export async function setOrdersEnabled(enabled: boolean): Promise<void> {
 
 export function _updateOrdersToggleUI(enabled: boolean): void {
   const toggle = document.getElementById('ordersEnabledToggle') as HTMLInputElement | null;
-  const label  = document.getElementById('ordersEnabledLabel');
   if (toggle) toggle.checked = enabled;
-  if (label) {
-    label.textContent = t(enabled ? 'orders_accept_on' : 'orders_accept_off');
-    label.className   = 'orders-toggle-state ' + (enabled ? 'on' : 'off');
-  }
 }
 
 export async function loadOrdersView(): Promise<void> {
@@ -215,7 +210,7 @@ export async function loadOrdersView(): Promise<void> {
     }
   } else {
     renderOrdersList(orders);
-    renderOrdersVerdict(ordersVerdictText(orders, queueEta, sw));
+    renderOrdersVerdict(ordersVerdictText(orders, queueEta, sw, milkStock));
   }
   renderOrdersMenuAdmin(menu);
   renderMilkStock(milkStock);
@@ -241,14 +236,18 @@ export async function loadOrdersView(): Promise<void> {
 // Tiered relative time (#320) — raw minutes was unreadable once an order
 // sat for hours/days (e.g. "Vor 3904 Min"): minutes under an hour, hours
 // under a day, days beyond that.
-export function _orderTimeAgo(ts: number): Html {
-  const min = Math.round((Date.now() - ts) / 60000);
-  if (min < 1) return tHtml('orders_just_now');
-  if (min < 60) return tHtml('orders_ago', min);
+export function _orderTimeAgoText(ts: number, now = Date.now()): string {
+  const min = Math.round((now - ts) / 60000);
+  if (min < 1) return t('orders_just_now');
+  if (min < 60) return t('orders_ago', min);
   const hours = Math.round(min / 60);
-  if (hours < 24) return tHtml('orders_ago_hours', hours);
+  if (hours < 24) return t('orders_ago_hours', hours);
   const days = Math.round(hours / 24);
-  return tHtml('orders_ago_days', days);
+  return t('orders_ago_days', days);
+}
+
+export function _orderTimeAgo(ts: number): Html {
+  return esc(_orderTimeAgoText(ts));
 }
 
 export function renderMilkStock(milks: MilkStock[]): void {
@@ -294,7 +293,8 @@ export function renderOrdersList(orders: Order[]): void {
   _lastOrders = orders;
   const pending  = orders.filter(o => o.status === 'pending');
   const accepted = orders.filter(o => o.status === 'accepted');
-  const history  = orders.filter(o => ['done', 'declined'].includes(o.status)).slice(0, 20);
+  const allHistory = orders.filter(o => ['done', 'declined'].includes(o.status));
+  const history  = allHistory.slice(0, 20);
 
   const pendingEl  = document.getElementById('orders-pending-list');
   const acceptedEl = document.getElementById('orders-accepted-list');
@@ -314,6 +314,8 @@ export function renderOrdersList(orders: Order[]): void {
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   (historyEl as HTMLElement).innerHTML = history.length ? joinHtml(history.map(o => renderOrderCard(o, 'history'))) : _emptyRow('orders_stats_no_data');
   if (clearHistBtn) clearHistBtn.style.display = history.length ? '' : 'none';
+  const historySub = document.getElementById('ordersHistorySub');
+  if (historySub) historySub.textContent = ordersHistorySub(allHistory);
 
   // Bind buttons after render
   pendingEl.querySelectorAll<HTMLElement>('[data-order-accept]').forEach(btn => {
@@ -367,13 +369,11 @@ export function renderOrderCard(o: Order, ctx: string, primary = false): Html {
   const customer = html`${tHtml('orders_for')} ${esc(o.customer)}${o.note ? html` · ${esc(o.note)}` : html``}`;
 
   if (ctx === 'pending') {
-    const queuePos = SO._ordersQueueEta?.positions?.[String(o.id)];
-    const queueHint = queuePos ? html` · ${tHtml('orders_queue_pos', queuePos.position, queuePos.suggestedEta)}` : html``;
     const isNew = (Date.now() - o.createdAt) < 60000;
     return html`<div class="settings-row settings-row-static order-row">
       <span class="settings-row-text">
         ${_orderTitle(o, isNew ? html` <span class="badge badge--err">${tHtml('orders_new_badge')}</span>` : html``)}
-        <span class="settings-row-sub">${customer} · ${_orderTimeAgo(o.createdAt)}${queueHint}</span>
+        <span class="settings-row-sub">${customer} · ${_orderTimeAgo(o.createdAt)}</span>
       </span>
       <span class="order-row-actions">
         <span class="order-accept" role="group">
@@ -804,28 +804,48 @@ export interface OrdersVerdict {
   sub: string;
 }
 
-// The verdict: the big number is the orders waiting; the sentence says how
-// long the queue takes, the sub line whether the machine is off.
-export function ordersVerdictText(orders: Order[], queueEta: QueueEta | null, sw: SwitchState, now = Date.now()): OrdersVerdict {
+// The verdict: the big number is the orders waiting, the sentence how long
+// the queue takes; the sub line says whether the machine is on and how much
+// milk is left. No "running low" mark: there is no threshold for it.
+export function ordersVerdictText(orders: Order[], queueEta: QueueEta | null, sw: SwitchState, milks: MilkStock[], now = Date.now()): OrdersVerdict {
   const waiting = orders.filter(o => o.status === 'pending').length;
   const active = waiting + orders.filter(o => o.status === 'accepted').length;
-  const minutes = ordersQueueMinutes(orders, queueEta, now);
-  // Interim texts until the verdict strings arrive (#2148 slice 3).
-  const title = active > 0 && minutes > 0 ? t('orders_queue_banner', active, minutes) : t('orders_empty');
-  const sub = sw.configured && sw.state === false ? t('orders_machine_off') : '';
+  const title = active === 0
+    ? t('orders_verdict_idle')
+    : t('orders_verdict_eta', Math.max(1, ordersQueueMinutes(orders, queueEta, now)));
+  const machine = !sw.configured ? ''
+    : sw.state === false ? t('orders_machine_off')
+    : sw.state === true ? t('orders_machine_on')
+    : '';
+  const milk = milks.map(m => `${m.name} ${(m.stockMl ?? 0) <= 0 ? t('lib_milk_empty') : `${m.remaining} ml`}`);
+  const sub = [machine, ...milk].filter(Boolean).join(' · ');
   return { count: waiting, title, sub };
 }
 
 export function renderOrdersVerdict(v: OrdersVerdict): void {
   const count = document.getElementById('ordersWaitingCount');
+  const lbl = document.getElementById('ordersWaitingLbl');
   const title = document.getElementById('ordersVerdictTitle');
   const sub = document.getElementById('ordersVerdictSub');
   if (count) count.textContent = String(v.count);
+  if (lbl) lbl.textContent = t('orders_verdict_waiting');
   if (title) title.textContent = v.title;
   if (sub) {
     sub.textContent = v.sub;
     sub.hidden = v.sub === '';
   }
+}
+
+// The History row's sub line: finished orders today and how long ago the
+// last one finished.
+export function ordersHistorySub(history: Order[], now = Date.now()): string {
+  if (!history.length) return t('orders_stats_no_data');
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const at = (o: Order): number => o.completedAt || o.createdAt;
+  const today = history.filter(o => at(o) >= start.getTime()).length;
+  const last = Math.max(...history.map(at));
+  return `${t('orders_history_today', today)} · ${_orderTimeAgoText(last, now)}`;
 }
 
 // The Manage group: each row opens its panel — static markup under
@@ -841,13 +861,14 @@ export const ORDERS_MANAGE_ROWS: readonly OrdersManageRow[] = [
   { id: 'history', titleKey: 'orders_history', panelId: 'ordersHistoryPanel' },
   { id: 'menu', titleKey: 'orders_menu_title', panelId: 'ordersMenuPanel' },
   { id: 'guests', titleKey: 'orders_stats_title', panelId: 'ordersGuestsPanel' },
-  { id: 'kiosk', titleKey: 'orders_kiosk_link_title', panelId: 'ordersKioskPanel' },
+  { id: 'kiosk', titleKey: 'orders_manage_kiosk', panelId: 'ordersKioskPanel' },
 ];
 
 // The data-i18n spans hold text only, so a language switch relabels them.
 export function ordersManageHtml(): Html {
-  return html`<div class="settings-group">${joinHtml(ORDERS_MANAGE_ROWS.map(row => html`<button type="button" class="settings-row" data-orders-manage="${esc(row.id)}" aria-haspopup="dialog">
-      <span class="settings-row-text"><span class="settings-row-title" data-i18n="${esc(row.titleKey)}">${tHtml(row.titleKey)}</span></span>
+  return html`<h2 class="section-title" data-i18n="orders_manage">${tHtml('orders_manage')}</h2>
+    <div class="settings-group">${joinHtml(ORDERS_MANAGE_ROWS.map(row => html`<button type="button" class="settings-row" data-orders-manage="${esc(row.id)}" aria-haspopup="dialog">
+      <span class="settings-row-text"><span class="settings-row-title" data-i18n="${esc(row.titleKey)}">${tHtml(row.titleKey)}</span>${row.id === 'history' ? html`<span class="settings-row-sub" id="ordersHistorySub"></span>` : html``}</span>
       <span class="settings-chev" aria-hidden="true"></span>
     </button>`))}</div>`;
 }
