@@ -201,10 +201,11 @@ describe('index.html i18n wiring', () => {
     const __dirname = dirname(fileURLToPath(import.meta.url));
     const html = readFileSync(join(__dirname, '../public-src/index.html'), 'utf8');
 
+    // Deliberate plan deviation (#2153 slice 2): the plan lists only index.html,
+    // style.css and the six dictionaries, but this guard pinned the old
+    // <h1 data-i18n="live_title"> title bar, which this slice deletes. Without
+    // the update the suite cannot go green; slice 3 can fold it into the page test.
     it('keeps the Live view title-less and wires the page-pattern keys (#2153)', () => {
-        // #2153: the Live view follows the Home Assistant page pattern, so it
-        // has no bare title bar; its section title, hint and reference chip are
-        // the localized pieces instead.
         expect(html).not.toMatch(/data-i18n="live_title"/);
         expect(html).toMatch(/<span data-i18n="live_setup_toggle">/);
         expect(html).toMatch(/<span class="section-title__count" data-i18n="live_setup_hint">/);
