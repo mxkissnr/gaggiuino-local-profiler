@@ -489,7 +489,6 @@
         <div class="settings-bar orders-bar">
             <h1 class="settings-bar-title" data-i18n="nav_orders">Bestellungen</h1>
             <label class="orders-accept-label" for="ordersEnabledToggle" data-i18n="orders_accept_toggle">Bestellungen annehmen</label>
-            <span id="ordersEnabledLabel">–</span>
             <label class="toggle-switch">
                 <input type="checkbox" id="ordersEnabledToggle">
                 <span class="toggle-track"></span>
@@ -523,7 +522,7 @@
         <!-- Manage panels: hidden here, shown while the detail sheet holds one (openOrdersManage) -->
         <div class="orders-panels" hidden>
             <div class="orders-panel" id="ordersHistoryPanel">
-                <div class="orders-history-list" id="orders-history-list"></div>
+                <div class="settings-group" id="orders-history-list"></div>
                 <button type="button" class="btn btn--danger" id="orders-clear-history" data-i18n="orders_clear_history" style="display:none">Verlauf löschen</button>
             </div>
             <div class="orders-panel" id="ordersMenuPanel">
