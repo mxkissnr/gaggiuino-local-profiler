@@ -7,7 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import type { KioskKey, MenuItem, MilkStock, NotifyMappingView, NotifyService, Order, OrderStats, OrdersSettings, QueueEta } from '../public-src/api/types.js';
+import type { KioskKey, MenuItem, MilkStock, NotifyService, Order, OrderStats, OrdersSettings, QueueEta } from '../public-src/api/types.js';
 
 const g = globalThis as unknown as Record<string, unknown>;
 
@@ -169,7 +169,7 @@ beforeEach(() => {
   api.getOrdersSettings.mockResolvedValue({ enabled: true });
   api.getOrdersStats.mockResolvedValue({ total: 0 } as unknown as OrderStats);
   api.getKioskKey.mockResolvedValue({ kioskKey: 'k3y' });
-  api.getNotifyMapping.mockResolvedValue({ mapping: {}, customers: {} } as unknown as NotifyMappingView);
+  api.getNotifyMapping.mockResolvedValue({ mapping: {}, customers: {} });
   api.getNotifyServices.mockResolvedValue([]);
   api.postOrderAccept.mockResolvedValue({ ok: true } as unknown as Response);
   api.getSwitch.mockResolvedValue({ json: () => Promise.resolve({}) } as unknown as Response);
