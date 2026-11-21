@@ -51,6 +51,11 @@ interface LiveMessage {
   machineReachable?: boolean | null;
   machineWarnings?: string[];
   machineUpdateAvailable?: boolean;
+  // #2139: the GaggiMate display's system state when it is not ready (''
+  // when ready, without a sys object and for Gaggiuino), and the controller
+  // error code for 'error' (0 = none).
+  machineSystemState?: string;
+  machineSystemErrorCode?: number;
   isSteaming?: boolean;
   isFlushing?: boolean;
   isDescaling?: boolean;
@@ -560,7 +565,9 @@ export function updatePreheatWidget(d: PreheatData): void {
   // A machine whose last live message reported it unreachable is hidden the same
   // way. The idle title is owned by the live-data handler (handleLiveData prefers
   // machine_standby and keeps its unreachable branch first); don't write it here.
-  if (d.standby || _lastLiveMsg?.machineReachable === false) {
+  // #2139: so is a display whose last live message reports a system state
+  // other than ready (handleLiveData re-applies this payload when it changes).
+  if (d.standby || _lastLiveMsg?.machineReachable === false || _lastLiveMsg?.machineSystemState) {
     readyBadge.style.display  = 'none';
     warmingWrap.style.display = 'none';
   } else if (d.ready) {
@@ -586,7 +593,7 @@ export function updatePreheatWidget(d: PreheatData): void {
   // owned by handleLiveData above.
   const idleEl = document.getElementById('live-idle');
   if (idleEl && idleEl.style.display !== 'none' && _lastLiveMsg?.machineReachable !== false) {
-    setLiveBadge(idlePhase());
+    setIdleBadge(idlePhase());
   }
 }
 
@@ -641,7 +648,28 @@ const LIVE_BADGE_VARIANTS: Record<string, string> = {
   flushing: 'badge--accent',
   descaling: 'badge--accent',
   warming: 'badge--accent',
+  // #2139: a display that is not ready warns; a controller error is an error.
+  'system-state': 'badge--warn',
+  'system-error': 'badge--err',
 };
+
+// #2139: the GaggiMate display's own system state (firmware v1.9.0+) while it
+// is reachable but not ready. The backend sends only these six states; a
+// controller error adds its code when the machine reports one.
+const MACHINE_SYSTEM_STATE_KEYS: Record<string, string> = {
+  starting: 'machine_system_starting',
+  waiting: 'machine_system_waiting',
+  updating: 'machine_system_updating',
+  autotuning: 'machine_system_autotuning',
+  mismatch: 'machine_system_mismatch',
+  error: 'machine_system_error',
+};
+
+export function machineSystemStateLabel(state: string, code?: number | null): string {
+  if (state === 'error' && code != null && code > 0) return t('machine_system_error_code', code);
+  const key = MACHINE_SYSTEM_STATE_KEYS[state];
+  return key ? t(key) : state;
+}
 
 export function setLiveBadge(state: string, detail = ''): void {
   const badge   = document.getElementById('live-status-badge') as HTMLElement;
@@ -667,6 +695,9 @@ export function setLiveBadge(state: string, detail = ''): void {
     // (no new translations -- the same keys the title already uses).
     standby:     t('machine_standby'),
     warming:     t('preheat_warming'),
+    // #2139: the caller passes the translated system state as detail.
+    'system-state': detail,
+    'system-error': detail,
     error:       detail || t('live_error_status'),
     idle:        t('live_ready_status'),
     unreachable: detail || t('live_unreachable_status')
@@ -718,11 +749,26 @@ export function handlePreheatUpdateEvent(payload: PreheatData): void {
 
 // #1541: one derivation of the machine's idle phase, shared by the idle title
 // and the status badge so the two can never disagree. Standby wins (a GaggiMate
-// in standby is off), then a preheat still counting down, else ready.
-function idlePhase(): 'standby' | 'warming' | 'ready' {
+// in standby is off), then a display that reports a system state other than
+// ready (#2139), then a preheat still counting down, else ready.
+type IdlePhase = 'standby' | 'system' | 'warming' | 'ready';
+function idlePhase(): IdlePhase {
   if (_lastPreheat?.standby) return 'standby';
+  if (_lastLiveMsg?.machineSystemState) return 'system';
   if (_lastPreheat && !_lastPreheat.ready && _lastPreheat.remaining > 0) return 'warming';
   return 'ready';
+}
+
+// #2139: sets the status badge for an idle phase. A display that is not ready
+// shows its own state, as a warning, or as an error for a controller error.
+function setIdleBadge(phase: IdlePhase): void {
+  if (phase !== 'system') {
+    setLiveBadge(phase);
+    return;
+  }
+  const systemState = _lastLiveMsg?.machineSystemState ?? '';
+  setLiveBadge(systemState === 'error' ? 'system-error' : 'system-state',
+    machineSystemStateLabel(systemState, _lastLiveMsg?.machineSystemErrorCode));
 }
 
 // #1613: the live-session transitions (reference-shot auto-apply at brew
@@ -803,6 +849,9 @@ export function handleLiveData(msg: LiveMessage): void {
   // machine renders identically to an idle-but-reachable one (state.liveAccum
   // is null in both cases) and the live tab keeps showing "Ready to brew"
   // indefinitely, which was the reported bug.
+  // #2139: the system state of the previous live message, read before
+  // syncMachineIcon replaces it, to notice when it changes.
+  const prevSystemState = _lastLiveMsg?.machineSystemState ?? '';
   syncMachineIcon(msg);   // #811
 
   if (msg.machineReachable === false) {
@@ -846,6 +895,11 @@ export function handleLiveData(msg: LiveMessage): void {
   }
   idleEl.classList.remove('unreachable');
   renderMachineControl(msg.machineControl);
+  // #2139: a display that is not ready hides the preheat badge and countdown
+  // (updatePreheatWidget reads the state off the last live message). When the
+  // state changes, re-apply the last preheat payload so they hide at once and
+  // come back as soon as the display is ready again.
+  if ((msg.machineSystemState ?? '') !== prevSystemState && _lastPreheat) updatePreheatWidget(_lastPreheat);
   // #811: "machine_ready" means REACHABLE, but it reads as "ready to brew" —
   // and while preheating it sat directly under a widget counting down "heating
   // ... 20 min", flatly contradicting it. The animated icon made that obvious
@@ -858,7 +912,10 @@ export function handleLiveData(msg: LiveMessage): void {
   const phase       = idlePhase();
   const neverPolled = msg.machineReachable == null;
   // #1498: a standby GaggiMate is off — say so instead of "warming"/"ready".
-  if (idleTitleEl) idleTitleEl.textContent = phase === 'standby' ? t('machine_standby') : neverPolled ? t('live_connecting') : phase === 'warming' ? t('preheat_warming') : t('machine_ready');
+  // #2139: a display that is not ready names its own state, after standby.
+  if (idleTitleEl) idleTitleEl.textContent = phase === 'standby' ? t('machine_standby')
+    : phase === 'system' ? machineSystemStateLabel(msg.machineSystemState ?? '', msg.machineSystemErrorCode)
+    : neverPolled ? t('live_connecting') : phase === 'warming' ? t('preheat_warming') : t('machine_ready');
   if (idleTextEl)  idleTextEl.textContent  = t('live_idle_text');
 
   // #902: idle stats row -- always kept current (not gated behind the true-
@@ -932,7 +989,7 @@ export function handleLiveData(msg: LiveMessage): void {
   if (!msg.isLive && times.length === 0) {
     // #1541: the badge follows the same standby/warming/ready phase as the
     // idle title above instead of always saying "Ready".
-    setLiveBadge(phase);
+    setIdleBadge(phase);
     metaEl.textContent = '–';
     contentEl.style.display = 'none';
     idleEl.style.display    = 'flex';
