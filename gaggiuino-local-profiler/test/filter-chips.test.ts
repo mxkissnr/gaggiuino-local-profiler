@@ -431,7 +431,8 @@ describe('remaining action buttons (#2112)', () => {
     expect(index).not.toContain('<button class="lib-scan-trigger"');
     expect(index.split('<button type="button" class="btn btn--tonal lib-add-trigger"').length - 1).toBe(7);
     expect(index.split('<button type="button" class="btn btn--quiet lib-scan-trigger"').length - 1).toBe(3);
-    expect(read('views/library/bean-form-sheet.ts')).toContain("save.className = 'btn btn--tonal lib-sheet-save';");
+    // #2135: the bean form sheet's bar has no Save; the form's own row saves.
+    expect(read('views/library/bean-form-sheet.ts')).not.toContain('lib-sheet-save');
     expect(read('views/maintenance.ts').split('class="btn btn--primary lib-sheet-save"').length - 1).toBe(2);
 
     const css = read('style.css');

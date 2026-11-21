@@ -49,9 +49,6 @@ let _beanFormDirtyBound = false;
 // openBeanForm). saveBeanInternal compares against it so an edit that leaves
 // the field untouched sends no roastDate at all (#1606).
 let _beanFormPrefilledRoastDate = '';
-// The sheet header's Save button (built once with the persistent host); one of
-// the buttons disabled while a save is in flight.
-let _formSheetSaveBtn: HTMLButtonElement | null = null;
 // True from just before the save POST until it settles. A second Save tap
 // while the first is pending is ignored instead of creating the bean twice
 // (#1614 slice 4).
@@ -65,8 +62,8 @@ let _beanSaveQueued = false;
 // the returned reset runs on every open so the last entry's state never shows
 // on the next one (#2098).
 let _resetAutosave: (() => void) | null = null;
-// The sheet bar's action row, kept so the autosave status can sit next to the
-// bar's Save button: the form's own action row is hidden while editing.
+// The sheet bar's action row, kept so the autosave status can sit in the bar:
+// the form's own action row is hidden while editing.
 let _formSheetHeadActions: HTMLElement | null = null;
 
 function _rememberFormHome(): void {
@@ -137,21 +134,9 @@ function _beanFormSheetHost(): HTMLElement | null {
   head.appendChild(title);
   const headActions = document.createElement('div');
   headActions.className = 'lib-sheet-bar-actions';
-  // #1489: creating saves the bean and opens its new-bag form right away
-  // (#1933). Editing saves itself, so this button is hidden while editing
-  // (#1962, #2098). The create action row keeps "save without bag" available.
-  const save = document.createElement('button');
-  save.type = 'button';
-  // #2112: tonal, because the form's "Save and add bag" button is this view's
-  // one primary action and runs the same save.
-  save.className = 'btn btn--tonal lib-sheet-save';
-  save.setAttribute('aria-label', t('lib_save'));
-  save.textContent = t('lib_save');
-  save.setAttribute('data-i18n-aria-label', 'lib_save');
-  save.setAttribute('data-i18n', 'lib_save');
-  save.addEventListener('click', () => { void (S.beanEditId != null ? saveBean() : saveBeanAddBag()); });
-  headActions.appendChild(save);
-  _formSheetSaveBtn = save;
+  // The bar has no Save (#2135): editing saves itself and shows its saved
+  // state here (#1962, #2098); creating uses the form's own two saves,
+  // "save without bag" and "save and add bag", so the bar repeats neither.
   _formSheetHeadActions = headActions;
   head.appendChild(headActions);
   section.appendChild(head);
@@ -273,10 +258,8 @@ function _showBeanFormSheet(): void {
   }
   // #1489: hide the form's own action row only when editing; creating keeps it
   // so both "save without / with a bag" choices stay reachable. Editing saves
-  // itself, so the bar's Save is hidden too — the bar shows the saved state in
-  // its place (#2098).
+  // itself and the bar shows the saved state (#2098).
   _formSheetSection?.classList?.toggle('is-editing', isEdit);
-  if (_formSheetSaveBtn) _formSheetSaveBtn.style.display = isEdit ? 'none' : '';
   _hideFormConfirm();
   const form = document.getElementById('beanAddForm');
   if (form) {
@@ -489,10 +472,9 @@ export async function saveBeanNoBag(): Promise<void> { return saveBeanInternal(f
 export async function saveBeanAddBag(): Promise<void> { return saveBeanInternal(true); }
 
 // Enables/disables every Save control the bean form can be submitted with (the
-// sheet header's Save plus the create/edit action-row buttons) so a double tap
-// during an in-flight save is visibly a no-op (#1614 slice 4).
+// create/edit action-row buttons) so a double tap during an in-flight save is
+// visibly a no-op (#1614 slice 4).
 function _setBeanSaveButtonsDisabled(disabled: boolean): void {
-  if (_formSheetSaveBtn) _formSheetSaveBtn.disabled = disabled;
   for (const id of ['saveBeanBtn', 'saveBeanNoBagBtn', 'saveBeanAddBagBtn']) {
     const btn = document.getElementById(id) as HTMLButtonElement | null;
     if (btn) btn.disabled = disabled;
