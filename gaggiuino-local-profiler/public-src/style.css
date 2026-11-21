@@ -1966,10 +1966,14 @@
            "save without / with a bag" choices must stay reachable. The markup
            stays for other callers. */
         .lib-form-sheet.is-editing .lib-form-actions { display: none; }
-        .lib-form-confirm { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); margin-bottom: var(--sp-2); background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); }
-        .lib-form-confirm[hidden] { display: none; }
-        .lib-form-confirm-q { font-size: var(--fs-1); color: var(--gray-200); }
-        .lib-form-confirm-actions { display: flex; gap: var(--sp-2); }
+        /* #2144: creating saves only from that row, so it stays at the sheet's
+           bottom edge while the long form scrolls, like the edit form's saved
+           state (#2098). It stays in the flow, so the last field always ends
+           above it. The sheet hands its bottom padding (safe area included) to
+           the row, and scroll-padding keeps a field focused under the on-screen
+           keyboard from ending up behind the row. */
+        .lib-form-sheet:not(.is-editing) { padding-bottom: 0; scroll-padding-bottom: calc(var(--ctl-height) * 2 + env(safe-area-inset-bottom, 0px)); }
+        .lib-form-sheet .lib-form-actions { position: sticky; bottom: 0; z-index: var(--z-local-3); padding: var(--sp-2) 0 calc(var(--sp-2) + env(safe-area-inset-bottom, 0px)); background: var(--gray-900); border-top: 1px solid var(--gray-700); }
         @keyframes lib-shelf-drop { 0% { transform: translateY(-14px) scale(1.05); } 60% { transform: translateY(0) scale(.97); } 100% { transform: translateY(0) scale(1); } }
         @keyframes lib-icicle-fall { 0%, 86% { opacity:0; transform: translateY(0); } 90% { opacity:.9; } 100% { opacity:0; transform: translateY(26px); } }
         @keyframes lib-sheet-in { from { transform: translateY(100%); } to { transform: translateY(0); } }
