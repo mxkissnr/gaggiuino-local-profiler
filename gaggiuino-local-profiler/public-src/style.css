@@ -2662,9 +2662,11 @@
         .pe-preview canvas { width:100%; height:100%; }
         .pe-timeline, .pe-phase, .pe-recipe { display:flex; flex-direction:column; gap: var(--sp-2); min-width:0; }
         .phase-timeline { display:flex; align-items:stretch; gap: var(--sp-1); overflow-x:auto; }
-        .phase-timeline-item { flex: var(--phase-share, 1) 1 0; min-width:44px; min-height:56px; flex-direction:column; align-items:flex-start; justify-content:center; gap:0; overflow:hidden; }
+        .phase-timeline-item { flex: var(--phase-share, 1) 1 0; min-width:44px; min-height:56px; flex-direction:column; align-items:flex-start; justify-content:center; gap:0; overflow:hidden; container-type: inline-size; }
         .phase-timeline-name, .phase-timeline-sub { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
         .phase-timeline-sub { font-weight:400; font-variant-numeric: tabular-nums; }
+        .phase-timeline-num { display:none; }
+        @container (max-width: 80px) { .phase-timeline-num { display:block; } .phase-timeline-name { display:none; } }
         .phase-timeline-add { flex:0 0 auto; min-height:56px; }
         .phase-timeline-empty { flex:1 1 auto; align-self:center; }
         .pe-stops-summary { min-height:44px; align-items:center; cursor:pointer; list-style:none; }
