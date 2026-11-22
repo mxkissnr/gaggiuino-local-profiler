@@ -34,11 +34,10 @@ const sheet = vi.hoisted(() => ({
 vi.mock('../public-src/components/detail-sheet.js', () => sheet);
 
 // The annotation module runs the real autosave; the page module only needs
-// its flush, its busy flag and the shot defaults it prefills from.
+// its flush and its busy flag.
 const ann = vi.hoisted(() => ({
   flushAutoSave: vi.fn<() => void>(),
   annotationBusy: vi.fn<() => boolean>(() => false),
-  _applyShotDefaults: vi.fn<(a: unknown) => unknown>(a => a),
 }));
 vi.mock('../public-src/views/shots/annotation.js', () => ann);
 
@@ -72,8 +71,16 @@ function fakeEl(id: string): FakeEl {
   return el;
 }
 
+interface FieldEl {
+  hidden: boolean;
+  style: { display: string };
+  focus: ReturnType<typeof vi.fn>;
+  box: { scrollIntoView: ReturnType<typeof vi.fn> };
+  closest: ReturnType<typeof vi.fn>;
+}
+
 // A note field in the sheet: the page focuses it and centres its block.
-function fieldEl(hidden = false, display = ''): Record<string, unknown> {
+function fieldEl(hidden = false, display = ''): FieldEl {
   const box = { scrollIntoView: vi.fn() };
   return { hidden, style: { display }, focus: vi.fn(), box, closest: vi.fn(() => box) };
 }
@@ -194,11 +201,11 @@ describe('notes sheet at a field (#2164)', () => {
     page.openShotNotes('bean');
     expect(sheet.openDetailSheet).toHaveBeenCalledTimes(1);
     expect(lastSheet().title).toBe(t('shot_notes_all'));
+    expect(lastSheet().dialog).toBe(true);
     expect(bean.focus).toHaveBeenCalledWith({ preventScroll: true });
-    expect((bean.box as { scrollIntoView: ReturnType<typeof vi.fn> }).scrollIntoView)
-      .toHaveBeenCalledWith({ block: 'center' });
+    expect(bean.box.scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
     const open = sheet.openDetailSheet.mock.invocationCallOrder[0]!;
-    expect((bean.focus as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!).toBeGreaterThan(open);
+    expect(bean.focus.mock.invocationCallOrder[0]!).toBeGreaterThan(open);
   });
 
   it('opens at the grinder select when the library has grinders', () => {
@@ -211,6 +218,7 @@ describe('notes sheet at a field (#2164)', () => {
     S.primaryShotId = 1;
     page.openShotNotes('grinder');
     expect(grinder.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(grinder.box.scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
     expect(other.focus).not.toHaveBeenCalled();
   });
 
@@ -224,6 +232,7 @@ describe('notes sheet at a field (#2164)', () => {
     S.primaryShotId = 1;
     page.openShotNotes('grinder');
     expect(other.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(other.box.scrollIntoView).toHaveBeenCalledWith({ block: 'center' });
     expect(grinder.focus).not.toHaveBeenCalled();
   });
 
@@ -237,10 +246,11 @@ describe('notes sheet at a field (#2164)', () => {
     S.primaryShotId = 1;
     page.openShotNotes();
     expect(sheet.openDetailSheet).toHaveBeenCalledTimes(1);
+    expect(lastSheet().title).toBe(t('shot_notes_all'));
     expect(bean.focus).not.toHaveBeenCalled();
     expect(grinder.focus).not.toHaveBeenCalled();
-    expect((bean.box as { scrollIntoView: ReturnType<typeof vi.fn> }).scrollIntoView).not.toHaveBeenCalled();
-    expect((grinder.box as { scrollIntoView: ReturnType<typeof vi.fn> }).scrollIntoView).not.toHaveBeenCalled();
+    expect(bean.box.scrollIntoView).not.toHaveBeenCalled();
+    expect(grinder.box.scrollIntoView).not.toHaveBeenCalled();
   });
 
   it('opening at a field writes nothing', () => {
@@ -249,6 +259,7 @@ describe('notes sheet at a field (#2164)', () => {
     setShots([shot(1)]);
     S.primaryShotId = 1;
     page.openShotNotes('grinder');
+    expect(sheet.openDetailSheet).toHaveBeenCalledTimes(1);
     expect(ann.flushAutoSave).not.toHaveBeenCalled();
   });
 });
@@ -256,15 +267,18 @@ describe('notes sheet at a field (#2164)', () => {
 describe('Coffee rows (#2164)', () => {
   it('shows the saved label as it is', () => {
     expect(page.coffeeRowText('K6 · Grind 12', 'Niche')).toEqual({ text: 'K6 · Grind 12', prefilled: false });
+    expect(page.coffeeRowText('K6 · Grind 12', '')).toEqual({ text: 'K6 · Grind 12', prefilled: false });
   });
 
   it('shows the prefilled default, marked, instead of a dash', () => {
     expect(page.coffeeRowText(null, 'Niche')).toEqual({ text: 'Niche', prefilled: true });
     expect(page.coffeeRowText('', 'Guji')).toEqual({ text: 'Guji', prefilled: true });
+    expect(page.coffeeRowText('Huila', 'Guji')).toEqual({ text: 'Huila', prefilled: false });
   });
 
   it('shows a dash when nothing is saved or prefilled', () => {
     expect(page.coffeeRowText(null, '')).toEqual({ text: '–', prefilled: false });
+    expect(page.coffeeRowText('', '')).toEqual({ text: '–', prefilled: false });
   });
 
   it('mutes a default and shows its hint, and clears both for a saved value', () => {
@@ -277,6 +291,7 @@ describe('Coffee rows (#2164)', () => {
     expect(value.textContent).toBe('Guji');
     expect(value.className).toBe('settings-row-title settings-row-title--muted');
     expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toBe('');
     page.showCoffeeRow('beanVal', 'beanDefaultHint', 'Huila', 'Guji');
     expect(value.textContent).toBe('Huila');
     expect(value.className).toBe('settings-row-title');
@@ -286,6 +301,7 @@ describe('Coffee rows (#2164)', () => {
   it('the page feeds both rows from the same defaults as the notes sheet', () => {
     const src = read('views/shots/index.ts');
     expect(src).toContain('const prefill = _applyShotDefaults(ann);');
+    expect(src).toContain("import { renderAnnotationPanel, annotationBusy, _applyShotDefaults } from './annotation.js';");
     expect(src).toContain("showCoffeeRow('beanVal', 'beanDefaultHint', beanLabel(ann, true), beanLabel(prefill, true));");
     expect(src).toContain("showCoffeeRow('grinderVal', 'grinderDefaultHint', grinderLabel, prefill?.grinder || '');");
   });
@@ -484,6 +500,7 @@ describe('shot page markup (#2152)', () => {
     expect(coffee).toContain('data-shot-notes-open="bean"');
     expect(coffee).toContain('data-shot-notes-open="grinder"');
     expect(coffee).toContain('M6 12c0-4 3-7.5 7-7.5S19 8 19 12s-3.5 7-7.5 7A6.5 6.5 0 0 1 6 12z');
+    expect(count(coffee, 'M6 12c0-4 3-7.5 7-7.5')).toBe(1);
     expect(coffee).toContain('M12 6.5V3.5h5.5');
     expect(coffee).not.toContain('M17 8h1a3 3 0 0 1 0 6h-1');
     expect(coffee).not.toContain('M12 4v4M12 16v4');
@@ -497,6 +514,7 @@ describe('shot page markup (#2152)', () => {
     expect(count(indexHtml, 'id="beanDefaultHint"')).toBe(1);
     expect(count(indexHtml, 'id="grinderDefaultHint"')).toBe(1);
     expect(read('style.css')).toContain('.settings-row-title--muted { color: var(--gray-400); }');
+    expect(count(read('style.css'), '.settings-row-title--muted { color: var(--gray-400); }')).toBe(1);
   });
 
   it('shows nothing twice', () => {
