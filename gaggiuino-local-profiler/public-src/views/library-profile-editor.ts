@@ -190,7 +190,7 @@ export function openProfileForm(profile?: MachineProfile | null, beanId?: string
   renderProfilePreviewChart();
   // #2154: the name row sits at the bottom of the phone sheet now; start
   // at the top, on the sheet's close button.
-  (document.getElementById('closeProfileFormBtn') as HTMLElement | null)?.focus();
+  document.getElementById('closeProfileFormBtn')?.focus();
 }
 
 export function closeProfileForm(): void {
