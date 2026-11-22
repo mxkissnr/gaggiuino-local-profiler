@@ -7,6 +7,9 @@
 // orders page test).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ShotLike } from '../public-src/views/shots/utils.js';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import postcss from 'postcss';
 
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
@@ -317,5 +320,87 @@ describe('the shot the verdict compares against (#2152)', () => {
     const mix = { beanId: 1, coffee: 'Guji', beanMix: [{ beanId: 1, coffee: 'Guji', grams: 9 }, { beanId: 2, coffee: 'Santos', grams: 9 }] };
     const shots = [at(1, 100, { annotation: { beanId: 2, coffee: 'Santos' } }), at(2, 200, { annotation: mix })];
     expect(findPreviousComparableShot(shots, shots[1]!)).toEqual({ shot: shots[0], sameBean: false });
+  });
+});
+
+const SRC = join(import.meta.dirname, '..', 'public-src');
+const read = (rel: string): string => readFileSync(join(SRC, rel), 'utf8');
+const indexHtml = read('index.html');
+const between = (from: string, to: string): string => {
+  const start = indexHtml.indexOf(from);
+  const end = start === -1 ? -1 : indexHtml.indexOf(to, start);
+  return end === -1 ? '' : indexHtml.slice(start, end);
+};
+
+describe('shot page markup (#2152)', () => {
+  const bar = between('<div class="shot-bar">', '<div class="shot-layout">');
+  const layout = between('<div class="shot-layout">', '<div class="shot-notes-panels" hidden>');
+  const panel = between('<div class="shot-notes-panels" hidden>', '</div><!-- #shots-view -->');
+
+  it('opens with a top app bar: title, compare, share and the downloads in the overflow menu', () => {
+    expect(bar).toContain('<h1 id="topTitle" class="settings-bar-title">');
+    expect(bar).toContain('class="lib-sheet-iconbtn" id="shotCompareBtn"');
+    expect(bar).toContain('class="lib-sheet-iconbtn" id="shareCardBtn"');
+    const more = between('<details class="lib-sheet-more shot-more" id="shotMore">', '</details>');
+    for (const id of ['exportShotBtn', 'exportProfileBtn', 'exportAllCsvBtn']) {
+      expect(more, id).toContain(`class="lib-sheet-menu-item" id="${id}"`);
+    }
+  });
+
+  it('keeps the stars and the taste tag on the page and every other note field in the notes sheet', () => {
+    for (const id of ['starRating', 'tasteTagPillsContainer', 'quickCloneBtn', 'shotNotesOpen']) {
+      expect(layout, id).toContain(`id="${id}"`);
+      expect(panel, id).not.toContain(`id="${id}"`);
+    }
+    for (const id of ['annDrinkType', 'annCoffee', 'annBasket', 'annPuckScreen', 'annGrinder', 'annGrindSetting', 'annDose', 'annTds', 'annNotes', 'annPhotoPickBtn', 'autoSaveStatus']) {
+      expect(panel, id).toContain(`id="${id}"`);
+      expect(layout, id).not.toContain(`id="${id}"`);
+    }
+    expect(count(layout, 'data-shot-notes-open')).toBe(3);
+  });
+
+  it('heads Notes, Coffee and Process with the shared section title', () => {
+    expect(layout).toContain('<h2 class="section-title" data-i18n="ann_title">');
+    expect(layout).toContain('<h2 class="section-title" data-i18n="settings_group_coffee">');
+    expect(layout).toContain('<section class="shot-process" id="shotProcess"></section>');
+  });
+
+  it('shows nothing twice', () => {
+    for (const id of ['verdictRingVal', 'verdictDeltaChip', 'doseYieldVal', 'beanVal', 'grinderVal', 'orderedByInfo', 'shotHeroPhoto', 'freshnessBadge', 'grindAdviceComparative']) {
+      expect(count(indexHtml, `id="${id}"`), id).toBe(1);
+    }
+    expect(indexHtml).not.toContain('orderedByBadge');
+    expect(indexHtml).not.toContain('shotHeaderThumb');
+  });
+});
+
+describe('shot page wiring (#2152)', () => {
+  it('routes the compare picker and share rows through the click delegation', () => {
+    const src = read('boot/delegation.ts');
+    expect(src).toContain("case 'pick-compare-shot':  pickCompareShot(numId()); break;");
+    expect(src).toContain("case 'share-shot-card':    chooseShareFormat(el.dataset.format ?? 'square'); break;");
+    expect(src).not.toContain('toggle-comp-grind');
+  });
+
+  it('wires the bar buttons and the rows that open the notes', () => {
+    const src = read('boot/shot-detail.ts');
+    expect(src).toContain('onShotCompareClick(compareBtn)');
+    expect(src).toContain('openShotShare(shareBtn)');
+    expect(src).toContain("closest('[data-shot-notes-open]')) openShotNotes();");
+    expect(src).not.toContain('cardFmtMenu');
+  });
+});
+
+describe('shot page classes only lay out (#2152)', () => {
+  it('sets no colour, background, border, radius, padding or font on a shot page class', () => {
+    const LAYOUT = /^(?:--[\w-]+|display|flex(?:-[a-z]+)?|grid(?:-[a-z]+)*|gap|row-gap|column-gap|align-[a-z]+|justify-[a-z]+|place-[a-z]+|order|margin(?:-[a-z]+)*|(?:min-|max-)?(?:width|height)|position|top|right|bottom|left|inset|z-index|overflow(?:-[xy])?|white-space|text-overflow|text-align|cursor|container-type|list-style|transform)$/;
+    const found: string[] = [];
+    postcss.parse(read('style.css')).walkRules(rule => {
+      if (!/\.shot-(?:bar|layout|grid|verdict|figures|chart|side|similar|rating|taste|more)\b/.test(rule.selector)) return;
+      rule.walkDecls(decl => {
+        if (!LAYOUT.test(decl.prop)) found.push(`${rule.selector} { ${decl.prop} }`);
+      });
+    });
+    expect(found).toEqual([]);
   });
 });

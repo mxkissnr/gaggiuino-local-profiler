@@ -110,6 +110,18 @@ const RETIRED_2148 = [
   'orders-broadcast-empty',
 ] as const;
 
+// Classes and ids retired by #2152: the shot detail uses the top app bar,
+// the shared verdict, grouped rows and the detail sheet; its page classes
+// only lay out. No rule, markup or code may use them again.
+const RETIRED_2152 = [
+  'sprofiler-header', 'sph-title', 'sph-actions', 'shotHeaderZone', 'verdict-header',
+  'verdict-line', 'verdict-headline', 'verdict-subline', 'verdictSubline', 'verdict-score-num',
+  'process-zone', 'process-card', 'annotation-header', 'card-fmt-wrap', 'card-fmt-menu',
+  'card-fmt-opt', 'cardFmtWrap', 'cardFmtMenu', 'grind-comparative', 'comp-toggle',
+  'shot-header-thumb', 'shotHeaderThumb', 'ann-ordered-by', 'orderedByBadge', 'meta-stability',
+  'tempStability', 'channelingWarning', 'toggle-comp-grind',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -170,7 +182,7 @@ describe('shared filter chips (#2093)', () => {
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120, ...RETIRED_2141, ...RETIRED_2148]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120, ...RETIRED_2141, ...RETIRED_2148, ...RETIRED_2152]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -568,10 +580,9 @@ describe('form headings (#2120)', () => {
     expect(read('views/library/import.ts')).toContain('<div class="section-title">${esc(t(');
   });
 
-  it('keeps only layout in the step list head and the annotation row', () => {
+  it('keeps only layout in the step list head', () => {
     const root = postcss.parse(read('style.css'));
     expect(declsOf(rulesWith(root, '.lib-recipe-steps-section > .section-title'))).toEqual(['justify-content: space-between', 'align-items: center']);
-    expect(declsOf(rulesWith(root, '.annotation-header .section-title'))).toEqual(['margin-bottom: 0']);
   });
 });
 

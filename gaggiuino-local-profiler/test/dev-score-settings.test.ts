@@ -285,7 +285,7 @@ describe('blind-rating CSS and markup contract (#1922)', () => {
   it('style.css carries both blind-rating selectors', () => {
     const css = read('public-src/style.css');
     expect(css).toContain('body.glp-blind-rating .shot:not(:has(.stars)) .sidebar-score');
-    expect(css).toContain('body.glp-blind-rating:not(:has(#starRating .star.active)) #verdictHeader .verdict-line');
+    expect(css).toContain('body.glp-blind-rating:not(:has(#starRating .star.active)) #verdictHeader .analytics-verdict-head');
   });
 
   it('the sidebar row still emits the score pill and the rated-only stars', () => {
