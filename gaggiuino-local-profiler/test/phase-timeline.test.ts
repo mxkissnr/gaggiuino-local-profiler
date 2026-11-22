@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // #2154: the pieces both profile editors share. The i18n chain reads
 // localStorage/navigator at module load time.
@@ -73,6 +75,26 @@ describe('phase timeline (#2154)', () => {
     const markup = tl.phaseTimelineHtml([{ name: '<b>"x"</b>', seconds: 5 }], 0, OPTS);
     expect(markup).toContain('&lt;b&gt;&quot;x&quot;&lt;/b&gt;');
     expect(markup).not.toContain('<b>');
+  });
+
+  it('names every chip in full for tooltips and screen readers (#2163)', () => {
+    const markup = tl.phaseTimelineHtml([
+      { name: 'Ramp up', seconds: 4 }, { name: '', seconds: 12 },
+      { name: 'Brew', seconds: 0, sub: 'Skip' },
+    ], 0, OPTS);
+    expect(markup).toContain('title="1. Ramp up, 4 s" aria-label="1. Ramp up, 4 s"');
+    expect(markup).toContain('title="Phase 2, 12 s" aria-label="Phase 2, 12 s"');
+    expect(markup).toContain('title="3. Brew, Skip"');
+    expect(tl.phaseTimelineHtml([{ name: '"x"', seconds: 5 }], 0, OPTS)).toContain('title="1. &quot;x&quot;, 5 s"');
+  });
+
+  it('shows the phase number when the chip is too narrow for the name (#2163)', () => {
+    const markup = tl.phaseTimelineHtml([{ name: 'Ramp up', seconds: 4 }], 0, OPTS);
+    expect(markup).toContain('<span class="phase-timeline-num" aria-hidden="true">1</span><span class="phase-timeline-name">Ramp up</span>');
+    const css = readFileSync(join(import.meta.dirname, '..', 'public-src', 'style.css'), 'utf8');
+    expect(css).toContain('overflow:hidden; container-type: inline-size; }');
+    expect(css).toContain('.phase-timeline-num { display:none; }');
+    expect(css).toContain('@container (max-width: 80px) { .phase-timeline-num { display:block; } .phase-timeline-name { display:none; } }');
   });
 });
 

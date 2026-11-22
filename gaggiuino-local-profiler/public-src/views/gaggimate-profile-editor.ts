@@ -12,6 +12,7 @@ import type { MachineProfile } from '../api/types.js';
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { phasePlugin, buildGmPhaseRanges } from '../constants.js';
+import type { GmPhaseRange } from '../constants.js';
 import { bindPillSelects } from '../components/pill-select.js';
 import { markFieldInvalid } from '../components/field-error.js';
 import { loadMachineProfileList } from './library-profile-editor.js';
@@ -287,6 +288,23 @@ function _applyEasing(x: number, type: string | undefined): number {
   }
 }
 
+// #2163: the preview's time axis steps in whole seconds, at most 8 steps,
+// so Chart.js never falls back to a fractional spacing.
+const TIME_AXIS_STEPS = [5, 10, 15, 20, 30, 60, 120];
+export function gmTimeAxisStep(totalSeconds: number): number {
+  return TIME_AXIS_STEPS.find(s => totalSeconds / s <= 8) ?? 120;
+}
+// A tick label: whole seconds; the unit sits in the axis title.
+export function gmTimeTickLabel(value: number): string {
+  return String(Math.round(value));
+}
+// #2163: a profile whose pump sets a pressure or flow target is charted and
+// edited with targets: every Pro profile, and a standard profile as soon as
+// one phase has an object pump (GaggiMate runs it the same way).
+function _usesPumpTargets(p: GmProfile): boolean {
+  return p.type === 'pro' || (p.phases ?? []).some(ph => typeof ph.pump === 'object');
+}
+
 const CHART_POINT_INTERVAL = 0.1; // s — matches GaggiMate's ExtendedProfileChart
 
 // Port of GaggiMate's ExtendedProfileChart.jsx prepareData(). `target` on
@@ -343,24 +361,33 @@ function _preparePumpSeries(phases: GmPhase[], target: string): { x: number; y: 
   return data;
 }
 
-function _buildChartData() {
-  const phases = _profile?.phases || [];
+export interface GmChartData {
+  pressureData: { x: number; y: number; target: boolean }[];
+  flowData: { x: number; y: number; target: boolean }[];
+  powerData: { x: number; y: number }[];
+  gmPhases: GmPhaseRange[];
+  totalTime: number;
+  pumpChart: boolean;
+}
+
+export function buildGmChartData(profile: GmProfile | null): GmChartData | null {
+  const phases = profile?.phases || [];
   if (!phases.length) return null;
-  const isPro = _profile!.type === 'pro';
+  const pumpChart = _usesPumpTargets(profile!);
 
   const gmPhases = buildGmPhaseRanges(phases);
   const lastGmPhase = gmPhases.at(-1);
   const totalTime = lastGmPhase ? lastGmPhase.t1 : 0;
 
-  if (isPro) {
+  if (pumpChart) {
     const pressureData = _preparePumpSeries(phases, 'pressure');
     const flowData = _preparePumpSeries(phases, 'flow');
-    return { pressureData, flowData, powerData: [], gmPhases, totalTime };
+    return { pressureData, flowData, powerData: [], gmPhases, totalTime, pumpChart: true };
   }
 
-  // Standard: pump is a plain 0-100 power % (0 = off). GaggiMate itself
+  // Standard with numeric pumps only: a plain 0-100 power % (0 = off). GaggiMate itself
   // doesn't chart these — GLP shows a simple stepped power line instead.
-  const powerData = [];
+  const powerData: { x: number; y: number }[] = [];
   let running = 0, lastPct = 0;
   for (const ph of phases) {
     const pct = typeof ph.pump === 'number' ? ph.pump : 0;
@@ -370,7 +397,7 @@ function _buildChartData() {
   }
   if (powerData.length) powerData.push({ x: running, y: lastPct });
 
-  return { pressureData: [], flowData: [], powerData, gmPhases, totalTime };
+  return { pressureData: [], flowData: [], powerData, gmPhases, totalTime, pumpChart: false };
 }
 
 function _renderChart(): Html {
@@ -386,18 +413,17 @@ function _initChart(): void {
   if (!canvas) return;
   if (_chart) { _chart.destroy(); _chart = null; }
 
-  const d = _buildChartData();
+  const d = buildGmChartData(_profile);
   if (!d) return;
 
-  const { pressureData, flowData, powerData, gmPhases, totalTime } = d;
-  const isPro = _profile!.type === 'pro';
+  const { pressureData, flowData, powerData, gmPhases, totalTime, pumpChart } = d;
 
   // Dashed+dimmed where the point isn't the phase's controlled parameter.
   const dashed = (color: string | number[]) => (ctx: { p0: { raw: { target: boolean } } }): string | number[] | undefined =>
     (!ctx.p0.raw.target ? color : undefined);
 
   const datasets: Record<string, unknown>[] = [];
-  if (isPro) {
+  if (pumpChart) {
     datasets.push({
       label: t('gm_chart_pressure'),
       data: pressureData,
@@ -453,9 +479,9 @@ function _initChart(): void {
     text: 'rgba(180,180,180,0.85)',
   };
 
-  const yMax = isPro ? 12 : 100;
+  const yMax = pumpChart ? 12 : 100;
   const y1Max = 10;
-  const yTickCb = isPro ? (v: number): string => `${v}` : (v: number): string => `${v}%`;
+  const yTickCb = pumpChart ? (v: number): string => `${v}` : (v: number): string => `${v}%`;
 
   try {
     _chart = new Chart(canvas as HTMLCanvasElement, {
@@ -471,7 +497,7 @@ function _initChart(): void {
         plugins: {
           phases: { gaggimatePhases: gmPhases },
           legend: {
-            display: isPro,
+            display: pumpChart,
             position: 'bottom',
             labels: { color: C.text, font: { family: 'Figtree', size: 10 }, boxWidth: 10, padding: 6 },
           },
@@ -488,7 +514,8 @@ function _initChart(): void {
         scales: {
           x: {
             type: 'linear', min: 0, max: totalTime, clip: false,
-            ticks: { color: C.tick, font: { family: 'Figtree' }, stepSize: 5, callback: (v: number): string => `${v}s`, maxTicksLimit: 10 },
+            title: { display: true, text: t('profile_preview_x_axis'), color: C.tick, font: { family: 'Figtree' } },
+            ticks: { color: C.tick, font: { family: 'Figtree' }, stepSize: gmTimeAxisStep(totalTime), callback: (v: number): string => gmTimeTickLabel(v) },
             grid: { color: C.grid },
           },
           y: {
@@ -496,7 +523,7 @@ function _initChart(): void {
             ticks: { color: C.tick, maxTicksLimit: 6, callback: yTickCb },
             grid: { color: C.grid },
           },
-          ...(isPro ? {
+          ...(pumpChart ? {
             y1: {
               type: 'linear', position: 'right', min: 0, max: y1Max,
               ticks: { color: C.tick, maxTicksLimit: 6 },
@@ -584,8 +611,33 @@ function _renderInfo(): Html {
 
 // ── Standard profile phases ───────────────────────────────────────────────
 
+// The pressure and flow fields of a pump target; `prefix` names the view
+// ('std' or 'pro') in the ids and actions.
+function _pumpTargetFields(mode: string | undefined, pressure: number, flow: number, i: number, prefix: 'std' | 'pro'): Html {
+  return html`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+      <div class="lib-form-field">
+        <label for="gm-${esc(prefix)}-pressure-${esc(i)}">${mode === 'pressure' ? tHtml('gm_field_pressure_target') : tHtml('gm_field_pressure_max')} (bar)</label>
+        <input type="number" class="lib-input" value="${esc(pressure)}" min="0.1" max="20" step="0.01" id="gm-${esc(prefix)}-pressure-${esc(i)}"
+          data-action="gm-${esc(prefix)}-pressure" data-idx="${esc(i)}">
+      </div>
+      <div class="lib-form-field">
+        <label for="gm-${esc(prefix)}-flow-${esc(i)}">${mode === 'flow' ? tHtml('gm_field_flow_target') : tHtml('gm_field_flow_max')} (ml/s)</label>
+        <input type="number" class="lib-input" value="${esc(flow)}" min="0.1" max="20" step="0.01" id="gm-${esc(prefix)}-flow-${esc(i)}"
+          data-action="gm-${esc(prefix)}-flow" data-idx="${esc(i)}">
+      </div>
+    </div>`;
+}
+
 function _renderStandardPhase(ph: GmPhase, i: number): Html {
   const { mode, pumpPower } = _pumpMode(ph);
+  // #2163: a standard profile with pump targets (GaggiMate's Pressure/Flow
+  // modes) shows and edits them like GaggiMate's own standard form.
+  const withTargets = _usesPumpTargets(_profile!);
+  const pressure = typeof ph.pump === 'object' ? (ph.pump.pressure ?? 0) : 0;
+  const flow = typeof ph.pump === 'object' ? (ph.pump.flow ?? 0) : 0;
+  const pumpModes = [{ val: 'off', label: t('gm_pump_off') }, { val: 'power', label: t('gm_pump_power') }];
+  if (withTargets) pumpModes.push({ val: 'pressure', label: t('gm_pump_pressure') }, { val: 'flow', label: t('gm_pump_flow') });
   const volTarget = (ph.targets || []).find(tg => tg.type === 'volumetric');
   const volValue = volTarget?.value ?? 0;
 
@@ -605,7 +657,7 @@ function _renderStandardPhase(ph: GmPhase, i: number): Html {
       </div>
       <div class="lib-form-field">
         <label>${tHtml('gm_field_pump')}</label>
-        ${_toggleGroup('gm-std-pump-mode', [{ val: 'off', label: t('gm_pump_off') }, { val: 'power', label: t('gm_pump_power') }], mode, i)}
+        ${_toggleGroup('gm-std-pump-mode', pumpModes, mode, i)}
       </div>
       ${mode === 'power' ? html`
         <div class="lib-form-field" style="margin-top:.5rem">
@@ -613,6 +665,7 @@ function _renderStandardPhase(ph: GmPhase, i: number): Html {
           <input type="number" class="lib-input" value="${esc(pumpPower)}" min="0" max="100" step="1" id="gm-std-pump-power-${esc(i)}"
             data-action="gm-std-pump-power" data-idx="${esc(i)}">
         </div>` : html``}
+      ${(mode === 'pressure' || mode === 'flow') ? _pumpTargetFields(mode, pressure, flow, i, 'std') : html``}
       ${stopsFoldHtml(html`<div class="lib-form-field">
           <label for="gm-std-vol-${esc(i)}">${tHtml('gm_field_stop_weight')}</label>
           <input type="number" class="lib-input" value="${esc(volValue)}" min="0" max="2000" step="0.1" id="gm-std-vol-${esc(i)}"
@@ -689,19 +742,7 @@ function _renderProPhase(ph: GmPhase, i: number): Html {
             data-action="gm-pro-pump-power" data-idx="${esc(i)}">
         </div>` : html``}
 
-      ${(mode === 'pressure' || mode === 'flow') ? html`
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
-          <div class="lib-form-field">
-            <label for="gm-pro-pressure-${esc(i)}">${mode === 'pressure' ? tHtml('gm_field_pressure_target') : tHtml('gm_field_pressure_max')} (bar)</label>
-            <input type="number" class="lib-input" value="${esc(pressure)}" min="0.1" max="20" step="0.01" id="gm-pro-pressure-${esc(i)}"
-              data-action="gm-pro-pressure" data-idx="${esc(i)}">
-          </div>
-          <div class="lib-form-field">
-            <label for="gm-pro-flow-${esc(i)}">${mode === 'flow' ? tHtml('gm_field_flow_target') : tHtml('gm_field_flow_max')} (ml/s)</label>
-            <input type="number" class="lib-input" value="${esc(flow)}" min="0.1" max="20" step="0.01" id="gm-pro-flow-${esc(i)}"
-              data-action="gm-pro-flow" data-idx="${esc(i)}">
-          </div>
-        </div>` : html``}
+      ${(mode === 'pressure' || mode === 'flow') ? _pumpTargetFields(mode, pressure, flow, i, 'pro') : html``}
 
       <div class="lib-form-field" style="margin-bottom:.5rem">
         <label>${tHtml('gm_field_ramp_style')}</label>
@@ -812,7 +853,9 @@ function _bindInputs(): void {
       case 'gm-pro-temperature':  _setPhase(idx, { temperature: num() }); break;
       case 'gm-std-pump-power':
       case 'gm-pro-pump-power': { const pv = parseFloat(el.value); _setPhase(idx, { pump: isNaN(pv) ? 100 : pv }); break; }
+      case 'gm-std-pressure':
       case 'gm-pro-pressure': { const pump = ph().pump; _setPhase(idx, { pump: { ...(typeof pump === 'object' ? pump : {}), pressure: num() } }); break; }
+      case 'gm-std-flow':
       case 'gm-pro-flow':     { const pump = ph().pump; _setPhase(idx, { pump: { ...(typeof pump === 'object' ? pump : {}), flow: num() } }); break; }
       case 'gm-pro-ramp-duration':
         _setPhase(idx, { transition: { ...(ph().transition ?? {}), duration: num() } });
@@ -885,7 +928,11 @@ export function handleGmEditorAction(action: string, el: HTMLElement): void {
 
     case 'gm-std-pump-mode': {
       const v = el.dataset.val;
-      _setPhase(idx, { pump: v === 'off' ? 0 : v === 'power' ? existingPower() : { target: v, pressure: 0, flow: 0 } });
+      // #2163: the selected mode keeps its values; Pressure <-> Flow keeps both numbers.
+      if (v === _pumpMode(ph()).mode) break;
+      const pump = ph().pump;
+      const keep: GmPump = typeof pump === 'object' ? pump : {};
+      _setPhase(idx, { pump: v === 'off' ? 0 : v === 'power' ? existingPower() : { target: v, pressure: keep.pressure ?? 0, flow: keep.flow ?? 0 } });
       break;
     }
     case 'gm-pro-pump-mode': {
