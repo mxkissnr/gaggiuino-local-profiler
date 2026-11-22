@@ -2711,16 +2711,11 @@
         .lib-select:focus, .lib-input:focus { outline:none; border-color:var(--gray-500); }
         .lib-input { min-width:0; }
         .flex-1 { flex:1; }
-        .gm-chart-container { flex-shrink:0; margin:.5rem 0 .75rem; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); overflow:hidden; height:180px; position:relative; }
         /* A row of shared chips; the pressed one is the selection (#2093). */
         .gm-toggle-group { display:inline-flex; flex-wrap:wrap; gap: var(--sp-1); }
         .gm-phase { background:var(--gray-800); border-radius:var(--radius); padding:var(--sp-3); margin-bottom:var(--sp-2); }
-        .gm-phase-nav { display:flex; align-items:center; gap:var(--sp-2); margin-bottom:var(--sp-3); flex-wrap:wrap; }
-        .gm-phase-nav span { flex:0 0 auto; font-size:var(--fs-1); color:var(--gray-400); }
         .gm-render-error { padding: var(--sp-4); color: var(--err); }
         .gm-note { text-align: center; padding: var(--sp-2); opacity: .6; }
-        .gm-phase-sep { text-align: center; padding: var(--sp-1); opacity: .4; }
-        .gm-empty { padding: var(--sp-2); opacity: .5; }
         .gm-dropdown { position:relative; display:inline-block; }
         /* This is a <ul> — list-style/margin were never reset, so its
            default browser bullet/indent showed next to every item (2026-
