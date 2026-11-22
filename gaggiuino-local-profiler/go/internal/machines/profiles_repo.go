@@ -190,9 +190,11 @@ func (r *ProfilesRepository) UpsertSynced(machineID int64, remoteID, name string
 // only ever returns {id, name, utility}, never the full profile body, so
 // overwriting `data` here would blow away whatever a prior GetProfile/
 // Create/Update call actually stored. A brand-new row (never seen before)
-// gets an empty `{}` placeholder body — it becomes complete the first time
-// someone opens it (getMachineProfile's live-success path calls
-// UpsertSynced with the real body then). Same dirty-row protection as
+// gets an empty `{}` placeholder body — it becomes complete through the
+// background prefetch after the list reconcile (#2162, FillProfileBody) or
+// the first time someone opens it while the machine is reachable
+// (getMachineProfile's live-success path calls UpsertSynced). Same
+// dirty-row protection as
 // UpsertSynced, enforced in SQL: a local edit still waiting to push is left
 // alone by the DO UPDATE's `WHERE machine_profiles.sync_status = ?`.
 func (r *ProfilesRepository) UpsertListSummary(machineID int64, remoteID, name string, utility bool) error {
@@ -209,6 +211,26 @@ func (r *ProfilesRepository) UpsertListSummary(machineID int64, remoteID, name s
 		return fmt.Errorf("machines: upserting profile list summary: %w", err)
 	}
 	return nil
+}
+
+// FillProfileBody stores a full profile body fetched in the background on a
+// row that so far held only the list summary (#2162). It writes only while
+// the row is still synced AND still holds exactly oldData, in one statement:
+// a local edit made meanwhile (dirty/pending_*) or a body stored by another
+// path (editor fetch, save, sync push) is never replaced by the older
+// background fetch. Reports whether the row was updated.
+func (r *ProfilesRepository) FillProfileBody(localID int64, oldData, newData json.RawMessage) (bool, error) {
+	res, err := r.db.Exec(`UPDATE machine_profiles SET data = ?, updated_at = ?
+		WHERE local_id = ? AND sync_status = ? AND data = ?`,
+		string(newData), time.Now().UnixMilli(), localID, ProfileSyncSynced, string(oldData))
+	if err != nil {
+		return false, fmt.Errorf("machines: filling body of local profile %d: %w", localID, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("machines: filling body of local profile %d: %w", localID, err)
+	}
+	return n == 1, nil
 }
 
 // UpsertDirty is the local-first write path: localID nil means "new row"

@@ -138,6 +138,11 @@ func (h *Handlers) listMachineProfiles(w http.ResponseWriter, r *http.Request) {
 	} else if err := h.profilesRepo.PruneStaleSynced(machine.ID, remoteIDs); err != nil {
 		slog.Warn("pruning stale local profiles failed", "machineId", machine.ID, "err", err)
 	}
+	if len(raw) > 0 {
+		// #2162: store the full body of every summary-only row in the
+		// background, so the editor can open it later with the machine off.
+		h.startProfilePrefetch(machine, adapter)
+	}
 	cached, err := h.profilesRepo.ListByMachine(machine.ID)
 	if err != nil {
 		internalError(w, err)
@@ -226,7 +231,9 @@ func (h *Handlers) setMachineProfile(w http.ResponseWriter, r *http.Request) {
 // getMachineProfile: previously hard-502'd on any adapter error with no
 // fallback whatsoever — opening the editor for an existing profile was
 // completely broken while the machine was unreachable, not just saving one.
-// Now falls back to the local row's stored body.
+// Now falls back to the local row's stored body. #2162: a known-offline
+// machine is answered from the local copy at once, and only a full local body
+// is served; a missing or summary-only copy is a 503.
 func (h *Handlers) getMachineProfile(w http.ResponseWriter, r *http.Request) {
 	id := pathIDStr(r)
 	if id == "" {
@@ -255,21 +262,20 @@ func (h *Handlers) getMachineProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// #2162: the poller already knows the machine is off; answer from the
+	// local copy without paying the live-fetch timeout (same shortcut as
+	// listMachineProfiles, #1572).
+	if h.machineKnownOffline(machine.ID) {
+		h.writeLocalProfileCopy(w, machine.ID, id)
+		return
+	}
+
 	liveCtx, cancel := context.WithTimeout(r.Context(), profileLiveFetchTimeout.get())
 	defer cancel()
 	profile, err := adapter.GetProfile(liveCtx, machine, id)
 	if err != nil {
 		slog.Warn("fetching machine profile failed, falling back to local copy", "machineId", machine.ID, "profileId", id, "err", err)
-		row, lerr := h.profilesRepo.Get(machine.ID, id)
-		if lerr != nil {
-			internalError(w, lerr)
-			return
-		}
-		if row == nil {
-			writeError(w, http.StatusBadGateway, err.Error())
-			return
-		}
-		writeRawProfile(w, row.Data)
+		h.writeLocalProfileCopy(w, machine.ID, id)
 		return
 	}
 	if name := profileName(machine.Type, profile); name != "" {
@@ -284,6 +290,91 @@ func writeRawProfile(w http.ResponseWriter, body json.RawMessage) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(body)
+}
+
+// profileNotStoredMessage is the 503 answer of GET /api/machine/profile/{id}
+// when the machine cannot be asked and GLP holds no full copy (#2162).
+const profileNotStoredMessage = "the machine is offline and this profile is not stored locally yet"
+
+// writeLocalProfileCopy answers GET /api/machine/profile/{id} from the local
+// row when the machine cannot be asked (#2162). Only a full body is served: a
+// missing row or a list-summary row (UpsertListSummary's {} placeholder) is a
+// 503, never a 200 {} that would open an empty editor.
+func (h *Handlers) writeLocalProfileCopy(w http.ResponseWriter, machineID int64, id string) {
+	row, err := h.profilesRepo.Get(machineID, id)
+	if err != nil {
+		internalError(w, err)
+		return
+	}
+	if row == nil || !hasFullProfileBody(row.Data) {
+		writeError(w, http.StatusServiceUnavailable, profileNotStoredMessage)
+		return
+	}
+	writeRawProfile(w, row.Data)
+}
+
+// hasFullProfileBody reports whether raw is a complete profile rather than a
+// list-summary placeholder: a JSON object with a "phases" array. Both machine
+// types' profile bodies carry one; an empty array still counts as a profile.
+func hasFullProfileBody(raw json.RawMessage) bool {
+	var body struct {
+		Phases json.RawMessage `json:"phases"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil || len(body.Phases) == 0 {
+		return false
+	}
+	var phases []json.RawMessage
+	return json.Unmarshal(body.Phases, &phases) == nil && phases != nil
+}
+
+// startProfilePrefetch runs prefetchProfileBodies in the background after a
+// successful live list reconcile (#2162): at most one run per machine at a
+// time, and the list response never waits for it.
+func (h *Handlers) startProfilePrefetch(machine *Machine, adapter Adapter) {
+	if _, running := h.profilePrefetching.LoadOrStore(machine.ID, struct{}{}); running {
+		return
+	}
+	h.profilePrefetchWG.Add(1)
+	go func() {
+		defer h.profilePrefetchWG.Done()
+		defer h.profilePrefetching.Delete(machine.ID)
+		h.prefetchProfileBodies(machine, adapter)
+	}()
+}
+
+// prefetchProfileBodies fetches and stores the full body of every synced row
+// that still holds only the list summary, so the editor can open the profile
+// later while the machine is off (#2162). One profile at a time (GaggiMate
+// serves one WebSocket request at a time), each bounded by
+// profileLiveFetchTimeout. The first failed fetch ends the run: the machine is
+// gone again, and the next list reconcile tries again. Local edits
+// (dirty/pending_*), local placeholders and rows with a full body are
+// skipped, and FillProfileBody writes only if the row did not change
+// meanwhile.
+func (h *Handlers) prefetchProfileBodies(machine *Machine, adapter Adapter) {
+	rows, err := h.profilesRepo.ListByMachine(machine.ID)
+	if err != nil {
+		slog.Warn("listing local profiles for the body prefetch failed", "machineId", machine.ID, "err", err)
+		return
+	}
+	for _, row := range rows {
+		if row.SyncStatus != ProfileSyncSynced || row.RemoteID == nil || hasFullProfileBody(row.Data) {
+			continue
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), profileLiveFetchTimeout.get())
+		body, err := adapter.GetProfile(ctx, machine, *row.RemoteID)
+		cancel()
+		if err != nil {
+			slog.Warn("prefetching machine profile failed, stopping", "machineId", machine.ID, "profileId", *row.RemoteID, "err", err)
+			return
+		}
+		if !hasFullProfileBody(body) {
+			continue
+		}
+		if _, err := h.profilesRepo.FillProfileBody(row.LocalID, row.Data, body); err != nil {
+			slog.Warn("storing prefetched machine profile failed", "machineId", machine.ID, "profileId", *row.RemoteID, "err", err)
+		}
+	}
 }
 
 // profileName extracts the display name out of a raw profile body —
