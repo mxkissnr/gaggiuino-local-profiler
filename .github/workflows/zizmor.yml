@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# #2156: a newer commit cancels the older run of the same pull request. Push runs on dev
+# get a group of their own (run id) and are never cancelled.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   zizmor:
     name: Workflow lint (zizmor)
