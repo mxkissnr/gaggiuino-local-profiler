@@ -121,14 +121,26 @@ export interface ShotCardOptions {
   theme: string;
   /** Viewer's UI language (de/en/es/fr/it/nl); the backend falls back to English. */
   lang: string;
+  /** The shot page's verdict sentence (#2166); left out when empty. */
+  verdict?: string;
+  /** The verdict's advice type; 'finer' and 'coarser' draw an arrow. */
+  verdictType?: string;
+  /** Score change against the compared shot; left out when null. */
+  delta?: number | null;
+  /** The line naming the compared shot; left out when empty. */
+  vs?: string;
 }
 
 /**
  * GET /api/shots/{id}/card — the rendered PNG. Returns the raw Response: the
  * caller streams the body as a Blob and reads the JSON error on a non-ok.
  */
-export function getShotCard(id: number, { format, accent, theme, lang }: ShotCardOptions): Promise<Response> {
+export function getShotCard(id: number, { format, accent, theme, lang, verdict, verdictType, delta, vs }: ShotCardOptions): Promise<Response> {
   const params = new URLSearchParams({ format, accent, theme, lang });
+  if (verdict) params.set('verdict', verdict);
+  if (verdictType) params.set('verdictType', verdictType);
+  if (delta != null) params.set('delta', String(delta));
+  if (vs) params.set('vs', vs);
   return apiFetch(`api/shots/${pathSeg(id)}/card?${params}`);
 }
 

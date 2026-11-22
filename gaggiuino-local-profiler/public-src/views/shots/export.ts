@@ -9,6 +9,7 @@ import { beanLabel } from '../../shared/bean-mix.js';
 import { showToast } from '../../components/toast.js';
 import { _equipmentName, _libCollection, _shots } from './shared.js';
 import type { ShotRow } from './shared.js';
+import type { CardVerdict } from './detail-page.js';
 
 // ── CSV Export ────────────────────────────────────────────────────────────
 
@@ -220,21 +221,22 @@ async function _downloadJSON_blob(content: string, filename: string, mime: strin
 
 // ── Share card ────────────────────────────────────────────────────────────
 
-export async function shareCard(format = 'square'): Promise<void> {
+export async function shareCard(format = 'square', verdict: CardVerdict | null = null): Promise<void> {
   const shotId = S.primaryShotId;
   if (!shotId) return;
   try {
-    // #462: the card should visually match whatever accent/theme the user
-    // is actually looking at, not a hardcoded snapshot — same attributes
-    // main.ts applies to <html> (dataset.accent/dataset.theme), same
-    // defaults ('amber-americano'/'dark', see applyTheme()/_savedAccent in
-    // main.ts). #1019: dataset.accent no longer drives any CSS itself (the
-    // [data-accent] rules it used to key are retired), but is still set on
-    // every setAccentTheme() call purely so this stays in sync with the
-    // user's actual Farbschema pick.
-    const accent = document.documentElement.dataset.accent || 'amber-americano';
-    const theme  = document.documentElement.dataset.theme  || 'dark';
-    const r = await getShotCard(shotId, { format, accent, theme, lang: S.currentLang });
+    // #462, #2166: the card matches the accent and theme on screen. The
+    // active accent is the inline --accent that applyActiveMachineAccentTheme()
+    // sets on <html> for a machine's own theme, the user's pick and custom
+    // colours alike; the card takes it as a hex. The preset key on
+    // dataset.accent is only the fallback.
+    const root = document.documentElement;
+    const accent = root.style.getPropertyValue('--accent').trim() || root.dataset.accent || 'amber-americano';
+    const theme  = root.dataset.theme || 'dark';
+    const r = await getShotCard(shotId, {
+      format, accent, theme, lang: S.currentLang,
+      verdict: verdict?.text, verdictType: verdict?.type, delta: verdict?.delta ?? null, vs: verdict?.vs,
+    });
     if (!r.ok) {
       const err = await r.json().catch(() => ({})) as { error?: string };
       throw new Error(err.error || r.statusText);

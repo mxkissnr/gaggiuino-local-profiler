@@ -41,6 +41,27 @@ export function verdictComparisonText(found: { shot: { id?: number; nativeId?: n
   return t(found.sameBean ? 'shot_verdict_vs_bean' : 'shot_verdict_vs_profile', n);
 }
 
+// What the share card draws as its verdict (#2166): the page's sentence, the
+// advice type, the score change and the line naming the compared shot.
+// updateView() records it for the open shot, so the card shows exactly what
+// the page shows without computing it a second time.
+export interface CardVerdict {
+  type: string;
+  text: string;
+  delta: number | null;
+  vs: string;
+}
+
+let _cardVerdict: { shotId: number; verdict: CardVerdict } | null = null;
+
+export function rememberShotVerdict(shotId: number, verdict: CardVerdict | null): void {
+  _cardVerdict = verdict ? { shotId, verdict } : null;
+}
+
+export function cardVerdictFor(shotId: number | null): CardVerdict | null {
+  return _cardVerdict && _cardVerdict.shotId === shotId ? _cardVerdict.verdict : null;
+}
+
 // ── Process ──────────────────────────────────────────────────────────────
 
 // One row of the Process group: the label, the measured value against its
@@ -136,7 +157,7 @@ export function openShotShare(anchor: HTMLElement | null): void {
 // A share row: close the sheet and share the card in that format.
 export function chooseShareFormat(format: string): void {
   closeDetailSheet();
-  void shareCard(format);
+  void shareCard(format, cardVerdictFor(S.primaryShotId));
 }
 
 // ── Notes ────────────────────────────────────────────────────────────────
