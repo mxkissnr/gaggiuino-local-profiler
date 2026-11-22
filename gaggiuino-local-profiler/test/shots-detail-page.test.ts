@@ -34,10 +34,11 @@ const sheet = vi.hoisted(() => ({
 vi.mock('../public-src/components/detail-sheet.js', () => sheet);
 
 // The annotation module runs the real autosave; the page module only needs
-// its flush and its busy flag.
+// its flush, its busy flag and the shot defaults it prefills from.
 const ann = vi.hoisted(() => ({
   flushAutoSave: vi.fn<() => void>(),
   annotationBusy: vi.fn<() => boolean>(() => false),
+  _applyShotDefaults: vi.fn<(a: unknown) => unknown>(a => a),
 }));
 vi.mock('../public-src/views/shots/annotation.js', () => ann);
 
@@ -69,6 +70,12 @@ function fakeEl(id: string): FakeEl {
     setAttribute: (name: string, value: string) => { el.attrs[name] = value; },
   };
   return el;
+}
+
+// A note field in the sheet: the page focuses it and centres its block.
+function fieldEl(hidden = false, display = ''): Record<string, unknown> {
+  const box = { scrollIntoView: vi.fn() };
+  return { hidden, style: { display }, focus: vi.fn(), box, closest: vi.fn(() => box) };
 }
 
 let els: Record<string, FakeEl> = {};
@@ -174,6 +181,113 @@ describe('notes sheet (#2152)', () => {
     expect(updateView).not.toHaveBeenCalled();
     vi.advanceTimersByTime(100);
     expect(updateView).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('notes sheet at a field (#2164)', () => {
+  it('opens at the bean field and focuses its select', () => {
+    installDoc(['shotNotesPanel']);
+    const bean = fieldEl();
+    els.annCoffee = bean as unknown as FakeEl;
+    setShots([shot(1)]);
+    S.primaryShotId = 1;
+    page.openShotNotes('bean');
+    expect(sheet.openDetailSheet).toHaveBeenCalledTimes(1);
+    expect(lastSheet().title).toBe(t('shot_notes_all'));
+    expect(bean.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect((bean.box as { scrollIntoView: ReturnType<typeof vi.fn> }).scrollIntoView)
+      .toHaveBeenCalledWith({ block: 'center' });
+    const open = sheet.openDetailSheet.mock.invocationCallOrder[0]!;
+    expect((bean.focus as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0]!).toBeGreaterThan(open);
+  });
+
+  it('opens at the grinder select when the library has grinders', () => {
+    installDoc(['shotNotesPanel']);
+    const grinder = fieldEl();
+    const other = fieldEl(false, 'none');
+    els.annGrinder = grinder as unknown as FakeEl;
+    els.annGrinderOther = other as unknown as FakeEl;
+    setShots([shot(1)]);
+    S.primaryShotId = 1;
+    page.openShotNotes('grinder');
+    expect(grinder.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(other.focus).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the free-text grinder input when the select is hidden', () => {
+    installDoc(['shotNotesPanel']);
+    const grinder = fieldEl(true);
+    const other = fieldEl();
+    els.annGrinder = grinder as unknown as FakeEl;
+    els.annGrinderOther = other as unknown as FakeEl;
+    setShots([shot(1)]);
+    S.primaryShotId = 1;
+    page.openShotNotes('grinder');
+    expect(other.focus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(grinder.focus).not.toHaveBeenCalled();
+  });
+
+  it('All notes opens at the top and moves no focus', () => {
+    installDoc(['shotNotesPanel']);
+    const bean = fieldEl();
+    const grinder = fieldEl();
+    els.annCoffee = bean as unknown as FakeEl;
+    els.annGrinder = grinder as unknown as FakeEl;
+    setShots([shot(1)]);
+    S.primaryShotId = 1;
+    page.openShotNotes();
+    expect(sheet.openDetailSheet).toHaveBeenCalledTimes(1);
+    expect(bean.focus).not.toHaveBeenCalled();
+    expect(grinder.focus).not.toHaveBeenCalled();
+    expect((bean.box as { scrollIntoView: ReturnType<typeof vi.fn> }).scrollIntoView).not.toHaveBeenCalled();
+    expect((grinder.box as { scrollIntoView: ReturnType<typeof vi.fn> }).scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('opening at a field writes nothing', () => {
+    installDoc(['shotNotesPanel']);
+    els.annGrinder = fieldEl() as unknown as FakeEl;
+    setShots([shot(1)]);
+    S.primaryShotId = 1;
+    page.openShotNotes('grinder');
+    expect(ann.flushAutoSave).not.toHaveBeenCalled();
+  });
+});
+
+describe('Coffee rows (#2164)', () => {
+  it('shows the saved label as it is', () => {
+    expect(page.coffeeRowText('K6 · Grind 12', 'Niche')).toEqual({ text: 'K6 · Grind 12', prefilled: false });
+  });
+
+  it('shows the prefilled default, marked, instead of a dash', () => {
+    expect(page.coffeeRowText(null, 'Niche')).toEqual({ text: 'Niche', prefilled: true });
+    expect(page.coffeeRowText('', 'Guji')).toEqual({ text: 'Guji', prefilled: true });
+  });
+
+  it('shows a dash when nothing is saved or prefilled', () => {
+    expect(page.coffeeRowText(null, '')).toEqual({ text: '–', prefilled: false });
+  });
+
+  it('mutes a default and shows its hint, and clears both for a saved value', () => {
+    installDoc([]);
+    const value = { textContent: '', className: '', hidden: false };
+    const hint = { textContent: '', className: '', hidden: true };
+    els.beanVal = value as unknown as FakeEl;
+    els.beanDefaultHint = hint as unknown as FakeEl;
+    page.showCoffeeRow('beanVal', 'beanDefaultHint', '', 'Guji');
+    expect(value.textContent).toBe('Guji');
+    expect(value.className).toBe('settings-row-title settings-row-title--muted');
+    expect(hint.hidden).toBe(false);
+    page.showCoffeeRow('beanVal', 'beanDefaultHint', 'Huila', 'Guji');
+    expect(value.textContent).toBe('Huila');
+    expect(value.className).toBe('settings-row-title');
+    expect(hint.hidden).toBe(true);
+  });
+
+  it('the page feeds both rows from the same defaults as the notes sheet', () => {
+    const src = read('views/shots/index.ts');
+    expect(src).toContain('const prefill = _applyShotDefaults(ann);');
+    expect(src).toContain("showCoffeeRow('beanVal', 'beanDefaultHint', beanLabel(ann, true), beanLabel(prefill, true));");
+    expect(src).toContain("showCoffeeRow('grinderVal', 'grinderDefaultHint', grinderLabel, prefill?.grinder || '');");
   });
 });
 
@@ -365,6 +479,26 @@ describe('shot page markup (#2152)', () => {
     expect(layout).toContain('<section class="shot-process" id="shotProcess"></section>');
   });
 
+  it('gives the bean and grinder rows their own field and distinct icons (#2164)', () => {
+    const coffee = between('<section class="shot-coffee">', '</section>');
+    expect(coffee).toContain('data-shot-notes-open="bean"');
+    expect(coffee).toContain('data-shot-notes-open="grinder"');
+    expect(coffee).toContain('M6 12c0-4 3-7.5 7-7.5S19 8 19 12s-3.5 7-7.5 7A6.5 6.5 0 0 1 6 12z');
+    expect(coffee).toContain('M12 6.5V3.5h5.5');
+    expect(coffee).not.toContain('M17 8h1a3 3 0 0 1 0 6h-1');
+    expect(coffee).not.toContain('M12 4v4M12 16v4');
+    expect(read('icons.ts')).toContain('M6 12c0-4 3-7.5 7-7.5S19 8 19 12s-3.5 7-7.5 7A6.5 6.5 0 0 1 6 12z');
+  });
+
+  it('marks a default bean or grinder with the shared hint (#2164)', () => {
+    const coffee = between('<section class="shot-coffee">', '</section>');
+    expect(coffee).toContain('<span class="settings-row-value" id="beanDefaultHint" data-i18n="lib_grinder_default" hidden>');
+    expect(coffee).toContain('<span class="settings-row-value" id="grinderDefaultHint" data-i18n="lib_grinder_default" hidden>');
+    expect(count(indexHtml, 'id="beanDefaultHint"')).toBe(1);
+    expect(count(indexHtml, 'id="grinderDefaultHint"')).toBe(1);
+    expect(read('style.css')).toContain('.settings-row-title--muted { color: var(--gray-400); }');
+  });
+
   it('shows nothing twice', () => {
     for (const id of ['verdictRingVal', 'verdictDeltaChip', 'doseYieldVal', 'beanVal', 'grinderVal', 'orderedByInfo', 'shotHeroPhoto', 'freshnessBadge', 'grindAdviceComparative']) {
       expect(count(indexHtml, `id="${id}"`), id).toBe(1);
@@ -386,7 +520,7 @@ describe('shot page wiring (#2152)', () => {
     const src = read('boot/shot-detail.ts');
     expect(src).toContain('onShotCompareClick(compareBtn)');
     expect(src).toContain('openShotShare(shareBtn)');
-    expect(src).toContain("closest('[data-shot-notes-open]')) openShotNotes();");
+    expect(src).toContain("if (row) openShotNotes(row.dataset.shotNotesOpen || undefined);");
     expect(src).not.toContain('cardFmtMenu');
   });
 });
