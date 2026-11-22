@@ -1,9 +1,9 @@
 package shots
 
 import (
-	_ "embed"
 	"context"
 	"crypto/sha256"
+	_ "embed"
 	"encoding/binary"
 	"fmt"
 	"math"
