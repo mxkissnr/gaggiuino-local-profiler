@@ -268,9 +268,11 @@ func rasterise(svg []byte, w, h uint32) ([]byte, error) {
 }
 
 // renderShareCard is the package entry point the card handler calls. score is
-// the shot's computed score (may be nil).
-func renderShareCard(shot Shot, score *int, format, accent, theme, lang string, deps cardDeps) ([]byte, error) {
+// the shot's computed score (may be nil); v is the shot page's verdict as the
+// app passed it (the zero value draws none).
+func renderShareCard(shot Shot, score *int, format, accent, theme, lang string, v cardVerdict, deps cardDeps) ([]byte, error) {
 	c := newCardModel(shot, score, format, accent, theme, lang, deps)
+	c.verdict = v
 	svg := c.svg()
 	return rasterise([]byte(svg), uint32(c.w), uint32(c.h))
 }

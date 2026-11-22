@@ -3,8 +3,10 @@ package shots
 import (
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // card_model.go holds the share card's data extraction (from the shot's
@@ -19,15 +21,66 @@ const cardPX = 52.0 // card design's base px unit
 const cardAxisMaxTicks = 200
 
 type cardModel struct {
-	shot   Shot
-	score  *int
-	format string
-	lang   string
-	pal    palette
-	deps   cardDeps
+	shot    Shot
+	score   *int
+	format  string
+	lang    string
+	pal     palette
+	deps    cardDeps
+	verdict cardVerdict // the shot page's verdict as the app passed it (#2166)
 
 	w, h  float64
 	scale float64
+}
+
+// cardVerdict is the shot page's verdict, passed in by the app (#2166): the
+// dial-in advice and the compared shot are computed in the frontend only, so
+// the card draws what the page shows instead of computing it again. Every
+// field is optional.
+type cardVerdict struct {
+	kind  string // "finer" or "coarser" (draws ↓ / ↑), else ""
+	text  string // the verdict sentence
+	delta *int   // score change against the compared shot
+	vs    string // the line naming the compared shot
+}
+
+const (
+	cardVerdictMaxRunes = 140
+	cardVsMaxRunes      = 80
+)
+
+// parseCardVerdict reads the card's verdict query parameters. Text is
+// trimmed, stripped of control characters and capped; delta must be an
+// integer in -100..100; any other verdictType is ignored.
+func parseCardVerdict(q url.Values) cardVerdict {
+	v := cardVerdict{
+		text: cardParamText(q.Get("verdict"), cardVerdictMaxRunes),
+		vs:   cardParamText(q.Get("vs"), cardVsMaxRunes),
+	}
+	if k := q.Get("verdictType"); k == "finer" || k == "coarser" {
+		v.kind = k
+	}
+	if d, err := strconv.Atoi(q.Get("delta")); err == nil && d >= -100 && d <= 100 {
+		v.delta = &d
+	}
+	return v
+}
+
+// cardParamText trims s, drops control and replacement characters and cuts
+// it to max runes, the last one an ellipsis.
+func cardParamText(s string, max int) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(s) {
+		if unicode.IsControl(r) || r == unicode.ReplacementChar {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	r := []rune(b.String())
+	if len(r) > max {
+		return string(r[:max-1]) + "…"
+	}
+	return string(r)
 }
 
 func newCardModel(shot Shot, score *int, format, accent, theme, lang string, deps cardDeps) *cardModel {
