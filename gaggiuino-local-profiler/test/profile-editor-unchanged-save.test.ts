@@ -174,7 +174,7 @@ describe('an unchanged profile is sent exactly as before (#2154)', () => {
 
   it('Gaggiuino: open, then send without an edit', async () => {
     installDocument();
-    openProfileForm(structuredClone(GAGGIUINO_PROFILE) as unknown as Parameters<typeof openProfileForm>[0]);
+    openProfileForm(structuredClone(GAGGIUINO_PROFILE));
     fetchSpy.mockResolvedValueOnce(response({ syncStatus: 'synced' })); // the PUT
     fetchSpy.mockResolvedValueOnce(response({ optionsRaw: [] }));      // the list reload after close
     await sendProfileToMachine();
