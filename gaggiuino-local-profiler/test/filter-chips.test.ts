@@ -266,7 +266,7 @@ describe('shared buttons (#2095)', () => {
     for (const id of ['exportAllCsvBtn', 'exportShotBtn', 'exportProfileBtn']) {
       expect(index, id).toContain(`class="lib-sheet-menu-item" id="${id}"`);
     }
-    expect(index).toContain('class="lib-sheet-iconbtn" id="shareCardBtn"');
+    expect(index).toContain('<details class="lib-sheet-more shot-share" id="shotShare">');
     expect(index).toContain('class="btn btn--quiet" id="annPhotoPickBtn"');
     expect(index).toContain('class="btn btn--danger" id="annPhotoRemoveBtn"');
     const sidebar = read('components/sidebar.ts');
