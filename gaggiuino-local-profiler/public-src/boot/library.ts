@@ -11,7 +11,7 @@ import { switchLibTab, openBeanForm, saveBean, saveBeanNoBag, saveBeanAddBag,
          closeScanModal, _handleScanPhoto, openMilkForm, closeMilkForm, saveMilk, openBasketForm,
          closeBasketForm, saveBasket, uploadBasketImage, openPuckScreenForm, closePuckScreenForm,
          savePuckScreen, uploadPuckScreenImage } from '../views/library.js';
-import { closeProfileForm, openNewProfileForm, applyBeanSuggestion, addProfilePhase, sendProfileToMachine,
+import { closeProfileForm, openNewProfileForm, applyBeanSuggestion, sendProfileToMachine,
          renderProfilePreviewChart } from '../views/library-profile-editor.js';
 import { openNewGaggiMateProfile } from '../views/gaggimate-profile-editor.js';
 import { openPhotoInput, showCameraButtons } from '../photo-capture.js';
@@ -94,8 +94,6 @@ export function wireLibrary(): void {
     else openNewProfileForm();
   });
   document.getElementById('closeProfileFormBtn')!.addEventListener('click', closeProfileForm);
-  document.getElementById('cancelProfileFormBtn')!.addEventListener('click', closeProfileForm);
-  document.getElementById('addProfilePhaseBtn')!.addEventListener('click', addProfilePhase);
   document.getElementById('profileApplySuggestionBtn')!.addEventListener('click', applyBeanSuggestion);
   document.getElementById('sendProfileToMachineBtn')!.addEventListener('click', () => { void sendProfileToMachine(); });
   // Live preview: any field/phase edit re-synthesizes the chart from the

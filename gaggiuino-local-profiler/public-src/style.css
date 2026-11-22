@@ -2837,23 +2837,57 @@
            collapse to 0px before echarts even has a size to init() against. */
         .flavor-wheel-modal { max-width:min(680px, 96vw); height:min(680px, calc(92dvh - var(--dev-banner-h, 0px))); max-height:min(680px, calc(92dvh - var(--dev-banner-h, 0px))); overflow-y:hidden; }
 
-        /* Machine profile editor modal (#307) — same fixed-height/flex-child
-           pattern as .flavor-wheel-modal above, but wider (dense 2-column
-           phase grid needs more horizontal room) and the scrollable content
-           is the phase list + preview chart rather than a canvas-based
-           interactive widget. */
-        .profile-editor-modal { max-width:min(760px, 96vw); height:min(760px, 92dvh); max-height:92dvh; overflow-y:hidden; }
+        /* Machine profile editors (#307, #2154). The Gaggiuino and the GaggiMate
+           editor share this layout: the preview chart first, then the phase
+           timeline (one chip per phase, as wide as its share of the time), the
+           selected phase's fields and the recipe rows. Desktop (900 px and
+           wider): a two-column dialog, chart, timeline and recipe left, the
+           phase right. Phone: a full-height sheet in one column. Page classes
+           only lay out; chips, buttons, rows and titles are the shared ones. */
+        .profile-editor-modal { max-width:min(1040px, 96vw); height:min(800px, 92dvh); max-height:92dvh; overflow-y:hidden; }
         .pe-scroll { flex:1 1 auto; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap: var(--sp-1); }
-        .pe-preview { margin-top: var(--sp-4); height:180px; flex-shrink:0; }
+        .pe-layout { display:flex; flex-direction:column; gap: var(--sp-4); min-width:0; }
+        .pe-layout .section-title { margin:0; }
+        .pe-preview { position:relative; height:200px; flex-shrink:0; }
         .pe-preview canvas { width:100%; height:100%; }
+        .pe-timeline, .pe-phase, .pe-recipe { display:flex; flex-direction:column; gap: var(--sp-2); min-width:0; }
+        .phase-timeline { display:flex; align-items:stretch; gap: var(--sp-1); overflow-x:auto; }
+        .phase-timeline-item { flex: var(--phase-share, 1) 1 0; min-width:44px; min-height:56px; flex-direction:column; align-items:flex-start; justify-content:center; gap:0; overflow:hidden; }
+        .phase-timeline-name, .phase-timeline-sub { max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .phase-timeline-sub { font-weight:400; font-variant-numeric: tabular-nums; }
+        .phase-timeline-add { flex:0 0 auto; min-height:56px; }
+        .phase-timeline-empty { flex:1 1 auto; align-self:center; }
+        .pe-stops-summary { min-height:44px; align-items:center; cursor:pointer; list-style:none; }
+        .pe-stops-summary::-webkit-details-marker { display:none; }
+        .pe-stops-summary::before { content:'\25B8'; }
+        .pe-stops[open] > .pe-stops-summary::before { transform: rotate(90deg); }
+        .pe-remove-phase, .pe-recipe > .btn { align-self:flex-start; }
+        .pe-recipe .settings-row-title { flex:1 1 auto; min-width:0; }
+        .pe-row-input { flex:0 0 auto; width:96px; text-align:right; }
+        .pe-row-name { flex:1 1 160px; width:auto; text-align:left; }
+        .pe-row-stack { flex-direction:column; align-items:stretch; }
+        .pe-row-stack textarea { width:100%; resize:vertical; }
+        /* Touch targets: every field in both editors is as tall as a chip (44 px on touch). */
+        .profile-editor-modal input:not([type="checkbox"]), .profile-editor-modal select, .profile-editor-modal textarea { min-height: var(--ctl-height); }
+        .pp-row[hidden] { display:none; }
+        @media (min-width: 900px) {
+            .pe-layout { display:grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); grid-template-areas: "chart phase" "timeline phase" "recipe phase"; grid-template-rows: auto auto 1fr; column-gap: var(--sp-6); row-gap: var(--sp-4); align-items:start; }
+            .pe-preview { grid-area: chart; height:260px; }
+            .pe-timeline { grid-area: timeline; }
+            .pe-phase { grid-area: phase; }
+            .pe-recipe { grid-area: recipe; }
+        }
+        /* Phone: both editors are a full-height sheet above the bottom navigation. */
+        @media (max-width: 899px) {
+            #profileEditorModal, #gmProfileEditorModal { padding:0; align-items:flex-end; }
+            .profile-editor-modal { max-width:none; height: calc(100dvh - var(--dev-banner-h, 0px)); max-height:none; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
+        }
         .pp-row { background:var(--gray-800); border-radius:var(--radius); padding: var(--sp-3); margin-bottom: var(--sp-2); }
         .pp-header { display:flex; align-items:center; gap: var(--sp-2); margin-bottom: var(--sp-2); flex-wrap:wrap; }
-        .pp-num { color:var(--gray-500); font-weight:700; flex-shrink:0; }
         .pp-name { flex:1 1 140px; min-width:100px; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); }
         .pp-type { flex:0 0 auto; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-2); }
         .pp-skip-label { flex:0 0 auto; }
-        .pp-grid { display:grid; grid-template-columns:repeat(2, 1fr); gap: var(--sp-2); }
-        @media (min-width: 560px) { .pp-grid { grid-template-columns:repeat(4, 1fr); } }
+        .pp-grid { display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap: var(--sp-2); }
         .pp-field { display:flex; flex-direction:column; gap: var(--sp-1); }
         .pp-field label { font-size: var(--fs-1); color:var(--gray-500); }
         .pp-field input, .pp-field select { background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); }
