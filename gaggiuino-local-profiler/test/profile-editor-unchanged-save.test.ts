@@ -18,7 +18,7 @@ const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
 const { openProfileForm, sendProfileToMachine } = await import('../public-src/views/library-profile-editor.js');
-const { openGaggiMateProfileEditor, saveGaggiMateProfile } = await import('../public-src/views/gaggimate-profile-editor.js');
+const { openGaggiMateProfileEditor, saveGaggiMateProfile, handleGmEditorAction } = await import('../public-src/views/gaggimate-profile-editor.js');
 
 // ── Fixtures ────────────────────────────────────────────────────────────
 
@@ -196,4 +196,18 @@ describe('an unchanged profile is sent exactly as before (#2154)', () => {
       expect(sentBody()).toBe(JSON.stringify({ ...profile, machineId: 2 }));
     },
   );
+
+  it('GaggiMate: browsing the phases and the stop conditions writes nothing', async () => {
+    installDocument();
+    fetchSpy.mockResolvedValueOnce(response(structuredClone(GM_PRO))); // the GET
+    await openGaggiMateProfileEditor(GM_PRO.id);
+    const pick = (idx: number): HTMLElement => ({ dataset: { idx: String(idx) } }) as unknown as HTMLElement;
+    handleGmEditorAction('gm-select-phase', pick(1));
+    handleGmEditorAction('gm-select-phase', pick(0));
+    fetchSpy.mockResolvedValueOnce(response({ syncStatus: 'synced' })); // the PUT
+    fetchSpy.mockResolvedValueOnce(response({ optionsRaw: [] }));      // the list reload after close
+    await saveGaggiMateProfile();
+
+    expect(sentBody()).toBe(JSON.stringify({ ...GM_PRO, machineId: 2 }));
+  });
 });
