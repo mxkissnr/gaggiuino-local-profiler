@@ -47,8 +47,8 @@ import (
 //     for pre-#462 cached links is not reproduced — see card_palette.go.
 //   - The shot photo "avatar" and the icon.png logo are not drawn; the
 //     header shows the "GLP" wordmark anyway.
-//   - Visual equivalence, not pixel parity: text metrics come from the Go
-//     font, so wrap/centre positions differ slightly.
+//   - Visual equivalence, not pixel parity: text metrics come from the app's
+//     own fonts, so wrap/centre positions differ slightly.
 //
 // There is no "canvas unavailable" 503 branch: the renderer is always compiled
 // in. The frontend already treats 501/503 as "card unavailable", so a partial
