@@ -565,7 +565,10 @@ describe('form headings (#2120)', () => {
     expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_title">');
     expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_custom_label">');
     expect(index).toContain('<span class="section-title" data-i18n="ann_title">');
-    expect(read('views/gaggimate-profile-editor.ts').split('<div class="section-title">').length - 1).toBe(2);
+    // #2154: the GaggiMate phase headings come from the shared phase timeline;
+    // the recipe rows use its shared title.
+    expect(read('views/gaggimate-profile-editor.ts').split('<div class="section-title">').length - 1).toBe(0);
+    expect(read('views/gaggimate-profile-editor.ts')).toContain('${recipeTitleHtml()}');
     expect(read('views/library/import.ts')).toContain('<div class="section-title">${esc(t(');
   });
 
