@@ -86,6 +86,92 @@ func TestGaggiuinoAdapter_ProfileCRUD_ViaWebSocket(t *testing.T) {
 	}
 }
 
+// #2167: the firmware's REST POST /api/profile reads enum names, not the
+// protobuf numbers; a number made it fall back to PRESSURE/EASE_IN_OUT.
+func TestGaggiuinoAdapter_CreateProfile_RESTBodyUsesEnumNames(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
+	instant, linear := proto.CurveInstant, proto.CurveLinear
+	start := 2.0
+
+	created, err := a.CreateProfile(context.Background(), testMachine(fake.URL), ProfileInput{
+		Name: "Sertao Decaf",
+		Phases: []PhaseInput{
+			{Type: proto.PhaseFlow, Target: &TransitionInput{Start: &start, Curve: &instant}},
+			{Type: proto.PhasePressure, Target: &TransitionInput{Curve: &linear}},
+			{Type: proto.PhaseFlow},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateProfile: %v", err)
+	}
+	if created.ID != "1" || created.Name != "Sertao Decaf" {
+		t.Fatalf("expected the REST create, got %+v", created)
+	}
+
+	fake.mu.Lock()
+	raw := fake.lastCreateBody
+	fake.mu.Unlock()
+	for _, want := range []string{`"type":"FLOW"`, `"curve":"INSTANT"`, `"type":"PRESSURE"`, `"curve":"LINEAR"`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("REST body %s does not contain %s", raw, want)
+		}
+	}
+	var body struct {
+		Name   string `json:"name"`
+		Phases []struct {
+			Type   any `json:"type"`
+			Target *struct {
+				Start any `json:"start"`
+				Curve any `json:"curve"`
+			} `json:"target"`
+		} `json:"phases"`
+	}
+	if err := json.Unmarshal(raw, &body); err != nil {
+		t.Fatalf("decoding REST body %s: %v", raw, err)
+	}
+	if body.Name != "Sertao Decaf" || len(body.Phases) != 3 {
+		t.Fatalf("REST body = %s", raw)
+	}
+	if p := body.Phases[0]; p.Type != "FLOW" || p.Target == nil || p.Target.Curve != "INSTANT" || p.Target.Start != 2.0 {
+		t.Errorf("phase 0 = %+v, want FLOW/INSTANT with start 2", p)
+	}
+	if p := body.Phases[1]; p.Type != "PRESSURE" || p.Target == nil || p.Target.Curve != "LINEAR" {
+		t.Errorf("phase 1 = %+v, want PRESSURE/LINEAR", p)
+	}
+	if p := body.Phases[2]; p.Type != "FLOW" || p.Target != nil {
+		t.Errorf("phase 2 = %+v, want FLOW without target", p)
+	}
+}
+
+// #2167: a type the REST API has no name for goes straight to the
+// WebSocket create (protobuf numbers) instead of a guessed REST body.
+func TestGaggiuinoAdapter_CreateProfile_UnknownEnumSkipsREST(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+	a := NewGaggiuinoAdapter(newGaggiuinoLiveClient(sse.NewHub()))
+
+	created, err := a.CreateProfile(context.Background(), testMachine(fake.URL), ProfileInput{
+		Name:   "Odd",
+		Phases: []PhaseInput{{Type: proto.PhaseType(9)}},
+	})
+	if err != nil {
+		t.Fatalf("CreateProfile: %v", err)
+	}
+	if created.Name != "Odd" || created.ID == "" {
+		t.Fatalf("unexpected created profile: %+v", created)
+	}
+	fake.mu.Lock()
+	raw := fake.lastCreateBody
+	fake.mu.Unlock()
+	if raw != nil {
+		t.Fatalf("REST POST /api/profile was called with %s, want the WebSocket create only", raw)
+	}
+}
+
 func TestGaggiuinoAdapter_GetProfile_RESTFirstThenWSFallback(t *testing.T) {
 	allowLoopbackMachineHost(t)
 	fake := newFakeGaggiuinoMachine()

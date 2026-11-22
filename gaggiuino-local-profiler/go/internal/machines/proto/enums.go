@@ -64,6 +64,26 @@ func (c *TransitionCurve) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// Name returns p's wire-enum name ("FLOW", "PRESSURE", "MANUAL"); false
+// for a value the schema does not define. Deliberately not String(),
+// MarshalJSON or MarshalText: JSON keeps the plain number (see the comment
+// at the top). Only the Gaggiuino REST profile body needs the names (#2167).
+func (p PhaseType) Name() (string, bool) { return enumName(phaseTypeNames, p) }
+
+// Name returns c's wire-enum name ("INSTANT", "LINEAR", ...); false for a
+// value the schema does not define. See PhaseType.Name.
+func (c TransitionCurve) Name() (string, bool) { return enumName(transitionCurveNames, c) }
+
+// enumName is the reverse lookup of one of the name maps above.
+func enumName[E ~int32](names map[string]E, v E) (string, bool) {
+	for name, n := range names {
+		if n == v {
+			return name, true
+		}
+	}
+	return "", false
+}
+
 // WebSocketResponseResult is decode-only (a d_resp field, never sent by this
 // app), so no UnmarshalJSON is needed, but one is provided anyway for
 // symmetry/testability.

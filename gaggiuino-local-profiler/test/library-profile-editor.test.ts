@@ -12,10 +12,14 @@ const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {} };
 g.navigator    ??= { language: 'en-US' };
 
+// sendProfileToMachine confirms through the app dialog; it answers yes here.
+const dialogs = vi.hoisted(() => ({ confirmDialog: vi.fn(() => Promise.resolve(true)) }));
+vi.mock('../public-src/components/confirm-dialog.js', () => ({ confirmDialog: dialogs.confirmDialog }));
+
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
-const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProfile, selectProfilePhase } = await import('../public-src/views/library-profile-editor.js');
+const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProfile, selectProfilePhase, editProfile, sendProfileToMachine } = await import('../public-src/views/library-profile-editor.js');
 const { t } = await import('../public-src/i18n.js');
 
 // _collectPhases reads phase rows straight off `document` (DOM-as-state, no
@@ -181,6 +185,49 @@ describe('duplicateProfile', () => {
     // '93' as a string: the .ts module stringifies input values (`String(profile?.waterTemperature)`),
     // which is what a real <input type="number">.value holds anyway.
     expect(entry(fields, 'profileFormWaterTemp').value).toBe('93');
+  });
+});
+
+describe('editProfile keeps the profile id (#2167)', () => {
+  it('saves an unchanged profile with PUT to the id it was opened with, even when the machine body has no id', async () => {
+    fetchSpy.mockReset();
+    S.profileEditId = null;
+    const fields: Record<string, FakeFormField> = {};
+    const row = fakeRow({
+      'pp-name': 'Bloom', 'pp-type': 'FLOW',
+      'pp-target-start': '0', 'pp-target-end': '4', 'pp-target-curve': 'INSTANT',
+      'pp-target-time': '4000', 'pp-skip': false,
+    });
+    g.document = {
+      getElementById: (id: string) => {
+        if (id === 'profilePreviewChart') return undefined;
+        return (fields[id] ??= { value: '', style: {}, classList: { add() {}, remove() {} }, focus() {} });
+      },
+      querySelectorAll: (sel: string) => sel === '#profilePhaseList .pp-row' ? [row] : [],
+    };
+    // The machine's REST export: no `id` key.
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({
+        name: 'Sertao Decaf', waterTemperature: 93,
+        recipe: { coffeeIn: 18, coffeeOut: 36, ratio: 2 },
+        globalStopConditions: { weight: 36 },
+        phases: [{ name: 'Bloom', type: 'FLOW', target: { start: 0, end: 4, curve: 'INSTANT', time: 4000 } }],
+      }),
+    } as unknown as Response);
+
+    await editProfile('13');
+    expect(S.profileEditId).toBe('13');
+
+    // The save itself, then the profile list reload.
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ id: '13', name: 'Sertao Decaf', syncStatus: 'synced' }) } as unknown as Response);
+    fetchSpy.mockResolvedValueOnce({ ok: false, json: () => Promise.resolve(null) } as unknown as Response);
+    await sendProfileToMachine();
+
+    const [url, init] = fetchSpy.mock.calls[1] as unknown as [string, RequestInit];
+    expect(url).toBe('api/machine/profile/13');
+    expect(init.method).toBe('PUT');
+    expect((JSON.parse(init.body as string) as { name: string }).name).toBe('Sertao Decaf');
   });
 });
 
