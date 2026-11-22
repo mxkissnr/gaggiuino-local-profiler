@@ -6,6 +6,7 @@
 // line and the similar-shots title. Fake DOM, no jsdom (same style as the
 // orders page test).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { ShotLike } from '../public-src/views/shots/utils.js';
 
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage ??= { getItem: () => null, setItem: () => {}, removeItem: () => {} };
@@ -46,6 +47,7 @@ vi.mock('../public-src/views/shots/export.js', () => card);
 const { S } = await import('../public-src/state/index.js');
 const { t } = await import('../public-src/i18n.js');
 const page = await import('../public-src/views/shots/detail-page.js');
+const { findPreviousComparableShot } = await import('../public-src/views/shots/utils.js');
 
 interface FakeEl {
   id: string;
@@ -278,5 +280,42 @@ describe('verdict line and similar shots (#2152)', () => {
 
   it('titles the similar shots fold with their number', () => {
     expect(page.similarShotsTitle(4)).toBe('Similar shots · 4');
+  });
+});
+
+describe('the shot the verdict compares against (#2152)', () => {
+  function at(id: number, ts: number, over: Partial<ShotLike> = {}): ShotLike {
+    return { id, machineId: 1, profileName: 'Adaptive', timestamp: ts, annotation: { beanId: 1, coffee: 'Guji' }, ...over };
+  }
+
+  beforeEach(() => {
+    S.coffeeLibrary = { beans: [{ id: 1, name: 'Guji' }, { id: 2, name: 'Santos' }], grinders: [] };
+  });
+
+  it('takes the newest earlier shot with the same profile, machine and bean', () => {
+    const shots = [
+      at(1, 100),
+      at(2, 200, { annotation: { beanId: 2, coffee: 'Santos' } }),
+      at(3, 250, { profileName: 'Blooming' }),
+      at(4, 150, { machineId: 2 }),
+      at(5, 300),
+    ];
+    expect(findPreviousComparableShot(shots, shots[4]!)).toEqual({ shot: shots[0], sameBean: true });
+  });
+
+  it('compares nothing for the first shot of a bean on that profile', () => {
+    const shots = [at(1, 100, { annotation: { beanId: 2, coffee: 'Santos' } }), at(2, 200)];
+    expect(findPreviousComparableShot(shots, shots[1]!)).toBeNull();
+  });
+
+  it('falls back to the same profile for a shot without a bean', () => {
+    const shots = [at(1, 100), at(2, 200, { annotation: {} })];
+    expect(findPreviousComparableShot(shots, shots[1]!)).toEqual({ shot: shots[0], sameBean: false });
+  });
+
+  it('falls back to the same profile for a mixed shot', () => {
+    const mix = { beanId: 1, coffee: 'Guji', beanMix: [{ beanId: 1, coffee: 'Guji', grams: 9 }, { beanId: 2, coffee: 'Santos', grams: 9 }] };
+    const shots = [at(1, 100, { annotation: { beanId: 2, coffee: 'Santos' } }), at(2, 200, { annotation: mix })];
+    expect(findPreviousComparableShot(shots, shots[1]!)).toEqual({ shot: shots[0], sameBean: false });
   });
 });
