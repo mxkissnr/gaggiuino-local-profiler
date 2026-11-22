@@ -148,6 +148,48 @@ function _whenSaved(fn: () => void, tries = 50): void {
   setTimeout(() => _whenSaved(fn, tries - 1), 100);
 }
 
+// #2164: the Coffee rows open the notes sheet at their own field. Each entry
+// lists the control ids to try in order; the first one that is shown gets the
+// focus (the grinder falls back to its free-text input when the library has
+// no grinders). Focusing writes nothing: the autosave only runs on a change.
+const NOTES_FIELDS: Record<string, readonly string[]> = {
+  bean: ['annCoffee'],
+  grinder: ['annGrinder', 'annGrinderOther'],
+};
+
+function _focusNotesField(field: string): void {
+  for (const id of NOTES_FIELDS[field] ?? []) {
+    const el = document.getElementById(id);
+    if (!el || el.hidden || el.style.display === 'none') continue;
+    el.focus({ preventScroll: true });
+    (el.closest('.annotation-field') ?? el).scrollIntoView({ block: 'center' });
+    return;
+  }
+}
+
+// #2164: what a Coffee row (bean, grinder) shows. A shot that names nothing
+// yet shows what the notes sheet prefills from the shot logging defaults
+// (#654, #1954), marked as a default, instead of a dash, so the row and the
+// sheet never disagree.
+export function coffeeRowText(label: string | null, prefill: string): { text: string; prefilled: boolean } {
+  if (label) return { text: label, prefilled: false };
+  if (prefill) return { text: prefill, prefilled: true };
+  return { text: '–', prefilled: false };
+}
+
+// Writes one Coffee row: its title (muted while it only shows a default)
+// and its "Default" hint. Nothing is saved by showing a default.
+export function showCoffeeRow(valueId: string, hintId: string, label: string | null, prefill: string): void {
+  const row = coffeeRowText(label, prefill);
+  const value = document.getElementById(valueId);
+  if (value) {
+    value.textContent = row.text;
+    value.className = row.prefilled ? 'settings-row-title settings-row-title--muted' : 'settings-row-title';
+  }
+  const hint = document.getElementById(hintId);
+  if (hint) hint.hidden = !row.prefilled;
+}
+
 // "All notes" and the Coffee rows: every note field except the stars and the
 // taste tag, in the shared detail sheet (a centred dialog on desktop, a
 // bottom sheet on phones). The fields are the static form in #shotNotesPanel,
@@ -155,7 +197,8 @@ function _whenSaved(fn: () => void, tries = 50): void {
 // unchanged. Closing saves a pending edit at once and, once the save has
 // landed, redraws the page when the shot's saved notes changed, so the
 // Coffee rows and the figures show them.
-export function openShotNotes(): void {
+// #2164: a Coffee row passes its field, the sheet then opens at that field.
+export function openShotNotes(field?: string): void {
   const panel = document.getElementById('shotNotesPanel');
   const id = S.primaryShotId;
   if (!panel || id == null) return;
@@ -173,4 +216,5 @@ export function openShotNotes(): void {
       });
     },
   });
+  if (field) _focusNotesField(field);
 }

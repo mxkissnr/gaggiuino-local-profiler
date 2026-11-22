@@ -17,10 +17,10 @@ import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousCompar
 import { mapShotDatapoints } from '../../utils.js';
 import { ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
-import { renderAnnotationPanel, annotationBusy }              from './annotation.js';
+import { renderAnnotationPanel, annotationBusy, _applyShotDefaults } from './annotation.js';
 import { markDirty }                                          from '../../live-sync.js';
 import { updatePQChart }                                      from './charts.js';
-import { processGroupHtml, similarShotsTitle, syncShotCompareButton, verdictComparisonText } from './detail-page.js';
+import { processGroupHtml, similarShotsTitle, syncShotCompareButton, verdictComparisonText, showCoffeeRow } from './detail-page.js';
 import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
 import { loadShotImageBlobUrl, invalidateShotImage }          from '../../bean-image.js';
@@ -744,8 +744,11 @@ export async function updateView(): Promise<void> {
   // a separate chip — one place to look instead of two.
   const grinderLabel = buildGrinderGrindLabel(_shots(), shotA, !shotB, t);
   // #1837: a mixed shot names every bean and its share ("A 10 g + B 8 g").
-  _el('beanVal').textContent    = beanLabel(ann, true) || '–';
-  _el('grinderVal').textContent = grinderLabel || '–';
+  // #2164: an unannotated shot shows what the notes sheet prefills from the
+  // shot logging defaults, muted and marked "Default"; nothing is saved.
+  const prefill = _applyShotDefaults(ann);
+  showCoffeeRow('beanVal', 'beanDefaultHint', beanLabel(ann, true), beanLabel(prefill, true));
+  showCoffeeRow('grinderVal', 'grinderDefaultHint', grinderLabel, prefill?.grinder || '');
 
   // Freshness badge — #1788: follows the library's current roast date instead
   // of the beanAgeDays frozen into the annotation at save time, so correcting a
