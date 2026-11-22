@@ -900,6 +900,7 @@
         .settings-row-icon .rail-icon { width:22px; height:22px; }
         .settings-row-text { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
         .settings-row-title { font-size: var(--fs-2); color: var(--gray-100); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .settings-row-title--muted { color: var(--gray-400); }
         .settings-row-sub { font-size: var(--fs-1); color: var(--gray-500); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         .settings-row-value { flex:0 0 auto; font-size: var(--fs-1); color: var(--gray-400); font-variant-numeric: tabular-nums; }
         .settings-chev { flex:0 0 auto; width:8px; height:8px; border-right:2px solid var(--gray-500); border-bottom:2px solid var(--gray-500); transform: rotate(-45deg); }

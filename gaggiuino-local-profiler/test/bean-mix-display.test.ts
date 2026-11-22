@@ -220,7 +220,7 @@ describe('shot detail bean value (#1837)', () => {
   const src = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../public-src/views/shots/index.ts'), 'utf8');
 
   it('shows the bean label with grams instead of the primary coffee alone', () => {
-    expect(src).toMatch(/_el\('beanVal'\)\.textContent\s*=\s*beanLabel\(ann, true\)\s*\|\|\s*'–'/);
+    expect(src).toMatch(/showCoffeeRow\('beanVal', 'beanDefaultHint', beanLabel\(ann, true\), beanLabel\(prefill, true\)\)/);
     expect(src).not.toMatch(/_el\('beanVal'\)\.textContent\s*=\s*ann\.coffee/);
   });
 

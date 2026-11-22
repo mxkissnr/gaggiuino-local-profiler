@@ -4,7 +4,8 @@
 // element only skips this step.
 // #2152: the top app bar. Compare and Share open a sheet, the downloads sit
 // in the overflow menu, and the rows marked data-shot-notes-open (All notes,
-// the bean and grinder rows) open the note fields in the detail sheet.
+// the bean and grinder rows) open the note fields in the detail sheet; the
+// bean and grinder rows open it at their own field (#2164).
 
 import { quickClone, uploadShotImage, removeShotImage, openShotPhotoLightbox, switchChartTab,
          openChartFullscreen, closeChartFullscreen, switchFsTab, exportAllCSV, exportShot, exportProfile } from '../views/shots.js';
@@ -32,7 +33,8 @@ export function wireShotDetail(): void {
   const compareBtn = document.getElementById('shotCompareBtn')!;
   compareBtn.addEventListener('click', () => onShotCompareClick(compareBtn));
   document.getElementById('chart-area')!.addEventListener('click', e => {
-    if ((e.target as HTMLElement).closest('[data-shot-notes-open]')) openShotNotes();
+    const row = (e.target as HTMLElement).closest<HTMLElement>('[data-shot-notes-open]');
+    if (row) openShotNotes(row.dataset.shotNotesOpen || undefined);
   });
   document.getElementById('tabZeit')!.addEventListener('click', () => switchChartTab('zeit'));
   document.getElementById('tabPQ')!.addEventListener('click', () => switchChartTab('pq'));
