@@ -774,14 +774,14 @@ function _renderProPhase(ph: GmPhase, i: number): Html {
 
       ${stopsFoldHtml(html`
         ${availTargets.length ? html`
-          <div class="gm-dropdown">
-            <button type="button" class="btn btn--tonal" data-action="gm-pro-target-menu" data-idx="${esc(i)}">${tHtml('gm_add_condition')}</button>
-            <ul class="gm-dropdown-menu" id="gmTargetMenu${esc(i)}" style="display:none">
+          <details class="lib-sheet-more gm-stop-add">
+            <summary class="btn btn--tonal">${tHtml('gm_add_condition')}</summary>
+            <div class="lib-sheet-menu-list">
               ${joinHtml(availTargets.map(tt => html`
-                <li><button type="button" class="gm-dropdown-item" data-action="gm-pro-add-target"
-                  data-idx="${esc(i)}" data-type="${esc(tt.type)}" data-op="${esc(tt.operator)}">${esc(tt.label)}</button></li>`))}
-            </ul>
-          </div>` : html``}
+                <button type="button" class="lib-sheet-menu-item" data-action="gm-pro-add-target"
+                  data-idx="${esc(i)}" data-type="${esc(tt.type)}" data-op="${esc(tt.operator)}">${esc(tt.label)}</button>`))}
+            </div>
+          </details>` : html``}
         ${joinHtml(targets.map((tg, ti) => (ti ? html`<div style="text-align:center;font-size:.8em;opacity:.5">${tHtml('gm_or')}</div>${_renderProTarget(tg, i, ti)}` : _renderProTarget(tg, i, ti))))}
         ${!targets.length ? html`<div style="opacity:.5;font-size:.85em">${tHtml('gm_no_stop_conditions')}</div>` : html``}`, _stopsOpen)}
     </div>
@@ -960,26 +960,6 @@ export function handleGmEditorAction(action: string, el: HTMLElement): void {
     case 'gm-pro-ramp-target':
       _setPhase(idx, { transition: { ...(ph().transition ?? {}), target: el.dataset.val } });
       break;
-    case 'gm-pro-target-menu': {
-      const menu = document.getElementById(`gmTargetMenu${idx}`);
-      if (!menu) break;
-      const opening = menu.style.display === 'none';
-      if (opening) {
-        // The trigger ("+ Hinzufügen") usually sits near the bottom of a
-        // long scrollable phase-editor panel — always opening downward
-        // (the CSS default, top:100%) routinely pushed the menu past the
-        // panel/viewport bottom, forcing a scroll to even see it (2026-09-09
-        // bug report). Flip to open upward when there isn't enough room
-        // below, same as any standard dropdown/select would.
-        menu.classList.remove('gm-dropdown-menu-up');
-        menu.style.display = 'block';
-        const fitsBelow = menu.getBoundingClientRect().bottom <= window.innerHeight;
-        menu.classList.toggle('gm-dropdown-menu-up', !fitsBelow);
-      } else {
-        menu.style.display = 'none';
-      }
-      break;
-    }
     case 'gm-pro-add-target':
       _setPhase(idx, { targets: [...(ph().targets || []), { type: el.dataset.type, operator: el.dataset.op, value: 0 }] });
       break;

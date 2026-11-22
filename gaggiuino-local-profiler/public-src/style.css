@@ -1861,9 +1861,11 @@
         .lib-sheet-close:hover, .lib-sheet-iconbtn:hover { background: var(--raised); }
         .lib-sheet-close:focus-visible, .lib-sheet-iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .lib-sheet-more { position: relative; }
-        .lib-sheet-more > summary { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: transparent; color: var(--gray-200); cursor: pointer; list-style: none; font-size: var(--fs-3); line-height: 1; }
+        .lib-sheet-more > summary { list-style: none; cursor: pointer; }
+        /* The ⋯ (or icon) trigger; a trigger with a label is a .btn summary instead (#2165). */
+        .lib-sheet-more > summary:not(.btn) { display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 50%; background: transparent; color: var(--gray-200); font-size: var(--fs-3); line-height: 1; }
         .lib-sheet-more > summary::-webkit-details-marker { display: none; }
-        .lib-sheet-more > summary:hover, .lib-sheet-more[open] > summary { background: var(--raised); }
+        .lib-sheet-more > summary:not(.btn):hover, .lib-sheet-more[open] > summary:not(.btn) { background: var(--raised); }
         .lib-sheet-more > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
         .lib-sheet-menu-list { position: absolute; right: 0; top: calc(100% + var(--sp-1)); z-index: var(--z-local-2); min-width: 200px; max-height: min(60vh, 360px); overflow-y: auto; padding: var(--sp-1) 0; background: var(--gray-800); border: 1px solid var(--gray-600); border-radius: var(--radius); box-shadow: 0 8px 24px color-mix(in srgb, var(--scrim) 45%, transparent); }
         /* #2165: set by the shared menu component when the list would end below the window. */
@@ -2724,19 +2726,8 @@
         .gm-phase { background:var(--gray-800); border-radius:var(--radius); padding:var(--sp-3); margin-bottom:var(--sp-2); }
         .gm-render-error { padding: var(--sp-4); color: var(--err); }
         .gm-note { text-align: center; padding: var(--sp-2); opacity: .6; }
-        .gm-dropdown { position:relative; display:inline-block; }
-        /* This is a <ul> — list-style/margin were never reset, so its
-           default browser bullet/indent showed next to every item (2026-
-           09-09 bug report). max-height+overflow-y is a safety net for a
-           very long stop-conditions list even after the up/down flip below. */
-        .gm-dropdown-menu { position:absolute; top:100%; left:0; z-index: var(--z-menu); background:var(--gray-800); border:1px solid var(--gray-600); border-radius:var(--radius); min-width:180px; padding:var(--sp-1) 0; margin:0; list-style:none; box-shadow:0 4px 16px color-mix(in srgb, var(--scrim) 40%, transparent); max-height:min(60vh, 320px); overflow-y:auto; }
-        /* Toggled on by the gm-pro-target-menu handler (gaggimate-profile-
-           editor.js) when opening downward would push the menu past the
-           viewport bottom — anchors it above the trigger instead, the same
-           flip any standard dropdown/select does. */
-        .gm-dropdown-menu.gm-dropdown-menu-up { top:auto; bottom:100%; }
-        .gm-dropdown-item { display:block; width:100%; text-align:left; background:none; border:none; color:var(--gray-300); font-size:var(--fs-1); padding:var(--sp-2) var(--sp-3); cursor:pointer; }
-        .gm-dropdown-item:hover { background:var(--gray-700); color:var(--gray-100); }
+        /* #2165: the stop-condition menu opens from its labelled button's start edge. */
+        .gm-stop-add .lib-sheet-menu-list { left: 0; right: auto; z-index: var(--z-menu); }
 
         /* Guided Dial-In wizard modal (#310) — same fixed-height/flex-child
            pattern as .profile-editor-modal, but narrower (it's a linear
