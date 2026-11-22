@@ -8,18 +8,19 @@ import { fetchMachineProfilesResponse, fetchMachineProfileResponse } from '../..
 import { localeFor, phasePlugin, corsairPlugin, clearChartOnTouchEnd, buildGmPhaseRanges, buildRecordedGmPhaseRanges, exitReasonKey } from '../../constants.js';
 import {
   esc, avg, avgActive, max, fmt, formatTimeLabel, formatDelta,
-  stddev, detectPhases, detectChanneling, scoreClass, scoreColor,
+  stddev, detectPhases, detectChanneling, scoreClass,
   chartColors, freshnessSourceLabelKey, resolveFreshness, html, joinHtml
 } from '../../utils.js';
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
-import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousShot, buildGrinderGrindLabel, shotBeanAge, beanFreshnessContext } from './utils.js';
+import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousComparableShot, buildGrinderGrindLabel, shotBeanAge, beanFreshnessContext } from './utils.js';
 import { mapShotDatapoints } from '../../utils.js';
 import { ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel, annotationBusy }              from './annotation.js';
 import { markDirty }                                          from '../../live-sync.js';
 import { updatePQChart }                                      from './charts.js';
+import { processGroupHtml, similarShotsTitle, syncShotCompareButton, verdictComparisonText } from './detail-page.js';
 import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
 import { loadShotImageBlobUrl, invalidateShotImage }          from '../../bean-image.js';
@@ -580,19 +581,6 @@ export async function permanentDeleteShot(id: number): Promise<void> {
 
 // ── Main view ─────────────────────────────────────────────────────────────
 
-// Shared setter for the #402 delta badges (verdict score + process-zone
-// metrics): hides the chip entirely when there's nothing to compare against,
-// never shows an empty pill.
-function _setDeltaChip(id: string, delta: number | null, decimals = 0, unit = '', colorClass: string | null = null, title = ''): void {
-  const el = _el(id);
-  if (!el) return;
-  if (delta == null) { el.style.display = 'none'; return; }
-  el.textContent = formatDelta(delta, decimals, unit);
-  el.className   = 'badge shot-delta' + (colorClass ? ` badge--${colorClass}` : '');
-  el.title       = title;
-  el.style.display = '';
-}
-
 let _updateViewToken = 0;
 
 // Language the shot detail was last fully rendered in (#1760). updateView()
@@ -617,10 +605,12 @@ export async function updateView(): Promise<void> {
   const shotB = S.compareShotId ? _shots().find(s => s.id === S.compareShotId) : null;
   if (!shotA) return;
 
-  // Same-profile auto-compare (#402): most recent earlier shot with the same
-  // profile on the same machine. Only meaningful outside A/B compare mode —
-  // that feature stays untouched and unrelated to this same-profile pairing.
-  const previousShot = (!shotB ? findPreviousShot(_shots(), shotA) : null) as ShotRow | null;
+  // Same-profile auto-compare (#402), #2152: the most recent earlier shot with
+  // the same profile on the same machine and, when this shot names one bean,
+  // the same bean. The verdict's delta, the Process deltas and the ghost
+  // curve all read it. Only meaningful outside A/B compare mode.
+  const comparable = !shotB ? findPreviousComparableShot(_shots(), shotA) : null;
+  const previousShot = (comparable?.shot ?? null) as ShotRow | null;
 
   // #957: curve data is lazy per shot now. Fetch the ones this render needs
   // (A, the B comparand, the previous same-profile shot for the ghost curve)
@@ -673,37 +663,49 @@ export async function updateView(): Promise<void> {
     }
   }
 
+  // #2152: the bar's compare button picks a shot, or ends the comparison.
+  syncShotCompareButton(!!shotB);
+
   const totalSecs = (shotA.duration || 0) / 10;
   _el('duration').innerText = formatTimeLabel(totalSecs);
 
   const pressureVals  = dA.pressure.map(p => p.y);
   const pressureTimes = dA.pressure.map(p => p.x);
   const avgPressure   = avgActive(pressureVals, 1.5);
-  _el('pressure').innerText       = fmt(avgPressure, ' bar');
-  _el('targetPressure').innerText = ` / ${fmt(max(dA.targetPressure.map(p => p.y)), ' bar')}`;
-  const avgFlow = avgActive(dA.flow.map(p => p.y), 0.2);
-  _el('flow').innerText           = fmt(avgFlow, ' ml/s');
-  _el('targetFlow').innerText     = ` / ${fmt(avgActive(dA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`;
+  const avgFlow       = avgActive(dA.flow.map(p => p.y), 0.2);
+  const tempVals      = dA.temp.map(p => p.y);
+  const sdTemp        = stddev(tempVals);
+  const avgTemp       = avg(tempVals);
+  const channeling    = !shotB && detectChanneling(pressureTimes, pressureVals);
 
-  const tempVals = dA.temp.map(p => p.y);
-  const sdTemp   = stddev(tempVals);
-  const avgTemp  = avg(tempVals);
-  _el('temp').innerText             = fmt(avgTemp, ' °C');
-  _el('tempStability').textContent  = (sdTemp != null && sdTemp < 5) ? `±${sdTemp.toFixed(1)}` : '';
-  _el('targetTemp').innerText       = ` / ${fmt(avg(dA.targetTemp.map(p => p.y)), ' °C')}`;
-
-  // Process-zone delta chips (#402): signed vs. the previous same-profile
-  // shot's own average — no quality judgment implied, so no score coloring.
-  if (dPrev && previousShot) {
-    const prevTitle = t('delta_vs_shot', previousShot.nativeId ?? previousShot.id);
-    _setDeltaChip('pressureDeltaChip', avgPressure != null ? avgPressure - (avgActive(dPrev.pressure.map(p => p.y), 1.5) ?? 0) : null, 1, ' bar', null, prevTitle);
-    _setDeltaChip('flowDeltaChip',     avgFlow     != null ? avgFlow     - (avgActive(dPrev.flow.map(p => p.y), 0.2) ?? 0)     : null, 1, ' ml/s', null, prevTitle);
-    _setDeltaChip('tempDeltaChip',     avgTemp     != null ? avgTemp     - (avg(dPrev.temp.map(p => p.y)) ?? 0)                : null, 1, ' °C', null, prevTitle);
-  } else {
-    _setDeltaChip('pressureDeltaChip', null);
-    _setDeltaChip('flowDeltaChip', null);
-    _setDeltaChip('tempDeltaChip', null);
-  }
+  // #2152: the Process group, one row per value against its target. The
+  // change against the compared shot (#402) is signed and neutral -- no
+  // quality judgment, so no score colour -- and left out without one.
+  const prevTitle = previousShot ? t('delta_vs_shot', previousShot.nativeId ?? previousShot.id) : '';
+  const deltaOf = (now: number | null, before: number | null, unit: string): string | null =>
+    dPrev && now != null && before != null ? formatDelta(now - before, 1, unit) : null;
+  // codeql[js/xss-through-dom] false positive: esc()/html already applied, see #760
+  _el('shotProcess').innerHTML = processGroupHtml([
+    {
+      titleKey: 'process_pressure',
+      value: `${fmt(avgPressure, ' bar')} / ${fmt(max(dA.targetPressure.map(p => p.y)), ' bar')}`,
+      delta: deltaOf(avgPressure, dPrev ? avgActive(dPrev.pressure.map(p => p.y), 1.5) : null, ' bar'),
+      deltaTitle: prevTitle,
+      channeling,
+    },
+    {
+      titleKey: 'process_flow',
+      value: `${fmt(avgFlow, ' ml/s')} / ${fmt(avgActive(dA.targetFlow.map(p => p.y), 0.2), ' ml/s')}`,
+      delta: deltaOf(avgFlow, dPrev ? avgActive(dPrev.flow.map(p => p.y), 0.2) : null, ' ml/s'),
+      deltaTitle: prevTitle,
+    },
+    {
+      titleKey: 'process_temp',
+      value: `${fmt(avgTemp, ' °C')}${sdTemp != null && sdTemp < 5 ? ` ±${sdTemp.toFixed(1)}` : ''} / ${fmt(avg(dA.targetTemp.map(p => p.y)), ' °C')}`,
+      delta: deltaOf(avgTemp, dPrev ? avg(dPrev.temp.map(p => p.y)) : null, ' °C'),
+      deltaTitle: prevTitle,
+    },
+  ]);
 
   const finalWeight = max(dA.weight.map(p => p.y));
   const ann         = shotA.annotation || {};
@@ -781,41 +783,19 @@ export async function updateView(): Promise<void> {
     fwEl.style.display = fw ? '' : 'none';
   }
 
-  // Shot photo (#448, #850): reuses the same image the annotation panel
-  // uploads/shows (_renderShotPhoto() in annotation.ts) — the small circular
-  // thumb fills the empty space next to the machine/freshness line on
-  // mobile, and the large hero panel (floated top-right of #chart-area)
-  // fills the unused desktop space above the chart. Both show the same
-  // photo, fetched once and shared; CSS (see .shot-hero-photo /
-  // .shot-header-thumb) decides which one is visible per breakpoint.
-  const photoThumbEl = _el('shotHeaderThumb') as HTMLImageElement | null;
-  const heroPhotoEl  = _el('shotHeroPhoto') as HTMLImageElement | null;
-  if (photoThumbEl || heroPhotoEl) {
+  // Shot photo (#448, #850), #2152: the same image the note fields show
+  // (_renderShotPhoto() in annotation.ts) is the verdict's round avatar,
+  // hidden in A/B compare mode; a click opens it full screen.
+  const heroPhotoEl = _el('shotHeroPhoto') as HTMLImageElement | null;
+  if (heroPhotoEl) {
     if (!shotB && shotA.image) {
-      if (photoThumbEl) {
-        photoThumbEl.style.display = '';
-        photoThumbEl.onclick = () => { if (photoThumbEl.src) openLightbox(photoThumbEl.src); };
-      }
-      if (heroPhotoEl) {
-        heroPhotoEl.classList.add('has-photo');
-        heroPhotoEl.onclick = () => { if (heroPhotoEl.src) openLightbox(heroPhotoEl.src); };
-      }
-      void loadShotImageBlobUrl(shotA.id).then(url => {
-        if (!url) return;
-        if (photoThumbEl) photoThumbEl.src = url;
-        if (heroPhotoEl)  heroPhotoEl.src  = url;
-      });
+      heroPhotoEl.classList.add('has-photo');
+      heroPhotoEl.onclick = () => { if (heroPhotoEl.src) openLightbox(heroPhotoEl.src); };
+      void loadShotImageBlobUrl(shotA.id).then(url => { if (url) heroPhotoEl.src = url; });
     } else {
-      if (photoThumbEl) {
-        photoThumbEl.style.display = 'none';
-        photoThumbEl.removeAttribute('src');
-        photoThumbEl.onclick = null;
-      }
-      if (heroPhotoEl) {
-        heroPhotoEl.classList.remove('has-photo');
-        heroPhotoEl.removeAttribute('src');
-        heroPhotoEl.onclick = null;
-      }
+      heroPhotoEl.classList.remove('has-photo');
+      heroPhotoEl.removeAttribute('src');
+      heroPhotoEl.onclick = null;
     }
   }
 
@@ -841,38 +821,35 @@ export async function updateView(): Promise<void> {
   const stopKey = !shotB ? exitReasonKey(rawA.finalExitReason) : null;
   _el('stopReasonSub').textContent = stopKey ? t('shot_end_reason', t(stopKey)) : '';
 
-  // Channeling
-  const channeling = !shotB && detectChanneling(pressureTimes, pressureVals);
-  _el('channelingWarning').style.display = channeling ? '' : 'none';
-
   // Verdict header (#398): score + the dial-in advice as one plain-language
   // line (#816: de-boxed — was a score badge beside a boxed advice line).
   const verdictHeader = _el('verdictHeader');
   if (!shotB) {
     const advice = calcGrindAdvice(shotA, dA);
     const sc     = calcShotScore(shotA, dA);
-    // #813: the score ring is now type. A 58px conic-gradient ring is a badge
-    // shape the redesign removes on both surfaces (the shot card did the same
-    // in glp-lovelace-card#120) — the number itself, at display size and in
-    // the score colour, carries the same information with none of the chrome.
+    // #813, #2152: the score is the verdict's big number, in the score colour
+    // (the shared score classes, like the dial-in verdict).
     const ringVal  = _el('verdictRingVal');
-    ringVal.style.setProperty('--ring-color', scoreColor(sc));
+    ringVal.className = `analytics-verdict-score-num serif-display${sc !== null ? ` ${scoreClass(sc)}` : ''}`;
     ringVal.textContent = sc !== null ? String(sc) : '–';
 
-    // Score delta chip (#402): same-profile auto-compare, unified score
-    // scale (#397) for the coloring — omitted entirely when there's no
-    // previous same-profile shot or either score is unknown.
+    // Score delta chip (#402) and the line naming the compared shot (#2152):
+    // the unified score scale (#397) colours the chip; both are left out when
+    // there is no compared shot or either score is unknown.
     const prevScore = previousShot ? previousShot.score : null;
     const verdictDeltaChip = _el('verdictDeltaChip');
+    const verdictSub = _el('verdictSub');
     if (previousShot && sc != null && prevScore != null) {
       const scoreDelta = sc - prevScore;
       const cls = scoreDelta > 0 ? 'score-great' : scoreDelta < 0 ? 'score-bad' : 'score-ok';
-      const vsShot = t('delta_vs_shot', previousShot.nativeId ?? previousShot.id);
-      verdictDeltaChip.textContent = `${formatDelta(scoreDelta)} ${vsShot}`;
+      verdictDeltaChip.textContent = formatDelta(scoreDelta);
       verdictDeltaChip.className   = `badge shot-delta badge--${cls}`;
       verdictDeltaChip.style.display = '';
+      _el('verdictSubText').textContent = verdictComparisonText(comparable);
+      verdictSub.hidden = false;
     } else {
       verdictDeltaChip.style.display = 'none';
+      verdictSub.hidden = true;
     }
 
     // #457: compact hint icon when the score was weighed against the bean's
@@ -891,7 +868,7 @@ export async function updateView(): Promise<void> {
     _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))}${scoreHint}`;
     // #838: duration and avg pressure dropped — they're already shown once
     // each, in the Dauer recipe card (incl. phase breakdown) and the
-    // Process-zone pressure card, so repeating them here was pure duplication.
+    // Process group's pressure row, so repeating them here was pure duplication.
     // #841: profile name + shot number (topTitle, one element above) and the
     // bean name (beanVal, in the recipe zone below) were the only
     // things left in this subline — both already shown elsewhere, so the
@@ -901,72 +878,62 @@ export async function updateView(): Promise<void> {
     verdictHeader.style.display = 'none';
   }
 
+  // #2152: the comparative grind advice is the similar shots fold row: its
+  // title counts the shots, its sub line is the advice, and opening it shows
+  // the thumbnails.
   const compEl  = _el('grindAdviceComparative');
   const compAdv = !shotB ? calcComparativeGrindAdvice(shotA, _shots()) : null;
-  if (compEl) {
-    if (compAdv) {
-      const wasOpen = compEl.classList.contains('expanded');
-      compEl.className = `grind-advice grind-comparative grind-${compAdv.type}${wasOpen ? ' expanded' : ''}`;
-      _el('grindAdviceComparativeIcon').innerHTML = compAdv.icon;
-      _el('grindAdviceComparativeText').textContent = compAdv.text;
+  if (compAdv) {
+    _el('grindAdviceComparativeIcon').innerHTML = compAdv.icon;
+    _el('grindAdviceComparativeTitle').textContent = similarShotsTitle(compAdv.shots.length);
+    _el('grindAdviceComparativeText').textContent = compAdv.text;
 
-      // #957: the comparative thumbnails each need their shot's curve — fetch
-      // the handful (typically 1-8) before rendering; _miniShotChart falls
-      // back to a no-data placeholder for any that are still missing.
-      await ensureCurves(compAdv.shots.map(x => x.shot.id));
-      if (token !== _updateViewToken) return;
+    // #957: the comparative thumbnails each need their shot's curve — fetch
+    // the handful (typically 1-8) before rendering; _miniShotChart falls
+    // back to a no-data placeholder for any that are still missing.
+    await ensureCurves(compAdv.shots.map(x => x.shot.id));
+    if (token !== _updateViewToken) return;
 
-      const locale   = localeFor(S.currentLang);
-      const listHtml = joinHtml(compAdv.shots.map(({ shot: s, grind, score }) => {
-        const date  = new Date((s.timestamp as number) * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
-        const dur   = s.duration ? `${(s.duration / 10).toFixed(0)}s` : '';
-        const cls   = scoreClass(score);
-        const chart = _miniShotChart(s);
-        return html`<div class="comp-thumb" role="button" tabindex="0" data-action="goto-shot" data-id="${esc(s.id)}" title="Shot ${esc(s.id)} — ${esc(date)}">
-          <div class="comp-thumb-chart">${chart}</div>
-          <div class="comp-thumb-meta">
-            <span class="comp-shot-date">${esc(date)}</span>
-            <span class="comp-shot-grind">${GEAR_ICON_SVG} ${esc(grind)}</span>
-            <span class="comp-shot-score ${esc(cls)}">${esc(score)}</span>
-            ${dur ? html`<span class="comp-shot-dur">${esc(dur)}</span>` : html``}
-          </div>
-        </div>`;
-      }));
+    const locale   = localeFor(S.currentLang);
+    const listHtml = joinHtml(compAdv.shots.map(({ shot: s, grind, score }) => {
+      const date  = new Date((s.timestamp as number) * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+      const dur   = s.duration ? `${(s.duration / 10).toFixed(0)}s` : '';
+      const cls   = scoreClass(score);
+      const chart = _miniShotChart(s);
+      return html`<div class="comp-thumb" role="button" tabindex="0" data-action="goto-shot" data-id="${esc(s.id)}" title="Shot ${esc(s.id)} — ${esc(date)}">
+        <div class="comp-thumb-chart">${chart}</div>
+        <div class="comp-thumb-meta">
+          <span class="comp-shot-date">${esc(date)}</span>
+          <span class="comp-shot-grind">${GEAR_ICON_SVG} ${esc(grind)}</span>
+          <span class="comp-shot-score ${esc(cls)}">${esc(score)}</span>
+          ${dur ? html`<span class="comp-shot-dur">${esc(dur)}</span>` : html``}
+        </div>
+      </div>`;
+    }));
 
-      let panel = compEl.querySelector('.comp-shots-panel');
-      if (!panel) {
-        panel = document.createElement('div');
-        panel.className = 'comp-shots-panel';
-        compEl.appendChild(panel);
-      }
-      panel.innerHTML = listHtml;
-
-      const toggle = compEl.querySelector('.comp-toggle');
-      if (!toggle) {
-        const btn = document.createElement('button');
-        btn.className = 'comp-toggle';
-        btn.textContent = '▸';
-        btn.dataset.action = 'toggle-comp-grind';
-        compEl.insertBefore(btn, compEl.querySelector('#grindAdviceComparativeIcon'));
-      }
-      compEl.style.display = '';
-    } else {
-      compEl.style.display = 'none';
-    }
+    _el('grindAdviceComparativePanel').innerHTML = listHtml;
+    compEl.hidden = false;
+  } else {
+    compEl.hidden = true;
   }
 
-  // Ordered-by info
+  // Ordered-by info — #2152: a row of the Coffee group, the only place it shows.
   const obEl = _el('orderedByInfo');
-  if (obEl) {
-    const ob = !shotB ? shotA.annotation?.orderedBy : null;
-    if (ob?.customer) {
-      const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
-      obEl.innerHTML = html`<span class="ann-ordered-by-label">${COFFEE_ICON_SVG} ${tHtml('ann_ordered_by')}</span><span class="ann-ordered-by-val">${esc(ob.customer)}${drink ? html` · ${esc(drink)}` : html``}${ob.note ? html` · <em>${esc(ob.note)}</em>` : html``}</span>`;
-      obEl.style.display = '';
-    } else {
-      obEl.style.display = 'none';
-    }
+  const ob = !shotB ? shotA.annotation?.orderedBy : null;
+  if (ob?.customer) {
+    const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
+    // codeql[js/xss-through-dom] false positive: esc()/html already applied, see #760
+    obEl.innerHTML = html`<span class="settings-row-icon" aria-hidden="true">${COFFEE_ICON_SVG}</span><span class="settings-row-text"><span class="settings-row-title">${esc(ob.customer)}</span><span class="settings-row-sub">${tHtml('ann_ordered_by')}${drink ? html` · ${esc(drink)}` : html``}${ob.note ? html` · ${esc(ob.note)}` : html``}</span></span>`;
+    obEl.hidden = false;
+  } else {
+    obEl.hidden = true;
   }
+
+  // #2152: the All notes row previews the first line of the shot's notes.
+  const notesPreview = _el('shotNotesPreview');
+  const firstLine = (shotA.annotation?.notes ?? '').split('\n')[0]?.trim() ?? '';
+  notesPreview.textContent = firstLine;
+  notesPreview.hidden = firstLine === '';
 
   renderAnnotationPanel(shotA);
 
