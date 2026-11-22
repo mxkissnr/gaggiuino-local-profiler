@@ -477,6 +477,20 @@ describe('shot page markup (#2152)', () => {
     }
   });
 
+  it('gives every download an icon and a label that says what it does (#2165)', () => {
+    const more = between('<details class="lib-sheet-more shot-more" id="shotMore">', '</details>');
+    expect(count(more, '<svg class="rail-icon sm"')).toBe(3);
+    for (const key of ['export_shot_menu', 'btn_export_profile', 'export_csv_title']) {
+      expect(more, key).toContain(`<span data-i18n="${key}">`);
+    }
+    expect(more).not.toContain('\u2193');
+    for (const lang of ['de', 'en', 'es', 'fr', 'it', 'nl']) {
+      const locale = read('i18n/' + lang + '.ts');
+      expect(locale, lang).toContain(`export_shot_menu:'`);
+      expect(locale, lang).not.toContain(`btn_export_profile:'\u2193`);
+    }
+  });
+
   it('keeps the stars and the taste tag on the page and every other note field in the notes sheet', () => {
     for (const id of ['starRating', 'tasteTagPillsContainer', 'quickCloneBtn', 'shotNotesOpen']) {
       expect(layout, id).toContain(`id="${id}"`);
