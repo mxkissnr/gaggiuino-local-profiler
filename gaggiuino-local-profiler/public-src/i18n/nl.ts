@@ -819,6 +819,7 @@ const nl: Partial<Translations> = {
     profile_btn_duplicate:'Dupliceren', profile_duplicate_suffix:' (Kopie)',
     profile_no_phases_error:'Minstens één fase is vereist',
     profile_editor_title:'Profielbewerker',
+    pe_recipe:'Recept', pe_phase_of:(i, n)=>`Fase ${i} van ${n}`, pe_phase_fallback:(n)=>`Fase ${n}`,
     profile_form_name:'Naam *', profile_form_water_temp:'Watertemperatuur (°C)',
     profile_form_coffee_in:'Dosis (g)', profile_form_coffee_out:'Opbrengst (g)', profile_form_ratio:'Ratio',
     profile_form_weight:'Stopgewicht (g)',

@@ -819,6 +819,7 @@ const en: Translations = {
     profile_btn_duplicate:'Duplicate', profile_duplicate_suffix:' (Copy)',
     profile_no_phases_error:'At least one phase is required',
     profile_editor_title:'Profile editor',
+    pe_recipe:'Recipe', pe_phase_of:(i, n)=>`Phase ${i} of ${n}`, pe_phase_fallback:(n)=>`Phase ${n}`,
     profile_form_name:'Name *', profile_form_water_temp:'Water temperature (°C)',
     profile_form_coffee_in:'Dose (g)', profile_form_coffee_out:'Yield (g)', profile_form_ratio:'Ratio',
     profile_form_weight:'Stop weight (g)',

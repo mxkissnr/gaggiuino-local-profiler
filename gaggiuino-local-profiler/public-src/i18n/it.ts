@@ -819,6 +819,7 @@ const it: Partial<Translations> = {
     profile_btn_duplicate:'Duplica', profile_duplicate_suffix:' (Copia)',
     profile_no_phases_error:'È richiesta almeno una fase',
     profile_editor_title:'Editor profilo',
+    pe_recipe:'Ricetta', pe_phase_of:(i, n)=>`Fase ${i} di ${n}`, pe_phase_fallback:(n)=>`Fase ${n}`,
     profile_form_name:'Nome *', profile_form_water_temp:'Temperatura acqua (°C)',
     profile_form_coffee_in:'Dose (g)', profile_form_coffee_out:'Resa (g)', profile_form_ratio:'Rapporto',
     profile_form_weight:'Peso di stop (g)',
