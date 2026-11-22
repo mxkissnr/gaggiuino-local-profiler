@@ -15,7 +15,7 @@ import { phasePlugin, buildGmPhaseRanges } from '../constants.js';
 import type { GmPhaseRange } from '../constants.js';
 import { bindPillSelects } from '../components/pill-select.js';
 import { markFieldInvalid } from '../components/field-error.js';
-import { loadMachineProfileList } from './library-profile-editor.js';
+import { loadMachineProfileList, loadProfileForEditing } from './library-profile-editor.js';
 import { invalidateGmPhaseCache } from './shots/index.js';
 import { phaseTimelineHtml, phaseHeadHtml, stopsFoldHtml, removePhaseButtonHtml, recipeTitleHtml } from '../components/phase-timeline.js';
 
@@ -78,8 +78,8 @@ let _editorMachineId: number | null = null;
 
 export async function openGaggiMateProfileEditor(id: string): Promise<void> {
   _editorMachineId = concreteActiveMachineId();
-  const profile = await machinesApi.getMachineProfile(id, _editorMachineId ?? undefined);
-  if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
+  const profile = await loadProfileForEditing(id, _editorMachineId ?? undefined, 'gm_toast_load_error');
+  if (!profile) return;
   _openEditor(profile);
 }
 
@@ -89,8 +89,8 @@ export async function openGaggiMateProfileEditor(id: string): Promise<void> {
 // its source in the list.
 export async function duplicateGaggiMateProfile(id: string): Promise<void> {
   _editorMachineId = concreteActiveMachineId();
-  const profile = await machinesApi.getMachineProfile(id, _editorMachineId ?? undefined);
-  if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
+  const profile = await loadProfileForEditing(id, _editorMachineId ?? undefined, 'gm_toast_load_error');
+  if (!profile) return;
   _openEditor({ ...profile, id: undefined, label: `${profile.label ?? ''}${t('profile_duplicate_suffix')}` });
 }
 

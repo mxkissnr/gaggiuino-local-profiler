@@ -135,14 +135,6 @@ export async function getMachineProfileResult(
   return { profile: null, notStored: r.status === 503 };
 }
 
-/** {@link getMachineProfileResult}'s profile, or null. */
-export async function getMachineProfile(
-  id: string | number,
-  machineId?: string | number,
-): Promise<MachineProfile | null> {
-  return (await getMachineProfileResult(id, machineId)).profile;
-}
-
 /**
  * Low-level GET /api/machine/profiles — the raw Response, for the GaggiMate
  * phase-name lookup in views/shots/index.ts. That caller retries on a

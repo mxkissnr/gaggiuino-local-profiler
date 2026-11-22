@@ -16,6 +16,7 @@
 import { S, concreteActiveMachineId } from '../state/index.js';
 import { t, tHtml }        from '../i18n.js';
 import * as machinesApi from '../api/machines.js';
+import { loadProfileForEditing } from './library-profile-editor.js';
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { calcShotScore } from './shots/utils.js';
@@ -117,8 +118,8 @@ export function openProfileDialinWizard(profile: DialinProfile | null | undefine
 // real phases to compute suggestions against.
 export async function startProfileDialinFromList(id: string | number): Promise<void> {
   const machineId = concreteActiveMachineId();
-  const profile = await machinesApi.getMachineProfile(id, machineId ?? undefined);
-  if (!profile) { window.showToast?.(t('profile_load_error')); return; }
+  const profile = await loadProfileForEditing(id, machineId ?? undefined, 'profile_load_error');
+  if (!profile) return;
   openProfileDialinWizard(profile, machineId);
 }
 
