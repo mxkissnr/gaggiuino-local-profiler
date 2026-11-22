@@ -57,10 +57,7 @@ describe('share card request (#2166)', () => {
   });
 
   it('drops a null delta', async () => {
-    await getShotCard(3, {
-      format: 'square', accent: 'amber-americano', theme: 'dark', lang: 'en',
-      delta: null,
-    });
+    await getShotCard(3, { format: 'square', accent: 'amber-americano', theme: 'dark', lang: 'en', delta: null });
     expect(sentParams().has('delta')).toBe(false);
   });
 });
