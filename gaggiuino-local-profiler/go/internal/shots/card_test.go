@@ -488,24 +488,6 @@ func TestSerifWidth_MeasuresFraunces(t *testing.T) {
 	}
 }
 
-// The two helpers below are the score's Fraunces emitters for #2166. They
-// stay test-local until the layout slice calls them: the blocking deadcode
-// gate builds ./cmd/... and would reject a production function with no
-// caller yet (same trade as #1922, #1961 and #2025). The layout slice moves
-// them into card.go unchanged.
-
-// serif emits a <text> in Fraunces 600, the app's display face for the score.
-func (s *svgBuf) serif(x, y, size float64, fill, content string) {
-	s.printf(`<text x="%s" y="%s" font-family="%s" font-size="%s" font-weight="600" fill="%s">%s</text>`,
-		fnum(x), fnum(y), cardSerifFamily, fnum(size), fill, esc(content))
-}
-
-// serifWidth measures s in Fraunces, the score's display face.
-func serifWidth(s string, size float64) float64 {
-	initFonts()
-	return measureText(s, size, cardSerifSF, "serif")
-}
-
 // #2166: the app sends its active accent as a #rrggbb hex, so the palette
 // must take it verbatim (the neutrals stay the theme's) and pick the text
 // colour on the accent fill by luminance.
@@ -601,5 +583,191 @@ func TestGetCard_AcceptsVerdictAndHexAccent(t *testing.T) {
 	b := doJSON(t, mux, http.MethodGet, "/api/shots/3/card?accent=%230f766e&theme=dark", nil).Body.Bytes()
 	if bytes.Equal(a, b) {
 		t.Error("expected two different hex accents to produce different card images")
+	}
+}
+
+// TestCard_ProfileNameOnlyOnce covers #2166: a shot without a bean falls back
+// to the profile name as the headline, and the line below never repeats it.
+func TestCard_ProfileNameOnlyOnce(t *testing.T) {
+	for _, format := range []string{"square", "story"} {
+		data := cardShotData()
+		delete(data["annotation"].(map[string]any), "coffee")
+		data["profileName"] = "Leva mk 9 v0.9"
+		svg := newCardModel(Shot(data), nil, format, "", "dark", "en", cardDeps{}).svg()
+		if got := strings.Count(svg, "Leva mk 9 v0.9"); got != 1 {
+			t.Errorf("%s: profile name appears %d times, want once", format, got)
+		}
+	}
+}
+
+// TestCard_BeanHeadlineKeepsProfileBelow pins #2166's hero: the bean is the
+// headline, the profile moves to the line below it.
+func TestCard_BeanHeadlineKeepsProfileBelow(t *testing.T) {
+	data := cardShotData()
+	data["profileName"] = "Leva"
+	svg := newCardModel(Shot(data), nil, "square", "", "dark", "en", cardDeps{}).svg()
+	if !strings.Contains(svg, "Colombia Huila") {
+		t.Error("bean headline is missing")
+	}
+	if got := strings.Count(svg, "Leva"); got != 1 {
+		t.Errorf("profile name appears %d times, want once", got)
+	}
+}
+
+// TestCard_NoDoseShowsYieldOnly covers #2166: without a dose the card draws a
+// Yield figure, never an empty label or a bare arrow.
+func TestCard_NoDoseShowsYieldOnly(t *testing.T) {
+	data := cardShotData()
+	delete(data["annotation"].(map[string]any), "dose")
+	svg := newCardModel(Shot(data), nil, "square", "", "dark", "en", cardDeps{}).svg()
+	for _, want := range []string{">Yield<", " g<"} {
+		if !strings.Contains(svg, want) {
+			t.Errorf("card is missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"Dose → Yield", ">Dose<", ">Ratio<"} {
+		if strings.Contains(svg, unwanted) {
+			t.Errorf("card still draws %q without a dose", unwanted)
+		}
+	}
+}
+
+// TestCard_NoEmptyTextElements pins #2166's "no empty labels": neither a full
+// shot, a shot without dose and bean, nor a bare shot row emits an empty text.
+func TestCard_NoEmptyTextElements(t *testing.T) {
+	emptyText := regexp.MustCompile(`<text[^>]*></text>`)
+
+	noDoseBean := cardShotData()
+	noDoseBeanAnn := noDoseBean["annotation"].(map[string]any)
+	delete(noDoseBeanAnn, "dose")
+	delete(noDoseBeanAnn, "coffee")
+
+	cases := map[string]Shot{
+		"full shot":        Shot(cardShotData()),
+		"no dose, no bean": Shot(noDoseBean),
+		"bare shot":        Shot{"id": int64(1)},
+	}
+	for name, shot := range cases {
+		for _, format := range []string{"square", "story"} {
+			svg := newCardModel(shot, nil, format, "", "dark", "en", cardDeps{}).svg()
+			if m := emptyText.FindString(svg); m != "" {
+				t.Errorf("%s (%s): empty text element %q", name, format, m)
+			}
+			if name == "bare shot" {
+				for _, unwanted := range []string{">Duration<", ">Pressure Ø<"} {
+					if strings.Contains(svg, unwanted) {
+						t.Errorf("%s (%s): card draws %q for a shot without data", name, format, unwanted)
+					}
+				}
+			}
+		}
+	}
+}
+
+// TestCard_VerdictSentenceDeltaAndSerifScore covers #2166's verdict block: the
+// score in Fraunces, the sentence with its arrow, the delta chip and the
+// compared shot, and no tier phrase next to a passed sentence.
+func TestCard_VerdictSentenceDeltaAndSerifScore(t *testing.T) {
+	score := 89
+	d := -11
+	m := newCardModel(Shot(cardShotData()), &score, "square", "", "dark", "en", cardDeps{})
+	m.verdict = cardVerdict{kind: "coarser", text: "Shot ran long (55 s) – grind coarser", delta: &d, vs: "vs shot 306"}
+	svg := m.svg()
+
+	for _, want := range []string{
+		`font-family="Fraunces"`, ">89</text>", ">↑</text>", "Shot ran long (55 s)",
+		">−11</text>", ">vs shot 306</text>",
+	} {
+		if !strings.Contains(svg, want) {
+			t.Errorf("card is missing %q", want)
+		}
+	}
+	if strings.Contains(svg, "Really dialed in") {
+		t.Error("card draws the tier phrase next to a passed verdict sentence")
+	}
+}
+
+// TestCard_TierPhraseWithoutVerdict pins the fallback: with no verdict the
+// score's tier phrase stands in, and no delta chip is drawn.
+func TestCard_TierPhraseWithoutVerdict(t *testing.T) {
+	score := 92
+	svg := newCardModel(Shot(cardShotData()), &score, "square", "", "dark", "en", cardDeps{}).svg()
+	if !strings.Contains(svg, "Outstanding shot") {
+		t.Error("card is missing the tier phrase")
+	}
+	for _, unwanted := range []string{">+", ">−", ">±"} {
+		if strings.Contains(svg, unwanted) {
+			t.Errorf("card draws a delta chip %q without a verdict", unwanted)
+		}
+	}
+}
+
+// TestCard_StoryHeaderHasDate covers #2166: the story header carries the shot
+// number and the date, like the square one.
+func TestCard_StoryHeaderHasDate(t *testing.T) {
+	data := cardShotData()
+	data["timestamp"] = 1_700_000_000
+	data["id"] = int64(7)
+	svg := newCardModel(Shot(data), nil, "story", "", "dark", "en", cardDeps{}).svg()
+	for _, want := range []string{"Shot #7", cardDate("en", 1_700_000_000)} {
+		if !strings.Contains(svg, want) {
+			t.Errorf("story header is missing %q", want)
+		}
+	}
+}
+
+// TestCard_BadgeFollowsAccent covers #2166: the badge is filled with the
+// accent, its text in the palette's accent text colour.
+func TestCard_BadgeFollowsAccent(t *testing.T) {
+	svg := newCardModel(Shot(cardShotData()), nil, "square", "#5b21b6", "dark", "en", cardDeps{}).svg()
+	if !regexp.MustCompile(`<rect[^>]*fill="#5b21b6"`).MatchString(svg) {
+		t.Error("no rect is filled with the accent")
+	}
+	if !regexp.MustCompile(`<text[^>]*fill="#ffffff"[^>]*>Made with GLP</text>`).MatchString(svg) {
+		t.Error("the badge text is not in the accent text colour")
+	}
+}
+
+// TestCardDurationAndDelta pins the figure and chip formatting (#2166).
+func TestCardDurationAndDelta(t *testing.T) {
+	for _, tc := range []struct {
+		sec  float64
+		want string
+	}{{28, "28 s"}, {65, "1:05"}} {
+		if got := cardDuration(tc.sec); got != tc.want {
+			t.Errorf("cardDuration(%v) = %q, want %q", tc.sec, got, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		d    int
+		want string
+	}{{5, "+5"}, {-11, "−11"}, {0, "±0"}} {
+		if got := cardDelta(tc.d); got != tc.want {
+			t.Errorf("cardDelta(%d) = %q, want %q", tc.d, got, tc.want)
+		}
+	}
+}
+
+// TestWrapToWidth_TwoLinesMax covers the verdict sentence's wrap: at most two
+// lines, the last one truncated with an ellipsis.
+func TestWrapToWidth_TwoLinesMax(t *testing.T) {
+	words := make([]string, 30)
+	for i := range words {
+		words[i] = "word" + strconv.Itoa(i)
+	}
+	lines := wrapToWidth(strings.Join(words, " "), 600, 30, true, 2)
+	if len(lines) != 2 {
+		t.Fatalf("wrapToWidth gave %d lines, want 2", len(lines))
+	}
+	for i, ln := range lines {
+		if w := textWidth(ln, 30, true); w > 600 {
+			t.Errorf("line %d is %v wide, want <= 600", i, w)
+		}
+	}
+	if !strings.HasSuffix(lines[1], "…") {
+		t.Errorf("last line = %q, want a trailing ellipsis", lines[1])
+	}
+	if got := wrapToWidth("Short verdict", 600, 30, true, 2); len(got) != 1 || got[0] != "Short verdict" {
+		t.Errorf("short sentence wrapped to %q, want one unchanged line", got)
 	}
 }

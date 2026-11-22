@@ -413,6 +413,18 @@ func (s *svgBuf) text(x, y, size float64, bold bool, fill, anchor, content strin
 		fnum(x), fnum(y), cardFontFamilies, fnum(size), weight, fill, a, esc(content))
 }
 
+// serif emits a <text> in Fraunces 600, the app's display face for the score.
+func (s *svgBuf) serif(x, y, size float64, fill, content string) {
+	s.printf(`<text x="%s" y="%s" font-family="%s" font-size="%s" font-weight="600" fill="%s">%s</text>`,
+		fnum(x), fnum(y), cardSerifFamily, fnum(size), fill, esc(content))
+}
+
+// serifWidth measures s in Fraunces, the score's display face.
+func serifWidth(s string, size float64) float64 {
+	initFonts()
+	return measureText(s, size, cardSerifSF, "serif")
+}
+
 func (s *svgBuf) line(x1, y1, x2, y2 float64, stroke string, width float64, dash string) {
 	d := ""
 	if dash != "" {
