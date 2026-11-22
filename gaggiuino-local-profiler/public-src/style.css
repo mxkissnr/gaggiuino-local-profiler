@@ -286,14 +286,10 @@
         .stars .off .star-glyph { fill: none; }
 
         /* #412: day-separator group header, replaces the per-row timestamp
-           and the old collapsible month-header (#399's approach) — plain,
-           non-collapsible, matches the approved rail+panel mockup. */
-        .day-sep {
-            padding: var(--sp-3) var(--sp-4) var(--sp-1);
-            font-size: var(--fs-1);
-            font-weight: 700;
-            color: var(--gray-500);
-        }
+           and the old collapsible month-header (#399's approach). #2152: it is
+           the shared .section-title with a counter of the day's shots; this
+           class only places it. */
+        .day-sep { margin: var(--sp-3) var(--sp-4) var(--sp-1); }
 
         /* #439: month-tier groups (14+ days old) restore the pre-#399
            collapsible accordion — clickable header (▸/▾ + "Month Year"),
