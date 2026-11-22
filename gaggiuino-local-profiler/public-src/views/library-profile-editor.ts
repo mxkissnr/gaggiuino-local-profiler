@@ -150,7 +150,9 @@ export function renderProfileList(): void {
 export async function editProfile(id: string): Promise<void> {
   const profile = await machinesApi.getMachineProfile(id, S.activeMachineId ?? '');
   if (!profile) { window.showToast?.(t('profile_load_error')); return; }
-  openProfileForm(profile);
+  // #2167: the machine's REST export has no `id`; keep the one we opened,
+  // so the save PUTs over this profile instead of creating a copy.
+  openProfileForm({ ...profile, id: profile.id ?? id });
 }
 
 // Opens a fresh (unsaved) editor pre-filled with an existing profile's
