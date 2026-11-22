@@ -5,7 +5,7 @@
 // adds its own radius, padding or look fails here. Use a token or a shared
 // component (.chip, .chip--input, .btn, .badge, .section-title) instead.
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import postcss from 'postcss';
@@ -191,5 +191,72 @@ describe('style.css design ratchet (#2091)', () => {
     for (const [name, text] of [['tokens.css', readFileSync(TOKENS_PATH, 'utf-8')], ['style.css', css], ['kiosk.css', kiosk]]) {
       expect(text, name).not.toContain('--radius-sm');
     }
+  });
+});
+
+// #2165: every menu is details.lib-sheet-more > summary + .lib-sheet-menu-list
+// > button.lib-sheet-menu-item (docs/DESIGN.md). A page that builds its own
+// menu fails here: a class named *dropdown*, *popover*, *popup* or *-menu*,
+// a menu list outside such a details, or a menu entry that is not a button.
+// Not menus: the orders page's drinks menu (orders-menu-*); the top bar's
+// nav list carries the shared list class itself. The kiosk is its own page.
+const SRC_DIR = join(here, '..', 'public-src');
+// test/node-builtins.d.ts types readdirSync for the one-argument call only.
+const readdirRecursive = readdirSync as unknown as (
+  path: string,
+  options: { recursive: true; encoding: 'utf8' },
+) => string[];
+const MENU_CLASS = /dropdown|popover|popup|(?:^|-)menu(?:$|-)/;
+const MENU_CLASS_ALLOWED = /^(?:lib-sheet-menu-(?:list|item|sep)(?:--[a-z]+)?|topbar-nav-menu|orders-menu-[\w-]+)$/;
+const MENU_HOSTS = ['lib-sheet-more', 'topbar-nav-more'];
+
+function menuViolations(files: Record<string, string>, css: string): string[] {
+  const out: string[] = [];
+  const checkClass = (name: string, where: string): void => {
+    if (MENU_CLASS.test(name) && !MENU_CLASS_ALLOWED.test(name)) out.push(`${where}: own menu class .${name}`);
+  };
+  postcss.parse(css).walkRules((rule) => {
+    for (const m of rule.selector.matchAll(/\.([A-Za-z_][\w-]*)/g)) checkClass(m[1] ?? '', 'style.css');
+  });
+  for (const [file, text] of Object.entries(files)) {
+    for (const m of text.matchAll(/class(?:Name)?\s*=\s*["']([^"']*)["']/g)) {
+      for (const name of (m[1] ?? '').split(/\s+/)) checkClass(name, file);
+    }
+    for (const m of text.matchAll(/classList\.(?:add|remove|toggle)\(\s*'([^']+)'/g)) checkClass(m[1] ?? '', file);
+    for (const m of text.matchAll(/class="lib-sheet-menu-list/g)) {
+      const before = text.slice(0, m.index);
+      const open = before.lastIndexOf('<details');
+      const span = open === -1 ? '' : before.slice(open);
+      const host = /^<details[^>]*class="([^"]*)"/.exec(span)?.[1] ?? '';
+      const inside = open !== -1 && !span.includes('</details>') && span.includes('<summary');
+      if (!inside || !MENU_HOSTS.some((h) => host.split(/\s+/).includes(h))) out.push(`${file}: menu list outside details.lib-sheet-more`);
+    }
+    for (const m of text.matchAll(/class="lib-sheet-menu-item/g)) {
+      const tag = text.slice(text.lastIndexOf('<', m.index), m.index);
+      if (!tag.startsWith('<button')) out.push(`${file}: menu entry that is not a button`);
+    }
+  }
+  return out;
+}
+
+describe('menus use the shared pattern (#2165)', () => {
+  it('fails on a menu outside the pattern', () => {
+    const ok = '<details class="lib-sheet-more"><summary>⋯</summary><div class="lib-sheet-menu-list"><button type="button" class="lib-sheet-menu-item">A</button></div></details>';
+    expect(menuViolations({ 'ok.ts': ok }, '.lib-sheet-menu-list--up { top: auto; }')).toEqual([]);
+    expect(menuViolations({ 'a.ts': '<div class="lib-sheet-menu-list"></div>' }, '')).toHaveLength(1);
+    expect(menuViolations({ 'b.ts': '<ul class="gm-dropdown-menu"></ul>' }, '')).toHaveLength(1);
+    expect(menuViolations({ 'c.ts': "el.classList.add('share-popover');" }, '')).toHaveLength(1);
+    expect(menuViolations({}, '.card-fmt-menu { left: 0; }')).toHaveLength(1);
+    expect(menuViolations({ 'd.ts': ok.replace('<button type="button" class="lib-sheet-menu-item">A</button>', '<div class="lib-sheet-menu-item">A</div>') }, '')).toHaveLength(1);
+  });
+
+  it('finds no menu outside the pattern in the app', () => {
+    const files: Record<string, string> = {};
+    for (const name of readdirRecursive(SRC_DIR, { recursive: true, encoding: 'utf8' })) {
+      if (!(name.endsWith('.ts') || name.endsWith('.html')) || name.startsWith('kiosk') || name.startsWith('public/')) continue;
+      files[name] = readFileSync(join(SRC_DIR, name), 'utf8');
+    }
+    expect(Object.keys(files).length).toBeGreaterThan(50);
+    expect(menuViolations(files, readFileSync(CSS_PATH, 'utf8'))).toEqual([]);
   });
 });
