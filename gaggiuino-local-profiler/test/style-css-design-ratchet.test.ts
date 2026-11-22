@@ -224,7 +224,7 @@ function menuViolations(files: Record<string, string>, css: string): string[] {
     }
     for (const m of text.matchAll(/classList\.(?:add|remove|toggle)\(\s*'([^']+)'/g)) checkClass(m[1] ?? '', file);
     for (const m of text.matchAll(/class="lib-sheet-menu-list/g)) {
-      const before = text.slice(0, m.index);
+      const before = text.slice(0, m.index ?? 0);
       const open = before.lastIndexOf('<details');
       const span = open === -1 ? '' : before.slice(open);
       const host = /^<details[^>]*class="([^"]*)"/.exec(span)?.[1] ?? '';
@@ -232,7 +232,7 @@ function menuViolations(files: Record<string, string>, css: string): string[] {
       if (!inside || !MENU_HOSTS.some((h) => host.split(/\s+/).includes(h))) out.push(`${file}: menu list outside details.lib-sheet-more`);
     }
     for (const m of text.matchAll(/class="lib-sheet-menu-item/g)) {
-      const tag = text.slice(text.lastIndexOf('<', m.index), m.index);
+      const tag = text.slice(text.lastIndexOf('<', m.index ?? 0), m.index ?? 0);
       if (!tag.startsWith('<button')) out.push(`${file}: menu entry that is not a button`);
     }
   }
