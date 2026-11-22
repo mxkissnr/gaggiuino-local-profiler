@@ -211,18 +211,18 @@ describe('analytics chips (#2093)', () => {
 describe('status badges (#2094)', () => {
   it('renders the shot detail status labels as shared badges', () => {
     const index = read('index.html');
-    for (const id of ['verdictDeltaChip', 'pressureDeltaChip', 'flowDeltaChip', 'tempDeltaChip']) {
-      expect(index, id).toContain(`<span class="badge shot-delta" id="${id}"`);
-    }
-    expect(index).toContain('<span id="channelingWarning" class="badge badge--err"');
+    expect(index).toContain('<span class="badge shot-delta" id="verdictDeltaChip"');
+    const page = read('views/shots/detail-page.ts');
+    expect(page).toContain('<span class="badge shot-delta" title=');
+    expect(page).toContain('<span class="badge badge--err">${LIGHTNING_ICON_SVG} Channeling</span>');
     expect(index).toContain('<span id="freshnessBadge" class="badge"');
-    expect(index).toContain('<div id="orderedByBadge" class="badge badge--warn"');
+    expect(index).not.toContain('orderedByBadge');
     expect(index).toContain('<span class="badge badge--err" id="trash-count">');
   });
 
   it('colours score deltas through the score-scale badge variants', () => {
     const shots = read('views/shots/index.ts');
-    expect(shots).toContain("'badge shot-delta'");
+    expect(read('views/shots/detail-page.ts')).toContain('<span class="badge shot-delta" title=');
     expect(shots).toContain('badge shot-delta badge--');
   });
 });
@@ -251,9 +251,11 @@ describe('shared buttons (#2095)', () => {
 
   it('gives the shot view, shot list and trash actions a shared button variant', () => {
     const index = read('index.html');
-    for (const id of ['exportAllCsvBtn', 'exportShotBtn', 'exportProfileBtn', 'shareCardBtn', 'annPhotoPickBtn']) {
-      expect(index, id).toContain(`class="btn btn--quiet" id="${id}"`);
+    for (const id of ['exportAllCsvBtn', 'exportShotBtn', 'exportProfileBtn']) {
+      expect(index, id).toContain(`class="lib-sheet-menu-item" id="${id}"`);
     }
+    expect(index).toContain('class="lib-sheet-iconbtn" id="shareCardBtn"');
+    expect(index).toContain('class="btn btn--quiet" id="annPhotoPickBtn"');
     expect(index).toContain('class="btn btn--danger" id="annPhotoRemoveBtn"');
     const sidebar = read('components/sidebar.ts');
     expect(sidebar).toContain("btnCmp.className = 'chip shot-compare';");
@@ -561,7 +563,7 @@ describe('form headings (#2120)', () => {
     expect(index.split('<div class="section-title">').length - 1).toBe(2);
     expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_title">');
     expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_custom_label">');
-    expect(index).toContain('<span class="section-title" data-i18n="ann_title">');
+    expect(index).toContain('<h2 class="section-title" data-i18n="ann_title">');
     expect(read('views/gaggimate-profile-editor.ts').split('<div class="section-title">').length - 1).toBe(2);
     expect(read('views/library/import.ts')).toContain('<div class="section-title">${esc(t(');
   });
