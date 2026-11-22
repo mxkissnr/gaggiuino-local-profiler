@@ -231,6 +231,24 @@ describe('editProfile keeps the profile id (#2167)', () => {
   });
 });
 
+describe('editProfile rejects a body without phases (#2162)', () => {
+  it('does not open the editor for a body without phases', async () => {
+    fetchSpy.mockReset();
+    const showToast = vi.fn();
+    g.window = { showToast };
+    const getElementById = vi.fn(() => undefined);
+    g.document = { getElementById, querySelectorAll: () => [] };
+    S.profileEditId = 4242;
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as unknown as Response);
+
+    await editProfile('p1');
+
+    expect(showToast).toHaveBeenCalledWith(t('profile_load_error'));
+    expect(getElementById).not.toHaveBeenCalledWith('profileEditorModal');
+    expect(S.profileEditId).toBe(4242);
+  });
+});
+
 describe('loadMachineProfileList (#521 race)', () => {
   beforeEach(() => {
     fetchSpy.mockReset();
