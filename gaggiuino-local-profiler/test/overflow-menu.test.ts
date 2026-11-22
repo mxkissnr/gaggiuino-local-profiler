@@ -163,7 +163,7 @@ describe('overflow menu behaviour (#2165)', () => {
     expect(menu.open).toBe(true);
   });
 
-  it('is wired once at boot and replaces the settings page own fold', () => {
+  it("is wired once at boot and replaces the settings page's own fold", () => {
     const delegation = read('boot/delegation.ts');
     expect(delegation.split('wireOverflowMenus();').length - 1).toBe(1);
 
