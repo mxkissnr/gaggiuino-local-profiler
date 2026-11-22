@@ -486,3 +486,21 @@ func TestSerifWidth_MeasuresFraunces(t *testing.T) {
 		t.Errorf("serifWidth and textWidth both returned %v; Fraunces is not measured", sans)
 	}
 }
+
+// The two helpers below are the score's Fraunces emitters for #2166. They
+// stay test-local until the layout slice calls them: the blocking deadcode
+// gate builds ./cmd/... and would reject a production function with no
+// caller yet (same trade as #1922, #1961 and #2025). The layout slice moves
+// them into card.go unchanged.
+
+// serif emits a <text> in Fraunces 600, the app's display face for the score.
+func (s *svgBuf) serif(x, y, size float64, fill, content string) {
+	s.printf(`<text x="%s" y="%s" font-family="%s" font-size="%s" font-weight="600" fill="%s">%s</text>`,
+		fnum(x), fnum(y), cardSerifFamily, fnum(size), fill, esc(content))
+}
+
+// serifWidth measures s in Fraunces, the score's display face.
+func serifWidth(s string, size float64) float64 {
+	initFonts()
+	return measureText(s, size, cardSerifSF, "serif")
+}
