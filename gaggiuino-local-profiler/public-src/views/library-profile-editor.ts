@@ -28,7 +28,6 @@ import { markFieldInvalid } from '../components/field-error.js';
 import { bindPillSelects } from '../components/pill-select.js';
 import { phaseTimelineHtml, phaseHeadHtml, stopsFoldHtml, removePhaseButtonHtml } from '../components/phase-timeline.js';
 
-const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 const ICON_COPY: Html   = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M19,21H8V7H19V21Z"/></svg>`;
 
 const PHASE_TYPES = ['FLOW', 'PRESSURE', 'MANUAL'];
@@ -131,19 +130,22 @@ export function renderProfileList(): void {
   }
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   el.innerHTML = joinHtml(S.machineProfiles.map(p => html`<div class="lib-item${p.utility ? html` lib-item-utility` : html``}">
-      <div class="lib-item-info">
-        <div class="lib-item-name-row">
+      <button type="button" class="lib-item-open" data-action="edit-profile" data-id="${esc(p.id as string | number)}">
+        <span class="lib-item-name-row">
           <span class="lib-item-name">${esc(p.name)}</span>
           ${p.utility ? html`<span class="badge">${tHtml('profile_utility_badge')}</span>` : html``}
           ${p.syncStatus && p.syncStatus !== 'synced' ? html`<span class="badge badge--warn" title="${tHtml('profile_not_synced')}">⏳</span>` : html``}
+        </span>
+      </button>
+      <details class="lib-sheet-more">
+        <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
+        <div class="lib-sheet-menu-list">
+          <button type="button" class="lib-sheet-menu-item" data-action="start-profile-dialin" data-id="${esc(p.id as string | number)}">${TARGET_ICON_SVG} ${tHtml('profile_dialin_start')}</button>
+          <button type="button" class="lib-sheet-menu-item" data-action="duplicate-profile" data-id="${esc(p.id as string | number)}">${ICON_COPY} ${tHtml('profile_btn_duplicate')}</button>
+          <span class="lib-sheet-menu-sep"></span>
+          <button type="button" class="lib-sheet-menu-item del" data-action="delete-profile" data-id="${esc(p.id as string | number)}">${ICON_TRASH} ${tHtml('lib_btn_delete')}</button>
         </div>
-      </div>
-      <div class="lib-item-actions">
-        <button type="button" class="btn btn--quiet btn--icon" data-action="start-profile-dialin" data-id="${esc(p.id as string | number)}" title="${tHtml('profile_dialin_start')}">${TARGET_ICON_SVG}</button>
-        <button type="button" class="btn btn--quiet btn--icon" data-action="edit-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button type="button" class="btn btn--quiet btn--icon" data-action="duplicate-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('profile_btn_duplicate')}">${ICON_COPY}</button>
-        <button type="button" class="btn btn--danger btn--icon" data-action="delete-profile" data-id="${esc(p.id as string | number)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
-      </div>
+      </details>
     </div>`));
 }
 
