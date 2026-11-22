@@ -5,6 +5,7 @@ import (
 	"image/png"
 	"math"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -503,4 +504,102 @@ func (s *svgBuf) serif(x, y, size float64, fill, content string) {
 func serifWidth(s string, size float64) float64 {
 	initFonts()
 	return measureText(s, size, cardSerifSF, "serif")
+}
+
+// #2166: the app sends its active accent as a #rrggbb hex, so the palette
+// must take it verbatim (the neutrals stay the theme's) and pick the text
+// colour on the accent fill by luminance.
+func TestBuildPalette_HexAccent(t *testing.T) {
+	hex := buildPalette("#5B21B6", "dark")
+	if hex.accentFrom != "#5b21b6" || hex.accentTo != "#5b21b6" {
+		t.Errorf("accent = %q/%q, want #5b21b6 for both", hex.accentFrom, hex.accentTo)
+	}
+	if hex.accentText != "#ffffff" {
+		t.Errorf("accentText = %q, want #ffffff on a dark accent", hex.accentText)
+	}
+	if amber := buildPalette("amber", "dark"); hex.bg != amber.bg {
+		t.Errorf("hex accent bg = %q, want the theme's %q", hex.bg, amber.bg)
+	}
+	if got := buildPalette("#f59e0b", "light").accentText; got != "#000000" {
+		t.Errorf("accentText = %q, want #000000 on a light accent", got)
+	}
+}
+
+// #2166: the six legacy names keep their colours; anything else — a preset
+// key, a malformed hex, an empty value, a script-looking string — is amber.
+func TestBuildPalette_AccentFallbacks(t *testing.T) {
+	if got := buildPalette("ocean", "dark").accentFrom; got != "#3b82f6" {
+		t.Errorf("ocean accentFrom = %q, want #3b82f6", got)
+	}
+	for _, accent := range []string{"mulberry-mocha", "#12345", "", "javascript:x"} {
+		if got := buildPalette(accent, "dark").accentFrom; got != "#f59e0b" {
+			t.Errorf("%q accentFrom = %q, want the amber #f59e0b", accent, got)
+		}
+	}
+}
+
+func TestParseCardVerdict_Sanitises(t *testing.T) {
+	v := parseCardVerdict(url.Values{
+		"verdict":     {"  Shot ran long\n(55 s)\x00 "},
+		"verdictType": {"coarser"},
+		"delta":       {"-11"},
+		"vs":          {"vs shot 306"},
+	})
+	if v.text != "Shot ran long(55 s)" {
+		t.Errorf("text = %q, want the trimmed, control-free sentence", v.text)
+	}
+	if v.kind != "coarser" {
+		t.Errorf("kind = %q, want coarser", v.kind)
+	}
+	if v.delta == nil || *v.delta != -11 {
+		t.Errorf("delta = %v, want -11", v.delta)
+	}
+	if v.vs != "vs shot 306" {
+		t.Errorf("vs = %q, want %q", v.vs, "vs shot 306")
+	}
+}
+
+func TestParseCardVerdict_RejectsBadInput(t *testing.T) {
+	for _, delta := range []string{"250", "abc"} {
+		if v := parseCardVerdict(url.Values{"delta": {delta}}); v.delta != nil {
+			t.Errorf("delta %q accepted as %v, want nil", delta, *v.delta)
+		}
+	}
+	if v := parseCardVerdict(url.Values{"verdictType": {"sideways"}}); v.kind != "" {
+		t.Errorf("kind = %q for an unknown type, want \"\"", v.kind)
+	}
+	long := strings.Repeat("é", 200)
+	got := []rune(parseCardVerdict(url.Values{"verdict": {long}}).text)
+	if len(got) != cardVerdictMaxRunes {
+		t.Fatalf("capped verdict is %d runes, want %d", len(got), cardVerdictMaxRunes)
+	}
+	if !strings.HasSuffix(string(got), "…") {
+		t.Errorf("capped verdict does not end in an ellipsis: %q", string(got))
+	}
+	if v := parseCardVerdict(url.Values{}); v != (cardVerdict{}) {
+		t.Errorf("empty values gave %+v, want the zero value", v)
+	}
+}
+
+// #2166: the endpoint accepts the verdict parameters and a hex accent, still
+// answers with a decodable square PNG, and draws two hex accents differently.
+func TestGetCard_AcceptsVerdictAndHexAccent(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(280)
+	insertShot(t, sqlDB, 3, 1_700_000_000, &dur, "V", cardShotData(), nil)
+
+	q := "?accent=%235b21b6&theme=dark&verdict=Shot+ran+long&verdictType=coarser&delta=-11&vs=vs+shot+306"
+	rec := doJSON(t, mux, http.MethodGet, "/api/shots/3/card"+q, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	a := rec.Body.Bytes()
+	if w, hgt := decodePNG(t, a); w != 1080 || hgt != 1080 {
+		t.Errorf("card = %dx%d", w, hgt)
+	}
+	b := doJSON(t, mux, http.MethodGet, "/api/shots/3/card?accent=%230f766e&theme=dark", nil).Body.Bytes()
+	if bytes.Equal(a, b) {
+		t.Error("expected two different hex accents to produce different card images")
+	}
 }
