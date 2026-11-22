@@ -262,12 +262,20 @@ export interface paths {
             parameters: {
                 query?: {
                     format?: "square" | "story";
-                    /** @description Hex accent color override */
+                    /** @description Accent colour: a #rrggbb hex (the app sends its active accent) or a legacy accent name (amber, ocean, aurora, ember, forest, crema); anything else is amber */
                     accent?: string;
                     /** @description UI theme name override */
                     theme?: string;
                     /** @description UI language for the card text (de/en/es/fr/it/nl, unknown falls back to en) */
                     lang?: string;
+                    /** @description The shot page's verdict sentence (#2166); without it the card shows a phrase for the score */
+                    verdict?: string;
+                    /** @description The verdict's advice type; finer and coarser draw an arrow, other values are ignored */
+                    verdictType?: string;
+                    /** @description Score change against the compared shot */
+                    delta?: number;
+                    /** @description The line naming the compared shot */
+                    vs?: string;
                 };
                 header?: never;
                 path: {
