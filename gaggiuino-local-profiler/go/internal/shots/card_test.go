@@ -11,6 +11,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/font/sfnt"
 )
 
 func floatSeq(n int, fn func(i int) float64) []any {
@@ -407,5 +410,79 @@ func TestTextWidth_ConcurrentUse(t *testing.T) {
 
 	if n := mismatches.Load(); n != 0 {
 		t.Errorf("%d concurrent textWidth calls returned a different width", n)
+	}
+}
+
+// TestCardFonts_EmbeddedFontsParse pins the three TTFs embedded from fonts/
+// (#2166): each must parse, carry the family name resvg is asked for, and
+// have a glyph for a digit the card draws.
+func TestCardFonts_EmbeddedFontsParse(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      []byte
+		wantPfx   string
+		exactName bool
+	}{
+		{"figtree-400", figtreeRegularTTF, "Figtree Light", false},
+		{"figtree-600", figtreeSemiBoldTTF, "Figtree Light", false},
+		{"fraunces-600", frauncesTTF, "Fraunces", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := opentype.Parse(tc.data)
+			if err != nil {
+				t.Fatalf("opentype.Parse: %v", err)
+			}
+			family, err := f.Name(nil, sfnt.NameIDFamily)
+			if err != nil {
+				t.Fatalf("Name(NameIDFamily): %v", err)
+			}
+			if tc.exactName {
+				if family != tc.wantPfx {
+					t.Errorf("family = %q, want %q", family, tc.wantPfx)
+				}
+			} else if !strings.HasPrefix(family, tc.wantPfx) {
+				t.Errorf("family = %q, want prefix %q", family, tc.wantPfx)
+			}
+			if idx, err := f.GlyphIndex(nil, '8'); err != nil || idx == 0 {
+				t.Errorf("GlyphIndex('8') = %d, %v; want a non-zero index", idx, err)
+			}
+		})
+	}
+}
+
+// TestCardSVG_TextUsesFigtree covers #2166: every text element asks for
+// Figtree with Go kept after it as the fallback.
+func TestCardSVG_TextUsesFigtree(t *testing.T) {
+	svg := cardSVGWith(int64(280), 930)
+	if !strings.Contains(svg, `font-family="'Figtree Light', Go"`) {
+		t.Errorf("card SVG does not ask for the Figtree family with a Go fallback")
+	}
+	if strings.Contains(svg, `font-family="Go"`) {
+		t.Errorf("card SVG still uses the Go family alone")
+	}
+}
+
+// TestSvgBufSerif_UsesFraunces checks the score's display text helper.
+func TestSvgBufSerif_UsesFraunces(t *testing.T) {
+	var b svgBuf
+	b.serif(52, 200, 96, "#5cb98a", "92")
+	got := b.b.String()
+	for _, want := range []string{`font-family="Fraunces"`, `font-weight="600"`, ">92</text>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("serif output %q does not contain %q", got, want)
+		}
+	}
+}
+
+// TestSerifWidth_MeasuresFraunces proves the serif measuring path uses
+// Fraunces rather than the Figtree bold face.
+func TestSerifWidth_MeasuresFraunces(t *testing.T) {
+	serif := serifWidth("88", 96)
+	if serif <= 0 {
+		t.Fatalf("serifWidth(%q, 96) = %v, want > 0", "88", serif)
+	}
+	if sans := textWidth("88", 96, true); serif == sans {
+		t.Errorf("serifWidth and textWidth both returned %v; Fraunces is not measured", sans)
 	}
 }
