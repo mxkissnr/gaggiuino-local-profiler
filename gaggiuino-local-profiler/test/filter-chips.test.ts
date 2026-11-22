@@ -572,11 +572,17 @@ describe('dialog close (#2120)', () => {
 describe('form headings (#2120)', () => {
   it('gives the step lists, the import settings and the annotation panel the shared section title', () => {
     const index = read('index.html');
-    expect(index.split('<div class="section-title">').length - 1).toBe(2);
+    // #2154: the profile editor's phase heading moved into the shared timeline;
+    // its recipe rows carry a section title of their own.
+    expect(index.split('<div class="section-title">').length - 1).toBe(1);
+    expect(index).toContain('<h4 class="section-title" data-i18n="pe_recipe">');
     expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_title">');
     expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_custom_label">');
     expect(index).toContain('<h2 class="section-title" data-i18n="ann_title">');
-    expect(read('views/gaggimate-profile-editor.ts').split('<div class="section-title">').length - 1).toBe(2);
+    // #2154: the GaggiMate phase headings come from the shared phase timeline;
+    // the recipe rows use its shared title.
+    expect(read('views/gaggimate-profile-editor.ts').split('<div class="section-title">').length - 1).toBe(0);
+    expect(read('views/gaggimate-profile-editor.ts')).toContain('${recipeTitleHtml()}');
     expect(read('views/library/import.ts')).toContain('<div class="section-title">${esc(t(');
   });
 

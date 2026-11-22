@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // library-profile-editor.ts imports state/index.ts/i18n.ts/api/transport.ts, which read
 // localStorage/navigator at module load time — stub the minimum browser
@@ -13,7 +15,8 @@ g.navigator    ??= { language: 'en-US' };
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
-const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProfile } = await import('../public-src/views/library-profile-editor.js');
+const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProfile, selectProfilePhase } = await import('../public-src/views/library-profile-editor.js');
+const { t } = await import('../public-src/i18n.js');
 
 // _collectPhases reads phase rows straight off `document` (DOM-as-state, no
 // separate JS array) — this vitest project runs in the 'node' environment
@@ -207,5 +210,109 @@ describe('loadMachineProfileList (#521 race)', () => {
     await callA;
 
     expect(S.machineProfiles).toEqual([{ id: 'b', name: 'B' }]);
+  });
+});
+
+// #2154: the phase timeline and the one visible phase. The rows are the same
+// fake .pp-row the collect tests use, plus the hidden flag the editor sets.
+function phaseRows(times: string[], skipLast = false) {
+  return times.map((time, i) => Object.assign(
+    fakeRow({ 'pp-name': `P${i + 1}`, 'pp-target-time': time, 'pp-skip': skipLast && i === times.length - 1 }),
+    { hidden: false },
+  ));
+}
+
+function navDocument(rows: unknown[]): Record<string, { innerHTML: string }> {
+  const els: Record<string, { innerHTML: string }> = {};
+  g.document = {
+    getElementById: (id: string) => (els[id] ??= { innerHTML: '' }),
+    querySelectorAll: (sel: string) => (sel === '#profilePhaseList .pp-row' ? rows : []),
+  };
+  return els;
+}
+
+const sharesOf = (markup: string): string[] => [...markup.matchAll(/--phase-share:([\d.]+)/g)].map(m => m[1] ?? '');
+
+describe('phase timeline and selection (#2154)', () => {
+  beforeEach(() => { S.currentLang = 'en'; });
+
+  it('shows only the selected phase and marks it in the timeline', () => {
+    const rows = phaseRows(['4000', '6000', '10000']);
+    const els = navDocument(rows);
+    selectProfilePhase(1);
+    expect(rows.map(r => r.hidden)).toEqual([true, false, true]);
+    const timeline = els.profilePhaseTimeline?.innerHTML ?? '';
+    expect(timeline.match(/aria-pressed="true"/g)?.length).toBe(1);
+    expect(timeline).toContain('aria-pressed="true" data-action="select-profile-phase" data-idx="1"');
+    expect(els.profilePhaseHead?.innerHTML).toContain(t('pe_phase_of', 2, 3));
+  });
+
+  it('sizes each chip by its share of the total time', () => {
+    const els = navDocument(phaseRows(['4000', '6000', '10000']));
+    selectProfilePhase(0);
+    const timeline = els.profilePhaseTimeline?.innerHTML ?? '';
+    expect(sharesOf(timeline)).toEqual(['0.2', '0.3', '0.5']);
+    expect(timeline).toContain('>4 s<');
+    expect(timeline).toContain('>10 s<');
+  });
+
+  it('gives a skipped phase no width and says it is skipped', () => {
+    const els = navDocument(phaseRows(['4000', '6000', '10000'], true));
+    selectProfilePhase(0);
+    const timeline = els.profilePhaseTimeline?.innerHTML ?? '';
+    expect(sharesOf(timeline)).toEqual(['0.4', '0.6', '0']);
+    expect(timeline).toContain(`>${t('profile_phase_skip')}<`);
+  });
+
+  it('keeps the selection inside the phase list', () => {
+    const rows = phaseRows(['4000', '6000']);
+    navDocument(rows);
+    selectProfilePhase(9);
+    expect(rows.map(r => r.hidden)).toEqual([true, false]);
+  });
+
+  it('offers adding a phase when there is none', () => {
+    const els = navDocument([]);
+    selectProfilePhase(0);
+    expect(els.profilePhaseTimeline?.innerHTML).toContain('data-action="add-profile-phase"');
+    expect(els.profilePhaseTimeline?.innerHTML).toContain(t('gm_no_phases_add'));
+    expect(els.profilePhaseHead?.innerHTML).toBe('');
+  });
+});
+
+describe('one sheet header and chart first (#2154)', () => {
+  const SRC = join(import.meta.dirname, '..', 'public-src');
+  const index = readFileSync(join(SRC, 'index.html'), 'utf8');
+  const block = (from: string, to: string): string => {
+    const start = index.indexOf(from);
+    return start < 0 ? '' : index.slice(start, index.indexOf(to, start));
+  };
+  const gaggiuino = block('id="profileEditorModal"', '<!-- GaggiMate profile editor modal');
+  const gaggimate = block('id="gmProfileEditorModal"', '<!-- ── Barcode scan modal ── -->');
+
+  it.each([['Gaggiuino', gaggiuino], ['GaggiMate', gaggimate]])('%s editor: one primary action, in the header, no Cancel', (_name, markup) => {
+    expect(markup.length).toBeGreaterThan(0);
+    expect(markup.match(/btn--primary/g)?.length).toBe(1);
+    const bar = markup.slice(markup.indexOf('<div class="lib-sheet-bar">'), markup.indexOf('<div class="pe-scroll"'));
+    expect(bar).toContain('<div class="lib-sheet-bar-actions">');
+    expect(bar).toContain('btn--primary');
+    expect(markup).not.toContain('lib-form-actions');
+    expect(markup).not.toContain('cancelProfileFormBtn');
+  });
+
+  it('puts the chart first, then the timeline, the phase and the recipe', () => {
+    const order = ['id="profilePreviewChart"', 'id="profilePhaseTimeline"', 'id="profilePhaseList"', 'data-i18n="pe_recipe"'].map(s => gaggiuino.indexOf(s));
+    expect(order.every(i => i > 0)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+  });
+
+  it('sits outside #main like the GaggiMate editor', () => {
+    expect(index.indexOf('id="profileEditorModal"')).toBeGreaterThan(index.indexOf('</div><!-- /main -->'));
+  });
+
+  it('routes the timeline actions through the click delegation', () => {
+    const delegation = readFileSync(join(SRC, 'boot', 'delegation.ts'), 'utf8');
+    expect(delegation).toContain("case 'select-profile-phase':");
+    expect(delegation).toContain("case 'add-profile-phase':");
   });
 });

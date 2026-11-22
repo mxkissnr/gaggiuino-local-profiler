@@ -1007,59 +1007,6 @@
         </div>
     </div><!-- #library-view -->
 
-    <!-- Machine profile editor modal (#307) -->
-    <div id="profileEditorModal" class="guided-maint-overlay" style="display:none">
-        <div class="guided-maint-modal profile-editor-modal">
-            <div class="lib-sheet-bar">
-                <button type="button" class="lib-sheet-close" id="closeProfileFormBtn" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-                <h3 class="lib-sheet-bar-title" data-i18n="profile_editor_title">Profil-Editor</h3>
-            </div>
-            <div class="pe-scroll">
-                <div class="lib-form-grid">
-                    <div class="lib-form-field">
-                        <label for="profileFormName" data-i18n="profile_form_name">Name *</label>
-                        <input type="text" id="profileFormName" placeholder="Sertao Decaf">
-                    </div>
-                    <div class="lib-form-field">
-                        <label for="profileFormWaterTemp" data-i18n="profile_form_water_temp">Wassertemperatur (°C)</label>
-                        <input type="number" id="profileFormWaterTemp" step="0.5" min="80" max="100" placeholder="93">
-                    </div>
-                    <div class="lib-form-field">
-                        <label for="profileFormCoffeeIn" data-i18n="profile_form_coffee_in">Dosis (g)</label>
-                        <input type="number" id="profileFormCoffeeIn" step="0.1" min="0" max="100" placeholder="18">
-                    </div>
-                    <div class="lib-form-field">
-                        <label for="profileFormCoffeeOut" data-i18n="profile_form_coffee_out">Ausbeute (g)</label>
-                        <input type="number" id="profileFormCoffeeOut" step="0.1" min="0" max="2000" placeholder="36">
-                    </div>
-                    <div class="lib-form-field">
-                        <label for="profileFormRatio" data-i18n="profile_form_ratio">Ratio</label>
-                        <input type="number" id="profileFormRatio" step="0.1" min="0" max="30" placeholder="2">
-                    </div>
-                    <div class="lib-form-field">
-                        <label for="profileFormWeight" data-i18n="profile_form_weight">Stopp-Gewicht (g)</label>
-                        <input type="number" id="profileFormWeight" step="0.1" min="0" max="2000" placeholder="39.6">
-                    </div>
-                </div>
-                <div class="lib-recipe-steps-section">
-                    <div class="section-title">
-                        <span data-i18n="profile_phases_title">Phasen</span>
-                        <button type="button" class="btn btn--tonal" id="profileApplySuggestionBtn" data-i18n="profile_apply_suggestion" style="display:none">Bohnen-Vorschlag anwenden</button>
-                        <button type="button" class="btn btn--tonal" id="addProfilePhaseBtn" data-i18n="profile_add_phase">+ Phase</button>
-                    </div>
-                    <div id="profilePhaseList"></div>
-                </div>
-                <div class="pe-preview">
-                    <canvas id="profilePreviewChart"></canvas>
-                </div>
-            </div>
-            <div class="lib-form-actions">
-                <button type="button" class="btn btn--quiet" id="cancelProfileFormBtn" data-i18n="lib_cancel">Abbrechen</button>
-                <button type="button" class="btn btn--primary" id="sendProfileToMachineBtn" data-i18n="profile_send_to_machine">An Maschine senden</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Flavor wheel modal -->
     <div id="flavorWheelModal" class="guided-maint-overlay" style="display:none">
         <div class="guided-maint-modal flavor-wheel-modal">
@@ -1925,6 +1872,64 @@
 
 </div><!-- /main -->
 
+<!-- Machine profile editor (#307, #2154): chart first, the phase timeline, the
+     selected phase's fields and the recipe rows; the layout is shared with the
+     GaggiMate editor below. A sibling of #main for the same reason as that
+     editor: on a phone it is a full-height sheet above the bottom navigation. -->
+<div id="profileEditorModal" class="guided-maint-overlay" style="display:none">
+    <div class="guided-maint-modal profile-editor-modal">
+        <div class="lib-sheet-bar">
+            <button type="button" class="lib-sheet-close" id="closeProfileFormBtn" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+            <h3 class="lib-sheet-bar-title" data-i18n="profile_editor_title">Profil-Editor</h3>
+            <div class="lib-sheet-bar-actions">
+                <button type="button" class="btn btn--primary" id="sendProfileToMachineBtn" data-i18n="profile_send_to_machine">An Maschine senden</button>
+            </div>
+        </div>
+        <div class="pe-scroll">
+            <div class="pe-layout">
+                <div class="pe-preview">
+                    <canvas id="profilePreviewChart"></canvas>
+                </div>
+                <div class="pe-timeline" id="profilePhaseTimeline"></div>
+                <div class="pe-phase">
+                    <div id="profilePhaseHead"></div>
+                    <div id="profilePhaseList"></div>
+                </div>
+                <div class="pe-recipe">
+                    <h4 class="section-title" data-i18n="pe_recipe">Rezept</h4>
+                    <div class="settings-group">
+                        <div class="settings-row settings-row-static">
+                            <label class="settings-row-title" for="profileFormName" data-i18n="profile_form_name">Name *</label>
+                            <input type="text" class="lib-input pe-row-input pe-row-name" id="profileFormName" placeholder="Sertao Decaf">
+                        </div>
+                        <div class="settings-row settings-row-static">
+                            <label class="settings-row-title" for="profileFormWaterTemp" data-i18n="profile_form_water_temp">Wassertemperatur (°C)</label>
+                            <input type="number" class="lib-input pe-row-input" id="profileFormWaterTemp" step="0.5" min="80" max="100" placeholder="93">
+                        </div>
+                        <div class="settings-row settings-row-static">
+                            <label class="settings-row-title" for="profileFormCoffeeIn" data-i18n="profile_form_coffee_in">Dosis (g)</label>
+                            <input type="number" class="lib-input pe-row-input" id="profileFormCoffeeIn" step="0.1" min="0" max="100" placeholder="18">
+                        </div>
+                        <div class="settings-row settings-row-static">
+                            <label class="settings-row-title" for="profileFormCoffeeOut" data-i18n="profile_form_coffee_out">Ausbeute (g)</label>
+                            <input type="number" class="lib-input pe-row-input" id="profileFormCoffeeOut" step="0.1" min="0" max="2000" placeholder="36">
+                        </div>
+                        <div class="settings-row settings-row-static">
+                            <label class="settings-row-title" for="profileFormRatio" data-i18n="profile_form_ratio">Ratio</label>
+                            <input type="number" class="lib-input pe-row-input" id="profileFormRatio" step="0.1" min="0" max="30" placeholder="2">
+                        </div>
+                        <div class="settings-row settings-row-static">
+                            <label class="settings-row-title" for="profileFormWeight" data-i18n="profile_form_weight">Stopp-Gewicht (g)</label>
+                            <input type="number" class="lib-input pe-row-input" id="profileFormWeight" step="0.1" min="0" max="2000" placeholder="39.6">
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn--tonal" id="profileApplySuggestionBtn" data-i18n="profile_apply_suggestion" style="display:none">Bohnen-Vorschlag anwenden</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- GaggiMate profile editor modal: sibling of #main, not child — #main is
      position:fixed with its own stacking context on mobile (z-index:40,
      below #bottom-nav's 150), so a modal nested inside it can never outrank
@@ -1935,12 +1940,12 @@
         <div class="lib-sheet-bar">
             <button type="button" class="lib-sheet-close" data-action="gm-editor-close" data-i18n-aria-label="lib_sheet_close" aria-label="Close"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
             <h3 class="lib-sheet-bar-title" id="gmEditorTitle">GaggiMate Profil</h3>
+            <div class="lib-sheet-bar-actions">
+                <button type="button" class="btn btn--primary" data-action="gm-editor-save" data-i18n="gm_editor_save_to_machine">Auf Maschine speichern</button>
+            </div>
         </div>
         <div class="pe-scroll" id="gmEditorBody">
-            <!-- rendered by gaggimate-profile-editor.js -->
-        </div>
-        <div class="lib-form-actions">
-            <button type="button" class="btn btn--primary" data-action="gm-editor-save" data-i18n="gm_editor_save_to_machine">Auf Maschine speichern</button>
+            <!-- rendered by the GaggiMate profile editor view -->
         </div>
     </div>
 </div>

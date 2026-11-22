@@ -27,7 +27,7 @@ import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrind
          removeRecipeStep, _submitManualScan, restockMilk, deleteMilk, editBasket, deleteBasket,
          editPuckScreen, deletePuckScreen, startBeanCompare, chooseBeanCompare, pickOtherBeanCompare,
          swapBeanCompare, backFromBeanCompare } from '../views/library.js';
-import { editProfile, duplicateProfile, deleteMachineProfile, createProfileFromBean, removeProfilePhase } from '../views/library-profile-editor.js';
+import { editProfile, duplicateProfile, deleteMachineProfile, createProfileFromBean, removeProfilePhase, addProfilePhase, selectProfilePhase } from '../views/library-profile-editor.js';
 import { toggleBeanProfilePin } from '../views/library/bean-profiles.js';
 import { openGaggiMateProfileEditor, duplicateGaggiMateProfile, openNewGaggiMateProfile, handleGmEditorAction } from '../views/gaggimate-profile-editor.js';
 import { openDialinWizard, startDialinFromBean, dialinGrinderChange, dialinConfirmShot, dialinAcceptNext,
@@ -136,6 +136,9 @@ export function wireDelegation(): void {
         break;
       case 'delete-profile':        void deleteMachineProfile(strId()); break;
       case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
+      // #2154: the profile editor's phase timeline.
+      case 'select-profile-phase':  selectProfilePhase(Number(el.dataset.idx)); break;
+      case 'add-profile-phase':     addProfilePhase(); break;
       case 'create-profile-from-bean':
         closeBeanSheet();
         if (isActiveMachineGaggiMate()) openNewGaggiMateProfile();
