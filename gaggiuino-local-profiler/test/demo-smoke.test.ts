@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { join, resolve } from 'node:path';
-import { contentTypeFor, resolveRequestPath, chartFitProblem } from '../scripts/demo-smoke.mts';
+import { contentTypeFor, resolveRequestPath, chartFitProblem, chartSettled } from '../scripts/demo-smoke.mts';
 
 // Part of #1193 (S4): the pure helpers behind scripts/demo-smoke.mts. The
 // smoke test itself serves demo-dist/ and drives Chromium, so only the two
@@ -99,5 +99,20 @@ describe('demo-smoke chartFitProblem (#2097)', () => {
         expect(problem).not.toBeNull();
         expect(problem).toContain('1200');
         expect(problem).toContain('1035');
+    });
+});
+
+// #2175: the fit check only trusts a reading taken once the layout settled.
+describe('demo-smoke chartSettled (#2175)', () => {
+    it('is not settled while the list still slides, even when the widths match', () => {
+        expect(chartSettled({ container: 614, canvas: 614, sidebarAnimating: true })).toBe(false);
+    });
+
+    it('is settled once the list stopped and the chart fits', () => {
+        expect(chartSettled({ container: 614, canvas: 614.4, sidebarAnimating: false })).toBe(true);
+    });
+
+    it('is not settled while the chart is wider than its container', () => {
+        expect(chartSettled({ container: 614, canvas: 616, sidebarAnimating: false })).toBe(false);
     });
 });
