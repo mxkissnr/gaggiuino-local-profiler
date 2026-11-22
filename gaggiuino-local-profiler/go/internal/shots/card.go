@@ -1,6 +1,7 @@
 package shots
 
 import (
+	_ "embed"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
@@ -32,13 +33,13 @@ import (
 //     (dp.pressure/pumpFlow/weightFlow/shotWeight|weight/temperature and the
 //     dp.target* lines, all tenths, ÷10 here).
 //  2. rasterise renders that SVG to PNG with github.com/kanrichan/resvg-go
-//     (resvg 0.35 compiled to wasm, run on wazero — no cgo). Fonts are the
-//     Go typeface (golang.org/x/image/font/gofont), whose .TTF bytes are
-//     already compiled into those packages, so no separate //go:embed is
-//     needed to get them into the static binary. fontdb in the resvg wasm
-//     build has no woff2 support, so the bean headline uses bold Go sans
-//     instead — the serif would fall back to sans anyway, so this is just
-//     that fallback, always taken.
+//     (resvg 0.35 compiled to wasm, run on wazero — no cgo). Text is set in
+//     the app's own fonts, embedded from fonts/ (#2166): Figtree for text and
+//     figures, Fraunces for the score. They are TTF copies of the app's
+//     bundled latin woff2 files (the wasm fontdb cannot read woff2), with
+//     Fraunces pinned to a static 600 instance because resvg draws a variable
+//     font at its default instance only. The Go typeface stays loaded as the
+//     fallback for glyphs the latin cut lacks (→, non-latin bean names).
 //
 // Cosmetic deviations, all deliberate:
 //
@@ -186,6 +187,13 @@ func (s *resvgSlot) warm() error {
 		ctx.Close()
 		return fmt.Errorf("resvg load bold font: %w", err)
 	}
+	for _, f := range [][]byte{figtreeRegularTTF, figtreeSemiBoldTTF, frauncesTTF} {
+		if err := r.LoadFontData(f); err != nil {
+			r.Close()
+			ctx.Close()
+			return fmt.Errorf("resvg load card font: %w", err)
+		}
+	}
 	if err := r.SetFontFamily(cardFontFamily); err != nil {
 		r.Close()
 		ctx.Close()
@@ -269,11 +277,31 @@ func renderShareCard(shot Shot, score *int, format, accent, theme, lang string, 
 
 // ── font metrics ───────────────────────────────────────────────────────
 
-const cardFontFamily = "Go"
+// The card's fonts (#2166). Figtree's own files name the family
+// "Figtree Light" for both weights, so that is the name resvg matches;
+// font-weight 400/600 then picks the file. Every text element lists Go after
+// it as the fallback for glyphs the latin cut lacks.
+const (
+	cardFontFamily   = "Figtree Light"
+	cardFontFamilies = "'Figtree Light', Go"
+	cardSerifFamily  = "Fraunces"
+)
 
 var (
-	fontOnce          sync.Once
-	regularSF, boldSF *opentype.Font
+	//go:embed fonts/figtree-400.ttf
+	figtreeRegularTTF []byte
+	//go:embed fonts/figtree-600.ttf
+	figtreeSemiBoldTTF []byte
+	//go:embed fonts/fraunces-600.ttf
+	frauncesTTF []byte
+)
+
+var (
+	fontOnce sync.Once
+	// regularSF is the Go regular face the HA chart PNG draws with.
+	regularSF *opentype.Font
+	// The card's measuring faces: Figtree 400/600 and Fraunces 600.
+	cardRegularSF, cardBoldSF, cardSerifSF *opentype.Font
 
 	// faceMu guards the face cache and every use of a cached face: an
 	// opentype face is not safe for concurrent use (#1915).
@@ -284,21 +312,22 @@ var (
 func initFonts() {
 	fontOnce.Do(func() {
 		regularSF, _ = opentype.Parse(goregular.TTF)
-		boldSF, _ = opentype.Parse(gobold.TTF)
+		cardRegularSF, _ = opentype.Parse(figtreeRegularTTF)
+		cardBoldSF, _ = opentype.Parse(figtreeSemiBoldTTF)
+		cardSerifSF, _ = opentype.Parse(frauncesTTF)
 	})
 }
 
-// faceForLocked returns the cached face for size/bold. The caller must hold
-// faceMu, and must keep holding it while using the returned face (#1915).
-func faceForLocked(size float64, bold bool) font.Face {
-	initFonts()
-	key := fmt.Sprintf("%v-%.2f", bold, size)
+// faceForLocked returns the cached face of src at size, cached under name.
+// The caller must hold faceMu, and must keep holding it while using the
+// returned face (#1915).
+func faceForLocked(src *opentype.Font, name string, size float64) font.Face {
+	key := fmt.Sprintf("%s-%.2f", name, size)
 	if fc, ok := faceCache[key]; ok {
 		return fc
 	}
-	src := regularSF
-	if bold {
-		src = boldSF
+	if src == nil {
+		return nil
 	}
 	fc, err := opentype.NewFace(src, &opentype.FaceOptions{Size: size, DPI: 72})
 	if err != nil {
@@ -308,16 +337,31 @@ func faceForLocked(size float64, bold bool) font.Face {
 	return fc
 }
 
-// textWidth measures s in the Go font at the given px size, for truncation
-// and centring.
-func textWidth(s string, size float64, bold bool) float64 {
+// measureText measures s in src at the given px size.
+func measureText(s string, size float64, src *opentype.Font, name string) float64 {
 	faceMu.Lock()
 	defer faceMu.Unlock()
-	fc := faceForLocked(size, bold)
+	fc := faceForLocked(src, name, size)
 	if fc == nil {
 		return float64(len([]rune(s))) * size * 0.55
 	}
 	return float64(font.MeasureString(fc, s)) / 64.0
+}
+
+// textWidth measures s in Figtree (600 when bold) at the given px size, for
+// truncation and centring.
+func textWidth(s string, size float64, bold bool) float64 {
+	initFonts()
+	if bold {
+		return measureText(s, size, cardBoldSF, "bold")
+	}
+	return measureText(s, size, cardRegularSF, "regular")
+}
+
+// serifWidth measures s in Fraunces, the score's display face.
+func serifWidth(s string, size float64) float64 {
+	initFonts()
+	return measureText(s, size, cardSerifSF, "serif")
 }
 
 var _ = fixed.I // keep the math/fixed import meaningful across Go versions
@@ -363,14 +407,20 @@ func (s *svgBuf) printf(format string, a ...any) { fmt.Fprintf(&s.b, format, a..
 func (s *svgBuf) text(x, y, size float64, bold bool, fill, anchor, content string) {
 	weight := ""
 	if bold {
-		weight = ` font-weight="bold"`
+		weight = ` font-weight="600"`
 	}
 	a := ""
 	if anchor != "" {
 		a = fmt.Sprintf(` text-anchor="%s"`, anchor)
 	}
 	s.printf(`<text x="%s" y="%s" font-family="%s" font-size="%s"%s fill="%s"%s>%s</text>`,
-		fnum(x), fnum(y), cardFontFamily, fnum(size), weight, fill, a, esc(content))
+		fnum(x), fnum(y), cardFontFamilies, fnum(size), weight, fill, a, esc(content))
+}
+
+// serif emits a <text> in Fraunces 600, the app's display face for the score.
+func (s *svgBuf) serif(x, y, size float64, fill, content string) {
+	s.printf(`<text x="%s" y="%s" font-family="%s" font-size="%s" font-weight="600" fill="%s">%s</text>`,
+		fnum(x), fnum(y), cardSerifFamily, fnum(size), fill, esc(content))
 }
 
 func (s *svgBuf) line(x1, y1, x2, y2 float64, stroke string, width float64, dash string) {
