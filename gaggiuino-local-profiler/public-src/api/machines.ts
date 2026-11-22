@@ -108,18 +108,31 @@ export async function listMachineProfiles(machineId: string | number): Promise<M
 }
 
 /**
+ * Result of {@link getMachineProfileResult}. `notStored` (#2162): the server
+ * answered 503, the machine is off and GLP has no full local copy of this
+ * profile yet.
+ */
+export type MachineProfileResult =
+  | { profile: MachineProfile; notStored: false }
+  | { profile: null; notStored: boolean };
+
+/**
  * GET /api/machine/profile/{id} — one full profile. `machineId` is optional:
  * the profile-dialin wizard fetches without it, while the editors scope to the
- * active machine. Null on a non-ok response.
+ * active machine. A body without a `phases` array (an old summary-only answer,
+ * #2162) never counts as a profile.
  */
-export async function getMachineProfile(
+export async function getMachineProfileResult(
   id: string | number,
   machineId?: string | number,
-): Promise<MachineProfile | null> {
+): Promise<MachineProfileResult> {
   const url = machineId === undefined
     ? `api/machine/profile/${pathSeg(id)}`
     : `api/machine/profile/${pathSeg(id)}?machineId=${pathSeg(machineId)}`;
-  return jsonOrNull<MachineProfile>(await apiFetch(url));
+  const r = await apiFetch(url);
+  const body = r.ok ? ((await r.json().catch(() => null)) as MachineProfile | null) : null;
+  if (body && Array.isArray(body.phases)) return { profile: body, notStored: false };
+  return { profile: null, notStored: r.status === 503 };
 }
 
 /**

@@ -5066,6 +5066,13 @@ export interface paths {
                     };
                     content?: never;
                 };
+                /** @description The machine is offline or did not answer, and GLP has no full local copy of this profile yet (#2162) */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
             };
         };
         /** Update an existing machine profile (name/phases/stop conditions), written over the machine's WebSocket/protobuf channel — the machine has no REST write endpoint */

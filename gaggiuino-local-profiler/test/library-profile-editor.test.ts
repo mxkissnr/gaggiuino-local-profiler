@@ -19,7 +19,7 @@ vi.mock('../public-src/components/confirm-dialog.js', () => ({ confirmDialog: di
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
-const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProfile, selectProfilePhase, editProfile, sendProfileToMachine } = await import('../public-src/views/library-profile-editor.js');
+const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProfile, selectProfilePhase, editProfile, sendProfileToMachine, loadProfileForEditing } = await import('../public-src/views/library-profile-editor.js');
 const { t } = await import('../public-src/i18n.js');
 
 // _collectPhases reads phase rows straight off `document` (DOM-as-state, no
@@ -228,6 +228,89 @@ describe('editProfile keeps the profile id (#2167)', () => {
     expect(url).toBe('api/machine/profile/13');
     expect(init.method).toBe('PUT');
     expect((JSON.parse(init.body as string) as { name: string }).name).toBe('Sertao Decaf');
+  });
+});
+
+describe('editProfile rejects a body without phases (#2162)', () => {
+  it('does not open the editor for a body without phases', async () => {
+    fetchSpy.mockReset();
+    const showToast = vi.fn();
+    g.window = { showToast };
+    const getElementById = vi.fn(() => undefined);
+    g.document = { getElementById, querySelectorAll: () => [] };
+    S.profileEditId = 4242;
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({}) } as unknown as Response);
+
+    await editProfile('p1');
+
+    expect(showToast).toHaveBeenCalledWith(t('profile_load_error'));
+    expect(getElementById).not.toHaveBeenCalledWith('profileEditorModal');
+    expect(S.profileEditId).toBe(4242);
+  });
+});
+
+describe('loadProfileForEditing (#2162)', () => {
+  const notStored = { ok: false, status: 503, json: () => Promise.resolve({ error: 'x' }) } as unknown as Response;
+
+  function stubDocument() {
+    const fields: Record<string, FakeFormField> = {};
+    const getElementById = vi.fn((id: string) => {
+      if (id === 'profilePreviewChart') return undefined;
+      return (fields[id] ??= { value: '', style: {}, classList: { add() {}, remove() {} }, focus() {} });
+    });
+    g.document = { getElementById, querySelectorAll: () => [] };
+    return { fields, getElementById };
+  }
+
+  it('editProfile shows the not-stored toast on a 503 and does not open the editor', async () => {
+    fetchSpy.mockReset();
+    const showToast = vi.fn();
+    g.window = { showToast };
+    const { getElementById } = stubDocument();
+    fetchSpy.mockResolvedValueOnce(notStored);
+
+    await editProfile('p1');
+
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledWith(t('profile_not_stored_offline'));
+    expect(getElementById).not.toHaveBeenCalledWith('profileEditorModal');
+  });
+
+  it('duplicateProfile shows the not-stored toast on a 503 and does not open the editor', async () => {
+    fetchSpy.mockReset();
+    const showToast = vi.fn();
+    g.window = { showToast };
+    const { getElementById } = stubDocument();
+    fetchSpy.mockResolvedValueOnce(notStored);
+
+    await duplicateProfile('p1');
+
+    expect(showToast).toHaveBeenCalledTimes(1);
+    expect(showToast).toHaveBeenCalledWith(t('profile_not_stored_offline'));
+    expect(getElementById).not.toHaveBeenCalledWith('profileEditorModal');
+  });
+
+  it("loadProfileForEditing shows the caller's load-error toast on another failure", async () => {
+    fetchSpy.mockReset();
+    const showToast = vi.fn();
+    g.window = { showToast };
+    stubDocument();
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 500, json: () => Promise.resolve({ error: 'x' }) } as unknown as Response);
+
+    await expect(loadProfileForEditing('p1', 1, 'gm_toast_load_error')).resolves.toBeNull();
+    expect(showToast).toHaveBeenCalledWith(t('gm_toast_load_error'));
+  });
+
+  it('loadProfileForEditing returns a profile with phases without a toast', async () => {
+    fetchSpy.mockReset();
+    const showToast = vi.fn();
+    g.window = { showToast };
+    stubDocument();
+    const profile = { id: 'p1', name: 'A', phases: [] };
+    fetchSpy.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve(profile) } as unknown as Response);
+
+    await expect(loadProfileForEditing('p1', 1, 'gm_toast_load_error')).resolves.toEqual(profile);
+    expect(showToast).not.toHaveBeenCalled();
   });
 });
 

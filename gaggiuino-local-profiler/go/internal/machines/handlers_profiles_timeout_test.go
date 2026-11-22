@@ -3,6 +3,7 @@ package machines
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -155,7 +156,7 @@ func TestGetMachineProfile_UnreachableMachineFallsBackWithinTimeout(t *testing.T
 	if err != nil {
 		t.Fatalf("CreateMachine: %v", err)
 	}
-	if err := profilesRepo.UpsertSynced(machine.ID, "remote-1", "Cached Profile", json.RawMessage(`{"label":"Cached Profile"}`), false); err != nil {
+	if err := profilesRepo.UpsertSynced(machine.ID, "remote-1", "Cached Profile", json.RawMessage(`{"label":"Cached Profile","phases":[{"type":"PRESSURE"}]}`), false); err != nil {
 		t.Fatalf("seeding cached profile: %v", err)
 	}
 
@@ -361,6 +362,12 @@ func (a *recordingProfilesAdapter) ListProfiles(context.Context, *Machine) ([]Pr
 	return []ProfileSummary{{ID: "remote-1", Name: "Cached Profile"}}, nil
 }
 
+// GetProfile fails at once: the live list reconcile now starts the #2162 body
+// prefetch, which must not block in the embedded blocking adapter.
+func (a *recordingProfilesAdapter) GetProfile(context.Context, *Machine, string) (json.RawMessage, error) {
+	return nil, errors.New("recordingProfilesAdapter: no profile bodies")
+}
+
 // TestListMachineProfiles_KnownOfflineAnswersFromCacheWithoutAdapter is the
 // #1572 regression test: once the poller reports the machine unreachable,
 // GET /api/machine/profiles must answer from the local cache immediately --
@@ -443,5 +450,141 @@ func TestListMachineProfiles_ReachableOrUnknownStillGoesLive(t *testing.T) {
 				t.Errorf("stale = %v, want false (live path)", body["stale"])
 			}
 		})
+	}
+}
+
+// TestGetMachineProfile_KnownOfflineSummaryRowIs503 pins #2162: a summary-only
+// local row must never be served as 200 {} while the machine is off. The
+// adapter proves no live call is made at all.
+func TestGetMachineProfile_KnownOfflineSummaryRowIs503(t *testing.T) {
+	registry, sqlDB := newTestRegistry(t)
+	profilesRepo := NewProfilesRepository(sqlDB)
+	h := &Handlers{registry: registry, gaggimate: failOnCallAdapter{t: t}, profilesRepo: profilesRepo}
+	mux := newMux(h)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if err := profilesRepo.UpsertListSummary(machine.ID, "remote-1", "Summary Only", false); err != nil {
+		t.Fatalf("UpsertListSummary: %v", err)
+	}
+	h.SetKnownUnreachable(func(id int64) bool { return id == machine.ID })
+
+	start := time.Now()
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/profile/remote-1?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("getMachineProfile took %v for a known-offline machine; want an immediate answer", elapsed)
+	}
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body = %s; want 503", rec.Code, rec.Body)
+	}
+	body := decodeBody(t, rec.Body.Bytes())
+	if body["error"] != profileNotStoredMessage {
+		t.Errorf("error = %v, want %q", body["error"], profileNotStoredMessage)
+	}
+}
+
+// TestGetMachineProfile_KnownOfflineFullRowServesLocalCopy is the converse of
+// the test above: a full local body is served at once, still without a live
+// call (#2162).
+func TestGetMachineProfile_KnownOfflineFullRowServesLocalCopy(t *testing.T) {
+	registry, sqlDB := newTestRegistry(t)
+	profilesRepo := NewProfilesRepository(sqlDB)
+	h := &Handlers{registry: registry, gaggimate: failOnCallAdapter{t: t}, profilesRepo: profilesRepo}
+	mux := newMux(h)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if err := profilesRepo.UpsertSynced(machine.ID, "remote-1", "Full", json.RawMessage(`{"label":"Full","phases":[{"type":"PRESSURE"}]}`), false); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	h.SetKnownUnreachable(func(id int64) bool { return id == machine.ID })
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/profile/remote-1?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
+	}
+	body := decodeBody(t, rec.Body.Bytes())
+	phases, _ := body["phases"].([]any)
+	if len(phases) != 1 {
+		t.Fatalf("phases = %v, want one phase", body["phases"])
+	}
+}
+
+// TestGetMachineProfile_UnreachableSummaryRowIs503 pins #2162: when the live
+// fetch fails and the local row holds only the list summary, the answer is a
+// 503, never a 200 {} that would open an empty editor.
+func TestGetMachineProfile_UnreachableSummaryRowIs503(t *testing.T) {
+	shrinkProfileLiveFetchTimeout(t, 100*time.Millisecond)
+
+	registry, sqlDB := newTestRegistry(t)
+	profilesRepo := NewProfilesRepository(sqlDB)
+	h := &Handlers{registry: registry, gaggimate: fakeBlockingAdapter{}, profilesRepo: profilesRepo}
+	mux := newMux(h)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if err := profilesRepo.UpsertListSummary(machine.ID, "remote-1", "Summary Only", false); err != nil {
+		t.Fatalf("UpsertListSummary: %v", err)
+	}
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/profile/remote-1?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, body = %s; want 503", rec.Code, rec.Body)
+	}
+	if body := decodeBody(t, rec.Body.Bytes()); body["error"] != profileNotStoredMessage {
+		t.Errorf("error = %v, want %q", body["error"], profileNotStoredMessage)
+	}
+}
+
+// TestGetMachineProfile_OnlineServesLiveBodyAndCachesIt keeps the live-success
+// path intact: a reachable machine's body is served and stored (#2162).
+func TestGetMachineProfile_OnlineServesLiveBodyAndCachesIt(t *testing.T) {
+	registry, sqlDB := newTestRegistry(t)
+	profilesRepo := NewProfilesRepository(sqlDB)
+	h := &Handlers{
+		registry: registry,
+		gaggimate: listProfilesAdapter{bodies: map[string]json.RawMessage{
+			"remote-1": json.RawMessage(`{"label":"Live","phases":[{"type":"PRESSURE"}]}`),
+		}},
+		profilesRepo: profilesRepo,
+	}
+	mux := newMux(h)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake GaggiMate"), Type: strPtr("gaggimate"), Host: strPtr("http://192.0.2.1"),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	if err := profilesRepo.UpsertListSummary(machine.ID, "remote-1", "Summary Only", false); err != nil {
+		t.Fatalf("UpsertListSummary: %v", err)
+	}
+
+	rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/profile/remote-1?machineId="+strconv.FormatInt(machine.ID, 10), nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body)
+	}
+	body := decodeBody(t, rec.Body.Bytes())
+	if body["label"] != "Live" {
+		t.Errorf("label = %v, want the live body", body["label"])
+	}
+	row, err := profilesRepo.Get(machine.ID, "remote-1")
+	if err != nil || row == nil {
+		t.Fatalf("Get(remote-1): %v", err)
+	}
+	if !hasFullProfileBody(row.Data) || string(row.Data) != `{"label":"Live","phases":[{"type":"PRESSURE"}]}` {
+		t.Errorf("stored data = %s, want the live body cached", row.Data)
 	}
 }

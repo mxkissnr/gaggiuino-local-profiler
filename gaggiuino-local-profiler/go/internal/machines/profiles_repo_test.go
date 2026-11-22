@@ -424,3 +424,92 @@ func TestProfilesRepository_UpsertListSummary_KeepsDirtyRowAndInsertsNew(t *test
 		t.Fatalf("new list row = %+v, want synced with {} body", fresh)
 	}
 }
+
+// FillProfileBody completes a summary row that a live list reconcile left with
+// only the `{}` placeholder (#2162).
+func TestProfilesRepository_FillProfileBody_FillsSummaryRow(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	if err := repo.UpsertListSummary(1, "remote-1", "A", false); err != nil {
+		t.Fatalf("UpsertListSummary: %v", err)
+	}
+	row, err := repo.Get(1, "remote-1")
+	if err != nil || row == nil {
+		t.Fatalf("Get after summary: %v", err)
+	}
+	body := json.RawMessage(`{"label":"A","phases":[{"type":"PRESSURE"}]}`)
+	ok, err := repo.FillProfileBody(row.LocalID, row.Data, body)
+	if err != nil {
+		t.Fatalf("FillProfileBody: %v", err)
+	}
+	if !ok {
+		t.Fatalf("FillProfileBody reported no update, want true")
+	}
+	got, err := repo.Get(1, "remote-1")
+	if err != nil || got == nil {
+		t.Fatalf("Get after fill: %v", err)
+	}
+	if got.SyncStatus != ProfileSyncSynced || string(got.Data) != string(body) {
+		t.Fatalf("got = %+v, want synced with the filled body", got)
+	}
+}
+
+// FillProfileBody never overwrites a local edit made meanwhile, nor a body
+// another path stored after the background fetch was started (#2162).
+func TestProfilesRepository_FillProfileBody_SkipsLocalEditAndChangedBody(t *testing.T) {
+	_, sqlDB := newTestRegistry(t)
+	repo := NewProfilesRepository(sqlDB)
+
+	if err := repo.UpsertListSummary(1, "remote-1", "A", false); err != nil {
+		t.Fatalf("UpsertListSummary: %v", err)
+	}
+	row, err := repo.Get(1, "remote-1")
+	if err != nil || row == nil {
+		t.Fatalf("Get after summary: %v", err)
+	}
+	remoteID := "remote-1"
+	if _, err := repo.UpsertDirty(1, &row.LocalID, &remoteID, "Local Edit", json.RawMessage(`{"v":2}`)); err != nil {
+		t.Fatalf("UpsertDirty: %v", err)
+	}
+	ok, err := repo.FillProfileBody(row.LocalID, row.Data, json.RawMessage(`{"label":"A","phases":[{"type":"PRESSURE"}]}`))
+	if err != nil {
+		t.Fatalf("FillProfileBody (dirty row): %v", err)
+	}
+	if ok {
+		t.Fatalf("FillProfileBody updated a dirty row, want false")
+	}
+	got, err := repo.Get(1, "remote-1")
+	if err != nil || got == nil {
+		t.Fatalf("Get after dirty fill: %v", err)
+	}
+	if got.SyncStatus != ProfileSyncDirty || string(got.Data) != `{"v":2}` {
+		t.Fatalf("got = %+v, want the dirty local edit preserved", got)
+	}
+
+	if err := repo.UpsertListSummary(1, "remote-2", "B", false); err != nil {
+		t.Fatalf("UpsertListSummary (second): %v", err)
+	}
+	second, err := repo.Get(1, "remote-2")
+	if err != nil || second == nil {
+		t.Fatalf("Get(remote-2): %v", err)
+	}
+	newerBody := json.RawMessage(`{"label":"B","phases":[{"type":"FLOW"}]}`)
+	if err := repo.UpsertSynced(1, "remote-2", "B", newerBody, false); err != nil {
+		t.Fatalf("UpsertSynced: %v", err)
+	}
+	ok, err = repo.FillProfileBody(second.LocalID, second.Data, json.RawMessage(`{"label":"B","phases":[{"type":"PRESSURE"}]}`))
+	if err != nil {
+		t.Fatalf("FillProfileBody (changed body): %v", err)
+	}
+	if ok {
+		t.Fatalf("FillProfileBody replaced a newer body, want false")
+	}
+	got, err = repo.Get(1, "remote-2")
+	if err != nil || got == nil {
+		t.Fatalf("Get after changed fill: %v", err)
+	}
+	if string(got.Data) != string(newerBody) {
+		t.Fatalf("got data = %s, want the UpsertSynced body %s", got.Data, newerBody)
+	}
+}

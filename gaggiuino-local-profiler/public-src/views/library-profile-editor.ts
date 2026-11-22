@@ -147,9 +147,24 @@ export function renderProfileList(): void {
     </div>`));
 }
 
+// #2162: the one place that turns a profile GET into either a profile to
+// open or a toast saying why not. Used by Edit/Duplicate here, by the
+// GaggiMate editor and by the profile dial-in wizard. A 503 means the machine
+// is off and GLP has no full local copy of the profile yet; every other
+// failure shows the caller's own load-error toast.
+export async function loadProfileForEditing(
+  id: string | number,
+  machineId: string | number | undefined,
+  failedKey: string,
+): Promise<MachineProfile | null> {
+  const { profile, notStored } = await machinesApi.getMachineProfileResult(id, machineId);
+  if (!profile) window.showToast?.(t(notStored ? 'profile_not_stored_offline' : failedKey));
+  return profile;
+}
+
 export async function editProfile(id: string): Promise<void> {
-  const profile = await machinesApi.getMachineProfile(id, S.activeMachineId ?? '');
-  if (!profile) { window.showToast?.(t('profile_load_error')); return; }
+  const profile = await loadProfileForEditing(id, S.activeMachineId ?? '', 'profile_load_error');
+  if (!profile) return;
   // #2167: the machine's REST export has no `id`; keep the one we opened,
   // so the save PUTs over this profile instead of creating a copy.
   openProfileForm({ ...profile, id: profile.id ?? id });
@@ -160,8 +175,8 @@ export async function editProfile(id: string): Promise<void> {
 // instead of PUTting over the original, name suffixed so the duplicate
 // is never accidentally confused with its source in the list.
 export async function duplicateProfile(id: string): Promise<void> {
-  const profile = await machinesApi.getMachineProfile(id, S.activeMachineId ?? '');
-  if (!profile) { window.showToast?.(t('profile_load_error')); return; }
+  const profile = await loadProfileForEditing(id, S.activeMachineId ?? '', 'profile_load_error');
+  if (!profile) return;
   const duplicate: MachineProfile = { ...profile };
   delete duplicate.id;
   openProfileForm({ ...duplicate, name: `${profile.name}${t('profile_duplicate_suffix')}` });

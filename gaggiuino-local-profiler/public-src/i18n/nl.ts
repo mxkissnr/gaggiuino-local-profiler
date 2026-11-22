@@ -817,6 +817,7 @@ const nl: Partial<Translations> = {
     profile_send_error:'Versturen naar de machine mislukt',
     profile_not_synced:'Nog niet gesynchroniseerd met de machine — gebeurt automatisch zodra deze bereikbaar is',
     profile_load_error:'Profiel kon niet worden geladen',
+    profile_not_stored_offline:'De machine staat uit en dit profiel is nog niet lokaal opgeslagen. Het wordt opgeslagen zodra de profiellijst wordt geopend terwijl de machine aan staat.',
     profile_btn_duplicate:'Dupliceren', profile_duplicate_suffix:' (Kopie)',
     profile_no_phases_error:'Minstens één fase is vereist',
     profile_editor_title:'Profielbewerker',
