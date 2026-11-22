@@ -92,10 +92,17 @@ export function renderSidebar(): void {
         }
         el.appendChild(body);
       } else {
+        // #2152: a day group is headed by the shared section title with a
+        // counter of its shots; filterShots() keeps the counter on the
+        // shots a search leaves visible.
         const sep = document.createElement('div');
-        sep.className = 'day-sep';
+        sep.className = 'section-title day-sep';
         sep.dataset.dayKey = group.key;
         sep.textContent = group.label;
+        const count = document.createElement('span');
+        count.className = 'section-title__count';
+        count.textContent = String(group.shots.length);
+        sep.appendChild(count);
         el.appendChild(sep);
         group.shots.forEach(shot => el.appendChild(_buildShotWrapper(shot)));
       }
@@ -366,12 +373,15 @@ export function filterShots(query: string): void {
   // signal about this day-sep's shots.
   document.querySelectorAll<HTMLElement>('#shots .day-sep').forEach(sep => {
     let sib = sep.nextElementSibling as HTMLElement | null;
-    let hasVisible = false;
+    let visible = 0;
     while (sib && !sib.classList.contains('day-sep') && !sib.classList.contains('sidebar-month-header')) {
-      if (sib.classList.contains('shot-wrapper') && sib.style.display !== 'none') { hasVisible = true; break; }
+      if (sib.classList.contains('shot-wrapper') && sib.style.display !== 'none') visible++;
       sib = sib.nextElementSibling as HTMLElement | null;
     }
-    sep.style.display = hasVisible ? '' : 'none';
+    sep.style.display = visible > 0 ? '' : 'none';
+    // #2152: the counter names the day's shots the search leaves visible.
+    const count = sep.children[0] as HTMLElement | undefined;
+    if (count) count.textContent = String(visible);
   });
   // #439: while actively searching, force every month group open so matches
   // nested inside a collapsed month are actually visible; hide the

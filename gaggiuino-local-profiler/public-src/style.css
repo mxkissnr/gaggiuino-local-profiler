@@ -286,14 +286,10 @@
         .stars .off .star-glyph { fill: none; }
 
         /* #412: day-separator group header, replaces the per-row timestamp
-           and the old collapsible month-header (#399's approach) — plain,
-           non-collapsible, matches the approved rail+panel mockup. */
-        .day-sep {
-            padding: var(--sp-3) var(--sp-4) var(--sp-1);
-            font-size: var(--fs-1);
-            font-weight: 700;
-            color: var(--gray-500);
-        }
+           and the old collapsible month-header (#399's approach). #2152: it is
+           the shared .section-title with a counter of the day's shots; this
+           class only places it. */
+        .day-sep { margin: var(--sp-3) var(--sp-4) var(--sp-1); }
 
         /* #439: month-tier groups (14+ days old) restore the pre-#399
            collapsible accordion — clickable header (▸/▾ + "Month Year"),
@@ -1164,77 +1160,45 @@
             background: none; border: 1px solid var(--accent); color: var(--accent-ink);
             border-radius:var(--radius); font-size: var(--fs-1); padding: var(--sp-1) var(--sp-2); cursor: pointer; }
 
-        #chart-area { display: flex; flex-direction: column; padding: var(--sp-6) var(--sp-6) var(--sp-6); }
+        #chart-area { display: flex; flex-direction: column; gap: var(--sp-4); padding: var(--sp-6); }
 
-        /* #852 fix: plain block wrapper for the title/verdict/recipe block +
-           the hero photo — see the comment in index.html above #shotHeaderZone
-           for why this exists (float has no effect on flex items, so
-           #shotHeroPhoto needs a non-flex, non-grid parent to float inside).
-           BFC (overflow:hidden) so the wrapper's own box clears the floated
-           photo — otherwise its height would collapse to the (shorter) text
-           column and .chart-tabs right below it would overlap the photo. */
-        #shotHeaderZone { display: block; overflow: hidden; }
-
-        .sprofiler-header        { margin-bottom: var(--sp-4); }
-        /* #413: was a hardcoded #fff — invisible on the light/Crema themes,
-           where the content area is white/near-white. --gray-200 is the same
-           themed "brightest text" token used elsewhere (e.g. #sidebar h2,
-           .profile-name-sidebar, after #405). */
-        .sprofiler-header h1     { font-size: var(--fs-5); font-weight: 600; color: var(--gray-200); margin: 0 0 var(--sp-1); }
-        .sprofiler-header p      { font-size: var(--fs-2); color: var(--gray-400); margin: 0; }
-        /* #865: explicit order for all three flex items of .sprofiler-header
-           (title, action buttons, #verdictHeader) so #verdictHeader's
-           position relative to the other two can be flipped per breakpoint
-           without depending on DOM order or the now-inapplicable
-           :first-child/:last-child pairing (there are three children, not
-           two). Desktop keeps the verdict line last, matching its previous
-           standalone position below the row; the mobile media query below
-           moves it to order:2, between title and buttons. */
-        .sph-title   { order: 1; }
-        .sph-actions { order: 2; }
+        /* #2152: the shot detail in the Home Assistant page pattern (design doc,
+           "Page anatomy"): a top app bar, the verdict, the recipe figures, the
+           chart, Notes, Coffee and Process as grouped rows, then the similar
+           shots fold. Phone: one column. From 880 px of detail width (the shot
+           list may sit beside it): the chart left, the rows right. The query
+           container is .shot-layout, not #chart-area, because a size container
+           also contains fixed elements and the fullscreen chart is one. Page
+           classes only lay out; the look comes from the shared components. */
+        .shot-bar { display: flex; align-items: center; gap: var(--sp-1); min-height: 56px; }
+        .shot-bar-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .shot-more .lib-sheet-menu-list { z-index: var(--z-dropdown); }
+        .shot-layout { container-type: inline-size; min-width: 0; }
+        .shot-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: "verdict" "figures" "chart" "side" "similar"; gap: var(--sp-5); }
+        .shot-verdict { grid-area: verdict; }
+        .shot-verdict .analytics-verdict-text { flex: 1; }
+        .shot-figures { grid-area: figures; }
+        .shot-chart { grid-area: chart; min-width: 0; }
+        .shot-side { grid-area: side; display: flex; flex-direction: column; gap: var(--sp-5); min-width: 0; }
+        .shot-similar { grid-area: similar; }
+        .shot-similar > summary { list-style: none; }
+        .shot-similar > summary::-webkit-details-marker { display: none; }
+        .shot-similar[open] > summary .settings-chev { transform: rotate(45deg); }
+        .shot-similar .settings-row-sub { white-space: normal; }
+        .shot-rating .btn { margin-left: auto; }
+        .shot-taste .settings-row-text { gap: var(--sp-2); }
+        @container (min-width: 880px) {
+            .shot-grid { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); grid-template-areas: "verdict figures" "chart side" "similar side"; column-gap: var(--sp-6); align-items: start; }
+            .shot-figures { align-self: center; }
+        }
 
         .meta-sub   { font-size: var(--fs-2); color: var(--gray-500); font-weight: normal; margin-left: var(--sp-2); }
 
-        /* ── Verdict header (#398) ── #816: de-boxed. Was a filled --gray-900
-           panel with the score as a badge beside a boxed advice line below —
-           now a plain two-line block matching the prototype's flat
-           `.verdict` markup: the verdict itself (score · advice, one line,
-           .verdict-line) and the existing metadata subline beneath it,
-           neither boxed. */
-        .verdict-header {
-            display: flex;
-            flex-direction: column;
-            gap: var(--sp-1);
-            margin-bottom: var(--sp-5);
-            /* #865: now a flex item of .sprofiler-header — basis:100% makes
-               it always wrap onto its own row regardless of the row's
-               remaining width; order:3 keeps it last on desktop (after
-               .sph-title/.sph-actions), matching where it sat as a
-               standalone block before. The mobile media query overrides
-               this to order:2. */
-            flex: 1 1 100%;
-            order: 3;
-        }
-        .verdict-line {
-            display: flex; align-items: baseline; flex-wrap: wrap; gap: var(--sp-2);
-        }
         /* #1922 blind rating (dev builds): hide a shot's verdict until it has a
-           star rating. `visibility` instead of `display` keeps the header from
+           star rating. `visibility` instead of `display` keeps the page from
            jumping when the score appears; renderStars() sets `.active` on the
            first click, so the reveal is immediate. */
-        body.glp-blind-rating:not(:has(#starRating .star.active)) #verdictHeader .verdict-line { visibility: hidden; }
-        /* #813: the score ring became type — the number itself, at display
-           size and in the score colour (--ring-color, set inline per shot,
-           unified score scale #397), carries the same information with none
-           of the chrome a 58px conic-gradient ring badge used to add. */
-        .verdict-score-num {
-            font-size: var(--fs-5); font-weight: 700; line-height: 1;
-            font-variant-numeric: tabular-nums;
-            color: var(--ring-color, var(--gray-600));
-            flex-shrink: 0;
-        }
-        .verdict-headline  { font-size: var(--fs-3); font-weight: 700; color: var(--gray-200); display: flex; align-items: center; gap: var(--sp-2); }
-        .verdict-subline   { font-size: var(--fs-1); color: var(--gray-500); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        body.glp-blind-rating:not(:has(#starRating .star.active)) #verdictHeader .analytics-verdict-head { visibility: hidden; }
         /* #457: bean-target score hint — muted, same tone as the subline, so
            it reads as metadata rather than another verdict judgment. */
         .verdict-bean-target-hint { display: inline-flex; margin-left: 2px; color: var(--gray-500); cursor: help; }
@@ -1242,11 +1206,7 @@
         /* ── Delta badges (#402): same-profile auto-compare vs. the previous shot.
            The score delta uses the score-scale badge variants; process-metric
            deltas (no quality judgment) stay neutral. */
-        .shot-delta { margin-top: var(--sp-1); font-variant-numeric: tabular-nums; }
-        /* #816: inline after the verdict line, not stacked block below it —
-           the old boxed layout needed the stack, the plain line doesn't. */
-        .verdict-line .shot-delta { margin-top: 0; }
-        .process-card .shot-delta { display: flex; width: fit-content; }
+        .shot-delta { font-variant-numeric: tabular-nums; }
 
         /* ── Recipe zone (#398): large cards, the values the user sets ── */
         /* #813: a guided line, not a tile wall. These four were a grid of
@@ -1262,7 +1222,6 @@
             display: flex;
             flex-wrap: wrap;
             gap: var(--sp-3) var(--sp-5);
-            margin-bottom: var(--sp-5);
         }
         /* A column flex box, so `order` below can put the VALUE first while the
            markup keeps label-then-value (the label carries the data-i18n hook
@@ -1277,40 +1236,9 @@
         .recipe-card-value { display: block; font-size: var(--fs-4); font-weight: 700; color: var(--gray-100); line-height: 1.15; order: 1; }
         .recipe-card-sub   { display: block; font-size: var(--fs-1); color: var(--gray-500); order: 3; margin-top: 2px; }
 
-        /* ── Process zone (#398): compact cards, the values the machine produced ── */
-        /* #813: same treatment as .recipe-zone above — the process metrics were
-           a second grid of filled tiles directly below the first, which is the
-           doubled tile wall the redesign set out to remove.
-           Deliberately quieter than the recipe line: these are what the machine
-           did, not what the user chose, so the value sits one step down the
-           scale and the row reads as a footnote to the chart above it rather
-           than competing with the recipe for the eye. */
-        .process-zone {
-            display: flex;
-            flex-wrap: wrap;
-            gap: var(--sp-2) var(--sp-5);
-            margin-top: var(--sp-5);
-        }
-        .process-card       { position: relative; padding: 0; min-width: 0; display: flex; flex-direction: column; }
-        .process-card + .process-card::before {
-            content: ''; position: absolute; left: calc(var(--sp-5) / -2); top: 2px; bottom: 2px;
-            border-left: 1px solid var(--gray-700);
-        }
-        .process-card-label { display: block; font-size: var(--fs-1); color: var(--gray-500); order: 2; margin-top: 2px; }
-        .process-card-value { font-size: var(--fs-3); font-weight: 700; color: var(--gray-200); order: 1; line-height: 1.15; }
-
         .chart-container { position: relative; height: clamp(320px, 55vh, 480px); width: 100%; }
 
         /* ── Annotation panel ── */
-        .annotation-panel {
-            background: var(--gray-900);
-            border-radius:var(--radius);
-            padding: var(--sp-4) var(--sp-5);
-            margin-top: var(--sp-6);
-        }
-        .annotation-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--sp-4); }
-        .annotation-header .section-title { margin-bottom: 0; }
-
         .star-rating { display: flex; gap: var(--sp-1); }
         .star { cursor: pointer; color: var(--gray-700); transition: color .12s; user-select: none; line-height: 0; border:none; background:none; padding:0; }
         .star:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius: var(--radius-ctl); }
@@ -1382,7 +1310,6 @@
             margin-top: var(--sp-3); padding-top: var(--sp-3);
             border-top: 1px solid var(--gray-800);
         }
-        #orderedByBadge { white-space: normal; }
         .autosave-status { display: inline-flex; align-items: center; gap: var(--sp-1); font-size: var(--fs-1); color: var(--ok); opacity: 0; transition: opacity .3s; pointer-events: none; }
         .autosave-status.visible { opacity: 1; }
         .autosave-status.failed { color: var(--err); }
@@ -1449,7 +1376,7 @@
         .lib-item-name-row .lib-item-name { min-width: 0; }
         .lib-item-utility .lib-item-name { opacity: .75; }
         /* #404: eyebrow above the bean name — small, muted, uppercase,
-           same visual weight class as the recipe/process-card labels. */
+           same visual weight class as the recipe figure labels. */
         .lib-item-origin-eyebrow { font-size: var(--fs-1); color: var(--gray-600); margin-bottom: 2px; }
         /* #858: min-width:0 lives on the ancestor .lib-item-info, but some
            WebView-based engines (HA Companion App, installed PWA) still
@@ -2245,62 +2172,13 @@
         /* ── Freshness badge ── */
         #freshnessBadge, #firmwareVersionBadge { margin-left: var(--sp-2); vertical-align: middle; }
 
-        /* Shot-detail header photo thumbnail (#448) — originally the mobile
-           fallback for the space next to machine/freshness text. #850 made
-           it desktop-hidden in favor of .shot-hero-photo below; #863 hides it
-           on mobile too, since the (now-shrunk) hero panel covers that
-           space there as well. Kept around only in case a future layout
-           needs an inline-sized photo again. */
-        .shot-header-thumb {
-            display: none;
-            width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
-            vertical-align: middle; margin-left: var(--sp-2); cursor: pointer;
-            background: var(--gray-800);
-        }
-
-        /* Shot-detail hero photo (#850, shrunk for mobile in #863): panel
-           claiming the unused space to the right of the title/verdict/recipe
-           block, above the chart. Floated so the existing single-column
-           stack wraps around it with no DOM/layout restructuring. Desktop
-           size roughly matches the fixed 480x480 export resolution
-           (image-crop.js EXPORT_SIZE) — bigger would just look soft. Hidden
-           until JS adds .has-photo (no photo on this shot, or A/B compare
-           mode); the mobile media query below shrinks it instead of hiding
-           it. */
-        .shot-hero-photo {
-            display: none;
-            float: right;
-            width: 280px; height: 280px;
-            object-fit: cover; border-radius: 50%;
-            margin: 0 0 var(--sp-4) var(--sp-4);
-            background: var(--gray-800);
-            cursor: pointer;
-        }
+        /* #2152: the shot photo is the verdict's round avatar; hidden until the
+           shot has one (never in A/B compare mode). A click opens the lightbox. */
+        .shot-hero-photo { display: none; flex: none; width: 64px; height: 64px; object-fit: cover; border-radius: var(--radius-full); cursor: pointer; }
         .shot-hero-photo.has-photo { display: block; }
 
-        /* ── Grind advice ── #816: de-boxed — was a filled+bordered panel,
-           exactly the "everything is a box" pattern PLAN.md calls out. Not
-           clickable, so per Border-Diät it groups over a line instead: a
-           left accent line, no fill, matching the prototype's own .status
-           pattern (border-left + padding-left, no border-radius/background).
-           Applies to both the primary advice (if rendered standalone) and
-           #grindAdviceComparative, which shares this class family. */
-        .grind-advice {
-            display: flex; align-items: center; gap: var(--sp-3);
-            padding-left: var(--sp-3); border-left: 2px solid;
-            font-size: var(--fs-2); margin-top: var(--sp-4);
-        }
-        .grind-advice .grind-icon { font-size: var(--fs-3); flex-shrink: 0; }
-        .grind-ok      { border-color: var(--ok); color: var(--ok); }
-        .grind-finer   { border-color: var(--ice); color: var(--ice); }
-        .grind-coarser { border-color: var(--warn); color: var(--warn); }
-        .grind-warning { border-color: var(--err); color: var(--err); }
-        .grind-comparative { margin-top: var(--sp-2); font-size: var(--fs-1); opacity: .9; flex-wrap: wrap; cursor: default; }
-        .comp-toggle { background: none; border: none; color: inherit; font-size: var(--fs-1); cursor: pointer; padding: 0 var(--sp-2) 0 0; opacity: .7; flex-shrink: 0; display: inline-block; transition: transform .15s, opacity .15s; }
-        .comp-toggle:hover { opacity: 1; }
-        .grind-comparative.expanded .comp-toggle { transform: rotate(90deg); }
-        .comp-shots-panel { display: none; width: 100%; margin-top: var(--sp-2); padding-top: var(--sp-2); border-top: 1px solid color-mix(in srgb, var(--paper) 10%, transparent); }
-        .grind-comparative.expanded .comp-shots-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--sp-2); }
+        /* #2152: the similar shots fold row opens onto the thumbnails. */
+        .comp-shots-panel { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: var(--sp-2); margin: 0 var(--sp-4) var(--sp-4); }
         .comp-thumb { background: color-mix(in srgb, var(--paper) 5%, transparent); border: 1px solid color-mix(in srgb, var(--paper) 8%, transparent); border-radius:var(--radius); overflow: hidden; cursor: pointer; transition: border-color .15s, background .15s; }
         .comp-thumb:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
         .comp-thumb:hover { background: color-mix(in srgb, var(--paper) 9%, transparent); border-color: color-mix(in srgb, var(--paper) 20%, transparent); }
@@ -2338,41 +2216,6 @@
         }
         #chartFullscreen .fs-tabs { display: flex; gap: var(--sp-2); flex: 1; }
         #chartFullscreen .fs-body { flex: 1; position: relative; min-height: 0; padding: var(--sp-2); }
-
-        /* ── Share-card format picker ── */
-        .card-fmt-wrap { position: relative; display: inline-flex; align-items: flex-start; }
-        .card-fmt-menu {
-            display: none;
-            position: absolute;
-            top: calc(100% + 4px);
-            right: 0;
-            background: var(--gray-900);
-            border: 1px solid var(--gray-700);
-            border-radius:var(--radius);
-            min-width: 140px;
-            z-index: var(--z-menu);
-            overflow: hidden;
-        }
-        .card-fmt-wrap.open .card-fmt-menu { display: block; }
-        .card-fmt-opt {
-            display: block;
-            width: 100%;
-            background: none;
-            border: none;
-            color: var(--gray-300);
-            padding: var(--sp-2) var(--sp-4);
-            text-align: left;
-            font-size: var(--fs-1);
-            cursor: pointer;
-            transition: background .15s;
-        }
-        .card-fmt-opt:hover { background: var(--gray-800); color: var(--gray-200); }
-
-        /* ── Channeling warning ── */
-        #channelingWarning { margin-left: var(--sp-2); vertical-align: middle; }
-
-        /* ── Temp stability ── */
-        .meta-stability { font-size: var(--fs-1); color: var(--gray-500); margin-left: var(--sp-1); font-weight: normal; }
 
         /* #1622: the one five-step score scale (SCORE_STEPS, utils.ts) as CSS
            classes — each step names the matching token, exactly like scoreColor()
@@ -2630,36 +2473,6 @@
                 transition: background .15s, color .15s;
             }
             .more-sheet-item:hover, .more-sheet-item:active { background: var(--gray-800); color: var(--gray-200); }
-            .sprofiler-header { margin-bottom: var(--sp-3); }
-            .sprofiler-header h1 { font-size: var(--fs-4); }
-            /* The title block (flex:1;min-width:0) and the export-buttons block
-               (flex-shrink:0) are both set via inline style="" in index.html
-               (display:flex;flex-wrap:wrap on the parent). flex-wrap only kicks in once
-               shrinkable items can't shrink further — but flex:1;min-width:0 lets the
-               title block shrink almost to nothing instead of wrapping, so on narrow
-               viewports the title/subtitle get squeezed into a sliver and visually
-               overlap the buttons instead of wrapping onto their own row. Forcing
-               both children to flex-basis:100% makes each claim the full row width,
-               so they stack as two clean rows. */
-            .sph-title   { flex: 1 1 100% !important; }
-            .sph-actions { flex: 1 1 100% !important; flex-wrap: wrap; justify-content: flex-start; order: 3; }
-            /* #865: on mobile, #verdictHeader moves from last (order:3, its
-               desktop position) to between the title and the button row —
-               it fills the band next to the shrunk hero photo instead of
-               that space going unused while the score sits below everything.
-               .sph-actions is bumped to order:3 here so verdict's order:2
-               actually lands between title(1) and actions, instead of tying
-               with actions' base order:2 and losing on DOM order. */
-            .verdict-header { order: 2; margin-bottom: var(--sp-3); }
-            /* #863: the hero panel now shows on mobile too, shrunk to fit the
-               header's unused top-right space instead of falling back to the
-               22px thumb — the thumb is no longer needed once the hero
-               covers the same spot here. */
-            .shot-hero-photo.has-photo {
-                width: 100px; height: 100px;
-                margin: 0 0 var(--sp-2) var(--sp-2);
-            }
-            .shot-header-thumb { display: none; }
             .annotation-fields { grid-template-columns: 1fr; }
             .annotation-field.full-width { grid-column: 1; }
             .chart-container { height: clamp(300px, 50vh, 400px); }
@@ -2682,7 +2495,6 @@
             #sidebar h2        { padding: var(--sp-4) var(--sp-4); }
 
             /* Annotation panel — mobile improvements */
-            .annotation-panel  { padding: var(--sp-4); margin-top: var(--sp-4); }
             .annotation-actions { flex-direction: column; align-items: stretch; gap: var(--sp-2); }
             .star              { padding: var(--sp-2) var(--sp-2); font-size: var(--fs-5); }
             /* #1960: every library picker and its free-text fallback is a 44px target on a phone. */
@@ -2698,7 +2510,6 @@
             gap: var(--sp-5);
         }
         @media (max-width: 480px) {
-            .sprofiler-header h1 { font-size: var(--fs-3); }
             #analytics-view, #maintenance-view { --analytics-pad: var(--sp-3); }
             #analytics-view, #library-view, #maintenance-view,
             #dialin-view, #settings-view, #orders-view, #achievements-view { padding: var(--sp-3); }
@@ -2707,7 +2518,6 @@
                chart from shrinking on small phones while still leaving room
                for the annotation panel below. */
             .chart-container { height: clamp(280px, 42vh, 360px); }
-            .annotation-panel  { padding: var(--sp-3); }
         }
 
         /* The rendered sections are the grid items, not the wrapper. */
@@ -3141,9 +2951,6 @@
         .orders-menu-variant-input { width: 120px; }
         .orders-use-beans-note { display:inline-flex; align-items:center; gap: var(--sp-1); }
 
-        .ann-ordered-by { display:flex; flex-direction:column; gap: 2px; margin-top: var(--sp-3); padding: var(--sp-2) var(--sp-3); background:color-mix(in srgb, var(--paper) 3%, transparent); border:1px solid var(--gray-800); border-radius:var(--radius); }
-        .ann-ordered-by-label { font-size: var(--fs-1); font-weight:700; color:var(--gray-500); display:inline-flex; align-items:center; gap: var(--sp-1); }
-        .ann-ordered-by-val { font-size: var(--fs-1); color:var(--gray-200); }
         .orders-menu-add-row { display:flex; gap: var(--sp-2); align-items:center; flex-wrap:wrap; }
         .orders-menu-emoji { width: 56px; text-align: center; }
         .orders-menu-name, .orders-kiosk-link { flex:1; min-width:0; }
