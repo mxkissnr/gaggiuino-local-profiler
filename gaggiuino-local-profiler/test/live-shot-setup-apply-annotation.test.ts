@@ -67,6 +67,7 @@ interface FakeElement {
   querySelector: () => null;
   addEventListener: () => void;
   removeEventListener: () => void;
+  setAttribute: () => void;
   selectedOptions: { dataset: Record<string, string> }[];
 }
 
@@ -79,6 +80,7 @@ function makeFakeDocument() {
       querySelector: () => null,
       addEventListener() {},
       removeEventListener() {},
+      setAttribute() {},
       selectedOptions: [],
     };
   }

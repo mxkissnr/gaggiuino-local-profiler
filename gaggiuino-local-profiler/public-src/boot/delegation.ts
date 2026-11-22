@@ -37,6 +37,7 @@ import { switchActiveMachine, setDefaultMachine } from '../components/machines-s
 import { closeSetupWizard, setupWizardGetStarted, setupWizardSkipToDemo } from '../views/setup-wizard.js';
 import { closeEasterEggPanel } from '../components/topbar-machine-icon.js';
 import { toggleFlush, confirmBrewFromDialog, cancelBrewFromDialog } from '../components/machine-control.js';
+import { openRefPicker, chooseReferenceShot, openLiveSetupSheet } from '../views/live.js';
 import { isActiveMachineGaggiMate } from './library.js';
 
 // #1619: keep role="button" cards operable without turning their block
@@ -216,6 +217,11 @@ export function wireDelegation(): void {
       case 'live-set-default-machine':
         if (typeof S.activeMachineId === 'number') void setDefaultMachine(S.activeMachineId);
         break;
+      // #2153: the Live tab's reference chip opens the reference list, a row
+      // picks that shot; a next-shot row opens the fields in the sheet.
+      case 'live-ref-open':     openRefPicker(el); break;
+      case 'live-ref-choose':   chooseReferenceShot(strId()); break;
+      case 'live-setup-open':   openLiveSetupSheet(); break;
     }
   });
 
