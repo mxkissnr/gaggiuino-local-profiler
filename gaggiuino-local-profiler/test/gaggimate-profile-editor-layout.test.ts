@@ -15,7 +15,8 @@ const { S } = await import('../public-src/state/index.js');
 const { t } = await import('../public-src/i18n.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
-const { openGaggiMateProfileEditor, handleGmEditorAction } = await import('../public-src/views/gaggimate-profile-editor.js');
+const { openGaggiMateProfileEditor, handleGmEditorAction, buildGmChartData, gmTimeAxisStep, gmTimeTickLabel } =
+  await import('../public-src/views/gaggimate-profile-editor.js');
 
 interface FakeEl {
   innerHTML: string;
@@ -50,6 +51,15 @@ const PRO = {
   phases: [
     { name: 'Fill', phase: 'preinfusion', valve: 1, pump: { target: 'flow', pressure: 3, flow: 4 }, duration: 5, temperature: 0,
       targets: [], transition: { type: 'linear', duration: 2, adaptive: true, target: 'time' } },
+  ],
+};
+
+// #2163: the simulator's "Cremina Lever": a standard profile with pressure pumps.
+const CREMINA = {
+  id: 'gm-3', label: 'Cremina Lever', description: '', temperature: 93, type: 'standard', utility: false, favorite: false,
+  phases: [
+    { name: 'Fill', phase: 'preinfusion', valve: 1, pump: { flow: 0, pressure: 1.1, target: 'pressure' }, duration: 10, targets: [] },
+    { name: 'Lever', phase: 'brew', valve: 1, pump: { flow: 0, pressure: 9, target: 'pressure' }, duration: 30, targets: [{ type: 'volumetric', operator: 'gte', value: 36 }] },
   ],
 };
 
@@ -154,6 +164,50 @@ describe('GaggiMate editor layout (#2154)', () => {
     expect(markup).toContain(t('gm_no_phases'));
     expect(markup).toContain('data-action="gm-add-phase"');
     expect(markup).not.toContain('pe-remove-phase');
+  });
+
+  it('steps the time axis in whole seconds (#2163)', () => {
+    expect(gmTimeAxisStep(30)).toBe(5);
+    expect(gmTimeAxisStep(65)).toBe(10);
+    expect(gmTimeAxisStep(200)).toBe(30);
+    expect(gmTimeAxisStep(600)).toBe(120);
+    expect(gmTimeAxisStep(5000)).toBe(120);
+    expect(gmTimeTickLabel(9.428571428571429)).toBe('9');
+    expect(gmTimeTickLabel(65)).toBe('65');
+  });
+
+  it('shows the pump target of a standard profile with pressure pumps (#2163)', async () => {
+    const cremina = await open(CREMINA);
+    expect(cremina).toContain('aria-pressed="true" data-action="gm-std-pump-mode" data-idx="0" data-val="pressure"');
+    expect(cremina).toContain('data-val="flow"');
+    expect(cremina).toContain('data-action="gm-std-pressure" data-idx="0"');
+    expect(cremina).toContain('value="1.1"');
+    expect(cremina).not.toContain('data-action="gm-pro-ramp-type"');
+
+    const standard = await open(STANDARD);
+    expect(standard).not.toContain('data-val="pressure"');
+    expect(standard).toContain('aria-pressed="true" data-action="gm-std-pump-mode" data-idx="0" data-val="power"');
+  });
+
+  it('keeps the target values when the standard pump mode switches (#2163)', async () => {
+    await open(CREMINA);
+    handleGmEditorAction('gm-std-pump-mode', { dataset: { idx: '0', val: 'flow' } } as unknown as HTMLElement);
+    const markup = body();
+    expect(markup).toContain('aria-pressed="true" data-action="gm-std-pump-mode" data-idx="0" data-val="flow"');
+    expect(markup).toContain('data-action="gm-std-pressure" data-idx="0"');
+    expect(markup).toContain('value="1.1"');
+  });
+
+  it('draws the pump target curve of a standard profile with pressure pumps (#2163)', () => {
+    const cremina = buildGmChartData(CREMINA)!;
+    expect(cremina.pumpChart).toBe(true);
+    expect(cremina.powerData).toEqual([]);
+    expect(Math.max(...cremina.pressureData.map(p => p.y))).toBeGreaterThan(8);
+
+    const standard = buildGmChartData(STANDARD)!;
+    expect(standard.pumpChart).toBe(false);
+    expect(standard.pressureData).toEqual([]);
+    expect(standard.powerData.map(p => p.y)).toEqual([30, 100, 100]);
   });
 
   it('leaves no style for the retired GaggiMate editor parts', () => {

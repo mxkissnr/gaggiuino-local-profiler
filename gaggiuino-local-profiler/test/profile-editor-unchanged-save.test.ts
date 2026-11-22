@@ -90,6 +90,16 @@ const GM_PRO: GmFixture = {
   ],
 };
 
+// #2163: a standard profile with pressure pumps, like the simulator's
+// "Cremina Lever" — GaggiMate runs an object pump whatever the type.
+const GM_STANDARD_TARGETS: GmFixture = {
+  id: 'gm-3', label: 'Cremina Lever', description: '', temperature: 93, type: 'standard', utility: false, favorite: false,
+  phases: [
+    { name: 'Fill', phase: 'preinfusion', valve: 1, pump: { flow: 0, pressure: 1.1, target: 'pressure' }, duration: 10, targets: [] },
+    { name: 'Lever', phase: 'brew', valve: 1, pump: { flow: 0, pressure: 9, target: 'pressure' }, duration: 30, targets: [{ type: 'volumetric', operator: 'gte', value: 36 }] },
+  ],
+};
+
 // ── Harness ─────────────────────────────────────────────────────────────
 
 const unescapeAttr = (s: string): string => s
@@ -183,7 +193,7 @@ describe('an unchanged profile is sent exactly as before (#2154)', () => {
     expect(sentBody()).toBe(JSON.stringify(GAGGIUINO_SENT));
   });
 
-  it.each([['standard', GM_STANDARD], ['pro', GM_PRO]] as Array<[string, GmFixture]>)(
+  it.each([['standard', GM_STANDARD], ['pro', GM_PRO], ['standard with a pump target', GM_STANDARD_TARGETS]] as Array<[string, GmFixture]>)(
     'GaggiMate %s: open, then save without an edit',
     async (_type, profile) => {
       installDocument();

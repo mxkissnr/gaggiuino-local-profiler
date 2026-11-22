@@ -55,9 +55,21 @@ export function phaseLabel(name: string | undefined, index: number): string {
   return trimmed || t('pe_phase_fallback', index + 1);
 }
 
+// #2163: a chip's full text for its tooltip and screen readers, so a chip
+// too narrow for its name still names the phase: "2. Ramp up, 4 s", or
+// "Phase 2, 12 s" for a phase without a name.
+export function phaseChipTitle(name: string | undefined, index: number, sub: string): string {
+  const trimmed = (name ?? '').trim();
+  return trimmed ? `${index + 1}. ${trimmed}, ${sub}` : `${t('pe_phase_fallback', index + 1)}, ${sub}`;
+}
+
 export function phaseTimelineHtml(phases: readonly TimelinePhase[], selected: number, opts: TimelineOptions): Html {
   const shares = phaseShares(phases.map(p => p.seconds));
-  const chips = phases.map((p, i) => html`<button type="button" class="chip phase-timeline-item" aria-pressed="${esc(i === selected ? 'true' : 'false')}" data-action="${esc(opts.selectAction)}" data-idx="${esc(i)}" style="--phase-share:${esc(shares[i] ?? 0)}"><span class="phase-timeline-name">${esc(phaseLabel(p.name, i))}</span><span class="phase-timeline-sub">${esc(p.sub ?? phaseSecondsText(p.seconds))}</span></button>`);
+  const chips = phases.map((p, i) => {
+    const sub = p.sub ?? phaseSecondsText(p.seconds);
+    const full = phaseChipTitle(p.name, i, sub);
+    return html`<button type="button" class="chip phase-timeline-item" aria-pressed="${esc(i === selected ? 'true' : 'false')}" data-action="${esc(opts.selectAction)}" data-idx="${esc(i)}" style="--phase-share:${esc(shares[i] ?? 0)}" title="${esc(full)}" aria-label="${esc(full)}"><span class="phase-timeline-num" aria-hidden="true">${esc(i + 1)}</span><span class="phase-timeline-name">${esc(phaseLabel(p.name, i))}</span><span class="phase-timeline-sub">${esc(sub)}</span></button>`;
+  });
   return html`<div class="section-title"><span>${esc(opts.title)}</span></div>
     <div class="phase-timeline" role="group" aria-label="${esc(opts.title)}">
       ${phases.length ? joinHtml(chips) : html`<span class="phase-timeline-empty">${esc(opts.emptyText)}</span>`}
