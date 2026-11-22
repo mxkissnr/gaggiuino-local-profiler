@@ -2,6 +2,7 @@
 // Node environment, no DOM library: the menus, their lists and the document
 // are hand-built fakes, styled after the deleted topbar-nav-fade test.
 import { describe, it, expect, vi } from 'vitest';
+import type { Mock } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +20,7 @@ interface FakeList {
   getBoundingClientRect: () => { bottom: number };
 }
 
-interface FakeSummary { focus: ReturnType<typeof vi.fn> }
+interface FakeSummary { focus: Mock }
 
 interface FakeItem { closest: (s: string) => unknown }
 
