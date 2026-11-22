@@ -817,6 +817,7 @@ const fr: Partial<Translations> = {
     profile_send_error:'Échec de l\'envoi à la machine',
     profile_not_synced:'Pas encore synchronisé avec la machine — se fera automatiquement dès qu\'elle sera accessible',
     profile_load_error:'Impossible de charger le profil',
+    profile_not_stored_offline:'La machine est éteinte et ce profil n\'est pas encore enregistré localement. Il le sera à la prochaine ouverture de la liste des profils, machine allumée.',
     profile_btn_duplicate:'Dupliquer', profile_duplicate_suffix:' (Copie)',
     profile_no_phases_error:'Au moins une phase est requise',
     profile_editor_title:'Éditeur de profil',

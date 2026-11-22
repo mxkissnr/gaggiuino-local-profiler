@@ -817,6 +817,7 @@ const it: Partial<Translations> = {
     profile_send_error:'Invio alla macchina non riuscito',
     profile_not_synced:'Non ancora sincronizzato con la macchina — avverrà automaticamente non appena sarà raggiungibile',
     profile_load_error:'Impossibile caricare il profilo',
+    profile_not_stored_offline:'La macchina è spenta e questo profilo non è ancora salvato in locale. Verrà salvato la prossima volta che si apre l\'elenco dei profili con la macchina accesa.',
     profile_btn_duplicate:'Duplica', profile_duplicate_suffix:' (Copia)',
     profile_no_phases_error:'È richiesta almeno una fase',
     profile_editor_title:'Editor profilo',

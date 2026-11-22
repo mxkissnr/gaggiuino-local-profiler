@@ -817,6 +817,7 @@ const en: Translations = {
     profile_send_error:'Failed to send to the machine',
     profile_not_synced:'Not yet synced to the machine — will happen automatically once it\'s reachable',
     profile_load_error:'Failed to load profile',
+    profile_not_stored_offline:'Machine is off and this profile is not stored locally yet. It is stored the next time the profile list is opened with the machine on.',
     profile_btn_duplicate:'Duplicate', profile_duplicate_suffix:' (Copy)',
     profile_no_phases_error:'At least one phase is required',
     profile_editor_title:'Profile editor',

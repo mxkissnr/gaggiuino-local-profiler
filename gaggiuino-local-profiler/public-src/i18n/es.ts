@@ -817,6 +817,7 @@ const es: Partial<Translations> = {
     profile_send_error:'Error al enviar a la máquina',
     profile_not_synced:'Aún no sincronizado con la máquina — se hará automáticamente en cuanto esté disponible',
     profile_load_error:'No se pudo cargar el perfil',
+    profile_not_stored_offline:'La máquina está apagada y este perfil aún no está guardado localmente. Se guardará la próxima vez que se abra la lista de perfiles con la máquina encendida.',
     profile_btn_duplicate:'Duplicar', profile_duplicate_suffix:' (Copia)',
     profile_no_phases_error:'Se requiere al menos una fase',
     profile_editor_title:'Editor de perfil',
