@@ -11,6 +11,15 @@ env:
 permissions:
   contents: read
 
+# #2156: a newer commit cancels the older run of the same pull request or ppops/** branch.
+# Every other push (dev, main, feature/**, release/**) gets a group of its own (run id), so
+# it is never cancelled and never replaced while queued. Push and pull_request runs never
+# share a group (refs/heads/... vs refs/pull/.../merge): the ppops pipeline gates on the
+# push run of the pushed commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request' || startsWith(github.ref, 'refs/heads/ppops/')) && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   test:
     name: Test and build
@@ -298,15 +307,20 @@ jobs:
     # considerably more expensive multi-stage (the esbuild frontend + Go compile x3
     # archs) build entirely instead of running it anyway.
     needs: go-test
-    if: github.server_url == 'https://github.com'
+    # #2156: skipped on ppops/** pushes (intermediate agent slices). The pull_request run and
+    # every dev, main, feature/** and release/** push still build and smoke-test all three arches.
+    if: github.server_url == 'https://github.com' && !(github.event_name == 'push' && startsWith(github.ref, 'refs/heads/ppops/'))
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # #1872: pushes to ppops/** (pipeline fix rounds) build amd64 only; every other trigger,
-      # in particular pull_request and dev/main pushes, keeps the full three-arch matrix, so the
-      # QEMU check described above still gates every merge.
       matrix:
-        include: ${{ fromJSON(github.event_name == 'push' && startsWith(github.ref, 'refs/heads/ppops/') && '[{"arch":"amd64","platform":"linux/amd64"}]' || '[{"arch":"amd64","platform":"linux/amd64"},{"arch":"arm64","platform":"linux/arm64"},{"arch":"armv7","platform":"linux/arm/v7"}]') }}
+        include:
+          - arch: amd64
+            platform: linux/amd64
+          - arch: arm64
+            platform: linux/arm64
+          - arch: armv7
+            platform: linux/arm/v7
     defaults:
       run:
         working-directory: gaggiuino-local-profiler
