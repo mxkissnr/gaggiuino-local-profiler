@@ -256,4 +256,18 @@ describe('sidebar lazy month groups (#969)', () => {
     S.shots = orig;
     expect(findCalls).toBe(0);
   });
+
+  it('heads each recent day with the shared section title and counts its visible shots (#2152)', () => {
+    renderSidebar();
+    const seps = collect(shotsEl, n => n.classList.contains('day-sep'));
+    expect(seps.length).toBe(3);
+    for (const sep of seps) {
+      expect(sep.classList.contains('section-title')).toBe(true);
+      expect(sep.children[0]?.className).toBe('section-title__count');
+      expect(sep.children[0]?.textContent).toBe('1');
+    }
+    filterShots('Profile 12');
+    expect(seps.map(s => s.style.display)).toEqual(['', 'none', 'none']);
+    expect(seps.map(s => s.children[0]?.textContent)).toEqual(['1', '0', '0']);
+  });
 });

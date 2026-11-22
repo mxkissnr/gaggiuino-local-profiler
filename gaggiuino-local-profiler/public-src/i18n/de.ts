@@ -139,6 +139,7 @@ const de: Partial<Translations> = {
     chart_pressure_unit:'Druck (bar)', chart_flow_unit:'Pumpenfluss (ml/s)',
     chart_time:(s)=>`Zeit: ${s}`,
     delta_vs_shot:(n)=>`vs. Shot ${n}`, chart_prev_suffix:(n)=>` (Shot ${n})`,
+    shot_compare_pick:'Mit anderem Shot vergleichen', shot_compare_end:'Vergleich beenden', shot_compare_none:'Es gibt noch keinen anderen Shot zum Vergleichen.', shot_notes_all:'Alle Notizen', shot_section_process:'Prozess', shot_similar_title:(n)=>`Ähnliche Shots · ${n}`, shot_verdict_vs_bean:(n)=>`ggü. Shot ${n}, dem letzten mit diesem Profil und dieser Bohne`, shot_verdict_vs_profile:(n)=>`ggü. Shot ${n}, dem letzten mit diesem Profil`,
     orders_just_now:'gerade eben',
     live_idle_text:'Sobald ein Bezug startet, erscheinen hier die Echtzeit-Daten.',
     live_time_unit:'min:sec', live_time_label:'Zeit',

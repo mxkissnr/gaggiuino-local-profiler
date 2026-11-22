@@ -139,6 +139,7 @@ const en: Translations = {
     chart_pressure_unit:'Pressure (bar)', chart_flow_unit:'Flow (ml/s)',
     chart_time:(s)=>`Time: ${s}`,
     delta_vs_shot:(n)=>`vs. Shot ${n}`, chart_prev_suffix:(n)=>` (Shot ${n})`,
+    shot_compare_pick:'Compare with another shot', shot_compare_end:'End comparison', shot_compare_none:'There is no other shot to compare with yet.', shot_notes_all:'All notes', shot_section_process:'Process', shot_similar_title:(n)=>`Similar shots · ${n}`, shot_verdict_vs_bean:(n)=>`vs. Shot ${n}, the last one with this profile and bean`, shot_verdict_vs_profile:(n)=>`vs. Shot ${n}, the last one with this profile`,
     orders_just_now:'just now',
     live_idle_text:'Once a shot starts, real-time data will appear here.',
     live_time_unit:'min:sec', live_time_label:'Time',

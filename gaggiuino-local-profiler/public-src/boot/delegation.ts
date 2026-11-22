@@ -16,6 +16,7 @@ import { markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope, deleteM
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from '../components/flavor-wheel.js';
 import { highlightSheetFlavor } from '../components/flavor-mini-wheel.js';
 import { closeDetailSheet } from '../components/detail-sheet.js';
+import { chooseShareFormat, pickCompareShot } from '../views/shots/detail-page.js';
 import { openDialinShot } from '../views/dialin.js';
 import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrinder, deleteGrinder,
          resetGrinderBurrs, deleteGrinderZeroPointEntry, toggleBeanQR, openNewBagForm, closeNewBagForm,
@@ -187,7 +188,9 @@ export function wireDelegation(): void {
       case 'open-dialin-shot':   openDialinShot(numId(), el); break;
       case 'dialin-goto-shot':   closeDetailSheet(); goToShot(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
-      case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
+      // #2152: the shot page's compare picker and share sheet rows.
+      case 'pick-compare-shot':  pickCompareShot(numId()); break;
+      case 'share-shot-card':    chooseShareFormat(el.dataset.format ?? 'square'); break;
       case 'start-dialin':           openDialinWizard(); break;
       case 'start-dialin-from-bean': closeBeanSheet(); startDialinFromBean(numId()); break;
       case 'dialin-confirm-shot':    void dialinConfirmShot(numId(), el.dataset.match === '1'); break;

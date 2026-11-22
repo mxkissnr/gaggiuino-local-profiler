@@ -13,7 +13,7 @@ import { defaultGrinderName, suggestGrindDoseForBean, TASTE_TAGS, TASTE_TAG_LABE
 import type { TasteTag } from './grind.js';
 import { loadShotImageBlobUrl, invalidateShotImage } from '../../bean-image.js';
 import { openLightbox } from '../../components/lightbox.js';
-import { COFFEE_ICON_SVG, CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
+import { CHECK_ICON_SVG, MILK_ICON_SVG } from '../../icons.js';
 import { localeFor } from '../../constants.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
 import type { BeanMixPartInput, BeanMixPartPayload } from '../../shared/bean-mix.js';
@@ -830,17 +830,8 @@ export function renderAnnotationPanel(shot: AnnotationShot): void {
   _updateMilkFieldVisibility();
   _renderRecipeSelect(ann.recipeId || null);
   _setAutoSaveStatus('idle'); // #430: clear any leftover status from the previously viewed shot
-  const badge = document.getElementById('orderedByBadge');
-  if (badge) {
-    const ob = ann.orderedBy;
-    if (ob?.customer) {
-      const drink = ob.item ? (ob.variant ? `${ob.item} · ${ob.variant}` : ob.item) : null;
-      badge.innerHTML = html`${COFFEE_ICON_SVG} ${esc(ob.customer)}${drink ? html` · ${esc(drink)}` : esc('')}${ob.note ? html` · ${esc(ob.note)}` : esc('')}`;
-      badge.style.display = '';
-    } else {
-      badge.style.display = 'none';
-    }
-  }
+  // #2152: who ordered the shot shows once, as a row of the page's Coffee
+  // group (updateView), no longer as a second badge here.
 }
 
 export function quickClone(): void {
