@@ -199,12 +199,12 @@ describe('GaggiMate editor layout (#2154)', () => {
   });
 
   it('draws the pump target curve of a standard profile with pressure pumps (#2163)', () => {
-    const cremina = buildGmChartData(structuredClone(CREMINA) as unknown as Parameters<typeof buildGmChartData>[0])!;
+    const cremina = buildGmChartData(CREMINA)!;
     expect(cremina.pumpChart).toBe(true);
     expect(cremina.powerData).toEqual([]);
     expect(Math.max(...cremina.pressureData.map(p => p.y))).toBeGreaterThan(8);
 
-    const standard = buildGmChartData(structuredClone(STANDARD) as unknown as Parameters<typeof buildGmChartData>[0])!;
+    const standard = buildGmChartData(STANDARD)!;
     expect(standard.pumpChart).toBe(false);
     expect(standard.pressureData).toEqual([]);
     expect(standard.powerData.map(p => p.y)).toEqual([30, 100, 100]);
