@@ -235,7 +235,9 @@ export async function shareCard(format = 'square', verdict: CardVerdict | null =
     const theme  = root.dataset.theme || 'dark';
     const r = await getShotCard(shotId, {
       format, accent, theme, lang: S.currentLang,
-      verdict: verdict?.text, verdictType: verdict?.type, delta: verdict?.delta ?? null, vs: verdict?.vs,
+      // exactOptionalPropertyTypes: the verdict fields are left out entirely
+      // rather than sent as undefined.
+      ...(verdict ? { verdict: verdict.text, verdictType: verdict.type, delta: verdict.delta, vs: verdict.vs } : {}),
     });
     if (!r.ok) {
       const err = await r.json().catch(() => ({})) as { error?: string };
