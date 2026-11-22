@@ -20,6 +20,7 @@ const { openProfileForm, sendProfileToMachine, closeProfileForm }
   = await import('../public-src/views/library-profile-editor.js');
 const { openGaggiMateProfileEditor, saveGaggiMateProfile }
   = await import('../public-src/views/gaggimate-profile-editor.js');
+const { t } = await import('../public-src/i18n.js');
 
 // A DOM-as-state harness: everything the two editors read or render into comes
 // off `document`, so one cached fake element per id serves both the library
@@ -124,5 +125,23 @@ describe('profile editors capture the machine they were opened for (#1605)', () 
     await saveGaggiMateProfile();
 
     expect(putBody().machineId).toBe(2);
+  });
+
+  it('the GaggiMate editor does not open on a 503 and shows the not-stored toast', async () => {
+    g.document = fakeDocument([]);
+    const showToast = vi.fn();
+    g.window = { showToast };
+    fetchSpy.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: () => Promise.resolve({ error: 'x' }),
+    } as unknown as Response);
+
+    await openGaggiMateProfileEditor('p1');
+
+    const modal = (g.document as { getElementById(id: string): { style: Record<string, string> } })
+      .getElementById('gmProfileEditorModal');
+    expect(modal.style.display).not.toBe('flex');
+    expect(showToast).toHaveBeenCalledWith(t('profile_not_stored_offline'));
   });
 });
