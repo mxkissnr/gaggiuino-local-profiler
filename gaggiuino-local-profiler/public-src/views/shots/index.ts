@@ -838,7 +838,7 @@ export async function updateView(): Promise<void> {
     // there is no compared shot or either score is unknown.
     const prevScore = previousShot ? previousShot.score : null;
     const verdictDeltaChip = _el('verdictDeltaChip');
-    const verdictSub = _el('verdictSub');
+    const verdictSub = _el('shotVerdictSub');
     if (previousShot && sc != null && prevScore != null) {
       const scoreDelta = sc - prevScore;
       const cls = scoreDelta > 0 ? 'score-great' : scoreDelta < 0 ? 'score-bad' : 'score-ok';
