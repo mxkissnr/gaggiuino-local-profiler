@@ -1,7 +1,7 @@
 // The shot detail in the Home Assistant page pattern (#2152): the parts of
 // the page that open a sheet or are built from data -- the notes sheet, the
-// share and compare sheets, the Process group, the verdict's comparison line
-// and the similar-shots title. The static parts of the page are markup;
+// share menu, the compare sheet, the Process group, the verdict's comparison
+// line and the similar-shots title. The static parts of the page are markup;
 // updateView() fills them and calls the builders here.
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';

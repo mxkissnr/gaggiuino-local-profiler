@@ -459,7 +459,7 @@ describe('profile list rows (#2165)', () => {
     return el.innerHTML;
   };
 
-  it('opens the editor on a row tap and keeps the rest in a \u22ef menu', () => {
+  it('opens the editor on a row tap and keeps the rest in a ⋯ menu', () => {
     const markup = render();
     expect(markup).toContain('<button type="button" class="lib-item-open" data-action="edit-profile" data-id="7">');
     expect(markup.split('data-action="edit-profile"').length - 1).toBe(1);

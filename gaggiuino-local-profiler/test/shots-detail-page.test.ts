@@ -2,8 +2,8 @@
 // "Page anatomy"). Pins what the shot page module builds or opens: the notes
 // sheet (the static note fields moved into the shared detail sheet, a pending
 // save flushed on close and the page redrawn once a changed note has saved),
-// the share and compare sheets, the Process group, the verdict's comparison
-// line and the similar-shots title. Fake DOM, no jsdom (same style as the
+// the share menu, the compare sheet, the Process group, the verdict's
+// comparison line and the similar-shots title. Fake DOM, no jsdom (same style as the
 // orders page test).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ShotLike } from '../public-src/views/shots/utils.js';

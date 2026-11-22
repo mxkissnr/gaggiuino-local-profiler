@@ -3,9 +3,10 @@
 // main.ts's DOMContentLoaded handler; run through runStep() so a missing
 // element only skips this step.
 // #2152: the top app bar. Compare opens a sheet; Share and the downloads are
-// menus in the shared pattern (#2165, no wiring here), and the rows marked data-shot-notes-open (All notes,
-// the bean and grinder rows) open the note fields in the detail sheet; the
-// bean and grinder rows open it at their own field (#2164).
+// menus in the shared pattern (#2165, no wiring here). The rows marked
+// data-shot-notes-open (All notes, the bean and grinder rows) open the note
+// fields in the detail sheet; the bean and grinder rows open it at their own
+// field (#2164).
 
 import { quickClone, uploadShotImage, removeShotImage, openShotPhotoLightbox, switchChartTab,
          openChartFullscreen, closeChartFullscreen, switchFsTab, exportAllCSV, exportShot, exportProfile } from '../views/shots.js';
