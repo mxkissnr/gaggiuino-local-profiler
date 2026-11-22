@@ -285,6 +285,32 @@ export function findPreviousShotForBean(shots: ShotLike[], shot: ShotLike): Shot
   return prev;
 }
 
+// #2152: the shot the verdict measures its delta against (and the Process
+// deltas and the ghost curve with it): the most recent earlier shot with the
+// same profile on the same machine and, when this shot names one bean, the
+// same bean (_sameBean above). A shot without a bean, or a mixed one, falls
+// back to the same profile alone; `sameBean` tells the verdict which it was.
+export function findPreviousComparableShot(shots: ShotLike[], shot: ShotLike): { shot: ShotLike; sameBean: boolean } | null {
+  const ann = shot?.annotation;
+  const oneBean = !!ann && (!!ann.coffee || ann.beanId != null) && !isBeanMix(ann);
+  if (!oneBean) {
+    const prev = findPreviousShot(shots, shot);
+    return prev ? { shot: prev, sameBean: false } : null;
+  }
+  if (!shot.profileName) return null;
+  const machineId = shot.machineId ?? 1;
+  let prev: ShotLike | null = null;
+  for (const s of shots) {
+    if (s.id === shot.id) continue;
+    if ((s.machineId ?? 1) !== machineId) continue;
+    if (s.profileName !== shot.profileName) continue;
+    if (!_sameBean(ann, s.annotation)) continue;
+    if ((s.timestamp as number) >= (shot.timestamp as number)) continue;
+    if (!prev || (s.timestamp as number) > (prev.timestamp as number)) prev = s;
+  }
+  return prev ? { shot: prev, sameBean: true } : null;
+}
+
 // True when `shot` is the most recent shot recorded for its own bean — the
 // reference chip only makes sense while dialing in the newest shot; older
 // shots already have later data to compare against via the normal
