@@ -139,6 +139,7 @@ const fr: Partial<Translations> = {
     chart_pressure_unit:'Pression (bar)', chart_flow_unit:'Débit (ml/s)',
     chart_time:(s)=>`Temps : ${s}`,
     delta_vs_shot:(n)=>`vs Shot ${n}`, chart_prev_suffix:(n)=>` (Shot ${n})`,
+    shot_compare_pick:'Comparer avec un autre shot', shot_compare_end:'Terminer la comparaison', shot_compare_none:"Il n'y a pas encore d'autre shot à comparer.", shot_notes_all:'Toutes les notes', shot_section_process:'Processus', shot_similar_title:(n)=>`Shots similaires · ${n}`, shot_verdict_vs_bean:(n)=>`par rapport au Shot ${n}, le dernier avec ce profil et ce grain`, shot_verdict_vs_profile:(n)=>`par rapport au Shot ${n}, le dernier avec ce profil`,
     orders_just_now:'à l\'instant',
     live_idle_text:"Dès qu'un shot démarre, les données en temps réel apparaîtront ici.",
     live_time_unit:'min:sec', live_time_label:'Temps',

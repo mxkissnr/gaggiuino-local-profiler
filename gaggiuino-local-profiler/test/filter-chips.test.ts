@@ -110,6 +110,18 @@ const RETIRED_2148 = [
   'orders-broadcast-empty',
 ] as const;
 
+// Classes and ids retired by #2152: the shot detail uses the top app bar,
+// the shared verdict, grouped rows and the detail sheet; its page classes
+// only lay out. No rule, markup or code may use them again.
+const RETIRED_2152 = [
+  'sprofiler-header', 'sph-title', 'sph-actions', 'shotHeaderZone', 'verdict-header',
+  'verdict-line', 'verdict-headline', 'verdict-subline', 'verdictSubline', 'verdict-score-num',
+  'process-zone', 'process-card', 'annotation-header', 'card-fmt-wrap', 'card-fmt-menu',
+  'card-fmt-opt', 'cardFmtWrap', 'cardFmtMenu', 'grind-comparative', 'comp-toggle',
+  'shot-header-thumb', 'shotHeaderThumb', 'ann-ordered-by', 'orderedByBadge', 'meta-stability',
+  'tempStability', 'channelingWarning', 'toggle-comp-grind',
+] as const;
+
 function declsOf(rules: Rule[]): string[] {
   const out: string[] = [];
   for (const rule of rules) {
@@ -170,7 +182,7 @@ describe('shared filter chips (#2093)', () => {
     const hits: string[] = [];
     for (const file of files) {
       const text = read(file);
-      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120, ...RETIRED_2141, ...RETIRED_2148]) {
+      for (const name of [...RETIRED, ...RETIRED_BADGES, ...RETIRED_BUTTONS, ...RETIRED_2096, ...RETIRED_2112, ...RETIRED_2120, ...RETIRED_2141, ...RETIRED_2148, ...RETIRED_2152]) {
         if (new RegExp(`(?<![\\w-])${name}(?![\\w-])`).test(text)) hits.push(`${file}: ${name}`);
       }
     }
@@ -211,18 +223,18 @@ describe('analytics chips (#2093)', () => {
 describe('status badges (#2094)', () => {
   it('renders the shot detail status labels as shared badges', () => {
     const index = read('index.html');
-    for (const id of ['verdictDeltaChip', 'pressureDeltaChip', 'flowDeltaChip', 'tempDeltaChip']) {
-      expect(index, id).toContain(`<span class="badge shot-delta" id="${id}"`);
-    }
-    expect(index).toContain('<span id="channelingWarning" class="badge badge--err"');
+    expect(index).toContain('<span class="badge shot-delta" id="verdictDeltaChip"');
+    const page = read('views/shots/detail-page.ts');
+    expect(page).toContain('<span class="badge shot-delta" title=');
+    expect(page).toContain('<span class="badge badge--err">${LIGHTNING_ICON_SVG} Channeling</span>');
     expect(index).toContain('<span id="freshnessBadge" class="badge"');
-    expect(index).toContain('<div id="orderedByBadge" class="badge badge--warn"');
+    expect(index).not.toContain('orderedByBadge');
     expect(index).toContain('<span class="badge badge--err" id="trash-count">');
   });
 
   it('colours score deltas through the score-scale badge variants', () => {
     const shots = read('views/shots/index.ts');
-    expect(shots).toContain("'badge shot-delta'");
+    expect(read('views/shots/detail-page.ts')).toContain('<span class="badge shot-delta" title=');
     expect(shots).toContain('badge shot-delta badge--');
   });
 });
@@ -251,9 +263,11 @@ describe('shared buttons (#2095)', () => {
 
   it('gives the shot view, shot list and trash actions a shared button variant', () => {
     const index = read('index.html');
-    for (const id of ['exportAllCsvBtn', 'exportShotBtn', 'exportProfileBtn', 'shareCardBtn', 'annPhotoPickBtn']) {
-      expect(index, id).toContain(`class="btn btn--quiet" id="${id}"`);
+    for (const id of ['exportAllCsvBtn', 'exportShotBtn', 'exportProfileBtn']) {
+      expect(index, id).toContain(`class="lib-sheet-menu-item" id="${id}"`);
     }
+    expect(index).toContain('class="lib-sheet-iconbtn" id="shareCardBtn"');
+    expect(index).toContain('class="btn btn--quiet" id="annPhotoPickBtn"');
     expect(index).toContain('class="btn btn--danger" id="annPhotoRemoveBtn"');
     const sidebar = read('components/sidebar.ts');
     expect(sidebar).toContain("btnCmp.className = 'chip shot-compare';");
@@ -561,15 +575,14 @@ describe('form headings (#2120)', () => {
     expect(index.split('<div class="section-title">').length - 1).toBe(2);
     expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_title">');
     expect(index).toContain('<div class="section-title" data-i18n="lib_import_settings_custom_label">');
-    expect(index).toContain('<span class="section-title" data-i18n="ann_title">');
+    expect(index).toContain('<h2 class="section-title" data-i18n="ann_title">');
     expect(read('views/gaggimate-profile-editor.ts').split('<div class="section-title">').length - 1).toBe(2);
     expect(read('views/library/import.ts')).toContain('<div class="section-title">${esc(t(');
   });
 
-  it('keeps only layout in the step list head and the annotation row', () => {
+  it('keeps only layout in the step list head', () => {
     const root = postcss.parse(read('style.css'));
     expect(declsOf(rulesWith(root, '.lib-recipe-steps-section > .section-title'))).toEqual(['justify-content: space-between', 'align-items: center']);
-    expect(declsOf(rulesWith(root, '.annotation-header .section-title'))).toEqual(['margin-bottom: 0']);
   });
 });
 
