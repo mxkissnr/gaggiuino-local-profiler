@@ -44,7 +44,7 @@ vi.mock('../public-src/views/shots/annotation.js', () => ann);
 const list = vi.hoisted(() => ({ toggleCompare: vi.fn<(id: number) => void>() }));
 vi.mock('../public-src/components/sidebar.js', () => list);
 
-const card = vi.hoisted(() => ({ shareCard: vi.fn<(format?: string) => Promise<void>>(() => Promise.resolve()) }));
+const card = vi.hoisted(() => ({ shareCard: vi.fn<(format?: string, verdict?: unknown) => Promise<void>>(() => Promise.resolve()) }));
 vi.mock('../public-src/views/shots/export.js', () => card);
 
 const { S } = await import('../public-src/state/index.js');
@@ -310,13 +310,37 @@ describe('Coffee rows (#2164)', () => {
 describe('share menu (#2165)', () => {
   it('shares the chosen format without a sheet', () => {
     page.chooseShareFormat('story');
-    expect(card.shareCard).toHaveBeenCalledWith('story');
+    expect(card.shareCard).toHaveBeenCalledWith('story', null);
     expect(sheet.openDetailSheet).not.toHaveBeenCalled();
     expect(sheet.closeDetailSheet).not.toHaveBeenCalled();
   });
 
   it('has no share sheet any more', () => {
     expect('openShotShare' in page).toBe(false);
+  });
+
+  it('shares the remembered verdict of the open shot (#2166)', () => {
+    const v = { type: 'coarser', text: 'Shot ran long (55 s) – grind coarser', delta: -11, vs: 'vs shot 306' };
+    S.primaryShotId = 7;
+    page.rememberShotVerdict(7, v);
+    page.chooseShareFormat('square');
+    expect(card.shareCard).toHaveBeenCalledWith('square', v);
+  });
+
+  it('drops a verdict remembered for another shot (#2166)', () => {
+    const v = { type: 'coarser', text: 'Shot ran long (55 s) – grind coarser', delta: -11, vs: 'vs shot 306' };
+    page.rememberShotVerdict(8, v);
+    S.primaryShotId = 7;
+    page.chooseShareFormat('square');
+    expect(card.shareCard).toHaveBeenCalledWith('square', null);
+  });
+
+  it('updateView records the verdict for the share card (#2166)', () => {
+    const view = read('views/shots/index.ts');
+    const exp = read('views/shots/export.ts');
+    expect(view).toContain('rememberShotVerdict(shotA.id, {');
+    expect(view).toContain('rememberShotVerdict(shotA.id, null);');
+    expect(exp).toContain("getPropertyValue('--accent')");
   });
 });
 

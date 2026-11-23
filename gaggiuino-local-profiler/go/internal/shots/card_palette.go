@@ -3,6 +3,7 @@ package shots
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -27,6 +28,7 @@ type palette struct {
 	cWeight, cTemp                string
 	accentFrom, accentTo          string
 	accentTintRGB                 string // "r,g,b" — wrap as rgba(<rgb>,<a>)
+	accentText                    string // text on an accent fill: #000000 or #ffffff
 	star, starDim                 string
 	ok, good, warn, low, err      string
 }
@@ -145,26 +147,46 @@ func lineColorFor(key string) string {
 
 func i2f(i int) float64 { return float64(i) }
 
-// buildPalette computes the palette for accent/theme (the non-legacy path
-// only). An unknown/empty accent falls back to "amber"; any theme other than
-// "light" is "dark".
-func buildPalette(accent, theme string) palette {
-	a := accent
-	if _, ok := accentPairs[a]; !ok {
-		a = "amber"
+// cardHexAccentRe matches the app's active accent as it sends it (#2166).
+var cardHexAccentRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// accentTextFor is the text colour on an accent fill: black on a light
+// accent, white on a dark one, at the app's 0.179 luminance split.
+func accentTextFor(hex string) string {
+	r, g, b := hexToRGB(hex)
+	if relLuminance(float64(r), float64(g), float64(b)) > 0.179 {
+		return "#000000"
 	}
+	return "#ffffff"
+}
+
+// buildPalette computes the palette for accent/theme (the non-legacy path
+// only). accent is a #rrggbb hex or one of the six legacy accent names;
+// anything else (including empty) is amber. Any theme other than "light" is
+// "dark".
+func buildPalette(accent, theme string) palette {
 	th := "dark"
 	if theme == "light" {
 		th = "light"
 	}
 	key := th
-	if a == "crema" {
-		key = th + "-crema"
+	var pair [2]string
+	if cardHexAccentRe.MatchString(accent) {
+		hex := strings.ToLower(accent)
+		pair = [2]string{hex, hex}
+	} else {
+		a := accent
+		if _, ok := accentPairs[a]; !ok {
+			a = "amber"
+		}
+		if a == "crema" {
+			key = th + "-crema"
+		}
+		pair = accentPairs[a][th]
 	}
 	gray := grayScales[key]
 	line := lineColorFor(key)
 	sem := semanticColors[key]
-	pair := accentPairs[a][th]
 	ar, ag, ab := hexToRGB(pair[0])
 
 	return palette{
@@ -176,6 +198,7 @@ func buildPalette(accent, theme string) palette {
 		accentFrom:    pair[0],
 		accentTo:      pair[1],
 		accentTintRGB: fmt.Sprintf("%d,%d,%d", ar, ag, ab),
+		accentText:    accentTextFor(pair[0]),
 		star:          pair[0],
 		starDim:       gray[700],
 		ok:            sem["ok"], good: sem["good"], warn: sem["warn"],

@@ -5,12 +5,16 @@ import (
 	"image/png"
 	"math"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"golang.org/x/image/font/opentype"
+	"golang.org/x/image/font/sfnt"
 )
 
 func floatSeq(n int, fn func(i int) float64) []any {
@@ -407,5 +411,363 @@ func TestTextWidth_ConcurrentUse(t *testing.T) {
 
 	if n := mismatches.Load(); n != 0 {
 		t.Errorf("%d concurrent textWidth calls returned a different width", n)
+	}
+}
+
+// TestCardFonts_EmbeddedFontsParse pins the three TTFs embedded from fonts/
+// (#2166): each must parse, carry the family name resvg is asked for, and
+// have a glyph for a digit the card draws.
+func TestCardFonts_EmbeddedFontsParse(t *testing.T) {
+	tests := []struct {
+		name      string
+		data      []byte
+		wantPfx   string
+		exactName bool
+	}{
+		{"figtree-400", figtreeRegularTTF, "Figtree Light", false},
+		{"figtree-600", figtreeSemiBoldTTF, "Figtree Light", false},
+		{"fraunces-600", frauncesTTF, "Fraunces", true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			f, err := opentype.Parse(tc.data)
+			if err != nil {
+				t.Fatalf("opentype.Parse: %v", err)
+			}
+			family, err := f.Name(nil, sfnt.NameIDFamily)
+			if err != nil {
+				t.Fatalf("Name(NameIDFamily): %v", err)
+			}
+			if tc.exactName {
+				if family != tc.wantPfx {
+					t.Errorf("family = %q, want %q", family, tc.wantPfx)
+				}
+			} else if !strings.HasPrefix(family, tc.wantPfx) {
+				t.Errorf("family = %q, want prefix %q", family, tc.wantPfx)
+			}
+			if idx, err := f.GlyphIndex(nil, '8'); err != nil || idx == 0 {
+				t.Errorf("GlyphIndex('8') = %d, %v; want a non-zero index", idx, err)
+			}
+		})
+	}
+}
+
+// TestCardSVG_TextUsesFigtree covers #2166: every text element asks for
+// Figtree with Go kept after it as the fallback.
+func TestCardSVG_TextUsesFigtree(t *testing.T) {
+	svg := cardSVGWith(int64(280), 930)
+	if !strings.Contains(svg, `font-family="'Figtree Light', Go"`) {
+		t.Errorf("card SVG does not ask for the Figtree family with a Go fallback")
+	}
+	if strings.Contains(svg, `font-family="Go"`) {
+		t.Errorf("card SVG still uses the Go family alone")
+	}
+}
+
+// TestSvgBufSerif_UsesFraunces checks the score's display text helper.
+func TestSvgBufSerif_UsesFraunces(t *testing.T) {
+	var b svgBuf
+	b.serif(52, 200, 96, "#5cb98a", "92")
+	got := b.b.String()
+	for _, want := range []string{`font-family="Fraunces"`, `font-weight="600"`, ">92</text>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("serif output %q does not contain %q", got, want)
+		}
+	}
+}
+
+// TestSerifWidth_MeasuresFraunces proves the serif measuring path uses
+// Fraunces rather than the Figtree bold face.
+func TestSerifWidth_MeasuresFraunces(t *testing.T) {
+	serif := serifWidth("88", 96)
+	if serif <= 0 {
+		t.Fatalf("serifWidth(%q, 96) = %v, want > 0", "88", serif)
+	}
+	if sans := textWidth("88", 96, true); serif == sans {
+		t.Errorf("serifWidth and textWidth both returned %v; Fraunces is not measured", sans)
+	}
+}
+
+// #2166: the app sends its active accent as a #rrggbb hex, so the palette
+// must take it verbatim (the neutrals stay the theme's) and pick the text
+// colour on the accent fill by luminance.
+func TestBuildPalette_HexAccent(t *testing.T) {
+	hex := buildPalette("#5B21B6", "dark")
+	if hex.accentFrom != "#5b21b6" || hex.accentTo != "#5b21b6" {
+		t.Errorf("accent = %q/%q, want #5b21b6 for both", hex.accentFrom, hex.accentTo)
+	}
+	if hex.accentText != "#ffffff" {
+		t.Errorf("accentText = %q, want #ffffff on a dark accent", hex.accentText)
+	}
+	if amber := buildPalette("amber", "dark"); hex.bg != amber.bg {
+		t.Errorf("hex accent bg = %q, want the theme's %q", hex.bg, amber.bg)
+	}
+	if got := buildPalette("#f59e0b", "light").accentText; got != "#000000" {
+		t.Errorf("accentText = %q, want #000000 on a light accent", got)
+	}
+}
+
+// #2166: the six legacy names keep their colours; anything else — a preset
+// key, a malformed hex, an empty value, a script-looking string — is amber.
+func TestBuildPalette_AccentFallbacks(t *testing.T) {
+	if got := buildPalette("ocean", "dark").accentFrom; got != "#3b82f6" {
+		t.Errorf("ocean accentFrom = %q, want #3b82f6", got)
+	}
+	for _, accent := range []string{"mulberry-mocha", "#12345", "", "javascript:x"} {
+		if got := buildPalette(accent, "dark").accentFrom; got != "#f59e0b" {
+			t.Errorf("%q accentFrom = %q, want the amber #f59e0b", accent, got)
+		}
+	}
+}
+
+func TestParseCardVerdict_Sanitises(t *testing.T) {
+	v := parseCardVerdict(url.Values{
+		"verdict":     {"  Shot ran long\n(55 s)\x00 "},
+		"verdictType": {"coarser"},
+		"delta":       {"-11"},
+		"vs":          {"vs shot 306"},
+	})
+	if v.text != "Shot ran long(55 s)" {
+		t.Errorf("text = %q, want the trimmed, control-free sentence", v.text)
+	}
+	if v.kind != "coarser" {
+		t.Errorf("kind = %q, want coarser", v.kind)
+	}
+	if v.delta == nil || *v.delta != -11 {
+		t.Errorf("delta = %v, want -11", v.delta)
+	}
+	if v.vs != "vs shot 306" {
+		t.Errorf("vs = %q, want %q", v.vs, "vs shot 306")
+	}
+}
+
+func TestParseCardVerdict_RejectsBadInput(t *testing.T) {
+	for _, delta := range []string{"250", "abc"} {
+		if v := parseCardVerdict(url.Values{"delta": {delta}}); v.delta != nil {
+			t.Errorf("delta %q accepted as %v, want nil", delta, *v.delta)
+		}
+	}
+	if v := parseCardVerdict(url.Values{"verdictType": {"sideways"}}); v.kind != "" {
+		t.Errorf("kind = %q for an unknown type, want \"\"", v.kind)
+	}
+	long := strings.Repeat("é", 200)
+	got := []rune(parseCardVerdict(url.Values{"verdict": {long}}).text)
+	if len(got) != cardVerdictMaxRunes {
+		t.Fatalf("capped verdict is %d runes, want %d", len(got), cardVerdictMaxRunes)
+	}
+	if !strings.HasSuffix(string(got), "…") {
+		t.Errorf("capped verdict does not end in an ellipsis: %q", string(got))
+	}
+	if v := parseCardVerdict(url.Values{}); v != (cardVerdict{}) {
+		t.Errorf("empty values gave %+v, want the zero value", v)
+	}
+}
+
+// #2166: the endpoint accepts the verdict parameters and a hex accent, still
+// answers with a decodable square PNG, and draws two hex accents differently.
+func TestGetCard_AcceptsVerdictAndHexAccent(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(280)
+	insertShot(t, sqlDB, 3, 1_700_000_000, &dur, "V", cardShotData(), nil)
+
+	q := "?accent=%235b21b6&theme=dark&verdict=Shot+ran+long&verdictType=coarser&delta=-11&vs=vs+shot+306"
+	rec := doJSON(t, mux, http.MethodGet, "/api/shots/3/card"+q, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	a := rec.Body.Bytes()
+	if w, hgt := decodePNG(t, a); w != 1080 || hgt != 1080 {
+		t.Errorf("card = %dx%d", w, hgt)
+	}
+	b := doJSON(t, mux, http.MethodGet, "/api/shots/3/card?accent=%230f766e&theme=dark", nil).Body.Bytes()
+	if bytes.Equal(a, b) {
+		t.Error("expected two different hex accents to produce different card images")
+	}
+}
+
+// TestCard_ProfileNameOnlyOnce covers #2166: a shot without a bean falls back
+// to the profile name as the headline, and the line below never repeats it.
+func TestCard_ProfileNameOnlyOnce(t *testing.T) {
+	for _, format := range []string{"square", "story"} {
+		data := cardShotData()
+		delete(data["annotation"].(map[string]any), "coffee")
+		data["profileName"] = "Leva mk 9 v0.9"
+		svg := newCardModel(Shot(data), nil, format, "", "dark", "en", cardDeps{}).svg()
+		if got := strings.Count(svg, "Leva mk 9 v0.9"); got != 1 {
+			t.Errorf("%s: profile name appears %d times, want once", format, got)
+		}
+	}
+}
+
+// TestCard_BeanHeadlineKeepsProfileBelow pins #2166's hero: the bean is the
+// headline, the profile moves to the line below it.
+func TestCard_BeanHeadlineKeepsProfileBelow(t *testing.T) {
+	data := cardShotData()
+	data["profileName"] = "Leva"
+	svg := newCardModel(Shot(data), nil, "square", "", "dark", "en", cardDeps{}).svg()
+	if !strings.Contains(svg, "Colombia Huila") {
+		t.Error("bean headline is missing")
+	}
+	if got := strings.Count(svg, "Leva"); got != 1 {
+		t.Errorf("profile name appears %d times, want once", got)
+	}
+}
+
+// TestCard_NoDoseShowsYieldOnly covers #2166: without a dose the card draws a
+// Yield figure, never an empty label or a bare arrow.
+func TestCard_NoDoseShowsYieldOnly(t *testing.T) {
+	data := cardShotData()
+	delete(data["annotation"].(map[string]any), "dose")
+	svg := newCardModel(Shot(data), nil, "square", "", "dark", "en", cardDeps{}).svg()
+	for _, want := range []string{">Yield<", " g<"} {
+		if !strings.Contains(svg, want) {
+			t.Errorf("card is missing %q", want)
+		}
+	}
+	for _, unwanted := range []string{"Dose → Yield", ">Dose<", ">Ratio<"} {
+		if strings.Contains(svg, unwanted) {
+			t.Errorf("card still draws %q without a dose", unwanted)
+		}
+	}
+}
+
+// TestCard_NoEmptyTextElements pins #2166's "no empty labels": neither a full
+// shot, a shot without dose and bean, nor a bare shot row emits an empty text.
+func TestCard_NoEmptyTextElements(t *testing.T) {
+	emptyText := regexp.MustCompile(`<text[^>]*></text>`)
+
+	noDoseBean := cardShotData()
+	noDoseBeanAnn := noDoseBean["annotation"].(map[string]any)
+	delete(noDoseBeanAnn, "dose")
+	delete(noDoseBeanAnn, "coffee")
+
+	cases := map[string]Shot{
+		"full shot":        Shot(cardShotData()),
+		"no dose, no bean": Shot(noDoseBean),
+		"bare shot":        Shot{"id": int64(1)},
+	}
+	for name, shot := range cases {
+		for _, format := range []string{"square", "story"} {
+			svg := newCardModel(shot, nil, format, "", "dark", "en", cardDeps{}).svg()
+			if m := emptyText.FindString(svg); m != "" {
+				t.Errorf("%s (%s): empty text element %q", name, format, m)
+			}
+			if name == "bare shot" {
+				for _, unwanted := range []string{">Duration<", ">Pressure Ø<"} {
+					if strings.Contains(svg, unwanted) {
+						t.Errorf("%s (%s): card draws %q for a shot without data", name, format, unwanted)
+					}
+				}
+			}
+		}
+	}
+}
+
+// TestCard_VerdictSentenceDeltaAndSerifScore covers #2166's verdict block: the
+// score in Fraunces, the sentence with its arrow, the delta chip and the
+// compared shot, and no tier phrase next to a passed sentence.
+func TestCard_VerdictSentenceDeltaAndSerifScore(t *testing.T) {
+	score := 89
+	d := -11
+	m := newCardModel(Shot(cardShotData()), &score, "square", "", "dark", "en", cardDeps{})
+	m.verdict = cardVerdict{kind: "coarser", text: "Shot ran long (55 s) – grind coarser", delta: &d, vs: "vs shot 306"}
+	svg := m.svg()
+
+	for _, want := range []string{
+		`font-family="Fraunces"`, ">89</text>", ">↑</text>", "Shot ran long (55 s)",
+		">−11</text>", ">vs shot 306</text>",
+	} {
+		if !strings.Contains(svg, want) {
+			t.Errorf("card is missing %q", want)
+		}
+	}
+	if strings.Contains(svg, "Really dialed in") {
+		t.Error("card draws the tier phrase next to a passed verdict sentence")
+	}
+}
+
+// TestCard_TierPhraseWithoutVerdict pins the fallback: with no verdict the
+// score's tier phrase stands in, and no delta chip is drawn.
+func TestCard_TierPhraseWithoutVerdict(t *testing.T) {
+	score := 92
+	svg := newCardModel(Shot(cardShotData()), &score, "square", "", "dark", "en", cardDeps{}).svg()
+	if !strings.Contains(svg, "Outstanding shot") {
+		t.Error("card is missing the tier phrase")
+	}
+	for _, unwanted := range []string{">+", ">−", ">±"} {
+		if strings.Contains(svg, unwanted) {
+			t.Errorf("card draws a delta chip %q without a verdict", unwanted)
+		}
+	}
+}
+
+// TestCard_StoryHeaderHasDate covers #2166: the story header carries the shot
+// number and the date, like the square one.
+func TestCard_StoryHeaderHasDate(t *testing.T) {
+	data := cardShotData()
+	data["timestamp"] = 1_700_000_000
+	data["id"] = int64(7)
+	svg := newCardModel(Shot(data), nil, "story", "", "dark", "en", cardDeps{}).svg()
+	for _, want := range []string{"Shot #7", cardDate("en", 1_700_000_000)} {
+		if !strings.Contains(svg, want) {
+			t.Errorf("story header is missing %q", want)
+		}
+	}
+}
+
+// TestCard_BadgeFollowsAccent covers #2166: the badge is filled with the
+// accent, its text in the palette's accent text colour.
+func TestCard_BadgeFollowsAccent(t *testing.T) {
+	svg := newCardModel(Shot(cardShotData()), nil, "square", "#5b21b6", "dark", "en", cardDeps{}).svg()
+	if !regexp.MustCompile(`<rect[^>]*fill="#5b21b6"`).MatchString(svg) {
+		t.Error("no rect is filled with the accent")
+	}
+	if !regexp.MustCompile(`<text[^>]*fill="#ffffff"[^>]*>Made with GLP</text>`).MatchString(svg) {
+		t.Error("the badge text is not in the accent text colour")
+	}
+}
+
+// TestCardDurationAndDelta pins the figure and chip formatting (#2166).
+func TestCardDurationAndDelta(t *testing.T) {
+	for _, tc := range []struct {
+		sec  float64
+		want string
+	}{{28, "28 s"}, {65, "1:05"}} {
+		if got := cardDuration(tc.sec); got != tc.want {
+			t.Errorf("cardDuration(%v) = %q, want %q", tc.sec, got, tc.want)
+		}
+	}
+	for _, tc := range []struct {
+		d    int
+		want string
+	}{{5, "+5"}, {-11, "−11"}, {0, "±0"}} {
+		if got := cardDelta(tc.d); got != tc.want {
+			t.Errorf("cardDelta(%d) = %q, want %q", tc.d, got, tc.want)
+		}
+	}
+}
+
+// TestWrapToWidth_TwoLinesMax covers the verdict sentence's wrap: at most two
+// lines, the last one truncated with an ellipsis.
+func TestWrapToWidth_TwoLinesMax(t *testing.T) {
+	words := make([]string, 30)
+	for i := range words {
+		words[i] = "word" + strconv.Itoa(i)
+	}
+	lines := wrapToWidth(strings.Join(words, " "), 600, 30, true, 2)
+	if len(lines) != 2 {
+		t.Fatalf("wrapToWidth gave %d lines, want 2", len(lines))
+	}
+	for i, ln := range lines {
+		if w := textWidth(ln, 30, true); w > 600 {
+			t.Errorf("line %d is %v wide, want <= 600", i, w)
+		}
+	}
+	if !strings.HasSuffix(lines[1], "…") {
+		t.Errorf("last line = %q, want a trailing ellipsis", lines[1])
+	}
+	if got := wrapToWidth("Short verdict", 600, 30, true, 2); len(got) != 1 || got[0] != "Short verdict" {
+		t.Errorf("short sentence wrapped to %q, want one unchanged line", got)
 	}
 }

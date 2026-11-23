@@ -3,8 +3,10 @@ package shots
 import (
 	"fmt"
 	"math"
+	"net/url"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // card_model.go holds the share card's data extraction (from the shot's
@@ -19,15 +21,65 @@ const cardPX = 52.0 // card design's base px unit
 const cardAxisMaxTicks = 200
 
 type cardModel struct {
-	shot   Shot
-	score  *int
-	format string
-	lang   string
-	pal    palette
-	deps   cardDeps
+	shot    Shot
+	score   *int
+	format  string
+	lang    string
+	pal     palette
+	deps    cardDeps
+	verdict cardVerdict // the shot page's verdict as the app passed it (#2166)
 
-	w, h  float64
-	scale float64
+	w, h float64
+}
+
+// cardVerdict is the shot page's verdict, passed in by the app (#2166): the
+// dial-in advice and the compared shot are computed in the frontend only, so
+// the card draws what the page shows instead of computing it again. Every
+// field is optional.
+type cardVerdict struct {
+	kind  string // "finer" or "coarser" (draws ↓ / ↑), else ""
+	text  string // the verdict sentence
+	delta *int   // score change against the compared shot
+	vs    string // the line naming the compared shot
+}
+
+const (
+	cardVerdictMaxRunes = 140
+	cardVsMaxRunes      = 80
+)
+
+// parseCardVerdict reads the card's verdict query parameters. Text is
+// trimmed, stripped of control characters and capped; delta must be an
+// integer in -100..100; any other verdictType is ignored.
+func parseCardVerdict(q url.Values) cardVerdict {
+	v := cardVerdict{
+		text: cardParamText(q.Get("verdict"), cardVerdictMaxRunes),
+		vs:   cardParamText(q.Get("vs"), cardVsMaxRunes),
+	}
+	if k := q.Get("verdictType"); k == "finer" || k == "coarser" {
+		v.kind = k
+	}
+	if d, err := strconv.Atoi(q.Get("delta")); err == nil && d >= -100 && d <= 100 {
+		v.delta = &d
+	}
+	return v
+}
+
+// cardParamText trims s, drops control and replacement characters and cuts
+// it to max runes, the last one an ellipsis.
+func cardParamText(s string, max int) string {
+	var b strings.Builder
+	for _, r := range strings.TrimSpace(s) {
+		if unicode.IsControl(r) || r == unicode.ReplacementChar {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	r := []rune(b.String())
+	if len(r) > max {
+		return string(r[:max-1]) + "…"
+	}
+	return string(r)
 }
 
 func newCardModel(shot Shot, score *int, format, accent, theme, lang string, deps cardDeps) *cardModel {
@@ -40,12 +92,34 @@ func newCardModel(shot Shot, score *int, format, accent, theme, lang string, dep
 		deps:   deps,
 		w:      1080,
 	}
+	c.h = 1080
 	if format == "story" {
-		c.h, c.scale = 1920, 1.78
-	} else {
-		c.h, c.scale = 1080, 1.0
+		c.h = 1920
 	}
 	return c
+}
+
+// cardLayout holds the sizes that differ between the square and the story
+// card (#2166). The story keeps the same blocks; its extra height goes to a
+// larger hero and verdict and to the figures, which become rows.
+type cardLayout struct {
+	headBase, headMax, headMin float64 // headline baseline and its font-size steps
+	subSize                    float64 // profile / machine line
+	scoreSize, verdictSize     float64 // Fraunces score, verdict sentence
+	chartMaxH                  float64 // chart block height cap
+	figValSize, figLblSize     float64 // figure value and label
+}
+
+var (
+	squareCardLayout = cardLayout{headBase: 130, headMax: 52, headMin: 36, subSize: 24, scoreSize: 96, verdictSize: 30, chartMaxH: 560, figValSize: 34, figLblSize: 16}
+	storyCardLayout  = cardLayout{headBase: 150, headMax: 68, headMin: 44, subSize: 28, scoreSize: 132, verdictSize: 38, chartMaxH: 760, figValSize: 44, figLblSize: 26}
+)
+
+func (c *cardModel) layout() cardLayout {
+	if c.format == "story" {
+		return storyCardLayout
+	}
+	return squareCardLayout
 }
 
 // ── datapoint / annotation extraction ────────
@@ -117,25 +191,6 @@ func fixed1(x float64) string {
 	return strconv.FormatFloat(math.Round(x*10)/10, 'f', 1, 64)
 }
 
-func fmtDur(dsRaw any) string {
-	ds := cardNum(dsRaw)
-	if ds == 0 {
-		return ""
-	}
-	s := int(math.Round(ds / 10))
-	m := s / 60
-	r := s % 60
-	if m > 0 {
-		return fmt.Sprintf("%d:%02d", m, r)
-	}
-	return fmt.Sprintf("%ds", s)
-}
-
-func fmtDurSec(s float64) string {
-	sec := int(math.Round(s))
-	return fmt.Sprintf("%02d:%02d", sec/60, sec%60)
-}
-
 func avgFiltered(vals []float64, keep func(float64) bool) (float64, bool) {
 	sum, n := 0.0, 0
 	for _, v := range vals {
@@ -148,47 +203,6 @@ func avgFiltered(vals []float64, keep func(float64) bool) (float64, bool) {
 		return 0, false
 	}
 	return sum / float64(n), true
-}
-
-func maxFiltered(vals []float64, keep func(float64) bool) (float64, bool) {
-	m, found := 0.0, false
-	for _, v := range vals {
-		if keep(v) && (!found || v > m) {
-			m, found = v, true
-		}
-	}
-	return m, found
-}
-
-func cardStdDev(vals []float64, keep func(float64) bool) (float64, bool) {
-	var f []float64
-	for _, v := range vals {
-		if keep(v) {
-			f = append(f, v)
-		}
-	}
-	if len(f) < 2 {
-		return 0, false
-	}
-	mean := 0.0
-	for _, v := range f {
-		mean += v
-	}
-	mean /= float64(len(f))
-	s := 0.0
-	for _, v := range f {
-		s += (v - mean) * (v - mean)
-	}
-	return math.Round(math.Sqrt(s/float64(len(f)))*10) / 10, true
-}
-
-func lastPositive(vals []float64) (float64, bool) {
-	for i := len(vals) - 1; i >= 0; i-- {
-		if vals[i] > 0 {
-			return vals[i], true
-		}
-	}
-	return 0, false
 }
 
 // cardFigures is the share card's shot-derived summary — the figures it
@@ -219,6 +233,7 @@ func (c *cardModel) figures(dp map[string]any) cardFigures {
 
 func (c *cardModel) svg() string {
 	p := c.pal
+	L := c.layout()
 	dp := c.datapoints()
 	ann := c.annotation()
 	fig := c.figures(dp)
@@ -236,9 +251,15 @@ func (c *cardModel) svg() string {
 	tgtTemp := tenthsSeries(dp, "targetTemperature")
 
 	nPts := cardMaxInt(len(pressure), len(flow), len(temp), 1)
+	hasDuration := cardNum(c.shot["duration"]) != 0
 	totalSec := 30.0
-	if d := cardNum(c.shot["duration"]); d != 0 {
-		totalSec = d / 10
+	if hasDuration {
+		totalSec = cardNum(c.shot["duration"]) / 10
+	} else if ts := tenthsSeries(dp, "timeInShot"); len(ts) > 1 {
+		// A shot without its own duration field still knows how long it ran
+		// from its time series, so the figure is drawn rather than dropped.
+		hasDuration = true
+		totalSec = ts[len(ts)-1]
 	}
 	totalSec = clampCardRange(totalSec, 1, 3600)
 
@@ -254,35 +275,23 @@ func (c *cardModel) svg() string {
 	bean := BeanLabel(ann)
 	machine := firstNonEmpty(strField(ann, "machine"), strField(c.shot, "machine"))
 
-	var dose *float64
-	if v, ok := numField(ann, "dose"); ok {
+	var dose, yieldG *float64
+	if v, ok := numField(ann, "dose"); ok && v > 0 {
 		r := math.Round(v*10) / 10
 		dose = &r
 	}
-	var yieldG *float64
-	if fig.hasYield {
+	if fig.hasYield && fig.yield > 0 {
 		r := math.Round(fig.yield*10) / 10
 		yieldG = &r
 	}
-	ratio := ""
-	if dose != nil && *dose != 0 && yieldG != nil && *yieldG != 0 {
-		ratio = "1:" + fixed1(*yieldG / *dose)
-	}
-	dur := fmtDur(c.shot["duration"])
 
 	avgPres, hasAvgPres := avgFiltered(pressure, func(v float64) bool { return v > 1.5 })
-	maxPres, hasMaxPres := maxFiltered(pressure, func(v float64) bool { return v > 0 })
 	avgTemp, hasAvgTemp := avgFiltered(temp, func(v float64) bool { return v > 50 })
-	avgFlow, hasAvgFlow := avgFiltered(flow, func(v float64) bool { return v > 0.3 })
-	tempSD, hasTempSD := cardStdDev(temp, func(v float64) bool { return v > 50 })
 
 	var rating int
 	if v, ok := numField(ann, "rating"); ok {
 		rating = int(math.Round(v))
 	}
-
-	tgtPressVal, hasTgtPress := lastPositive(tgtPress)
-	tgtPressVal = math.Round(tgtPressVal*10) / 10
 
 	// The origin map is keyed by a single bean, so a mixed shot keeps the
 	// primary bean for the origin chip while the headline shows every bean.
@@ -298,116 +307,165 @@ func (c *cardModel) svg() string {
 
 	preEnd, hasPre := fig.preEndIdx, fig.hasPhases
 
+	// Figures (#2166): the shot page's order, one entry per value the shot
+	// has; a missing value leaves its figure out, never an empty label.
+	type cardFigure struct{ label, value string }
+	var figs []cardFigure
+	switch {
+	case dose != nil && yieldG != nil:
+		figs = append(figs, cardFigure{cardText(c.lang, "dose_yield"), num1(*dose) + " → " + num1(*yieldG) + " g"})
+	case dose != nil:
+		figs = append(figs, cardFigure{cardText(c.lang, "dose"), num1(*dose) + " g"})
+	case yieldG != nil:
+		figs = append(figs, cardFigure{cardText(c.lang, "yield"), num1(*yieldG) + " g"})
+	}
+	if dose != nil && yieldG != nil {
+		figs = append(figs, cardFigure{cardText(c.lang, "ratio"), "1:" + fixed1(*yieldG / *dose)})
+	}
+	if hasDuration {
+		figs = append(figs, cardFigure{cardText(c.lang, "duration"), cardDuration(totalSec)})
+	}
+	if hasAvgPres {
+		figs = append(figs, cardFigure{cardText(c.lang, "pressure_avg"), num1(math.Round(avgPres*10)/10) + " bar"})
+	}
+	if hasAvgTemp {
+		figs = append(figs, cardFigure{cardText(c.lang, "temperature_avg"), num1(math.Round(avgTemp*10)/10) + " °C"})
+	}
+
 	var s svgBuf
 	s.printf(`<svg xmlns="http://www.w3.org/2000/svg" width="%s" height="%s" viewBox="0 0 %s %s">`,
 		fnum(c.w), fnum(c.h), fnum(c.w), fnum(c.h))
 	s.rect(0, 0, c.w, c.h, 0, p.bg, "", 0)
 
-	// ── HEADER ──
+	// ── HEADER ── wordmark left, shot number and date right (both formats).
 	const hh = 76.0
 	s.text(cardPX, 50, 44, true, p.text, "", "GLP")
-	headerRight := ""
-	if c.format != "story" {
-		shotID := ""
-		if id := nativeShotID(c.shot); id != 0 {
-			shotID = cardTextf(c.lang, "shot_id", id)
-		}
-		dateStr := ""
-		if ts := cardNum(c.shot["timestamp"]); ts != 0 {
-			dateStr = cardDate(c.lang, int64(ts))
-		}
-		headerRight = strings.TrimSpace(strings.Join(nonEmpty(shotID, dateStr), "  ·  "))
+	shotID := ""
+	if id := nativeShotID(c.shot); id != 0 {
+		shotID = cardTextf(c.lang, "shot_id", id)
 	}
-	if headerRight != "" {
+	dateStr := ""
+	if ts := cardNum(c.shot["timestamp"]); ts != 0 {
+		dateStr = cardDate(c.lang, int64(ts))
+	}
+	if headerRight := strings.Join(nonEmpty(shotID, dateStr), "  ·  "); headerRight != "" {
 		s.text(c.w-cardPX, 44, 20, false, p.textDim, "end", headerRight)
 	}
 	s.line(0, hh, c.w, hh, p.border, 1, "")
 
-	// ── HERO ──
-	headlineBaseline := hh + 54
-	chipCY := headlineBaseline - 16
+	// ── HERO ── the bean (or, without one, the profile) as the headline; the
+	// line below never repeats the headline (#2166).
+	headlineBaseline := L.headBase
+	chipCY := headlineBaseline - L.headMax*0.3
 	leadW := 0.0
 	if originCode != "" {
 		chipW := textWidth(originCode, 18, true) + 26
 		chipH := 34.0
 		s.rect(cardPX, chipCY-chipH/2, chipW, chipH, cardChipRadius, p.accentTint("0.14"), p.accentTint("0.35"), 1)
-		s.text(cardPX+chipW/2, chipCY+6, 18, true, p.accentFrom, "middle", originCode)
+		s.text(cardPX+chipW/2, chipCY+6, 18, true, p.text, "middle", originCode)
 		leadW = chipW + 14
 	}
 	headline := firstNonEmpty(bean, profileName)
 	nameMaxW := c.w - 2*cardPX - 20
-	// #1853: cutting a mixed headline ("Bean A + Bean B") at the full size
-	// usually hid the second bean. Step the size down first so both names
-	// stay readable, and truncate only what still overflows at the minimum.
-	headlineSize := 52.0
-	for headlineSize > 36 && textWidth(headline, headlineSize, true) > nameMaxW-leadW {
+	// #1853: step the size down before truncating, so a mixed headline
+	// ("Bean A + Bean B") keeps both names readable.
+	headlineSize := L.headMax
+	for headlineSize > L.headMin && textWidth(headline, headlineSize, true) > nameMaxW-leadW {
 		headlineSize -= 4
 	}
 	headline = truncateToWidth(headline, nameMaxW-leadW, headlineSize, true)
 	s.text(cardPX+leadW, headlineBaseline, headlineSize, true, p.text, "", headline)
 
-	cursorY := headlineBaseline + 32
-	phrase := scoreTierPhrase(c.score, c.lang)
-	if c.score != nil && phrase != "" {
-		cursorY = headlineBaseline + 78
-		vx := cardPX
-		numText := strconv.Itoa(*c.score)
-		s.text(vx, cursorY, 62, true, scoreColor(c.score, p), "", numText)
-		vx += textWidth(numText, 62, true) + 14
-		s.text(vx, cursorY, 24, false, p.textMute, "", "·")
-		vx += textWidth("·", 24, false) + 14
-		s.text(vx, cursorY, 24, false, p.textDim, "", phrase)
-		cursorY += 30
-	} else if phrase != "" {
-		s.text(cardPX, cursorY, 24, false, p.textDim, "", phrase)
-		cursorY += 34
+	cursorY := headlineBaseline
+	subParts := nonEmpty(machine)
+	if bean != "" {
+		subParts = nonEmpty(profileName, machine)
 	}
-
+	starR := L.subSize * 0.45
+	const starGap = 8.0
+	starsW := 0.0
 	if rating > 0 {
-		starR := 11.0
-		starGap := 8.0
-		starsY := cursorY - 8
-		sx := cardPX + starR
-		for i := 0; i < 5; i++ {
+		starsW = 10*starR + 4*starGap
+	}
+	if len(subParts) > 0 || rating > 0 {
+		cursorY = headlineBaseline + L.subSize + 18
+		if len(subParts) > 0 {
+			line := truncateToWidth(strings.Join(subParts, "  ·  "), c.w-2*cardPX-starsW-24, L.subSize, false)
+			s.text(cardPX, cursorY, L.subSize, false, p.textDim, "", line)
+		}
+		sx := c.w - cardPX - starsW + starR
+		for i := 0; i < 5 && rating > 0; i++ {
 			fill := p.starDim
 			if i < rating {
 				fill = p.star
 			}
-			s.raw(starPolygon(sx, starsY, starR, fill))
+			s.raw(starPolygon(sx, cursorY-L.subSize*0.35, starR, fill))
 			sx += starR*2 + starGap
 		}
-		cursorY = starsY + starR + 24
 	}
 
-	subY := cursorY
-	if parts := nonEmpty(profileName, machine); len(parts) > 0 {
-		line := truncateToWidth(strings.Join(parts, "  ·  "), nameMaxW+140, 24, false)
-		s.text(cardPX, cursorY, 24, false, p.textDim, "", line)
-		subY = cursorY + 32
+	// ── VERDICT ── like the shot page: the score in Fraunces, the verdict
+	// sentence (or the score phrase), the change against the compared shot.
+	sentence := c.verdict.text
+	if sentence == "" {
+		sentence = scoreTierPhrase(c.score, c.lang)
+	}
+	blockTop := cursorY + 28
+	blockBottom := cursorY
+	textX := cardPX
+	if c.score != nil {
+		num := strconv.Itoa(*c.score)
+		base := blockTop + L.scoreSize*0.8
+		s.serif(cardPX, base, L.scoreSize, scoreColor(c.score, p), num)
+		textX = cardPX + serifWidth(num, L.scoreSize) + 28
+		blockBottom = base + 14
+	}
+	lineGap := L.verdictSize * 1.25
+	rowY := blockTop + L.verdictSize + 6 // baseline of the next verdict line
+	if sentence != "" {
+		x := textX
+		arrow := ""
+		switch c.verdict.kind {
+		case "coarser":
+			arrow = "↑"
+		case "finer":
+			arrow = "↓"
+		}
+		if arrow != "" {
+			s.text(x, rowY, L.verdictSize, true, p.accentFrom, "", arrow)
+			x += textWidth(arrow+" ", L.verdictSize, true)
+		}
+		lines := wrapToWidth(sentence, c.w-cardPX-x, L.verdictSize, true, 2)
+		for i, ln := range lines {
+			s.text(x, rowY+float64(i)*lineGap, L.verdictSize, true, p.text, "", ln)
+		}
+		rowY += float64(len(lines)) * lineGap
+		blockBottom = math.Max(blockBottom, rowY-lineGap+14)
+	}
+	if c.verdict.delta != nil {
+		d := *c.verdict.delta
+		col := p.textDim
+		if d > 0 {
+			col = p.ok
+		} else if d < 0 {
+			col = p.err
+		}
+		label := cardDelta(d)
+		size := L.verdictSize * 0.7
+		chipH := L.verdictSize * 1.1
+		chipW := textWidth(label, size, true) + 24
+		cr, cg, cb := hexToRGB(col)
+		s.rect(textX, rowY-chipH*0.72, chipW, chipH, cardChipRadius, fmt.Sprintf("rgba(%d,%d,%d,0.16)", cr, cg, cb), "", 0)
+		s.text(textX+chipW/2, rowY, size, true, col, "middle", label)
+		if c.verdict.vs != "" {
+			vsX := textX + chipW + 12
+			vsSize := L.verdictSize * 0.65
+			s.text(vsX, rowY, vsSize, false, p.textDim, "", truncateToWidth(c.verdict.vs, c.w-cardPX-vsX, vsSize, false))
+		}
+		blockBottom = math.Max(blockBottom, rowY+chipH*0.28+14)
 	}
 
-	// Dosis → Ausbeute · Ratio · Dauer
-	var doseParts []string
-	if dose != nil && *dose != 0 {
-		doseParts = append(doseParts, num1(*dose)+"g")
-	}
-	if yieldG != nil && *yieldG != 0 {
-		doseParts = append(doseParts, "→ "+num1(*yieldG)+"g")
-	}
-	if ratio != "" {
-		doseParts = append(doseParts, "· "+ratio)
-	}
-	if dur != "" {
-		doseParts = append(doseParts, "· "+dur)
-	}
-	if len(doseParts) > 0 {
-		doseY := subY + 14
-		s.text(cardPX, doseY, 22, false, p.textMute, "", cardText(c.lang, "dose"))
-		s.text(cardPX+78, doseY, 22, true, p.text, "", strings.Join(doseParts, "  "))
-		subY = doseY
-	}
-
-	sepY := subY + 20
+	sepY := blockBottom + 20
 	s.printf(`<defs><linearGradient id="sep" x1="0" y1="0" x2="1" y2="0">`+
 		`<stop offset="0" stop-color="%s" stop-opacity="0.5"/>`+
 		`<stop offset="0.6" stop-color="%s" stop-opacity="0.15"/>`+
@@ -418,12 +476,20 @@ func (c *cardModel) svg() string {
 
 	// ── CHART ──
 	const chartL, chartR, chartT, chartB, legendH = 44.0, 44.0, 10.0, 28.0, 50.0
-	const statsH, footH = 200.0, 52.0
+	// The chart takes the room between the verdict and the figures, capped
+	// per format (#2166: the story no longer stretches it over the page).
+	footLine := c.h - 64
+	figH := 0.0
+	if len(figs) > 0 {
+		figH = 120
+		if c.format == "story" {
+			figH = float64(len(figs)) * 96
+		}
+	}
 	outerX := cardPX - 8
 	outerY := sepY + 10
 	outerW := c.w - 2*cardPX + 16
-	availH := c.h - outerY - statsH - 16 - footH
-	outerH := math.Max(math.Round(240*c.scale), availH)
+	outerH := clampCardRange(footLine-16-figH-12-outerY, 200, L.chartMaxH)
 	plotX := outerX + chartL
 	plotY := outerY + chartT
 	plotW := outerW - chartL - chartR
@@ -554,97 +620,41 @@ func (c *cardModel) svg() string {
 		}
 	}
 
-	// ── STATS BAND ──
-	sX := cardPX - 8
-	sW := c.w - 2*cardPX + 16
-	statsY := outerY + outerH + 8
-
-	pressQual := ""
-	if hasTgtPress && tgtPressVal > 0 {
-		pressQual = cardTextf(c.lang, "press_target", num1(tgtPressVal))
-	} else if hasMaxPres {
-		pressQual = cardTextf(c.lang, "press_max", num1(math.Round(maxPres*10)/10))
-	}
-
-	type bandCell struct{ label, value string }
-
-	var row1, row2 []*bandCell
-	if dose != nil || yieldG != nil {
-		v := ""
-		if dose != nil && yieldG != nil {
-			v = fmt.Sprintf("%s → %sg", num1(*dose), num1(*yieldG))
-		} else if dose != nil {
-			v = num1(*dose) + "g"
-		} else {
-			v = num1(*yieldG) + "g"
+	// ── FIGURES ── square: one row of cells; story: one row per figure.
+	if len(figs) > 0 && c.format == "story" {
+		top := outerY + outerH + 12
+		rowH := math.Min(132, (footLine-16-top)/float64(len(figs)))
+		figTop := footLine - 16 - rowH*float64(len(figs))
+		for i, f := range figs {
+			y := figTop + float64(i)*rowH
+			s.line(outerX, y, outerX+outerW, y, p.border, 1, "")
+			base := y + rowH/2 + L.figValSize*0.35
+			s.text(cardPX, base, L.figLblSize, false, p.textDim, "", f.label)
+			s.text(c.w-cardPX, base, L.figValSize, true, p.text, "end", f.value)
 		}
-		row1 = append(row1, &bandCell{cardText(c.lang, "dose_yield"), v})
-	} else {
-		row1 = append(row1, nil)
-	}
-	if ratio != "" {
-		row1 = append(row1, &bandCell{cardText(c.lang, "ratio"), ratio})
-	} else {
-		row1 = append(row1, nil)
-	}
-	row1 = append(row1, &bandCell{cardText(c.lang, "duration"), fmtDurSec(totalSec)})
-
-	if hasAvgPres {
-		lbl := cardText(c.lang, "pressure_avg")
-		if pressQual != "" {
-			lbl = cardText(c.lang, "pressure_avg") + " · " + pressQual
-		}
-		row2 = append(row2, &bandCell{lbl, num1(math.Round(avgPres*10)/10) + " bar"})
-	} else {
-		row2 = append(row2, nil)
-	}
-	if hasAvgFlow {
-		row2 = append(row2, &bandCell{cardText(c.lang, "pump_flow_avg"), num1(math.Round(avgFlow*10)/10) + " ml/s"})
-	} else {
-		row2 = append(row2, nil)
-	}
-	if hasAvgTemp {
-		lbl := cardText(c.lang, "temperature_avg")
-		if hasTempSD {
-			lbl += " ±" + num1(tempSD)
-		}
-		row2 = append(row2, &bandCell{lbl, num1(math.Round(avgTemp*10)/10) + " °C"})
-	} else {
-		row2 = append(row2, nil)
-	}
-
-	bandColW := sW / 3
-	bandRowH := statsH / 2
-	drawBandRow := func(cells []*bandCell, rowY float64) {
-		s.line(sX, rowY, sX+sW, rowY, p.border, 1, "")
-		for i, cell := range cells {
-			if cell == nil {
-				continue
-			}
-			cx := sX + float64(i)*bandColW
-			if i > 0 {
-				cx += 16
-			}
-			s.text(cx, rowY+14+30, 30, true, p.text, "", cell.value)
-			s.text(cx, rowY+14+54, 14, false, p.textMute, "", cell.label)
+	} else if len(figs) > 0 {
+		figTop := footLine - 16 - figH
+		s.line(outerX, figTop, outerX+outerW, figTop, p.border, 1, "")
+		cellW := outerW / float64(len(figs))
+		for i, f := range figs {
+			cx := outerX + float64(i)*cellW + 8
+			valY := figTop + 16 + L.figValSize
+			s.text(cx, valY, L.figValSize, true, p.text, "", truncateToWidth(f.value, cellW-16, L.figValSize, true))
+			s.text(cx, valY+L.figLblSize+12, L.figLblSize, false, p.textMute, "", truncateToWidth(f.label, cellW-16, L.figLblSize, false))
 		}
 	}
-	drawBandRow(row1, statsY)
-	drawBandRow(row2, statsY+bandRowH)
 
-	// ── FOOTER ──
-	footY := c.h - 38
-	s.line(0, footY-12, c.w, footY-12, p.border, 1, "")
+	// ── FOOTER ── app name and install code left, the badge in the accent right.
+	s.line(0, footLine, c.w, footLine, p.border, 1, "")
+	footBase := footLine + 38
 	footerLeft := strings.Join(nonEmpty("Gaggiuino Local Profiler", installCode), "  ·  ")
-	s.text(cardPX, footY+6, 20, false, p.textMute, "", footerLeft)
-
+	s.text(cardPX, footBase, 20, false, p.textMute, "", footerLeft)
 	pillText := "Made with GLP"
-	pillPad := 12.0
-	pillW := textWidth(pillText, 16, true) + pillPad*2
-	pillH := 30.0
+	pillW := textWidth(pillText, 16, true) + 24
+	const pillH = 32.0
 	pillX := c.w - cardPX - pillW
-	s.rect(pillX, footY+6-pillH/2, pillW, pillH, 5, "", p.accentFrom, 1)
-	s.text(pillX+pillW/2, footY+12, 16, true, p.accentFrom, "middle", pillText)
+	s.rect(pillX, footBase-6-pillH/2, pillW, pillH, cardChipRadius, p.accentFrom, "", 0)
+	s.text(pillX+pillW/2, footBase, 16, true, p.accentText, "middle", pillText)
 
 	s.raw(`</svg>`)
 	return s.b.String()
@@ -684,6 +694,56 @@ func cardTimeLabel(t float64) string {
 		return fmt.Sprintf("%d:%02d", m, sec)
 	}
 	return fmt.Sprintf("%ds", sec)
+}
+
+// cardDuration formats the shot time like the shot page: "28 s", or "1:05"
+// from one minute on.
+func cardDuration(sec float64) string {
+	s := int(math.Round(sec))
+	if s < 60 {
+		return fmt.Sprintf("%d s", s)
+	}
+	return fmt.Sprintf("%d:%02d", s/60, s%60)
+}
+
+// cardDelta formats a score change like the shot page: "+5", "−11" (a real
+// minus sign) or "±0".
+func cardDelta(d int) string {
+	switch {
+	case d > 0:
+		return fmt.Sprintf("+%d", d)
+	case d < 0:
+		return fmt.Sprintf("−%d", -d)
+	}
+	return "±0"
+}
+
+// wrapToWidth breaks s at spaces into at most maxLines lines that fit maxW;
+// the last line takes the rest and is truncated with an ellipsis.
+func wrapToWidth(s string, maxW, size float64, bold bool, maxLines int) []string {
+	words := strings.Fields(s)
+	var lines []string
+	cur := ""
+	for i, w := range words {
+		next := w
+		if cur != "" {
+			next = cur + " " + w
+		}
+		if cur == "" || textWidth(next, size, bold) <= maxW {
+			cur = next
+			continue
+		}
+		if len(lines) == maxLines-1 {
+			cur = strings.Join(append([]string{cur}, words[i:]...), " ")
+			break
+		}
+		lines = append(lines, truncateToWidth(cur, maxW, size, bold))
+		cur = w
+	}
+	if cur != "" {
+		lines = append(lines, truncateToWidth(cur, maxW, size, bold))
+	}
+	return lines
 }
 
 func starPolygon(cx, cy, outerR float64, fill string) string {
