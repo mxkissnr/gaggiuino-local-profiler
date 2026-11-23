@@ -16,7 +16,7 @@ g.document = {
 };
 
 const { S } = await import('../public-src/state/index.js');
-const { dialinAcceptNext } = await import('../public-src/views/dialin-wizard.js');
+const { dialinAcceptNext, dialinBandFromShot } = await import('../public-src/views/dialin-wizard.js');
 const { calcNextGrindSuggestion } = await import('../public-src/dialin-convergence.js');
 
 const GRINDER = 'Lagom';
@@ -29,6 +29,7 @@ interface SessionView {
   pendingGrind: number | string;
   rounds: { grindSetting: number; seconds: number }[];
   reviewRound: { grindSetting: number; seconds: number; shotId: number; score: number | null; ratio: number | null; channeling: boolean; suggestion?: { nextGrind: number | null } };
+  timeBand?: { low: number; high: number } | null;
 }
 
 // A session already waiting on confirmation of one 20 s shot at 8.3 — a fast
@@ -96,5 +97,32 @@ describe('dial-in wizard steps on a grinder scale (#1961)', () => {
     const rounds = [session.reviewRound];
     dialinAcceptNext();
     expect(session.pendingGrind).toBe(calcNextGrindSuggestion(rounds).nextGrind);
+  });
+});
+
+describe('the dial-in band follows the profile window (#1504)', () => {
+  beforeEach(() => { S.dialinSession = null; });
+  afterEach(() => { S.dialinSession = null; });
+
+  it('dialinBandFromShot reads the shot\'s window', () => {
+    expect(dialinBandFromShot({ timeTarget: { minS: 40, maxS: 48 } })).toEqual({ low: 40, high: 48 });
+    expect(dialinBandFromShot({ timeTarget: null })).toBeNull();
+    expect(dialinBandFromShot({})).toBeNull();
+    expect(dialinBandFromShot(null)).toBeNull();
+    expect(dialinBandFromShot(undefined)).toBeNull();
+    expect(dialinBandFromShot({ timeTarget: { minS: 48, maxS: 48 } })).toBeNull();
+    expect(dialinBandFromShot({ timeTarget: { minS: 48, maxS: 40 } })).toBeNull();
+  });
+
+  it('the session band drives the next suggestion', () => {
+    const session = startSession(undefined);
+    // 44 s is the midpoint of 40-48, so the session band turns the review
+    // round into a hold instead of a coarser step.
+    session.reviewRound.seconds = 44;
+    session.timeBand = { low: 40, high: 48 };
+    const rounds = [session.reviewRound];
+    dialinAcceptNext();
+    expect(session.pendingGrind).toBe(calcNextGrindSuggestion(rounds, null, { low: 40, high: 48 }).nextGrind);
+    expect(session.timeBand).toEqual({ low: 40, high: 48 });
   });
 });

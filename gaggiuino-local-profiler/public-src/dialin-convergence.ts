@@ -22,7 +22,7 @@ import type { GrindScale } from './grind-scale.js';
 
 export interface DialinBand { low: number; high: number }
 
-const BAND       = { low: 25, high: 32 };
+const BAND: DialinBand = { low: 25, high: 32 };
 const DEAD_ZONE  = 1;
 const STEP_FLOOR = 0.3;
 const MAX_ROUNDS = 6;
