@@ -74,7 +74,7 @@ Converts the bundled world TopoJSON into the GeoJSON the Analytics map draws.
 - Source: https://github.com/topojson/topojson-client
 - Licence: https://github.com/topojson/topojson-client/blob/master/LICENSE
 
-### barcode-detector 3.2.3
+### barcode-detector 3.2.4
 
 Barcode scanning ponyfill used where the browser has no native BarcodeDetector.
 
