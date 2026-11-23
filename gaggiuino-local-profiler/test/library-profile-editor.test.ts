@@ -759,6 +759,45 @@ describe('profile target time (#1504)', () => {
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
+  it('a profile row offers Target time and shows its window', async () => {
+    fetchSpy.mockImplementation((url: string) => Promise.resolve(
+      url.startsWith('api/machine/profiles')
+        ? ({ ok: true, json: () => Promise.resolve({
+            optionsRaw: [{ id: 1, name: 'Adaptive v2' }, { id: 2, name: 'Flush', utility: true }],
+          }) } as unknown as Response)
+        : ({ ok: true, json: () => Promise.resolve([
+            { profileName: 'adaptive v2', minS: 40, maxS: 48 },
+          ]) } as unknown as Response),
+    ));
+    const el = { innerHTML: '' };
+    g.document = {
+      getElementById: (id: string) => (id === 'profileListUI' ? el : undefined),
+      querySelectorAll: () => [],
+    };
+    S.activeMachineId = 1;
+
+    await loadMachineProfileList();
+
+    // Only the real profile gets the entry; the utility row never offers it.
+    expect(el.innerHTML.split('data-action="profile-time-target"').length - 1).toBe(1);
+    expect(el.innerHTML.split('40–48 s').length - 1).toBe(1);
+  });
+
+  it('loading the profile list also loads that machine\'s target times', async () => {
+    fetchSpy.mockImplementation((url: string) => Promise.resolve(
+      url.startsWith('api/machine/profiles')
+        ? ({ ok: true, json: () => Promise.resolve({ optionsRaw: [] }) } as unknown as Response)
+        : ({ ok: true, json: () => Promise.resolve([]) } as unknown as Response),
+    ));
+    g.document = { getElementById: () => undefined, querySelectorAll: () => [] };
+    S.activeMachineId = 1;
+
+    await loadMachineProfileList();
+
+    const urls = (fetchSpy.mock.calls as unknown as [string][]).map(c => c[0]);
+    expect(urls).toContain('api/profile-time-targets?machineId=1');
+  });
+
   it('a rejected save keeps the sheet data and reports the status', async () => {
     const fields = stubSheet({ pttMin: '40', pttMax: '48' });
     openProfileTimeTargetSheet('Adaptive v2', null);

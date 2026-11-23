@@ -21,6 +21,7 @@ const { openProfileForm, sendProfileToMachine, closeProfileForm }
 const { openGaggiMateProfileEditor, saveGaggiMateProfile }
   = await import('../public-src/views/gaggimate-profile-editor.js');
 const { t } = await import('../public-src/i18n.js');
+const { loadProfileTimeTargets, profileTimeTargetFor } = await import('../public-src/views/library/profile-time-target.js');
 
 // A DOM-as-state harness: everything the two editors read or render into comes
 // off `document`, so one cached fake element per id serves both the library
@@ -125,6 +126,46 @@ describe('profile editors capture the machine they were opened for (#1605)', () 
     await saveGaggiMateProfile();
 
     expect(putBody().machineId).toBe(2);
+  });
+
+  it('neither profile editor sends a target time to the machine', async () => {
+    const gmProfile = {
+      id: 'p1', label: 'Turbo', description: '', type: 'standard', utility: false, favorite: false,
+      temperature: 93,
+      phases: [{ name: 'Brew', phase: 'brew', valve: 1, pump: 100, duration: 25000, targets: [{ type: 'volumetric', operator: 'gte', value: 36 }] }],
+    };
+    const bodies: Record<string, unknown>[] = [];
+    fetchSpy.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT' && url.startsWith('api/machine/profile')) {
+        bodies.push(JSON.parse(init.body as string) as Record<string, unknown>);
+        return Promise.resolve(response({ syncStatus: 'synced' }));
+      }
+      if (url.startsWith('api/machine/profiles')) return Promise.resolve(response({ optionsRaw: [] }));
+      // The window this profile has in GLP — a GLP-only setting.
+      if (url.startsWith('api/profile-time-targets')) return Promise.resolve(response([{ profileName: 'Turbo', minS: 40, maxS: 48 }]));
+      return Promise.resolve(response(gmProfile));
+    });
+
+    await loadProfileTimeTargets(2);
+    expect(profileTimeTargetFor(2, 'Turbo')).toEqual({ profileName: 'Turbo', minS: 40, maxS: 48 });
+
+    g.document = fakeDocument([fakePhaseRow()]);
+    openProfileForm({
+      id: 'p1', name: 'Turbo', waterTemperature: 93,
+      recipe: { coffeeIn: 18, coffeeOut: 36, ratio: 2 },
+      globalStopConditions: { weight: 36 },
+      phases: [],
+    });
+    await sendProfileToMachine();
+    closeProfileForm();
+
+    g.document = fakeDocument([]);
+    await openGaggiMateProfileEditor('p1');
+    await saveGaggiMateProfile();
+
+    expect(bodies).toHaveLength(2);
+    const leaked = bodies.flatMap(b => Object.keys(b).filter(k => k === 'minS' || k === 'maxS' || k === 'timeTarget'));
+    expect(leaked).toEqual([]);
   });
 
   it('the GaggiMate editor does not open on a 503 and shows the not-stored toast', async () => {
