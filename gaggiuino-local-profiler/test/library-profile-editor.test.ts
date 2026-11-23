@@ -784,24 +784,46 @@ describe('profile target time (#1504)', () => {
 
     await loadMachineProfileList();
 
-    // Only the real profile gets the entry; the utility row never offers it.
+    // One markup block per profile row: the ⋯ menu entry and the badge must be
+    // in the row of the profile the window belongs to (case-insensitively),
+    // and nowhere near the utility row.
+    const rows = el.innerHTML.split('<div class="lib-item').slice(1);
+    expect(rows).toHaveLength(2);
+    const adaptive = rows.find(r => r.includes('Adaptive v2')) ?? '';
+    const utility = rows.find(r => r.includes('Flush')) ?? '';
+
+    expect(adaptive).toContain('data-action="profile-time-target"');
+    expect(adaptive).toContain('40–48 s');
+    expect(adaptive).toContain('<span class="lib-item-name">Adaptive v2</span>');
+    expect(utility).toContain('lib-item-utility');
+    expect(utility).not.toContain('data-action="profile-time-target"');
+    expect(utility).not.toContain('40–48 s');
+
+    // Exactly once overall: one entry, one badge, for the one real profile.
     expect(el.innerHTML.split('data-action="profile-time-target"').length - 1).toBe(1);
     expect(el.innerHTML.split('40–48 s').length - 1).toBe(1);
   });
 
-  it('loading the profile list also loads that machine\'s target times', async () => {
-    fetchSpy.mockImplementation((url: string) => Promise.resolve(
-      url.startsWith('api/machine/profiles')
-        ? ({ ok: true, json: () => Promise.resolve({ optionsRaw: [] }) } as unknown as Response)
-        : ({ ok: true, json: () => Promise.resolve([]) } as unknown as Response),
-    ));
+  it("loading the profile list also loads that machine's target times", async () => {
+    const urls: string[] = [];
+    fetchSpy.mockImplementation((url: string) => {
+      urls.push(url);
+      return Promise.resolve(
+        url.startsWith('api/machine/profiles')
+          ? ({ ok: true, json: () => Promise.resolve({ optionsRaw: [] }) } as unknown as Response)
+          : ({ ok: true, json: () => Promise.resolve([
+              { profileName: 'Window probe', minS: 40, maxS: 48 },
+            ]) } as unknown as Response),
+      );
+    });
     g.document = { getElementById: () => undefined, querySelectorAll: () => [] };
     S.activeMachineId = 1;
 
     await loadMachineProfileList();
 
-    const urls = (fetchSpy.mock.calls as unknown as [string][]).map(c => c[0]);
     expect(urls).toContain('api/profile-time-targets?machineId=1');
+    // The response is cached for the row entry and badge of that machine.
+    expect(profileTimeTargetFor(1, 'window probe')).toEqual({ profileName: 'Window probe', minS: 40, maxS: 48 });
   });
 
   // The window read is an enhancement next to the profile list, not part of

@@ -132,7 +132,7 @@ describe('profile editors capture the machine they were opened for (#1605)', () 
     expect(putBody().machineId).toBe(2);
   });
 
-  it('neither profile editor sends a target time to the machine', async () => {
+  it("neither profile editor sends a target time to the machine", async () => {
     const gmProfile = {
       id: 'p1', label: 'Turbo', description: '', type: 'standard', utility: false, favorite: false,
       temperature: 93,
@@ -150,6 +150,8 @@ describe('profile editors capture the machine they were opened for (#1605)', () 
       return Promise.resolve(response(gmProfile));
     });
 
+    // The window is known to both editors' module state, so "absent from the
+    // save body" below is a real result, not an empty cache.
     await loadProfileTimeTargets(2);
     expect(profileTimeTargetFor(2, 'Turbo')).toEqual({ profileName: 'Turbo', minS: 40, maxS: 48 });
 
@@ -167,7 +169,17 @@ describe('profile editors capture the machine they were opened for (#1605)', () 
     await openGaggiMateProfileEditor('p1');
     await saveGaggiMateProfile();
 
+    // One PUT per editor, both carrying the profile the window belongs to.
     expect(bodies).toHaveLength(2);
+    expect(bodies.map(b => b['name'] ?? b['label'])).toEqual(['Turbo', 'Turbo']);
+    expect(bodies.map(b => b['machineId'])).toEqual([2, 2]);
+
+    // The GaggiMate export takes no target time (#1605): neither the top level
+    // nor any nested phase/target may grow one.
+    const serialized = JSON.stringify(bodies);
+    expect(serialized).not.toContain('minS');
+    expect(serialized).not.toContain('maxS');
+    expect(serialized).not.toContain('timeTarget');
     const leaked = bodies.flatMap(b => Object.keys(b).filter(k => k === 'minS' || k === 'maxS' || k === 'timeTarget'));
     expect(leaked).toEqual([]);
   });
