@@ -502,7 +502,7 @@ describe('library list rows (#2172)', () => {
     g.document = { getElementById: (id: string) => (id === list.host ? el : undefined), querySelectorAll: () => [] };
     const row = { id: 7, name: 'Row', ...extra };
     S.shots = [];
-    S.coffeeLibrary = { beans: [], recipes: [row], baskets: [row], puckScreens: [row], grinders: [row] } as unknown as typeof S.coffeeLibrary;
+    S.coffeeLibrary = { beans: [], recipes: [row], baskets: [row], puckScreens: [row], grinders: [row] };
     list.render();
     return el.innerHTML;
   };
