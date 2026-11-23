@@ -180,6 +180,10 @@ describe('an unchanged profile is sent exactly as before (#2154)', () => {
     fetchSpy.mockReset();
     dialogs.confirmDialog.mockClear();
     S.activeMachineId = 2;
+    // The list reload after a save also reads that machine's target times, a
+    // GLP-only read (#1504); these tests pin the machine request, so the
+    // fallback answers the window read with none.
+    fetchSpy.mockImplementation(() => Promise.resolve(response([])));
   });
 
   it('Gaggiuino: open, then send without an edit', async () => {

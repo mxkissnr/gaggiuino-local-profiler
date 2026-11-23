@@ -90,6 +90,10 @@ describe('profile editors capture the machine they were opened for (#1605)', () 
   beforeEach(() => {
     fetchSpy.mockReset();
     S.activeMachineId = 2;
+    // The list reload after a save also reads that machine's target times, a
+    // GLP-only read (#1504); these tests pin the machine request, so the
+    // fallback answers the window read with none.
+    fetchSpy.mockImplementation(() => Promise.resolve(response([])));
   });
 
   it('the library profile form saves to the machine it was opened on, not the one active at save time', async () => {
