@@ -124,7 +124,7 @@ describe('the dial-in band follows the profile window (#1504)', () => {
     const rounds = [session.reviewRound];
     dialinAcceptNext();
     expect(session.rounds).toHaveLength(1);
-    expect(session.status).toBe('active');
+    expect(session.reviewRound).toBeNull();
     expect(session.pendingGrind).toBe(calcNextGrindSuggestion(rounds, null, { low: 40, high: 48 }).nextGrind);
     expect(session.timeBand).toEqual({ low: 40, high: 48 });
   });
