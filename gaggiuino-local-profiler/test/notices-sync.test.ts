@@ -204,7 +204,7 @@ describe('syncNotices (#2183)', () => {
 });
 
 describe('readNpmLock (#2183)', () => {
-    it('splits top-level from nested and skips dev packages', () => {
+    it('readNpmLock splits top-level from nested and skips dev packages', () => {
         const lock = {
             lockfileVersion: 3,
             packages: {
@@ -226,14 +226,14 @@ describe('readNpmLock (#2183)', () => {
 });
 
 describe('parseGoList (#2183)', () => {
-    it('throws on a replaced module', () => {
+    it('parseGoList throws on a replaced module', () => {
         expect(() => parseGoList('example.com/x v1.0.0 REPLACED\n')).toThrow(/example\.com\/x/);
         expect(parseGoList('a v1\n\nb v2\n').size).toBe(2);
     });
 });
 
 describe('builderGoVersion (#2183)', () => {
-    it('wants exactly one golang tag', () => {
+    it('builderGoVersion wants exactly one golang tag', () => {
         expect(builderGoVersion('FROM golang:1.27.4-alpine@sha256:abc AS builder')).toBe('1.27.4');
         expect(() =>
             builderGoVersion('FROM golang:1.27.4-alpine AS builder\nFROM golang:1.28.0-alpine AS other'),
