@@ -107,6 +107,7 @@ describe('a profile time window replaces the 25-32 band (#1504)', () => {
   it('a window band replaces 25-32 and its midpoint', () => {
     const hold = calcNextGrindSuggestion([{ grindSetting: 10, seconds: 44 }], null, BAND);
     expect(hold.type).toBe('hold');
+    expect(hold.nextGrind).toBe(10);
     expect(hold.band).toEqual(BAND);
 
     const noBand = calcNextGrindSuggestion([{ grindSetting: 10, seconds: 44 }]);
@@ -114,6 +115,8 @@ describe('a profile time window replaces the 25-32 band (#1504)', () => {
 
     const finer = calcNextGrindSuggestion([{ grindSetting: 10, seconds: 29 }], null, BAND);
     expect(finer.type).toBe('finer');
+    expect(finer.nextGrind).toBeLessThan(10);
+    expect(finer.band).toEqual(BAND);
   });
 
   it('no band keeps 25-32', () => {
@@ -127,7 +130,8 @@ describe('a profile time window replaces the 25-32 band (#1504)', () => {
       expect(calcNextGrindSuggestion(rounds, null, null)).toEqual(calcNextGrindSuggestion(rounds));
       expect(calcNextGrindSuggestion(rounds, null, null).band).toEqual({ low: 25, high: 32 });
     }
-    expect(isConverged([{ grindSetting: 10, seconds: 28 }, { grindSetting: 10, seconds: 29 }], null, null))
-      .toBe(isConverged([{ grindSetting: 10, seconds: 28 }, { grindSetting: 10, seconds: 29 }]));
+    const holds = [{ grindSetting: 10, seconds: 28 }, { grindSetting: 10, seconds: 29 }];
+    expect(isConverged(holds, null, null)).toBe(isConverged(holds));
+    expect(isConverged(holds, null, null)).toBe(true);
   });
 });

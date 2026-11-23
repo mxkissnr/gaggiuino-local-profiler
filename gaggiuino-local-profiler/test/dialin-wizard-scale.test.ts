@@ -104,7 +104,7 @@ describe('the dial-in band follows the profile window (#1504)', () => {
   beforeEach(() => { S.dialinSession = null; });
   afterEach(() => { S.dialinSession = null; });
 
-  it('dialinBandFromShot reads the shot\'s window', () => {
+  it("dialinBandFromShot reads the shot's window", () => {
     expect(dialinBandFromShot({ timeTarget: { minS: 40, maxS: 48 } })).toEqual({ low: 40, high: 48 });
     expect(dialinBandFromShot({ timeTarget: null })).toBeNull();
     expect(dialinBandFromShot({})).toBeNull();
@@ -112,6 +112,7 @@ describe('the dial-in band follows the profile window (#1504)', () => {
     expect(dialinBandFromShot(undefined)).toBeNull();
     expect(dialinBandFromShot({ timeTarget: { minS: 48, maxS: 48 } })).toBeNull();
     expect(dialinBandFromShot({ timeTarget: { minS: 48, maxS: 40 } })).toBeNull();
+    expect(dialinBandFromShot({ timeTarget: { minS: Number.NaN, maxS: 48 } })).toBeNull();
   });
 
   it('the session band drives the next suggestion', () => {
@@ -122,6 +123,8 @@ describe('the dial-in band follows the profile window (#1504)', () => {
     session.timeBand = { low: 40, high: 48 };
     const rounds = [session.reviewRound];
     dialinAcceptNext();
+    expect(session.rounds).toHaveLength(1);
+    expect(session.status).toBe('active');
     expect(session.pendingGrind).toBe(calcNextGrindSuggestion(rounds, null, { low: 40, high: 48 }).nextGrind);
     expect(session.timeBand).toEqual({ low: 40, high: 48 });
   });

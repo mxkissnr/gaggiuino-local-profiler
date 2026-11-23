@@ -346,13 +346,16 @@ describe('the advice edges follow the profile window (#1504)', () => {
           .toEqual(calcGrindAdvice(singleShot(duration, tag), series()));
       }
     }
+    for (const tag of TAGS) {
+      expect(calcGrindAdvice(singleShot(300, tag, win), series()))
+        .toEqual(calcGrindAdvice(singleShot(300, tag), series()));
+    }
   });
 
   it('window 40-48: 45 s holds, 29 s grinds finer', () => {
     const win = { minS: 40, maxS: 48 };
     const hold = calcGrindAdvice(singleShot(450, null, win), series());
-    expect(hold?.type).not.toBe('finer');
-    expect(hold?.type).not.toBe('coarser');
+    expect(hold?.type).toBe('ok');
 
     expectAdvice(calcGrindAdvice(singleShot(290, null, win), series()),
       { type: 'finer', key: 'grind_short', args: ['29'] });
