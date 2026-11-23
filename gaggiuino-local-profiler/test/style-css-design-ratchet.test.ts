@@ -197,7 +197,8 @@ describe('style.css design ratchet (#2091)', () => {
 // #2165: every menu is details.lib-sheet-more > summary + .lib-sheet-menu-list
 // > button.lib-sheet-menu-item (docs/DESIGN.md). A page that builds its own
 // menu fails here: a class named *dropdown*, *popover*, *popup* or *-menu*,
-// a menu list outside such a details, or a menu entry that is not a button.
+// a menu list outside such a details, a menu entry that is not a button, or
+// (#2172) a menu entry without an icon, except the entries in MENU_ITEMS_WITHOUT_ICON.
 // Not menus: the orders page's drinks menu (orders-menu-*); the top bar's
 // nav list carries the shared list class itself. The kiosk is its own page.
 const SRC_DIR = join(here, '..', 'public-src');
@@ -209,6 +210,11 @@ const readdirRecursive = readdirSync as unknown as (
 const MENU_CLASS = /dropdown|popover|popup|(?:^|-)menu(?:$|-)/;
 const MENU_CLASS_ALLOWED = /^(?:lib-sheet-menu-(?:list|item|sep)(?:--[a-z]+)?|topbar-nav-menu|orders-menu-[\w-]+)$/;
 const MENU_HOSTS = ['lib-sheet-more', 'topbar-nav-more'];
+
+// #2172: menu entries that stay text-only, by their data-action. The GaggiMate
+// stop conditions ("Pressure ≥", "Flow ≤", ...): the label is the meaning
+// (maintainer decision). Every other entry is an icon and its label.
+const MENU_ITEMS_WITHOUT_ICON = ['gm-pro-add-target'];
 
 function menuViolations(files: Record<string, string>, css: string): string[] {
   const out: string[] = [];
@@ -232,8 +238,14 @@ function menuViolations(files: Record<string, string>, css: string): string[] {
       if (!inside || !MENU_HOSTS.some((h) => host.split(/\s+/).includes(h))) out.push(`${file}: menu list outside details.lib-sheet-more`);
     }
     for (const m of text.matchAll(/class="lib-sheet-menu-item/g)) {
-      const tag = text.slice(text.lastIndexOf('<', m.index ?? 0), m.index ?? 0);
+      const at = m.index ?? 0;
+      const tag = text.slice(text.lastIndexOf('<', at), at);
       if (!tag.startsWith('<button')) out.push(`${file}: menu entry that is not a button`);
+      // The entry up to its </button>: an inline <svg> or an interpolated icon constant.
+      const end = text.indexOf('</button>', at);
+      const entry = text.slice(at, end === -1 ? undefined : end);
+      const textOnly = MENU_ITEMS_WITHOUT_ICON.some((action) => entry.includes(`data-action="${action}"`));
+      if (!textOnly && !/<svg|\$\{[^}]*ICON/.test(entry)) out.push(`${file}: menu entry without an icon`);
     }
   }
   return out;
@@ -241,13 +253,38 @@ function menuViolations(files: Record<string, string>, css: string): string[] {
 
 describe('menus use the shared pattern (#2165)', () => {
   it('fails on a menu outside the pattern', () => {
-    const ok = '<details class="lib-sheet-more"><summary>⋯</summary><div class="lib-sheet-menu-list"><button type="button" class="lib-sheet-menu-item">A</button></div></details>';
+    const ok = '<details class="lib-sheet-more"><summary>⋯</summary><div class="lib-sheet-menu-list"><button type="button" class="lib-sheet-menu-item"><svg class="rail-icon sm"></svg> A</button></div></details>';
     expect(menuViolations({ 'ok.ts': ok }, '.lib-sheet-menu-list--up { top: auto; }')).toEqual([]);
     expect(menuViolations({ 'a.ts': '<div class="lib-sheet-menu-list"></div>' }, '')).toHaveLength(1);
     expect(menuViolations({ 'b.ts': '<ul class="gm-dropdown-menu"></ul>' }, '')).toHaveLength(1);
     expect(menuViolations({ 'c.ts': "el.classList.add('share-popover');" }, '')).toHaveLength(1);
     expect(menuViolations({}, '.card-fmt-menu { left: 0; }')).toHaveLength(1);
-    expect(menuViolations({ 'd.ts': ok.replace('<button type="button" class="lib-sheet-menu-item">A</button>', '<div class="lib-sheet-menu-item">A</div>') }, '')).toHaveLength(1);
+    expect(menuViolations({ 'd.ts': ok.replace('<button type="button" class="lib-sheet-menu-item"><svg class="rail-icon sm"></svg> A</button>', '<div class="lib-sheet-menu-item"><svg class="rail-icon sm"></svg> A</div>') }, '')).toHaveLength(1);
+  });
+
+  it('fails on a menu entry without an icon (#2172)', () => {
+    const entry = (inner: string, attrs = ''): string =>
+      `<details class="lib-sheet-more"><summary>⋯</summary><div class="lib-sheet-menu-list"><button type="button" class="lib-sheet-menu-item"${attrs}>${inner}</button></div></details>`;
+    expect(menuViolations({ 'a.ts': entry('A') }, '')).toEqual(['a.ts: menu entry without an icon']);
+    expect(menuViolations({ 'a.ts': entry('<svg class="rail-icon sm"></svg> A') }, '')).toEqual([]);
+    expect(menuViolations({ 'a.ts': entry(`\${ICON_TRASH} A`) }, '')).toEqual([]);
+    expect(menuViolations({ 'a.ts': entry(`\${TARGET_ICON_SVG} A`) }, '')).toEqual([]);
+    expect(menuViolations({ 'a.ts': entry(`\${esc(tt.label)}`, ' data-action="gm-pro-add-target"') }, '')).toEqual([]);
+    expect(menuViolations({ 'a.ts': entry(`\${esc(tt.label)}`, ' data-action="delete-x"') }, '')).toEqual([
+      'a.ts: menu entry without an icon',
+    ]);
+  });
+
+  it('gives every top-bar More entry the icon of its tab (#2172)', () => {
+    const index = readFileSync(join(SRC_DIR, 'index.html'), 'utf8');
+    const region = index.slice(index.indexOf('<div class="topbar-nav-list">'), index.indexOf('<details id="topbarNavMore"'));
+    const tabs = region.match(/<button class="topbar-nav"/g) ?? [];
+    const icons = region.match(/<span class="rail-icon-slot"><svg class="rail-icon"/g) ?? [];
+    expect(tabs.length).toBeGreaterThan(5);
+    expect(icons.length).toBe(tabs.length);
+    const overflow = readFileSync(join(SRC_DIR, 'components', 'topbar-nav-overflow.ts'), 'utf8');
+    expect(overflow).toContain("tab.querySelector<HTMLElement>('.rail-icon-slot')");
+    expect(overflow).toContain('button.append(copy)');
   });
 
   it('finds no menu outside the pattern in the app', () => {

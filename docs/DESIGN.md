@@ -53,7 +53,7 @@ Chips, buttons, and the search fields and dropdowns that share a row with chips 
 | Input chip | `.chip--input`, on its own, never with `.chip` | the tint through `--input-chip-c` (background, border) and `--input-chip-ink` (text) | none |
 | Section title | `.section-title` | optional counter in `.section-title__count` | none |
 | Card title | `.card-title` | none | none |
-| Overflow menu | `details.lib-sheet-more` > `summary` + `.lib-sheet-menu-list` > `button.lib-sheet-menu-item` | `.del` for delete (red, last, after a `.lib-sheet-menu-sep`); the summary is the ⋯ or an icon, or a `.btn` when the trigger needs a label | `open` on the details; one menu open at a time, a pick, a press outside and Escape close it |
+| Overflow menu | `details.lib-sheet-more` > `summary` + `.lib-sheet-menu-list` > `button.lib-sheet-menu-item` | every entry is an icon and its label; `.del` for delete (red, last, after a `.lib-sheet-menu-sep`); the summary is the ⋯ or an icon, or a `.btn` when the trigger needs a label | `open` on the details; one menu open at a time, a pick, a press outside and Escape close it |
 
 Every status label is a `.badge`. A page class next to it only places it (margin, grid area, position); a badge never has a border or its own tint.
 
@@ -63,7 +63,7 @@ A card or form names itself with a `.card-title`: a settings card, the result at
 
 The ordering kiosk is the one page with its own controls. It is a separate page for guests at a wall tablet or an e-ink screen and loads only the tokens, not the app stylesheet: its main actions are 56 px tall for a standing user, its drinks are large tiles, a press scales the control instead of a hover, and the e-ink mode redraws every control in black and white with a 3 px border. Colours, spacing, radii and fonts still come from the tokens; `.btn` and `.chip` are not used there.
 
-A guard test fails on any literal radius, literal px padding, `transition: all` or page class named `*-chip`, `*-badge`, `*-pill`, `*-tag` or `*-btn` that sets colour, background, border or radius, and on radius or padding in an inline style that a view or component writes, and on a menu outside the overflow menu pattern: its own `*dropdown*`, `*popover*`, `*popup*` or `*-menu*` class, a menu list outside `details.lib-sheet-more`, or a menu entry that is not a button. Navigation items, menu entries and notification dots are not buttons or badges, so their classes say what they are (`bottom-nav-item`, `lib-sheet-menu-item`, `maint-dot`).
+A guard test fails on any literal radius, literal px padding, `transition: all` or page class named `*-chip`, `*-badge`, `*-pill`, `*-tag` or `*-btn` that sets colour, background, border or radius, and on radius or padding in an inline style that a view or component writes, and on a menu outside the overflow menu pattern: its own `*dropdown*`, `*popover*`, `*popup*` or `*-menu*` class, a menu list outside `details.lib-sheet-more`, a menu entry that is not a button, or a menu entry without an icon (text-only only where the label is the meaning: the GaggiMate stop conditions). Navigation items, menu entries and notification dots are not buttons or badges, so their classes say what they are (`bottom-nav-item`, `lib-sheet-menu-item`, `maint-dot`).
 
 ## Interaction rules
 

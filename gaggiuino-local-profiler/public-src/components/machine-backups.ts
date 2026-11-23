@@ -305,9 +305,13 @@ export function parseBackupFile(text: string): MachineBackupDocument | null {
   return parsed.format === 'gaggiuino-settings' ? parsed : null;
 }
 
-/** The row action slice W adds to every Gaggiuino machine row. */
+// #2172: the Backups entry's icon, an archive box with a down arrow (single-use, stays local).
+
+const ICON_BACKUPS: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v4H4zM5 8v12h14V8M12 11v6M9 14l3 3 3-3"/></svg>`;
+
+/** The Backups entry of a Gaggiuino machine's dialog ⋯ menu. */
 export function machineBackupsButtonHtml(): Html {
-  return html`<button type="button" class="lib-sheet-menu-item machine-backups-btn">${tHtml('mbk_row_action')}</button>`;
+  return html`<button type="button" class="lib-sheet-menu-item machine-backups-btn">${ICON_BACKUPS} ${tHtml('mbk_row_action')}</button>`;
 }
 
 /** The update did not start because the backup before it failed. True is the user's

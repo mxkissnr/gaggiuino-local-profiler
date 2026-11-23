@@ -10,7 +10,7 @@ import * as machinesApi from '../api/machines.js';
 import { getUiPref, setUiPref } from '../ui-prefs.js';
 import { t, tHtml } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
-import { CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
+import { CHECK_ICON_SVG, CLOSE_ICON_SVG, ICON_TRASH, STAR_ICON_SVG } from '../icons.js';
 import { updateStatus } from './status.js';
 import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-presets.js';
 import { migrateLegacyAccent } from '../theme.js';
@@ -973,12 +973,15 @@ function renderFirmwareRestarting(row: HTMLElement): void {
 // actions that are not part of editing live here, in their old row order;
 // "Edit" is the row tap that opened the dialog, so it has no entry.
 export function machineDialogActionsHtml(m: MachineView): Html {
+  // #2172: every entry has an icon; Delete sits after a separator when an entry is above it.
+  const entriesAbove = m.type === 'gaggiuino' || !m.isDefault;
   return html`<details class="lib-sheet-more machine-dialog-more">
   <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
   <div class="lib-sheet-menu-list">
     ${m.type === 'gaggiuino' ? machineBackupsButtonHtml() : html``}
-    ${!m.isDefault ? html`<button type="button" class="lib-sheet-menu-item machine-set-default-btn">${tHtml('settings_machine_set_default')}</button>` : html``}
-    <button type="button" class="lib-sheet-menu-item del machine-delete-btn">${tHtml('settings_machine_delete')}</button>
+    ${!m.isDefault ? html`<button type="button" class="lib-sheet-menu-item machine-set-default-btn">${STAR_ICON_SVG} ${tHtml('settings_machine_set_default')}</button>` : html``}
+    ${entriesAbove ? html`<span class="lib-sheet-menu-sep"></span>` : html``}
+    <button type="button" class="lib-sheet-menu-item del machine-delete-btn">${ICON_TRASH} ${tHtml('settings_machine_delete')}</button>
   </div>
 </details>`;
 }
