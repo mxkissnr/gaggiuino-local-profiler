@@ -106,8 +106,8 @@ The app's sans-serif UI font, bundled with the app as WOFF2 for the 400 and
 
 ### Fraunces 600
 
-Serif display font for bean names and the shot-card image, bundled with
-the app as WOFF2 for the 600 weight (latin subset).
+Serif display font for bean names, bundled with the app as WOFF2 for the
+600 weight (latin subset).
 
 - Copyright 2018 The Fraunces Project Authors (https://github.com/undercasetype/Fraunces)
 - Licensed under the SIL Open Font License 1.1.

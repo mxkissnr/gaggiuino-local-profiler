@@ -34,12 +34,11 @@ import (
 //     dp.target* lines, all tenths, ÷10 here).
 //  2. rasterise renders that SVG to PNG with github.com/kanrichan/resvg-go
 //     (resvg 0.35 compiled to wasm, run on wazero — no cgo). Text is set in
-//     the app's own fonts, embedded from fonts/ (#2166): Figtree for text and
-//     figures, Fraunces for the score. They are TTF copies of the app's
-//     bundled latin woff2 files (the wasm fontdb cannot read woff2), with
-//     Fraunces pinned to a static 600 instance because resvg draws a variable
-//     font at its default instance only. The Go typeface stays loaded as the
-//     fallback for glyphs the latin cut lacks (→, non-latin bean names).
+//     the app's UI font, embedded from fonts/ (#2166): Figtree 400 and 600
+//     for all text, figures and the score (#2191). They are TTF copies of the
+//     app's bundled latin woff2 files (the wasm fontdb cannot read woff2).
+//     The Go typeface stays loaded as the fallback for glyphs the latin cut
+//     lacks (→, non-latin bean names).
 //
 // Cosmetic deviations, all deliberate:
 //
@@ -187,7 +186,7 @@ func (s *resvgSlot) warm() error {
 		ctx.Close()
 		return fmt.Errorf("resvg load bold font: %w", err)
 	}
-	for _, f := range [][]byte{figtreeRegularTTF, figtreeSemiBoldTTF, frauncesTTF} {
+	for _, f := range [][]byte{figtreeRegularTTF, figtreeSemiBoldTTF} {
 		if err := r.LoadFontData(f); err != nil {
 			r.Close()
 			ctx.Close()
@@ -286,7 +285,6 @@ func renderShareCard(shot Shot, score *int, format, accent, theme, lang string, 
 const (
 	cardFontFamily   = "Figtree Light"
 	cardFontFamilies = "'Figtree Light', Go"
-	cardSerifFamily  = "Fraunces"
 )
 
 var (
@@ -294,16 +292,14 @@ var (
 	figtreeRegularTTF []byte
 	//go:embed fonts/figtree-600.ttf
 	figtreeSemiBoldTTF []byte
-	//go:embed fonts/fraunces-600.ttf
-	frauncesTTF []byte
 )
 
 var (
 	fontOnce sync.Once
 	// regularSF is the Go regular face the HA chart PNG draws with.
 	regularSF *opentype.Font
-	// The card's measuring faces: Figtree 400/600 and Fraunces 600.
-	cardRegularSF, cardBoldSF, cardSerifSF *opentype.Font
+	// The card's measuring faces: Figtree 400/600.
+	cardRegularSF, cardBoldSF *opentype.Font
 
 	// faceMu guards the face cache and every use of a cached face: an
 	// opentype face is not safe for concurrent use (#1915).
@@ -316,7 +312,6 @@ func initFonts() {
 		regularSF, _ = opentype.Parse(goregular.TTF)
 		cardRegularSF, _ = opentype.Parse(figtreeRegularTTF)
 		cardBoldSF, _ = opentype.Parse(figtreeSemiBoldTTF)
-		cardSerifSF, _ = opentype.Parse(frauncesTTF)
 	})
 }
 
@@ -411,18 +406,6 @@ func (s *svgBuf) text(x, y, size float64, bold bool, fill, anchor, content strin
 	}
 	s.printf(`<text x="%s" y="%s" font-family="%s" font-size="%s"%s fill="%s"%s>%s</text>`,
 		fnum(x), fnum(y), cardFontFamilies, fnum(size), weight, fill, a, esc(content))
-}
-
-// serif emits a <text> in Fraunces 600, the app's display face for the score.
-func (s *svgBuf) serif(x, y, size float64, fill, content string) {
-	s.printf(`<text x="%s" y="%s" font-family="%s" font-size="%s" font-weight="600" fill="%s">%s</text>`,
-		fnum(x), fnum(y), cardSerifFamily, fnum(size), fill, esc(content))
-}
-
-// serifWidth measures s in Fraunces, the score's display face.
-func serifWidth(s string, size float64) float64 {
-	initFonts()
-	return measureText(s, size, cardSerifSF, "serif")
 }
 
 func (s *svgBuf) line(x1, y1, x2, y2 float64, stroke string, width float64, dash string) {
