@@ -165,7 +165,7 @@ The Go runtime and standard library compiled into the server.
 - Source: https://github.com/golang/go
 - Licence: https://go.dev/LICENSE
 
-### github.com/andybalholm/cascadia v1.3.4
+### github.com/andybalholm/cascadia v1.3.5
 
 CSS selectors for goquery.
 
@@ -258,7 +258,7 @@ The built-in MCP server for AI assistants.
 - Source: https://github.com/modelcontextprotocol/go-sdk
 - Licence: https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk@v1.8.0?tab=licenses
 
-### github.com/PuerkitoBio/goquery v1.13.0
+### github.com/PuerkitoBio/goquery v1.14.0
 
 Reads recipe and bean pages for the importer.
 
@@ -312,7 +312,7 @@ URI templates for the MCP server library.
 - Source: https://github.com/yosida95/uritemplate
 - Licence: https://pkg.go.dev/github.com/yosida95/uritemplate/v3@v3.0.2?tab=licenses
 
-### golang.org/x/crypto v0.58.0
+### golang.org/x/crypto v0.59.0
 
 Key derivation for encrypted backups.
 
@@ -321,7 +321,7 @@ Key derivation for encrypted backups.
 - Source: https://github.com/golang/crypto
 - Licence: https://pkg.go.dev/golang.org/x/crypto@v0.58.0?tab=licenses
 
-### golang.org/x/image v0.47.0
+### golang.org/x/image v0.48.0
 
 Image decoding, scaling and text drawing for photos, charts and the shot card; includes the Go fonts by Bigelow & Holmes.
 
@@ -348,7 +348,7 @@ OAuth types used by the MCP server library.
 - Source: https://github.com/golang/oauth2
 - Licence: https://pkg.go.dev/golang.org/x/oauth2@v0.35.0?tab=licenses
 
-### golang.org/x/sync v0.24.0
+### golang.org/x/sync v0.25.0
 
 Merges duplicate update and firmware checks into one request.
 
@@ -357,7 +357,7 @@ Merges duplicate update and firmware checks into one request.
 - Source: https://github.com/golang/sync
 - Licence: https://pkg.go.dev/golang.org/x/sync@v0.24.0?tab=licenses
 
-### golang.org/x/sys v0.49.0
+### golang.org/x/sys v0.50.0
 
 Operating-system calls for the SQLite runtime.
 
@@ -366,7 +366,7 @@ Operating-system calls for the SQLite runtime.
 - Source: https://github.com/golang/sys
 - Licence: https://pkg.go.dev/golang.org/x/sys@v0.49.0?tab=licenses
 
-### golang.org/x/text v0.43.0
+### golang.org/x/text v0.44.0
 
 Text encodings used by the font code.
 
@@ -394,7 +394,7 @@ Reads the bundled API description.
 - Source: https://github.com/go-yaml/yaml
 - Licence: https://pkg.go.dev/gopkg.in/yaml.v3@v3.0.1?tab=licenses
 
-### modernc.org/libc v1.79.0
+### modernc.org/libc v1.80.1
 
 C runtime for the SQLite database engine. It includes code from musl libc, go-netdb and Nixpkgs (MIT License) and from the Go project (BSD 3-Clause License).
 
@@ -423,7 +423,7 @@ Memory allocator for the SQLite runtime.
 - Source: https://gitlab.com/cznic/memory
 - Licence: https://pkg.go.dev/modernc.org/memory@v1.12.1?tab=licenses
 
-### modernc.org/sqlite v1.61.1
+### modernc.org/sqlite v1.62.0
 
 The SQLite database that stores all app data, without CGo. It contains SQLite 3.54.1, which is in the public domain.
 
