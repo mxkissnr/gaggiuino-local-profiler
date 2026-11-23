@@ -21,7 +21,7 @@
     "perf:compare": "node scripts/perf-compare.mts"
   },
   "dependencies": {
-    "barcode-detector": "3.2.3",
+    "barcode-detector": "3.2.4",
     "chart.js": "4.6.1",
     "echarts": "6.1.0",
     "onnxruntime-web": "1.31.1",
