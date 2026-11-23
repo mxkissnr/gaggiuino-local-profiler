@@ -8,14 +8,13 @@
 // is anchored to) unless the session carries the profile's own window (#1504),
 // in which case that window is used and its midpoint anchors the scaling. A ±1s
 // dead zone around the mid counts as "hold" — close enough that further grind
-// changes would be chasing noise. Step size
-// starts proportional to how far off the first round is, then behaves like a
-// binary search: overshoot the band (direction flips) → halve the step;
-// keep going the same direction → keep the step. Below the 0.3 floor (finer
-// than most grinders can reliably resolve) further halving is pointless, so
-// that's treated as converged too. With a grinder scale (#1961) the steps are
-// multiplied by the dial's span over 50, moved at least one valid step and
-// snapped into range.
+// changes would be chasing noise. Step size starts proportional to how far off
+// the first round is, then behaves like a binary search: overshoot the band
+// (direction flips) → halve the step; keep going the same direction → keep the
+// step. Below the 0.3 floor (finer than most grinders can reliably resolve)
+// further halving is pointless, so that's treated as converged too. With a
+// grinder scale (#1961) the steps are multiplied by the dial's span over 50,
+// moved at least one valid step and snapped into range.
 
 import { GRIND_REFERENCE_SPAN, snapGrind } from './grind-scale.js';
 import type { GrindScale } from './grind-scale.js';
@@ -52,8 +51,8 @@ export interface DialinSuggestion {
 
 /**
  * A round's direction plus how far off the mid of the band in use it was.
- * Channeling
- * rounds carry no error (they contribute no direction and no step update).
+ * Channeling rounds carry no error (they contribute no direction and no step
+ * update).
  */
 type ClassifiedRound =
   | { direction: 'channeling'; error: null }
