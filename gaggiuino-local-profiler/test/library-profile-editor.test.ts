@@ -29,6 +29,7 @@ const {
   normalizeProfileName, formatTimeWindow, loadProfileTimeTargets, profileTimeTargetFor,
   profileTimeTargetMenuItem, profileTimeTargetBadge, parseTimeWindowInputs,
   openProfileTimeTargetSheet, saveProfileTimeTargetFromSheet, clearProfileTimeTarget,
+  setProfileTimeTargetsChanged,
 } = await import('../public-src/views/library/profile-time-target.js');
 
 // _collectPhases reads phase rows straight off `document` (DOM-as-state, no
@@ -581,16 +582,20 @@ describe('profile target time (#1504)', () => {
   // The sheet reads its two inputs and the host element off `document`; a fake
   // host and the two input fields are all the open/save/clear paths touch.
   interface StubField extends FakeFormField {
-    setAttribute(): void;
-    removeAttribute(): void;
+    attrs: Record<string, string>;
+    setAttribute(name: string, value: string): void;
+    removeAttribute(name: string): void;
     addEventListener(): void;
   }
 
-  function stubSheet(values: Record<string, string>): void {
+  function stubSheet(values: Record<string, string>): Record<string, StubField> {
     const fields: Record<string, StubField> = {};
     const field = (id: string): StubField => (fields[id] ??= {
       value: values[id] ?? '', style: {}, classList: { add() {}, remove() {} },
-      focus() {}, setAttribute() {}, removeAttribute() {}, addEventListener() {},
+      focus() {}, attrs: {},
+      setAttribute(name: string, value: string) { this.attrs[name] = value; },
+      removeAttribute(name: string) { delete this.attrs[name]; },
+      addEventListener() {},
     });
     const host = {
       innerHTML: '',
@@ -603,11 +608,16 @@ describe('profile target time (#1504)', () => {
       getElementById: (id: string) => (id === 'detailSheet' ? host : field(id)),
       querySelectorAll: () => [],
     };
+    return fields;
   }
+
+  const changed = vi.fn();
 
   beforeEach(() => {
     fetchSpy.mockReset();
     showToast.mockReset();
+    changed.mockReset();
+    setProfileTimeTargetsChanged(changed);
     g.window = { showToast };
     S.activeMachineId = 1;
   });
@@ -669,7 +679,7 @@ describe('profile target time (#1504)', () => {
   });
 
   it('saving sends the window for the machine the sheet was opened on', async () => {
-    stubSheet({ pttMin: '40', pttMax: '48' });
+    const fields = stubSheet({ pttMin: '40', pttMax: '48' });
     openProfileTimeTargetSheet('Adaptive v2', null);
 
     // The active machine moves while the sheet is open; the write must stay
@@ -690,20 +700,39 @@ describe('profile target time (#1504)', () => {
     expect(init.method).toBe('PUT');
     expect(JSON.parse(init.body as string) as Record<string, unknown>).toEqual({ machineId: 1, profileName: 'Adaptive v2', minS: 40, maxS: 48 });
     expect(showToast).toHaveBeenCalledWith(t('profile_time_target_saved'));
+    // The response repopulates the cache of the machine the sheet was opened
+    // on, not the one that became active meanwhile.
+    expect(profileTimeTargetFor(1, 'Adaptive v2')).toEqual({ profileName: 'Adaptive v2', minS: 40, maxS: 48 });
+    expect(profileTimeTargetFor(2, 'Adaptive v2')).toBeNull();
+    expect(entry(fields, 'pttMin').attrs['aria-invalid']).toBeUndefined();
+    expect(changed).toHaveBeenCalledTimes(1);
   });
 
   it('an invalid window sends no request', async () => {
-    stubSheet({ pttMin: '48', pttMax: '40' });
+    const fields = stubSheet({ pttMin: '48', pttMax: '40' });
     openProfileTimeTargetSheet('Adaptive v2', null);
 
     await saveProfileTimeTargetFromSheet();
 
     expect(fetchSpy).not.toHaveBeenCalled();
     expect(showToast).toHaveBeenCalledWith(t('profile_time_target_invalid'));
+    // Min is a whole number in range but not below max: the min field is the
+    // one marked, and max stays clean.
+    expect(entry(fields, 'pttMin').attrs['aria-invalid']).toBe('true');
+    expect(entry(fields, 'pttMax').attrs['aria-invalid']).toBeUndefined();
+    expect(changed).not.toHaveBeenCalled();
   });
 
   it('removing sends null bounds', async () => {
     stubSheet({ pttMin: '40', pttMax: '48' });
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([{ profileName: 'Adaptive v2', minS: 40, maxS: 48 }]),
+    } as unknown as Response);
+    await loadProfileTimeTargets(1);
+    expect(profileTimeTargetFor(1, 'Adaptive v2')).toEqual({ profileName: 'Adaptive v2', minS: 40, maxS: 48 });
+
     openProfileTimeTargetSheet('Adaptive v2', null);
 
     fetchSpy.mockResolvedValueOnce({
@@ -714,10 +743,24 @@ describe('profile target time (#1504)', () => {
 
     await clearProfileTimeTarget();
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchSpy.mock.calls[1] as unknown as [string, RequestInit];
     expect(url).toBe('api/profile-time-targets');
     expect(init.method).toBe('PUT');
     expect(JSON.parse(init.body as string) as Record<string, unknown>).toEqual({ machineId: 1, profileName: 'Adaptive v2', minS: null, maxS: null });
+    expect(profileTimeTargetFor(1, 'Adaptive v2')).toBeNull();
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('a rejected save keeps the sheet data and reports the status', async () => {
+    const fields = stubSheet({ pttMin: '40', pttMax: '48' });
+    openProfileTimeTargetSheet('Adaptive v2', null);
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 500 } as unknown as Response);
+
+    await saveProfileTimeTargetFromSheet();
+
+    expect(showToast).toHaveBeenCalledWith(t('error_generic', 500));
+    expect(entry(fields, 'pttMin').value).toBe('40');
+    expect(changed).not.toHaveBeenCalled();
   });
 });
