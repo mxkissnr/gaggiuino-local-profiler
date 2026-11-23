@@ -765,7 +765,7 @@ describe('profile target time (#1504)', () => {
     expect(changed).toHaveBeenCalledTimes(1);
   });
 
-  it('a profile row offers Target time and shows its window', async () => {
+  it("a profile row offers Target time and shows its window", async () => {
     fetchSpy.mockImplementation((url: string) => Promise.resolve(
       url.startsWith('api/machine/profiles')
         ? ({ ok: true, json: () => Promise.resolve({
