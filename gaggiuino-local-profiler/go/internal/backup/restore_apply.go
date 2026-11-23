@@ -152,6 +152,13 @@ func (h *Handlers) applyKVSettings(kv map[string]any) error {
 			}
 		}
 	}
+	if v, ok := kv["profile_time_targets"]; ok {
+		if targets, ok := shots.SanitizeProfileTimeTargetsForRestore(v); ok {
+			if err := d.ShotsRepo.SaveProfileTimeTargets(targets); err != nil {
+				return err
+			}
+		}
+	}
 	if s, ok := kv["ui_prefs"].(map[string]any); ok {
 		if prefs, issues := uiprefs.Sanitize(s); len(issues) == 0 {
 			if err := uiprefs.NewRepository(d.DB).Save(prefs); err != nil {
