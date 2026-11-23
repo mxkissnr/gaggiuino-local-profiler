@@ -24,6 +24,9 @@ const (
 	standardLib = "Go standard library"
 )
 
+// syncHint points a red run at the script that fixes a version-only bump (#2183).
+const syncHint = "\nRun \"npm run notices:sync\" in gaggiuino-local-profiler/: it rewrites version bumps and names every heading to add or remove."
+
 // serverNoticeHeadings returns the component headings of the Server group, in
 // file order.
 func serverNoticeHeadings(notices string) []string {
@@ -132,7 +135,7 @@ func TestThirdPartyNoticesCoverServerModules(t *testing.T) {
 
 	standardHeading := standardLib + " " + builderGoVersion(t, string(dockerRaw))
 	if !present[standardHeading] {
-		t.Errorf("missing server entry for the standard library of the builder image; add this heading:\n### %s", standardHeading)
+		t.Errorf("missing server entry for the standard library of the builder image; add this heading:\n### %s"+syncHint, standardHeading)
 	}
 
 	modules := linkedServerModules(t)
@@ -146,12 +149,12 @@ func TestThirdPartyNoticesCoverServerModules(t *testing.T) {
 		version := modules[path]
 		heading := path + " " + version
 		if !present[heading] {
-			t.Errorf("module compiled into the server with no notice entry; add this heading under %q:\n### %s", serverGroup, heading)
+			t.Errorf("module compiled into the server with no notice entry; add this heading under %q:\n### %s"+syncHint, serverGroup, heading)
 			continue
 		}
 		link := "- Licence: https://pkg.go.dev/" + path + "@" + version + "?tab=licenses"
 		if !strings.Contains(serverEntry(notices, heading), link) {
-			t.Errorf("notice entry %q must carry %q, or a version bump leaves the licence link behind", heading, link)
+			t.Errorf("notice entry %q must carry %q, or a version bump leaves the licence link behind"+syncHint, heading, link)
 		}
 	}
 
@@ -160,7 +163,7 @@ func TestThirdPartyNoticesCoverServerModules(t *testing.T) {
 			continue
 		}
 		if strings.HasPrefix(heading, standardLib+" ") {
-			t.Errorf("notice entry %q names the wrong Go version; the builder image ships\n### %s", heading, standardHeading)
+			t.Errorf("notice entry %q names the wrong Go version; the builder image ships\n### %s"+syncHint, heading, standardHeading)
 			continue
 		}
 		path, version, ok := strings.Cut(heading, " ")
@@ -170,9 +173,9 @@ func TestThirdPartyNoticesCoverServerModules(t *testing.T) {
 		linked, known := modules[path]
 		switch {
 		case !known:
-			t.Errorf("stale notice entry %q: no package of %q is compiled into the server; remove the heading and the text it owns", heading, path)
+			t.Errorf("stale notice entry %q: no package of %q is compiled into the server; remove the heading and the text it owns"+syncHint, heading, path)
 		case linked != version:
-			t.Errorf("notice entry %q has the wrong version; the server links %s, so the heading must read:\n### %s %s", heading, linked, path, linked)
+			t.Errorf("notice entry %q has the wrong version; the server links %s, so the heading must read:\n### %s %s"+syncHint, heading, linked, path, linked)
 		}
 	}
 }

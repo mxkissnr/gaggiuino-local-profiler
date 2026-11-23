@@ -18,7 +18,8 @@
     "demo:smoke": "node scripts/demo-smoke.mts",
     "perf:dataset": "node scripts/perf-dataset.mts",
     "perf:measure": "node scripts/perf-measure.mts",
-    "perf:compare": "node scripts/perf-compare.mts"
+    "perf:compare": "node scripts/perf-compare.mts",
+    "notices:sync": "node scripts/notices-sync.mts"
   },
   "dependencies": {
     "barcode-detector": "3.2.4",
