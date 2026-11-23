@@ -670,6 +670,7 @@ export async function updateView(): Promise<void> {
 
   const totalSecs = (shotA.duration || 0) / 10;
   // #1504: name the profile's target window next to the time it was judged against.
+  // ShotRow itself carries no window field; it comes in on the shot response.
   const timeWindow = !shotB ? (shotA as ShotLike).timeTarget ?? null : null;
   _el('duration').innerText = formatTimeLabel(totalSecs) + (timeWindow ? ` / ${formatTimeWindow(timeWindow.minS, timeWindow.maxS)}` : '');
 
