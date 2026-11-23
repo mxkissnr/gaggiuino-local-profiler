@@ -8641,6 +8641,11 @@ export interface components {
             tempStabilityDev?: number | null;
             /** @description GET /api/shots/{id} only: id of the previous same-profile shot (null if none) */
             previousShotId?: number | null;
+            /** @description The profile's target time window (#1504) the duration part was scored against, or null. GET /api/shots, /api/shots/{id} and /api/shots/last only; never on /shots.json. */
+            timeTarget?: {
+                minS?: number;
+                maxS?: number;
+            } | null;
             previousShot?: components["schemas"]["HydratedShot"] | null;
         };
         /** @description The rectangle a library photo was cropped to, as fractions of the uncropped original's width and height — so it survives any later downscale. (#1845) An entity carries `imageCrop` exactly when its uncropped original is stored, i.e. when `GET .../image?original=1` and a re-crop are available. */
