@@ -20,7 +20,7 @@ import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './g
 import { renderAnnotationPanel, annotationBusy, _applyShotDefaults } from './annotation.js';
 import { markDirty }                                          from '../../live-sync.js';
 import { updatePQChart }                                      from './charts.js';
-import { processGroupHtml, similarShotsTitle, syncShotCompareButton, verdictComparisonText, showCoffeeRow } from './detail-page.js';
+import { processGroupHtml, similarShotsTitle, syncShotCompareButton, verdictComparisonText, showCoffeeRow, rememberShotVerdict } from './detail-page.js';
 import { updateMachineBanner, updateOnboardingPanel }          from '../../components/onboarding.js';
 import { GEAR_ICON_SVG, COFFEE_ICON_SVG, TARGET_ICON_SVG }    from '../../icons.js';
 import { loadShotImageBlobUrl, invalidateShotImage }          from '../../bean-image.js';
@@ -869,6 +869,13 @@ export async function updateView(): Promise<void> {
     const scoreHint: Html = hintTitles.length
       ? html`<span class="verdict-bean-target-hint" title="${esc(hintTitles.join('\n'))}">${TARGET_ICON_SVG}</span>` : html``;
     _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))}${scoreHint}`;
+    // #2166: the share card draws this same verdict.
+    rememberShotVerdict(shotA.id, {
+      type: advice?.type ?? '',
+      text: advice?.text ?? '',
+      delta: previousShot && sc != null && prevScore != null ? sc - prevScore : null,
+      vs: previousShot && sc != null && prevScore != null ? verdictComparisonText(comparable) : '',
+    });
     // #838: duration and avg pressure dropped — they're already shown once
     // each, in the Dauer recipe card (incl. phase breakdown) and the
     // Process group's pressure row, so repeating them here was pure duplication.
@@ -878,6 +885,7 @@ export async function updateView(): Promise<void> {
     // subline itself is retired (stays hidden, see index.html/style.css).
     verdictHeader.style.display = '';
   } else {
+    rememberShotVerdict(shotA.id, null);
     verdictHeader.style.display = 'none';
   }
 

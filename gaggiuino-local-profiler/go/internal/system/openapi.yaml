@@ -1484,9 +1484,13 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
         - { name: format, in: query, schema: { type: string, enum: [square, story], default: square } }
-        - { name: accent, in: query, schema: { type: string }, description: "Hex accent color override" }
+        - { name: accent, in: query, schema: { type: string }, description: "Accent colour: a #rrggbb hex (the app sends its active accent) or a legacy accent name (amber, ocean, aurora, ember, forest, crema); anything else is amber" }
         - { name: theme, in: query, schema: { type: string }, description: "UI theme name override" }
         - { name: lang, in: query, schema: { type: string }, description: "UI language for the card text (de/en/es/fr/it/nl, unknown falls back to en)" }
+        - { name: verdict, in: query, schema: { type: string, maxLength: 140 }, description: "The shot page's verdict sentence (#2166); without it the card shows a phrase for the score" }
+        - { name: verdictType, in: query, schema: { type: string }, description: "The verdict's advice type; finer and coarser draw an arrow, other values are ignored" }
+        - { name: delta, in: query, schema: { type: integer, minimum: -100, maximum: 100 }, description: "Score change against the compared shot" }
+        - { name: vs, in: query, schema: { type: string, maxLength: 80 }, description: "The line naming the compared shot" }
       responses:
         "200": { description: PNG image, content: { image/png: { schema: { type: string, format: binary } } } }
         "400": { description: Invalid shot ID }
