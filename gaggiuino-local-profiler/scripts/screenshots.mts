@@ -27,9 +27,16 @@
 // views (empty shot chart, mid-render sunburst).
 //
 // #1809: every PNG is a full-window page.screenshot() at the same 1400x900
-// viewport — no per-view clipping and no height trimming to the content — so
-// the set looks consistent side by side and the top nav, with the active tab,
-// is visible on every image.
+// viewport, with no height trimming to the content, so the set looks
+// consistent side by side and the top nav, with the active tab, is visible on
+// every image.
+//
+// #2189: the six README table images must also FILL that frame. Each is
+// captured in a state whose content reaches the bottom of the window
+// (library: "Empty & archive" fold open; bean sheet: current bag expanded),
+// flavor-wheel.png is cropped to the wheel dialog at the same 14:9 aspect,
+// and checkFill() fails the run when more than 10 % of an image's height is
+// empty background below the content (pure logic in screenshot-fill.mts).
 //
 // Data source of each PNG (#1185). Every capture comes from the one instance
 // loaded for the run: the restored backup (demo/glp-demo-backup.zip by
@@ -45,9 +52,15 @@ import { chromium } from 'playwright';
 import type { Page } from 'playwright';
 import { appRoot, bootServer, restoreBackup, seed, stopServer } from './e2e-harness.mts';
 import { openTopbarTab } from './topbar-nav.mts';
+import { aspectClip, fillProblem } from './screenshot-fill.mts';
+import type { Frame, VBox } from './screenshot-fill.mts';
 
 const outDir = path.join(appRoot, 'docs', 'screenshots');
 const repoRoot = path.join(appRoot, '..');
+
+// One window size for every capture (#1809); the full-window frame of the fill check (#2189).
+const viewport = { width: 1400, height: 900 };
+const fullFrame: Frame = { top: 0, height: viewport.height };
 
 // #1867: the git tree hash of public-src/ the PNGs were rendered from, so
 // release-check's freshness check can accept a regeneration that came out
@@ -112,6 +125,27 @@ function canvasFingerprint(sel: string): number | null {
         else if (v !== first) distinct++;
     }
     return distinct > 0 ? hash : null;
+}
+
+// Runs inside the page (#2189): the vertical extent of every visible piece of
+// content inside `rootSel`: elements with their own text, plus images,
+// canvases, inline SVGs and form controls. Containers without own text are
+// skipped on purpose: a view's scroll box spans the whole window whether it
+// holds content or not.
+function contentBoxes(rootSel: string): VBox[] {
+    const root = document.querySelector(rootSel);
+    if (!root) return [];
+    const media = new Set(['IMG', 'CANVAS', 'SVG', 'VIDEO', 'INPUT', 'SELECT', 'TEXTAREA', 'BUTTON']);
+    const boxes: VBox[] = [];
+    for (const el of root.querySelectorAll('*')) {
+        const ownText = [...el.childNodes].some(n => n.nodeType === Node.TEXT_NODE && (n.textContent ?? '').trim() !== '');
+        if (!ownText && !media.has(el.tagName.toUpperCase())) continue;
+        const style = getComputedStyle(el);
+        if (style.visibility === 'hidden' || style.opacity === '0') continue;
+        const r = el.getBoundingClientRect();
+        if (r.width > 0 && r.height > 0) boxes.push({ top: r.top, bottom: r.bottom });
+    }
+    return boxes;
 }
 
 // Waits until the canvas has painted AND stopped changing between polls —
@@ -197,6 +231,16 @@ async function shootWindow(page: Page, viewSel: string, filePath: string): Promi
     await page.screenshot({ path: filePath });
 }
 
+// #2189: README images must show app content down to the frame edge. Reads
+// the content boxes inside `rootSel` (the view, sheet or dialog the image is
+// about) right after its capture and records a problem when more than 10 % of
+// `frame`'s height is empty below them. main() fails after all captures.
+const fillProblems: string[] = [];
+async function checkFill(page: Page, name: string, rootSel: string, frame: Frame = fullFrame): Promise<void> {
+    const problem = fillProblem(name, await page.evaluate(contentBoxes, rootSel), frame);
+    if (problem) fillProblems.push(problem);
+}
+
 // Places three demo orders in the throwaway instance so the Orders view has
 // a queue to show (#1809): the instance's own queue is empty, and a restored
 // backup usually holds only completed orders. The API calls use the same
@@ -268,7 +312,7 @@ async function main(): Promise<void> {
     // navigator.language and a restored backup can carry its own preference. A
     // fixed timezone keeps relative dates stable across machines.
     const context = await browser.newContext({
-        viewport: { width: 1400, height: 900 },
+        viewport,
         locale: 'en-US',
         timezoneId: 'Europe/Berlin',
     });
@@ -337,6 +381,16 @@ async function main(): Promise<void> {
             : () => (document.getElementById('beanListUI')?.textContent || '').includes('Yirgacheffe'),
         undefined, { timeout: 15000 },
     );
+    // #2189: the stock tiles end about two thirds down the window; open the
+    // "Empty & archive" fold so the shelf fills the frame. The shelf remembers
+    // the open state on toggle, so it also stays open behind the bean sheet.
+    // Best-effort: a backup without archived beans has no fold, and the fill
+    // check below then names the view.
+    const archiveFold = page.locator('#library-view details.lib-shelf-archive');
+    if (await archiveFold.count()) {
+        await archiveFold.first().evaluate(el => el.setAttribute('open', ''));
+        await page.waitForSelector('#library-view details.lib-shelf-archive[open]');
+    }
     // Any bean/roaster/product thumbnails must be decoded, or they screenshot
     // blank. Only the thumbnails are waited on (the view also holds the hidden
     // flavor-wheel image, whose src stays unset until that modal opens).
@@ -344,6 +398,7 @@ async function main(): Promise<void> {
     // A restored backup's photos must all be served; name any that are not.
     if (fromBackup) await reportUnhydratedThumbs(page);
     await shootWindow(page, '#library-view', path.join(outDir, 'library.png'));
+    await checkFill(page, 'library', '#library-view');
 
     // ── Flavor wheel ───────────────────────────────────────────────────
     // #1330 moved the wheel button off the shelf into the bean's detail
@@ -365,15 +420,35 @@ async function main(): Promise<void> {
         // and the sheet's photos to decode before shooting.
         await page.waitForSelector('#beanSheet .lib-sheet', { state: 'visible' });
         await page.waitForTimeout(400);
-        await waitForImages(page, '#beanSheet img[src]');
+        // #2189: the sheet's content ends well above the window bottom; expand
+        // the current bag card so its details fill the rest. A DOM click (like
+        // the tile loop above) does not scroll the sheet. The toggle re-renders
+        // the sheet, so wait for the card and the photo again. Best-effort: the
+        // fill check below names the view if it stays short.
+        const bagExpanded = await page.evaluate(() => {
+            const header = document.querySelector<HTMLElement>('#beanSheet .lib-bag-card.active .lib-bag-card-header');
+            header?.click();
+            return !!header;
+        });
+        if (bagExpanded) {
+            await page.waitForSelector('#beanSheet .lib-bag-card.active.expanded', { timeout: 5000 })
+                .catch(() => console.warn('bean-sheet: current bag card did not expand, capturing anyway'));
+        }
+        await waitForImages(page, '#beanSheet .lib-bean-thumb');
         await page.screenshot({ path: path.join(outDir, 'bean-sheet.png') });
+        await checkFill(page, 'bean-sheet', '#beanSheet .lib-sheet');
 
         const wheelBtn = page.locator('#beanSheet [data-action="open-flavor-wheel"]').first();
         await wheelBtn.click();
         await page.waitForSelector('#flavorWheelModal', { state: 'visible' });
         await waitForPaint(page, '#flavorWheelCanvas'); // ECharts sunburst (incl. its entry animation)
-        // Full window with the modal open (#1809), not the modal box alone.
-        await page.screenshot({ path: path.join(outDir, 'flavor-wheel.png') });
+        // #2189: crop to the wheel dialog instead of the dimmed page around
+        // it, at the same 14:9 aspect as the full-window images, so the wheel
+        // and its legend fill the README tile.
+        const wheelBox = await page.locator('#flavorWheelModal .flavor-wheel-modal').boundingBox();
+        const wheelClip = wheelBox ? aspectClip(wheelBox, viewport) : { x: 0, y: 0, ...viewport };
+        await page.screenshot({ path: path.join(outDir, 'flavor-wheel.png'), clip: wheelClip });
+        await checkFill(page, 'flavor-wheel', '#flavorWheelModal .flavor-wheel-modal', { top: wheelClip.y, height: wheelClip.height });
         const closeBtn = page.locator('#flavorWheelModal .fw-close, #flavorWheelModal [data-action="close-flavor-wheel"]').first();
         if (await closeBtn.count()) await closeBtn.click();
         // Close the sheet too, or its backdrop covers the nav bar and the
@@ -401,6 +476,7 @@ async function main(): Promise<void> {
     await waitForPaint(page, '#worldMapWrap');      // ECharts origin map (force the dynamic import to resolve)
     // Capture 1: summary KPIs + score trend + calendar.
     await shootWindow(page, '#analytics-view', path.join(outDir, 'analytics.png'));
+    await checkFill(page, 'analytics', '#analytics-view');
 
     // Capture 2: the "More insights" fold with its lazily-built charts
     // (#1467). It starts closed, and the fold only builds its charts once
@@ -423,6 +499,7 @@ async function main(): Promise<void> {
     await page.waitForTimeout(200);
     // Keep the mid-view scroll alignToTop() just set: no scrollTo(0, 0) here.
     await page.screenshot({ path: path.join(outDir, 'analytics-machines.png') });
+    await checkFill(page, 'analytics-machines', '#analytics-view');
 
     // ── Maintenance ────────────────────────────────────────────────────
     await openTopbarTab(page, '#btnMaintenance');
@@ -431,6 +508,7 @@ async function main(): Promise<void> {
         undefined, { timeout: 15000 },
     );
     await shootWindow(page, '#maintenance-view', path.join(outDir, 'maintenance.png'));
+    await checkFill(page, 'maintenance', '#maintenance-view');
 
     // ── Dial-in ────────────────────────────────────────────────────────
     await openTopbarTab(page, '#btnDialin');
@@ -489,6 +567,12 @@ async function main(): Promise<void> {
     await context.close();
     await browser.close();
     console.log(`Screenshots written to ${outDir}`);
+    // #2189: fail after every PNG is written (so they can be inspected) but
+    // before the freshness stamp and the wiki copy, so a release cannot pass
+    // with README images that leave empty background bands.
+    if (fillProblems.length) {
+        throw new Error(`README screenshots must fill their frame (#2189):\n${fillProblems.join('\n')}`);
+    }
     writeSourceTreeStamp();
 
     const wikiDir = process.argv[2];
