@@ -716,6 +716,71 @@ func TestRestore_LegacyBackup_LeavesUIPrefsUntouched(t *testing.T) {
 	}
 }
 
+// TestStreamRoundTrip_ProfileTimeTargets (#1504): a stored
+// profile_time_targets blob survives a backup and restore into a fresh
+// install, keyed by machine id (the registry is restored first, so the keys
+// stay valid).
+func TestStreamRoundTrip_ProfileTimeTargets(t *testing.T) {
+	useImageDir(t)
+	h1, deps1, _ := newTestHandlers(t)
+	seedShot(t, deps1, 1)
+	stored := map[string][]shots.ProfileTimeTarget{
+		"1": {{ProfileName: "V60", MinS: 40, MaxS: 48}},
+	}
+	if err := deps1.ShotsRepo.SaveProfileTimeTargets(stored); err != nil {
+		t.Fatalf("seeding profile_time_targets: %v", err)
+	}
+	rec := doJSON(t, newMux(h1), http.MethodPost, "/api/backup", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("export status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	zipBytes := append([]byte(nil), rec.Body.Bytes()...)
+
+	h2, deps2, _ := newTestHandlersInDir(t)
+	rr := doZip(t, newMux(h2), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	got, err := deps2.ShotsRepo.GetProfileTimeTargets()
+	if err != nil {
+		t.Fatalf("GetProfileTimeTargets: %v", err)
+	}
+	list := got["1"]
+	if len(list) != 1 || list[0].ProfileName != "V60" || list[0].MinS != 40 || list[0].MaxS != 48 {
+		t.Fatalf("profile_time_targets not restored: %+v", got)
+	}
+}
+
+// TestRestore_LegacyBackup_LeavesProfileTimeTargetsUntouched (#1504): an old
+// bundle has no profile_time_targets key, so the target's own windows stay
+// put.
+func TestRestore_LegacyBackup_LeavesProfileTimeTargetsUntouched(t *testing.T) {
+	useImageDir(t)
+	zipBytes, err := os.ReadFile(filepath.Join("testdata", "legacy-backup.zip"))
+	if err != nil {
+		t.Fatalf("reading fixture: %v", err)
+	}
+	h, deps, _ := newTestHandlersInDir(t)
+	localOnly := map[string][]shots.ProfileTimeTarget{
+		"1": {{ProfileName: "Local Only", MinS: 30, MaxS: 36}},
+	}
+	if err := deps.ShotsRepo.SaveProfileTimeTargets(localOnly); err != nil {
+		t.Fatalf("seeding profile_time_targets: %v", err)
+	}
+	rr := doZip(t, newMux(h), "/api/restore", zipBytes, nil)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("restore status = %d; body=%s", rr.Code, rr.Body.String())
+	}
+	got, err := deps.ShotsRepo.GetProfileTimeTargets()
+	if err != nil {
+		t.Fatalf("GetProfileTimeTargets: %v", err)
+	}
+	list := got["1"]
+	if len(list) != 1 || list[0].ProfileName != "Local Only" || list[0].MinS != 30 || list[0].MaxS != 36 {
+		t.Fatalf("legacy restore clobbered profile_time_targets: %+v", got)
+	}
+}
+
 // latin1HeaderValue renders s the way a browser would place it in a header
 // value: each rune up to U+00FF becomes its single ISO-8859-1 byte, and a
 // rune above that (e.g. €) is replaced — exactly the corruption the legacy
