@@ -37,8 +37,8 @@ import (
 //     the app's UI font, embedded from fonts/ (#2166): Figtree 400 and 600
 //     for all text, figures and the score (#2191). They are TTF copies of the
 //     app's bundled latin woff2 files (the wasm fontdb cannot read woff2).
-//     The Go typeface stays loaded as the
-//     fallback for glyphs the latin cut lacks (→, non-latin bean names).
+//     The Go typeface stays loaded as the fallback for glyphs the latin cut
+//     lacks (→, non-latin bean names).
 //
 // Cosmetic deviations, all deliberate:
 //
