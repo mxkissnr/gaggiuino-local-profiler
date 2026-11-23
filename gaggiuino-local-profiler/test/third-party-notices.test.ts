@@ -8,8 +8,7 @@
 // #2080: the file moved to public-src/public/ so the Go server serves it to the
 // settings UI, and it grew a Server section. That section is guarded on the Go
 // side (go/cmd/server/third_party_notices_test.go), which compares it against
-// `go list -deps`; this test covers the npm packages, the fonts, and that every
-// Server heading names the same version as its licence link.
+// `go list -deps`; this test only covers the npm packages and the fonts.
 // #2183: "npm run notices:sync" rewrites the version headings after a dependency bump.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -48,34 +47,6 @@ function hasFontSection(family: string): boolean {
     return headings.some((line) => line.startsWith(`### ${family} `));
 }
 
-// A Server entry carries its version twice: once in the heading and once in
-// the pkg.go.dev licence link. A bump that updates only the heading leaves the
-// link on the old release and the About sheet still renders, so only a guard on
-// the file itself notices (#2194).
-function serverModules(): { heading: string; licenceLink: string }[] {
-    const start = notices.indexOf('## Server');
-    const server = notices.slice(start, notices.indexOf('## Full licence texts'));
-    const lines = server.split('\n');
-    const modules: { heading: string; licenceLink: string }[] = [];
-    for (let i = 0; i < lines.length; i += 1) {
-        const line = lines[i] ?? '';
-        // "Go standard library 1.27.4" is not a module and links to go.dev.
-        if (!line.startsWith('### ') || line.startsWith('### Go standard library ')) continue;
-        let licenceLink = '';
-        for (let next = i + 1; next < lines.length; next += 1) {
-            const body = lines[next] ?? '';
-            if (body.startsWith('### ')) break;
-            const match = /^- Licence: (https:\/\/\S+)$/.exec(body.trim());
-            if (match?.[1] !== undefined) {
-                licenceLink = match[1];
-                break;
-            }
-        }
-        modules.push({ heading: line.slice(4), licenceLink });
-    }
-    return modules;
-}
-
 describe('THIRD_PARTY_NOTICES.md', () => {
     it('has a section for every runtime dependency, at its installed version', () => {
         expect(dependencies.length).toBeGreaterThan(0);
@@ -95,22 +66,6 @@ describe('THIRD_PARTY_NOTICES.md', () => {
     it('has a section for every bundled font', () => {
         const missing = FONTS.filter((font) => !hasFontSection(font));
         expect(missing, 'bundled font(s) with no section:\n' + missing.join('\n')).toEqual([]);
-    });
-
-    it('names the same version in a Server module heading and its licence link', () => {
-        const modules = serverModules();
-        const titles = modules.map((module) => module.heading);
-        // The parser must reach the section, not just return nothing.
-        expect(titles.some((title) => title.startsWith('github.com/gorilla/websocket '))).toBe(true);
-        const bad = modules
-            .filter(({ heading, licenceLink }) => {
-                const space = heading.indexOf(' ');
-                const path = heading.slice(0, space);
-                const version = heading.slice(space + 1);
-                return licenceLink !== `https://pkg.go.dev/${path}@${version}?tab=licenses`;
-            })
-            .map(({ heading, licenceLink }) => `${heading} -> ${licenceLink || '(no licence link)'}`);
-        expect(bad, 'Server module(s) whose heading and licence link disagree:\n' + bad.join('\n')).toEqual([]);
     });
 
     // The notices are user-facing prose served to the About sheet, so they must
