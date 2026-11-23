@@ -116,6 +116,18 @@ func withScore(shot Shot, detail ScoreDetail) Shot {
 	return out
 }
 
+// withTimeTarget adds the shot's resolved profile time window (#1504), or
+// null. Never used by /shots.json, whose shape is fixed for the HA
+// integration.
+func withTimeTarget(out Shot, t *TimeTarget) Shot {
+	if t == nil {
+		out["timeTarget"] = nil
+	} else {
+		out["timeTarget"] = map[string]any{"minS": t.MinS, "maxS": t.MaxS}
+	}
+	return out
+}
+
 // ── id parsing ──────────────────────────────────────────────────────────
 
 // jsParseInt mirrors JS's parseInt(s, 10); see jsnum.ParseInt.
@@ -269,7 +281,7 @@ func (h *Handlers) listShotsPage(w http.ResponseWriter, r *http.Request) {
 		out["usedBeanTarget"] = row.UsedBeanTarget
 		out["hasChartData"] = row.HasChartData
 		out["tempStabilityDev"] = row.TempStabilityDev
-		shotsOut[i] = out
+		shotsOut[i] = withTimeTarget(out, row.TimeTarget)
 	}
 
 	var nextCursor *string
@@ -297,7 +309,8 @@ func (h *Handlers) lastShot(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, nil)
 		return
 	}
-	writeJSON(w, http.StatusOK, withScore(last, h.service.ComputeScoreDetail(last)))
+	d := h.service.ComputeScoreDetail(last)
+	writeJSON(w, http.StatusOK, withTimeTarget(withScore(last, d), d.TimeTarget))
 }
 
 // getDefaults serves GET /api/shots/defaults (#654).
@@ -379,10 +392,12 @@ func (h *Handlers) getShot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	detail := h.service.DetailScorer()
-	resp := withScore(shot, detail(shot))
+	shotDetail := detail(shot)
+	resp := withTimeTarget(withScore(shot, shotDetail), shotDetail.TimeTarget)
 	if previous != nil {
+		prevDetail := detail(previous)
 		resp["previousShotId"] = previous["id"]
-		resp["previousShot"] = withScore(previous, detail(previous))
+		resp["previousShot"] = withTimeTarget(withScore(previous, prevDetail), prevDetail.TimeTarget)
 	} else {
 		resp["previousShotId"] = nil
 		resp["previousShot"] = nil

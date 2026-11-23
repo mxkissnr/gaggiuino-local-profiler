@@ -227,6 +227,13 @@ components:
             hasChartData:     { type: boolean, description: "GET /api/shots rows only: whether the shot has a non-empty pressure/time curve series" }
             tempStabilityDev: { type: number, nullable: true, description: "GET /api/shots rows only: mean absolute deviation of the temperature series from target, in °C" }
             previousShotId:   { type: integer, nullable: true, description: "GET /api/shots/{id} only: id of the previous same-profile shot (null if none)" }
+            timeTarget:
+              type: object
+              nullable: true
+              description: "The profile's target time window (#1504) the duration part was scored against, or null. GET /api/shots, /api/shots/{id} and /api/shots/last only; never on /shots.json."
+              properties:
+                minS: { type: integer }
+                maxS: { type: integer }
             previousShot:
               nullable: true
               allOf:
