@@ -21,6 +21,10 @@ const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
 const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProfile, selectProfilePhase, editProfile, sendProfileToMachine, loadProfileForEditing, renderProfileList } = await import('../public-src/views/library-profile-editor.js');
 const { t } = await import('../public-src/i18n.js');
+const { renderRecipeList } = await import('../public-src/views/library/recipes.js');
+const { renderBasketList } = await import('../public-src/views/library/baskets.js');
+const { renderPuckScreenList } = await import('../public-src/views/library/puck-screens.js');
+const { renderGrinderList } = await import('../public-src/views/library/grinders.js');
 
 // _collectPhases reads phase rows straight off `document` (DOM-as-state, no
 // separate JS array) — this vitest project runs in the 'node' environment
@@ -482,5 +486,86 @@ describe('profile list rows (#2165)', () => {
     expect(markup).toContain('</svg> ' + t('profile_dialin_start') + '</button>');
     expect(markup).toContain('</svg> ' + t('profile_btn_duplicate') + '</button>');
     expect(markup).toContain('</svg> ' + t('lib_btn_delete') + '</button>');
+  });
+});
+
+describe('library list rows (#2172)', () => {
+  const LISTS = [
+    { action: 'recipe', host: 'recipeListUI', render: renderRecipeList },
+    { action: 'basket', host: 'basketListUI', render: renderBasketList },
+    { action: 'puckscreen', host: 'puckScreenListUI', render: renderPuckScreenList },
+    { action: 'grinder', host: 'grinderListUI', render: renderGrinderList },
+  ] as const;
+
+  const render = (list: (typeof LISTS)[number], extra: Record<string, unknown> = {}): string => {
+    const el = { innerHTML: '' };
+    g.document = { getElementById: (id: string) => (id === list.host ? el : undefined), querySelectorAll: () => [] };
+    const row = { id: 7, name: 'Row', ...extra };
+    S.shots = [];
+    S.coffeeLibrary = { beans: [], recipes: [row], baskets: [row], puckScreens: [row], grinders: [row] } as unknown as typeof S.coffeeLibrary;
+    list.render();
+    return el.innerHTML;
+  };
+  const buttonPart = (markup: string): string => {
+    const start = markup.indexOf('class="lib-item-open"');
+    return markup.slice(start, markup.indexOf('</button>', start));
+  };
+
+  it('opens a recipe, basket, puck screen and grinder on a row tap', () => {
+    for (const list of LISTS) {
+      const markup = render(list);
+      expect(markup).toContain(`<button type="button" class="lib-item-open" data-action="edit-${list.action}" data-id="7">`);
+      expect(markup.split(`data-action="edit-${list.action}"`).length - 1).toBe(1);
+      expect(markup).toContain('<details class="lib-sheet-more">');
+      expect(markup).toContain('<summary aria-label="' + t('lib_sheet_more') + '">⋯</summary>');
+      expect(buttonPart(markup)).not.toContain('<div');
+      expect(buttonPart(markup)).not.toContain('<a ');
+      expect(markup).not.toContain('btn--icon');
+      expect(markup).not.toContain('lib-item-actions');
+      expect(markup).not.toContain('lib-item-info');
+    }
+  });
+
+  it("keeps Delete last and red in each row's ⋯ menu", () => {
+    for (const list of LISTS) {
+      const markup = render(list);
+      expect(markup).toContain(`<button type="button" class="lib-sheet-menu-item del" data-action="delete-${list.action}" data-id="7">`);
+      expect(markup).toContain('</svg> ' + t('lib_btn_delete') + '</button>');
+      expect(markup.indexOf(`data-action="delete-${list.action}"`)).toBeGreaterThan(markup.indexOf('<details class="lib-sheet-more">'));
+      expect(markup).not.toContain('lib-sheet-menu-sep');
+    }
+  });
+
+  it("moves Burrs replaced into the grinder's ⋯ menu, above Delete", () => {
+    const markup = render(LISTS[3], { wear: { shotsSinceBurrs: 3, gramsSinceBurrs: 54 } });
+    const positions = [
+      '<details class="lib-sheet-more">',
+      '<button type="button" class="lib-sheet-menu-item" data-action="reset-grinder-burrs" data-id="7">',
+      'class="lib-sheet-menu-sep"',
+      'data-action="delete-grinder"',
+    ].map(part => markup.indexOf(part));
+    expect(positions.every(i => i >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    expect(markup).toContain('</svg> ' + t('lib_grinder_reset_burrs') + '</button>');
+    expect(markup).not.toContain('btn btn--quiet');
+    expect(markup.indexOf('lib-grinder-wear')).toBeLessThan(markup.indexOf('<details'));
+  });
+
+  it("keeps a recipe's source link outside the row's button", () => {
+    const markup = render(LISTS[0], { sourceUrl: 'https://example.com/r' });
+    expect(markup).toContain('href="https://example.com/r"');
+    expect(markup.indexOf('<div class="lib-item-source">')).toBeGreaterThan(markup.indexOf('</details>'));
+  });
+
+  it('leaves no style or markup for the old row action bar', () => {
+    const SRC = join(import.meta.dirname, '..', 'public-src');
+    const style = readFileSync(join(SRC, 'style.css'), 'utf8');
+    expect(style).not.toContain('.lib-item-actions');
+    expect(style).toContain('.lib-item > .lib-item-source { flex-basis: 100%; }');
+    for (const file of ['recipes.ts', 'baskets.ts', 'puck-screens.ts', 'grinders.ts']) {
+      const source = readFileSync(join(SRC, 'views', 'library', file), 'utf8');
+      expect(source).not.toContain('lib-item-actions');
+      expect(source).not.toContain('ICON_PENCIL');
+    }
   });
 });

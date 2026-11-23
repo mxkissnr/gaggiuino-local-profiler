@@ -15,7 +15,6 @@ import { _renderBeanSelect } from '../shots/annotation.js';
 import type { Recipe } from '../../api/types.js';
 import type { ShotMeta } from '../../state/index.js';
 
-const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 
 // state/index.ts's CoffeeLibrary types the recipe collection as Recipe[] but
 // has no recipeEditId (unlike the basket/puck-screen edit ids); this section
@@ -72,12 +71,12 @@ export function renderRecipeList(): void {
       r.grindSize     ? esc(r.grindSize)          : null,
     ].filter((p): p is Html => Boolean(p));
     const stepsHtml = Array.isArray(r.steps) && r.steps.length
-      ? html`<div class="lib-recipe-steps-list">${joinHtml(r.steps.map((s, i) => html`
-          <div class="lib-recipe-step">
+      ? html`<span class="lib-recipe-steps-list">${joinHtml(r.steps.map((s, i) => html`
+          <span class="lib-recipe-step">
             <span class="lib-recipe-step-n">${esc(i + 1)}.</span>
             <span>${esc(s.text)}</span>
             ${s.duration_s ? html`<span class="lib-recipe-step-dur">${esc(s.duration_s)} s</span>` : html``}
-          </div>`))}</div>`
+          </span>`))}</span>`
       : html``;
     const linkedShots = _shots().filter(s => s.annotation?.recipeId === r.id);
     const shotCount   = linkedShots.length;
@@ -92,18 +91,20 @@ export function renderRecipeList(): void {
       : html``;
     const sourceHref = safeHttpUrl(r.sourceUrl);
     return html`<div class="lib-item">
-      <div class="lib-item-info">
-        <div class="lib-item-name">${brewLabel}${esc(r.name)}${shotsBadge}</div>
-        ${meta ? html`<div class="lib-item-sub">${meta}</div>` : html``}
-        ${params.length ? html`<div class="lib-recipe-params">${joinHtml(params.map(p => html`<span>${p}</span>`))}</div>` : html``}
+      <button type="button" class="lib-item-open" data-action="edit-recipe" data-id="${esc(r.id)}">
+        <span class="lib-item-name">${brewLabel}${esc(r.name)}${shotsBadge}</span>
+        ${meta ? html`<span class="lib-item-sub">${meta}</span>` : html``}
+        ${params.length ? html`<span class="lib-recipe-params">${joinHtml(params.map(p => html`<span>${p}</span>`))}</span>` : html``}
         ${stepsHtml}
-        ${r.notes ? html`<div class="lib-item-sub" style="margin-top:4px">${esc(r.notes)}</div>` : html``}
-        ${sourceHref ? html`<div class="lib-item-source"><a href="${esc(sourceHref)}" target="_blank" rel="noopener">${LINK_ICON_SVG} ${tHtml('lib_recipe_source_link')}</a></div>` : html``}
-      </div>
-      <div class="lib-item-actions">
-        <button type="button" class="btn btn--quiet btn--icon" data-action="edit-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button type="button" class="btn btn--danger btn--icon" data-action="delete-recipe" data-id="${esc(r.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
-      </div>
+        ${r.notes ? html`<span class="lib-item-sub" style="margin-top:4px">${esc(r.notes)}</span>` : html``}
+      </button>
+      <details class="lib-sheet-more">
+        <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
+        <div class="lib-sheet-menu-list">
+          <button type="button" class="lib-sheet-menu-item del" data-action="delete-recipe" data-id="${esc(r.id)}">${ICON_TRASH} ${tHtml('lib_btn_delete')}</button>
+        </div>
+      </details>
+      ${sourceHref ? html`<div class="lib-item-source"><a href="${esc(sourceHref)}" target="_blank" rel="noopener">${LINK_ICON_SVG} ${tHtml('lib_recipe_source_link')}</a></div>` : html``}
     </div>`;
   }));
 }

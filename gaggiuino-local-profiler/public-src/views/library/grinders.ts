@@ -5,7 +5,6 @@ import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml, toIsoDateInput, localMidnightMs, formatDate } from '../../utils.js';
 import { localeFor } from '../../constants.js';
-import type { Html } from '../../utils.js';
 import { WRENCH_ICON_SVG, ICON_TRASH } from '../../icons.js';
 import { attachAutocomplete } from '../../components/autocomplete.js';
 import { showToast } from '../../components/toast.js';
@@ -27,7 +26,6 @@ import * as library from '../library.js';
 // Same 1:1 crop the grinder photo always had.
 const GRINDER_PHOTO: PhotoCropShape = { shape: 'square' };
 
-const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 
 // Burr-type suggestions for the grinder form (moved out of the old <datalist>
 // markup in index.html). Resolved on open so they follow a language change.
@@ -93,23 +91,24 @@ export function renderGrinderList(): void {
     return html`
     <div class="lib-item">
       ${g.image ? html`<img class="lib-grinder-thumb" data-grinder-id="${esc(g.id)}" alt="">` : html``}
-      <div class="lib-item-info">
-        <div class="lib-item-name-row">
-          <div class="lib-item-name">${esc(g.name)}</div>
+      <button type="button" class="lib-item-open" data-action="edit-grinder" data-id="${esc(g.id)}">
+        <span class="lib-item-name-row">
+          <span class="lib-item-name">${esc(g.name)}</span>
           ${g.isDefault === true ? html`<span class="badge">${tHtml('lib_grinder_default')}</span>` : html``}
+        </span>
+        ${extra ? html`<span class="lib-item-sub lib-item-extra">${esc(extra)}</span>` : html``}
+        ${g.notes ? html`<span class="lib-item-sub">${esc(g.notes)}</span>` : html``}
+        ${zeroPoint != null ? html`<span class="lib-item-sub">${tHtml('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</span>` : html``}
+        ${g.wear ? html`<span class="lib-item-sub lib-grinder-wear"><span>${WRENCH_ICON_SVG} ${tHtml('lib_grinder_wear', g.wear.shotsSinceBurrs, esc(formatWearGrams(g.wear.gramsSinceBurrs)))}</span></span>` : html``}
+      </button>
+      <details class="lib-sheet-more">
+        <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
+        <div class="lib-sheet-menu-list">
+          ${g.wear ? html`<button type="button" class="lib-sheet-menu-item" data-action="reset-grinder-burrs" data-id="${esc(g.id)}">${WRENCH_ICON_SVG} ${tHtml('lib_grinder_reset_burrs')}</button>
+          <span class="lib-sheet-menu-sep"></span>` : html``}
+          <button type="button" class="lib-sheet-menu-item del" data-action="delete-grinder" data-id="${esc(g.id)}">${ICON_TRASH} ${tHtml('lib_btn_delete')}</button>
         </div>
-        ${extra ? html`<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : html``}
-        ${g.notes ? html`<div class="lib-item-sub">${esc(g.notes)}</div>` : html``}
-        ${zeroPoint != null ? html`<div class="lib-item-sub">${tHtml('lib_grinder_zero_point')}: ${esc(String(zeroPoint))}</div>` : html``}
-        ${g.wear ? html`<div class="lib-item-sub lib-grinder-wear">
-          <span>${WRENCH_ICON_SVG} ${tHtml('lib_grinder_wear', g.wear.shotsSinceBurrs, esc(formatWearGrams(g.wear.gramsSinceBurrs)))}</span>
-          <button type="button" class="btn btn--quiet" data-action="reset-grinder-burrs" data-id="${esc(g.id)}">${tHtml('lib_grinder_reset_burrs')}</button>
-        </div>` : html``}
-      </div>
-      <div class="lib-item-actions">
-        <button type="button" class="btn btn--quiet btn--icon" data-action="edit-grinder" data-id="${esc(g.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button type="button" class="btn btn--danger btn--icon" data-action="delete-grinder" data-id="${esc(g.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
-      </div>
+      </details>
     </div>`;
   }));
   loadGrinderThumbnails();
