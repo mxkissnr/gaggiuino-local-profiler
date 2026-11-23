@@ -133,6 +133,9 @@ func buildDataRoutes() map[string]sse.Route {
 	// ui-prefs — the per-install UI choices.
 	add("PUT /api/ui-prefs", routeUIPrefs)
 
+	// shots + profiles — a target time window rescores that profile's shots and shows on its Library row.
+	add("PUT /api/profile-time-targets", sse.Route{Kinds: []string{"shots", "profiles"}})
+
 	// profiles — the locally stored machine profiles and their pending sync.
 	add("POST /api/machine/profile", routeProfiles)
 	add("PUT /api/machine/profile/{id}", routeProfiles)

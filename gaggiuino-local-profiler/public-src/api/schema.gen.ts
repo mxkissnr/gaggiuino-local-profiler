@@ -7694,6 +7694,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/profile-time-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Per-profile target time windows for one machine (#1504)
+         * @description The optional extraction-time window (min/max seconds) stored for each profile of a machine, in the kv store under `profile_time_targets`. Matching is per machine, trimmed and case-insensitive; a shot names its profile by `profileName`, falling back to `profile.name`. Always an array, `[]` when nothing is stored.
+         */
+        get: {
+            parameters: {
+                query: {
+                    machineId: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description That machine's target time windows, ordered by normalized profile name */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileTimeTarget"][];
+                    };
+                };
+                /** @description machineId is missing or not a positive integer */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        /** Upsert or delete one profile's target time window */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ProfileTimeTargetInput"];
+                };
+            };
+            responses: {
+                /** @description That machine's target time windows after the write */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileTimeTarget"][];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/achievements": {
         parameters: {
             query?: never;
@@ -9278,6 +9361,19 @@ export interface components {
             puckScreenId?: number | null;
             grinder?: string;
             dose?: number | null;
+        };
+        /** @description One stored extraction-time window for a profile, as served by GET/PUT /api/profile-time-targets. Matching is per machine, trimmed and case-insensitive; a shot names its profile by `profileName`, falling back to `profile.name`. */
+        ProfileTimeTarget: {
+            profileName: string;
+            minS: number;
+            maxS: number;
+        };
+        /** @description PUT /api/profile-time-targets body. Both null removes the window; both set needs 5 <= minS < maxS <= 300. */
+        ProfileTimeTargetInput: {
+            machineId: number;
+            profileName: string;
+            minS?: number | null;
+            maxS?: number | null;
         };
         /** @description One entry of GET /api/orders/queue-eta's `positions` map. */
         QueuePosition: {

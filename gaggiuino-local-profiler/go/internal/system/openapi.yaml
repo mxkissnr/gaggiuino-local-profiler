@@ -1011,6 +1011,33 @@ components:
         grinder:      { type: string }
         dose:         { type: number, nullable: true }
 
+    # ── Shots (per-profile target time, #1504) ─────────────────────────────
+
+    ProfileTimeTarget:
+      type: object
+      required: [profileName, minS, maxS]
+      description: >
+        One stored extraction-time window for a profile, as served by
+        GET/PUT /api/profile-time-targets. Matching is per machine, trimmed and
+        case-insensitive; a shot names its profile by `profileName`, falling
+        back to `profile.name`.
+      properties:
+        profileName: { type: string, minLength: 1, maxLength: 200 }
+        minS:        { type: integer, minimum: 5, maximum: 300 }
+        maxS:        { type: integer, minimum: 5, maximum: 300 }
+
+    ProfileTimeTargetInput:
+      type: object
+      required: [machineId, profileName]
+      description: >
+        PUT /api/profile-time-targets body. Both null removes the window; both
+        set needs 5 <= minS < maxS <= 300.
+      properties:
+        machineId:   { type: integer, minimum: 1 }
+        profileName: { type: string, minLength: 1, maxLength: 200 }
+        minS:        { type: integer, nullable: true, minimum: 5, maximum: 300 }
+        maxS:        { type: integer, nullable: true, minimum: 5, maximum: 300 }
+
     # ── Orders (derived, request/response) ─────────────────────────────────
 
     QueuePosition:
@@ -4105,6 +4132,45 @@ paths:
                 additionalProperties: true
         "400":
           description: Validation error (invalid key, too many keys, oversized value, or deeper nesting)
+
+  /api/profile-time-targets:
+    get:
+      tags: [Shots]
+      summary: Per-profile target time windows for one machine (#1504)
+      description: >
+        The optional extraction-time window (min/max seconds) stored for each
+        profile of a machine, in the kv store under `profile_time_targets`.
+        Matching is per machine, trimmed and case-insensitive; a shot names its
+        profile by `profileName`, falling back to `profile.name`. Always an
+        array, `[]` when nothing is stored.
+      parameters:
+        - { name: machineId, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: That machine's target time windows, ordered by normalized profile name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProfileTimeTarget' }
+        "400": { description: machineId is missing or not a positive integer, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    put:
+      tags: [Shots]
+      summary: Upsert or delete one profile's target time window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileTimeTargetInput' }
+      responses:
+        "200":
+          description: That machine's target time windows after the write
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProfileTimeTarget' }
+        "400": { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/achievements:
     get:

@@ -90,6 +90,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/shots/last", h.lastShot)
 	mux.HandleFunc("GET /api/shots/defaults", h.getDefaults)
 	mux.HandleFunc("POST /api/shots/defaults", h.postDefaults)
+	mux.HandleFunc("GET /api/profile-time-targets", h.getProfileTimeTargets)
+	mux.HandleFunc("PUT /api/profile-time-targets", h.putProfileTimeTarget)
 	mux.HandleFunc("GET /api/shots/{id}", h.getShot)
 	mux.HandleFunc("GET /api/shots/{id}/card", h.getCard)
 	mux.HandleFunc("GET /api/shots/{id}/chart.png", h.getChartPNG)
