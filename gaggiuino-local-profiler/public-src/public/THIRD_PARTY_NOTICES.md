@@ -228,14 +228,14 @@ Unique IDs used by the SQLite runtime.
 - Source: https://github.com/google/uuid
 - Licence: https://pkg.go.dev/github.com/google/uuid@v1.6.0?tab=licenses
 
-### github.com/gorilla/websocket v1.5.3
+### github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
 
 WebSocket transport of the MQTT client.
 
 - Copyright (c) 2013 The Gorilla WebSocket Authors.
 - Licensed under the BSD 2-Clause License.
 - Source: https://github.com/gorilla/websocket
-- Licence: https://pkg.go.dev/github.com/gorilla/websocket@v1.5.3?tab=licenses
+- Licence: https://pkg.go.dev/github.com/gorilla/websocket@v1.5.4-0.20240701034025-d67f41855da4?tab=licenses
 
 ### github.com/kanrichan/resvg-go v0.0.1
 
