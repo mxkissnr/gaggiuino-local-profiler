@@ -190,13 +190,27 @@ is missing, the script falls back to the built-in demo seed. `gaggiuino-local-pr
 is git-ignored, so keep a personal backup there or outside the repo — never commit it. Review the
 resulting PNGs for personal data before committing them.
 
-In backup mode — the default — every screenshot except `live.png` and `orders.png` comes from the
-restored backup:
-`shots.png`, `library.png`, `flavor-wheel.png`, `analytics.png`, `analytics-machines.png`,
-`maintenance.png`, `dialin.png` and `settings.png`. `live.png` and `orders.png` always come from the
-seeded demo instance — a real backup is normally all completed orders against a machine the
-throwaway instance cannot reach, so those two views would render empty, and backup mode leaves the
-seeded PNGs in place instead of regenerating them.
+Every PNG comes from the one instance loaded for the run (the restored backup by default, the
+built-in demo seed as fallback). For `orders.png` the script first places three demo orders through
+the instance's API, so the queue is never empty; `live.png` shows the offline state, because the
+throwaway instance has no machine to reach.
+
+### README images fill their frame
+
+The six images in the README screenshot table must show the app up to the frame edges, not a band
+of empty app background below a short view (#2189). Each of those views is captured in a state that
+fills the 1400×900 window: the library with its "Empty & archive" fold open, the bean sheet with its
+current bag expanded, Analytics at its top and at the machine comparison, Maintenance with its task
+list and log. The flavor wheel is cropped to the wheel dialog at the same 14:9 aspect ratio instead
+of showing the dimmed page around it.
+
+After each of those captures the script measures, in the page, the lowest visible content (text,
+images, charts, controls) inside the view, sheet or dialog the image shows. When more than 10 % of
+the image height below it is empty, the run still writes every PNG for inspection, then exits with
+an error that names each such view, before it updates `.source-tree` or copies anything into the
+wiki. Fix such a failure by giving that view a fuller state in the script, not by raising the limit.
+A new image in the README table needs its own fill check in the script; the unit test of the check
+fails until it has one.
 
 ## Demo fixtures
 
