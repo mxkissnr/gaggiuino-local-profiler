@@ -2,7 +2,8 @@ package shots
 
 // This file implements the optional per-profile target time window (#1504):
 // a min/max extraction time in whole seconds, keyed by machine and profile
-// name. Nothing scores against it yet — this is the store and the REST API.
+// name. score.go scores the duration part against it, and loadTimeTargetLookup
+// below resolves it per shot.
 // The whole store is one JSON blob under kv.key = 'profile_time_targets',
 // shaped {"<machineId>": [{"profileName": "...", "minS": 40, "maxS": 48}]},
 // following the shot-defaults precedent in defaults.go. It deliberately does

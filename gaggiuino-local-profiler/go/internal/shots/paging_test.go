@@ -542,8 +542,9 @@ func TestProfileTimeTarget_EveryReadPathFollows(t *testing.T) {
 		t.Errorf("ComputeScoreDetail TimeTarget = %+v, want %+v", got.TimeTarget, timeWindow)
 	}
 
-	// A window saved for another machine must not touch machine 1.
+	// A window stored only for machine 2 must not touch machine 1's shots.
 	if err := repo.SaveProfileTimeTargets(map[string][]ProfileTimeTarget{
+		"1": {{ProfileName: "another profile", MinS: 40, MaxS: 48}},
 		"2": {{ProfileName: "V60", MinS: 40, MaxS: 48}},
 	}); err != nil {
 		t.Fatalf("SaveProfileTimeTargets: %v", err)
@@ -555,6 +556,9 @@ func TestProfileTimeTarget_EveryReadPathFollows(t *testing.T) {
 	for _, row := range page.Rows {
 		if c := classicScores[row.Shot["id"].(int64)]; !sameScore(row.Score, c) {
 			t.Fatalf("shot %v: score for another machine's window = %v, want classic %v", row.Shot["id"], row.Score, c)
+		}
+		if row.TimeTarget != nil {
+			t.Fatalf("shot %v: TimeTarget = %+v from another machine's window", row.Shot["id"], row.TimeTarget)
 		}
 	}
 
