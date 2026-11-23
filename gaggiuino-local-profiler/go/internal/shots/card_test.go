@@ -657,6 +657,24 @@ func TestCard_VerdictSentenceDeltaAndScore(t *testing.T) {
 	}
 }
 
+// TestSvgBufSerif_UsesFraunces keeps the old serif helper test's name as the
+// #2191 tombstone: the score's display helper is gone, and the helper that
+// replaced it (svgBuf.text with bold set) asks for the card's Figtree
+// SemiBold, never Fraunces.
+func TestSvgBufSerif_UsesFraunces(t *testing.T) {
+	var b svgBuf
+	b.text(52, 200, 96, true, "#5cb98a", "", "92")
+	got := b.b.String()
+	for _, want := range []string{`font-family="'Figtree Light', Go"`, `font-weight="600"`, ">92</text>"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("bold text output %q does not contain %q", got, want)
+		}
+	}
+	if strings.Contains(got, "Fraunces") {
+		t.Error("bold text output still asks for Fraunces")
+	}
+}
+
 // TestCard_ScoreInFigtreeSemiBold covers #2191: the score is set in the card's
 // Figtree SemiBold at the layout's score size, no Fraunces is asked for, and
 // the verdict arrow and the delta chip start 28 px after the score measured in
