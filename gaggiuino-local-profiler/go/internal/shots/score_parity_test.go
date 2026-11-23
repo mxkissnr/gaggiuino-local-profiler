@@ -18,11 +18,18 @@ type parityBean struct {
 	BrewRatio string   `json:"brewRatio"`
 }
 
+// parityTimeTarget is the fixture's case-level duration window (#1504).
+type parityTimeTarget struct {
+	MinS int `json:"minS"`
+	MaxS int `json:"maxS"`
+}
+
 type parityCase struct {
-	Name     string         `json:"name"`
-	Shot     map[string]any `json:"shot"`
-	Bean     *parityBean    `json:"bean"`
-	Expected *int           `json:"expected"`
+	Name       string            `json:"name"`
+	Shot       map[string]any    `json:"shot"`
+	Bean       *parityBean       `json:"bean"`
+	TimeTarget *parityTimeTarget `json:"timeTarget"`
+	Expected   *int              `json:"expected"`
 	// KnownDivergence is set only when the Go and TypeScript scorers genuinely
 	// disagree on a case: "expected" is then the Go value and both tests skip
 	// the case with the reason, keeping the divergence visible without failing
@@ -56,7 +63,11 @@ func TestScoreParityFixture(t *testing.T) {
 			if c.Bean != nil {
 				bean = &Bean{BrewTempC: c.Bean.BrewTempC, BrewRatio: c.Bean.BrewRatio}
 			}
-			detail := CalcShotScoreDetail(Shot(c.Shot), bean)
+			var tt *TimeTarget
+			if c.TimeTarget != nil {
+				tt = &TimeTarget{MinS: c.TimeTarget.MinS, MaxS: c.TimeTarget.MaxS}
+			}
+			detail := CalcShotScoreTargets(Shot(c.Shot), ScoreTargets{Bean: bean, Time: tt})
 			switch {
 			case c.Expected == nil:
 				if detail.Score != nil {

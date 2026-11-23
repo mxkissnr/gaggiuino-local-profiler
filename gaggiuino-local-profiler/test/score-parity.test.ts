@@ -8,12 +8,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { calcShotScore } from '../public-src/shared/score.js';
+import { calcShotScore, durationScore } from '../public-src/shared/score.js';
 
 interface ParityCase {
     name: string;
     shot: unknown;
     bean?: unknown;
+    // #1504: the profile's own duration window, scored by both twins.
+    timeTarget?: { minS: number; maxS: number } | null;
     expected: number | null;
     // Set only when the Go and TypeScript scorers genuinely disagree on a case:
     // "expected" is then the Go value and both tests skip the case with the
@@ -28,7 +30,7 @@ const cases = JSON.parse(
 ) as ParityCase[];
 
 function assertCase(c: ParityCase): void {
-    expect(calcShotScore(c.shot, c.bean)).toBe(c.expected);
+    expect(calcShotScore(c.shot, c.bean, c.timeTarget ?? null)).toBe(c.expected);
 }
 
 describe('Go/TS shot score parity (#1622)', () => {
@@ -45,4 +47,31 @@ describe('Go/TS shot score parity (#1622)', () => {
             it(c.name, () => assertCase(c));
         }
     }
+});
+
+// #1504: the windowed duration curve must reproduce the old ternary chain
+// exactly for the generic band, so a caller that passes no window (or the
+// 25-35 band) keeps today's scores.
+function legacyDurationScore(secs: number): number {
+    return secs >= 25 && secs <= 35 ? 100
+        : (secs >= 20 && secs < 25) || (secs > 35 && secs <= 42) ? 82
+        : secs > 42 && secs <= 55 ? 62
+        : secs < 20 ? Math.max(15, 70 - (20 - secs) * 5)
+        : Math.max(15, 62 - (secs - 55) * 3);
+}
+
+const textbookShot = (cases.find(c => c.name === 'textbook shot')?.shot ?? {}) as Record<string, unknown>;
+function textbookShotWithDuration(duration: number): Record<string, unknown> {
+    return { ...textbookShot, duration };
+}
+
+describe('durationScore matches the legacy generic band (#1504)', () => {
+    it('durationScore with the 25-35 window equals the legacy band', () => {
+        for (let i = 51; i <= 1200; i++) {
+            const secs = i / 10;
+            expect(durationScore(secs, 25, 35)).toBe(legacyDurationScore(secs));
+            expect(calcShotScore(textbookShotWithDuration(i), undefined, { minS: 25, maxS: 35 }))
+                .toBe(calcShotScore(textbookShotWithDuration(i)));
+        }
+    });
 });
