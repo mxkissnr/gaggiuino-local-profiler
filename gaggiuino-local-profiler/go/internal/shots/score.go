@@ -78,7 +78,7 @@ type ScoreDetail struct {
 	TimeTarget *TimeTarget
 }
 
-// ScoreComponent is one weighted part of CalcShotScoreDetail's score.
+// ScoreComponent is one weighted part of CalcShotScoreTargets' score.
 type ScoreComponent struct {
 	// Name identifies the part: "pressure", "temperature", "duration",
 	// "ratio", "extraction_yield" or "channeling".
@@ -193,11 +193,6 @@ func durationScore(secs, lo, hi float64) float64 {
 	default:
 		return math.Max(15, 62-(secs-farHigh)*3)
 	}
-}
-
-// CalcShotScoreDetail scores against the bean only, without a time window.
-func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
-	return CalcShotScoreTargets(shot, ScoreTargets{Bean: bean})
 }
 
 // CalcShotScoreTargets scores a shot, operating on the Shot map hydrateRow
