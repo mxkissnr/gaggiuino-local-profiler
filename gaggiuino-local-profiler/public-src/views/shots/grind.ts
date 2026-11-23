@@ -174,13 +174,24 @@ function _rankableSiblings(comparable: GrindShot[]): GrindShot[] {
 const GRIND_FAR_SHORT_S = 18;
 const GRIND_FAR_LONG_S = 50;
 
+// #1504: the time edges of the grind advice, measured from the profile's
+// target window when the shot has one. The defaults equal the window 25-35.
+interface GrindEdges { farShort: number; short: number; long: number; farLong: number }
+export function grindEdges(shot: GrindShot): GrindEdges {
+  const tt = shot.timeTarget;
+  if (tt && Number.isFinite(tt.minS) && Number.isFinite(tt.maxS) && tt.minS < tt.maxS)
+    return { farShort: tt.minS - 7, short: tt.minS - 2, long: tt.maxS + 7, farLong: tt.maxS + 15 };
+  return { farShort: GRIND_FAR_SHORT_S, short: 23, long: 42, farLong: GRIND_FAR_LONG_S };
+}
+
 function _applyTaste(base: GrindAdvice | null, shot: GrindShot): GrindAdvice | null {
   const tag = tasteTagOf(shot.annotation);
   if (!base || !tag || base.type === 'warning') return base;
   const secs = (shot.duration || 0) / 10;
   const dir = base.type === 'finer' || base.type === 'coarser' ? base.type : null;
   const s = secs.toFixed(0);
-  switch (_tasteOutcome(tag, dir, secs < GRIND_FAR_SHORT_S || secs > GRIND_FAR_LONG_S)) {
+  const e = grindEdges(shot);
+  switch (_tasteOutcome(tag, dir, secs < e.farShort || secs > e.farLong)) {
     case 'finer':    return { type: 'finer',   icon: html`↓`, text: t('grind_taste_finer') };
     case 'coarser':  return { type: 'coarser', icon: html`↑`, text: t('grind_taste_coarser') };
     case 'hold':     return { type: 'ok',      icon: html`✓`, text: t('grind_taste_balanced', s) };
@@ -199,10 +210,11 @@ function _timeGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice | null
   const pAll   = data.pressure.map(p => p.y);
   if (detectChanneling(pTimes, pAll))
     return { type: 'warning', icon: LIGHTNING_ICON_SVG, text: t('grind_channeling_full') };
-  if (secs < GRIND_FAR_SHORT_S) return { type: 'finer',   icon: html`↓`, text: t('grind_short', secs.toFixed(0)) };
-  if (secs < 23) return { type: 'finer',   icon: html`↓`, text: t('grind_short_slight', secs.toFixed(0)) };
-  if (secs > GRIND_FAR_LONG_S) return { type: 'coarser', icon: html`↑`, text: t('grind_long', secs.toFixed(0)) };
-  if (secs > 42) return { type: 'coarser', icon: html`↑`, text: t('grind_long_slight', secs.toFixed(0)) };
+  const e = grindEdges(shot);
+  if (secs < e.farShort) return { type: 'finer',   icon: html`↓`, text: t('grind_short', secs.toFixed(0)) };
+  if (secs < e.short) return { type: 'finer',   icon: html`↓`, text: t('grind_short_slight', secs.toFixed(0)) };
+  if (secs > e.farLong) return { type: 'coarser', icon: html`↑`, text: t('grind_long', secs.toFixed(0)) };
+  if (secs > e.long) return { type: 'coarser', icon: html`↑`, text: t('grind_long_slight', secs.toFixed(0)) };
   // Duration is fine — check the brew ratio against the classic espresso
   // window (1:1.8–1:2.2). Yield is machine-stopped, so this is dose/yield
   // guidance rather than a grind direction.
