@@ -25,6 +25,11 @@ const { renderRecipeList } = await import('../public-src/views/library/recipes.j
 const { renderBasketList } = await import('../public-src/views/library/baskets.js');
 const { renderPuckScreenList } = await import('../public-src/views/library/puck-screens.js');
 const { renderGrinderList } = await import('../public-src/views/library/grinders.js');
+const {
+  normalizeProfileName, formatTimeWindow, loadProfileTimeTargets, profileTimeTargetFor,
+  profileTimeTargetMenuItem, profileTimeTargetBadge, parseTimeWindowInputs,
+  openProfileTimeTargetSheet, saveProfileTimeTargetFromSheet, clearProfileTimeTarget,
+} = await import('../public-src/views/library/profile-time-target.js');
 
 // _collectPhases reads phase rows straight off `document` (DOM-as-state, no
 // separate JS array) — this vitest project runs in the 'node' environment
@@ -567,5 +572,152 @@ describe('library list rows (#2172)', () => {
       expect(source).not.toContain('lib-item-actions');
       expect(source).not.toContain('ICON_PENCIL');
     }
+  });
+});
+
+describe('profile target time (#1504)', () => {
+  const showToast = vi.fn();
+
+  // The sheet reads its two inputs and the host element off `document`; a fake
+  // host and the two input fields are all the open/save/clear paths touch.
+  interface StubField extends FakeFormField {
+    setAttribute(): void;
+    removeAttribute(): void;
+    addEventListener(): void;
+  }
+
+  function stubSheet(values: Record<string, string>): void {
+    const fields: Record<string, StubField> = {};
+    const field = (id: string): StubField => (fields[id] ??= {
+      value: values[id] ?? '', style: {}, classList: { add() {}, remove() {} },
+      focus() {}, setAttribute() {}, removeAttribute() {}, addEventListener() {},
+    });
+    const host = {
+      innerHTML: '',
+      classList: { add() {}, remove() {} },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      focus() {},
+    };
+    g.document = {
+      getElementById: (id: string) => (id === 'detailSheet' ? host : field(id)),
+      querySelectorAll: () => [],
+    };
+  }
+
+  beforeEach(() => {
+    fetchSpy.mockReset();
+    showToast.mockReset();
+    g.window = { showToast };
+    S.activeMachineId = 1;
+  });
+
+  it('normalizeProfileName trims and lowercases', () => {
+    expect(normalizeProfileName('  Adaptive V2 ')).toBe('adaptive v2');
+  });
+
+  it('formatTimeWindow renders the en dash window', () => {
+    expect(formatTimeWindow(40, 48)).toBe('40–48 s');
+  });
+
+  it('profileTimeTargetFor matches per machine, ignoring case and spaces', async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([{ profileName: 'Adaptive v2', minS: 40, maxS: 48 }]),
+    } as unknown as Response);
+
+    await loadProfileTimeTargets(1);
+
+    const [url] = fetchSpy.mock.calls[0] as unknown as [string];
+    expect(url).toBe('api/profile-time-targets?machineId=1');
+    expect(profileTimeTargetFor(1, ' ADAPTIVE V2 ')).toEqual({ profileName: 'Adaptive v2', minS: 40, maxS: 48 });
+    expect(profileTimeTargetFor(2, 'Adaptive v2')).toBeNull();
+  });
+
+  it('profileTimeTargetBadge shows the stored window of the active machine', async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([{ profileName: 'Adaptive v2', minS: 40, maxS: 48 }]),
+    } as unknown as Response);
+    await loadProfileTimeTargets(1);
+
+    expect(profileTimeTargetBadge({ name: 'Adaptive v2' })).toBe('<span class="badge">40–48 s</span>');
+    expect(profileTimeTargetBadge({ name: 'Flush', utility: true })).toBe('');
+    expect(profileTimeTargetBadge({ name: 'Other' })).toBe('');
+  });
+
+  it('the target time menu item is hidden on utility profiles', () => {
+    expect(profileTimeTargetMenuItem({ name: 'Flush', utility: true })).toBe('');
+
+    S.activeMachineId = 1;
+    const item = profileTimeTargetMenuItem({ name: 'Adaptive v2' });
+    expect(item).toContain('data-action="profile-time-target"');
+    expect(item).toContain('data-name="Adaptive v2"');
+
+    S.activeMachineId = 'all';
+    expect(profileTimeTargetMenuItem({ name: 'Adaptive v2' })).toBe('');
+    expect(profileTimeTargetMenuItem({ name: '  ' })).toBe('');
+  });
+
+  it('parseTimeWindowInputs enforces whole seconds 5..300 with min below max', () => {
+    expect(parseTimeWindowInputs('40', '48')).toEqual({ minS: 40, maxS: 48 });
+    expect(parseTimeWindowInputs('4', '48')).toBeNull();
+    expect(parseTimeWindowInputs('40', '301')).toBeNull();
+    expect(parseTimeWindowInputs('40', '40')).toBeNull();
+    expect(parseTimeWindowInputs('40.5', '48')).toBeNull();
+    expect(parseTimeWindowInputs('', '48')).toBeNull();
+  });
+
+  it('saving sends the window for the machine the sheet was opened on', async () => {
+    stubSheet({ pttMin: '40', pttMax: '48' });
+    openProfileTimeTargetSheet('Adaptive v2', null);
+
+    // The active machine moves while the sheet is open; the write must stay
+    // on the machine it was opened against.
+    S.activeMachineId = 2;
+
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([{ profileName: 'Adaptive v2', minS: 40, maxS: 48 }]),
+    } as unknown as Response);
+
+    await saveProfileTimeTargetFromSheet();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('api/profile-time-targets');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body as string) as Record<string, unknown>).toEqual({ machineId: 1, profileName: 'Adaptive v2', minS: 40, maxS: 48 });
+    expect(showToast).toHaveBeenCalledWith(t('profile_time_target_saved'));
+  });
+
+  it('an invalid window sends no request', async () => {
+    stubSheet({ pttMin: '48', pttMax: '40' });
+    openProfileTimeTargetSheet('Adaptive v2', null);
+
+    await saveProfileTimeTargetFromSheet();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith(t('profile_time_target_invalid'));
+  });
+
+  it('removing sends null bounds', async () => {
+    stubSheet({ pttMin: '40', pttMax: '48' });
+    openProfileTimeTargetSheet('Adaptive v2', null);
+
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([]),
+    } as unknown as Response);
+
+    await clearProfileTimeTarget();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('api/profile-time-targets');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body as string) as Record<string, unknown>).toEqual({ machineId: 1, profileName: 'Adaptive v2', minS: null, maxS: null });
   });
 });
