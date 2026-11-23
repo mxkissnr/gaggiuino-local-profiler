@@ -247,9 +247,11 @@ function goListServerModules(projectDir: string, arch: string): string {
         });
     } catch (error) {
         if ((error as { code?: unknown }).code === 'ENOENT') {
-            throw new Error(`linux/${arch}: the Go part of this script needs the Go toolchain on PATH`);
+            throw new Error(`linux/${arch}: the Go part of this script needs the Go toolchain on PATH`, {
+                cause: error,
+            });
         }
-        throw error instanceof Error ? error : new Error(String(error));
+        throw error instanceof Error ? error : new Error(String(error), { cause: error });
     }
 }
 
