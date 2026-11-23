@@ -53,8 +53,31 @@ func loadScoreParityCases(t *testing.T) []parityCase {
 	return cases
 }
 
+// profileWindowParityCases are the #1504 cases that must exist in the shared
+// fixture: a profile window (40-48 s) on target, fast and long, plus a control
+// with no window that keeps the generic 25-35 band.
+var profileWindowParityCases = []string{
+	"profile window 40-48: 45 s is on target",
+	"profile window 40-48: 29 s runs fast",
+	"profile window 40-48: 70 s runs long",
+	"no window: 29 s keeps the generic band",
+}
+
+// TestScoreParityFixture scores every fixture case with the same expectations
+// its TypeScript twin uses, including the per-profile time window (#1504).
 func TestScoreParityFixture(t *testing.T) {
-	for _, c := range loadScoreParityCases(t) {
+	cases := loadScoreParityCases(t)
+	seen := make(map[string]bool, len(cases))
+	for _, c := range cases {
+		seen[c.Name] = true
+	}
+	for _, name := range profileWindowParityCases {
+		if !seen[name] {
+			t.Fatalf("score parity fixture is missing the #1504 case %q", name)
+		}
+	}
+
+	for _, c := range cases {
 		t.Run(c.Name, func(t *testing.T) {
 			if c.KnownDivergence != "" {
 				t.Skipf("known Go/TS score divergence: %s", c.KnownDivergence)

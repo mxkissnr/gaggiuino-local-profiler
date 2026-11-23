@@ -66,12 +66,21 @@ function textbookShotWithDuration(duration: number): Record<string, unknown> {
 }
 
 describe('durationScore matches the legacy generic band (#1504)', () => {
+    // Guards the shorthand below: a missing fixture case would leave
+    // textbookShot empty and both sides would score null, passing vacuously.
+    it('builds the comparison shot from the fixture', () => {
+        expect(textbookShot).toHaveProperty('duration');
+    });
+
     it('durationScore with the 25-35 window equals the legacy band', () => {
         for (let i = 51; i <= 1200; i++) {
             const secs = i / 10;
-            expect(durationScore(secs, 25, 35)).toBe(legacyDurationScore(secs));
-            expect(calcShotScore(textbookShotWithDuration(i), undefined, { minS: 25, maxS: 35 }))
-                .toBe(calcShotScore(textbookShotWithDuration(i)));
+            expect(durationScore(secs, 25, 35), `${secs} s duration curve`)
+                .toBe(legacyDurationScore(secs));
+            const shot = textbookShotWithDuration(i);
+            const scored = calcShotScore(shot);
+            expect(scored, `${secs} s shot scores`).not.toBeNull();
+            expect(calcShotScore(shot, undefined, { minS: 25, maxS: 35 }), `${secs} s with the 25-35 window`).toBe(scored);
         }
     });
 });
