@@ -194,7 +194,7 @@ export function achVerdictHtml(badges: Achievement[]): Html {
         ${progress ? html`<p class="analytics-verdict-sub">${esc(t('ach_progress', progress.current, progress.target))}</p>` : html``}
       </div>
       <div class="analytics-verdict-score">
-        <span class="analytics-verdict-score-num serif-display">${esc(got)}</span>
+        <span class="analytics-verdict-score-num">${esc(got)}</span>
         <span class="analytics-verdict-score-lbl">${esc(t('ach_verdict_of', total))}</span>
       </div>
     </div>`;

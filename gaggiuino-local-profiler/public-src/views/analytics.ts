@@ -207,7 +207,7 @@ export function buildSummaryKpis() {
     + _machineScopeSuffix();
 
   const avg = summary.verdict.avgScore;
-  scoreEl.className = avg !== null ? `analytics-verdict-score-num serif-display ${scoreClass(avg)}` : 'analytics-verdict-score-num serif-display';
+  scoreEl.className = avg !== null ? `analytics-verdict-score-num ${scoreClass(avg)}` : 'analytics-verdict-score-num';
   scoreEl.textContent = avg !== null ? String(avg) : '—';
 
   // Trend warning: check last 5 scored shots for declining trend

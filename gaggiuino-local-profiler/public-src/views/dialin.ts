@@ -111,7 +111,7 @@ export function _dialinVerdictHtml(state: DialinVerdictState, scores: (number | 
         ${facts ? html`<p class="analytics-verdict-sub">${esc(facts)}</p>` : html``}
       </div>
       <div class="analytics-verdict-score">
-        <span class="analytics-verdict-score-num serif-display${newest != null ? html` ${esc(scoreClass(newest))}` : html``}">${esc(newest ?? '–')}</span>
+        <span class="analytics-verdict-score-num${newest != null ? html` ${esc(scoreClass(newest))}` : html``}">${esc(newest ?? '–')}</span>
         ${trend ? html`<span class="analytics-verdict-score-lbl">${esc(trend)}</span>` : html``}
       </div>
     </div>

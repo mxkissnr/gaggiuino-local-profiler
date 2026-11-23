@@ -833,7 +833,7 @@ export async function updateView(): Promise<void> {
     // #813, #2152: the score is the verdict's big number, in the score colour
     // (the shared score classes, like the dial-in verdict).
     const ringVal  = _el('verdictRingVal');
-    ringVal.className = `analytics-verdict-score-num serif-display${sc !== null ? ` ${scoreClass(sc)}` : ''}`;
+    ringVal.className = `analytics-verdict-score-num${sc !== null ? ` ${scoreClass(sc)}` : ''}`;
     ringVal.textContent = sc !== null ? String(sc) : '–';
 
     // Score delta chip (#402) and the line naming the compared shot (#2152):

@@ -379,7 +379,7 @@ export function _maintVerdictHtml(state: MaintVerdictState): Html {
         </div>
         <div class="analytics-verdict-score">
           ${cup}
-          <span class="analytics-verdict-score-num serif-display maint-verdict-num ${esc(numClass)}">${esc(state.dueCount)}</span>
+          <span class="analytics-verdict-score-num maint-verdict-num ${esc(numClass)}">${esc(state.dueCount)}</span>
           <span class="analytics-verdict-score-lbl">${esc(t('maint_due'))}</span>
         </div>
       </div>

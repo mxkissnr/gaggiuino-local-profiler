@@ -58,7 +58,7 @@ function _factCard(fact: Fact): Html {
   return html`<button type="button" class="analytics-fact${fact.night ? html` night` : esc('')}" data-action="analytics-fact" data-fact="${esc(fact.id)}">
     ${fact.night ? _factStars() : esc('')}
     <span class="analytics-fact-icon" aria-hidden="true">${FACTS_ICONS[fact.icon]}</span>
-    <span class="analytics-fact-big serif-display">${esc(fact.big)}</span>
+    <span class="analytics-fact-big">${esc(fact.big)}</span>
     <span class="analytics-fact-text">${esc(sentence)}</span>
     ${gauge}
   </button>`;
