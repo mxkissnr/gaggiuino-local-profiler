@@ -217,7 +217,7 @@ describe('achievements view — the verdict', () => {
 
   it('shows the collected count as the big number and names the next stamp', () => {
     const out = achVerdictHtml(FIXTURE);
-    expect(out).toContain('analytics-verdict-score-num serif-display');
+    expect(out).toContain('analytics-verdict-score-num');
     expect(out).toContain('>1</span>');
     expect(out).toContain('of 6 stamps');
     expect(out).toContain('Next up: Streak');

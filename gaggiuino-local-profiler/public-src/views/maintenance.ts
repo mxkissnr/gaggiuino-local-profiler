@@ -374,7 +374,7 @@ export function _maintVerdictHtml(state: MaintVerdictState): Html {
     <section class="analytics-sec analytics-verdict-card maint-verdict" id="maintVerdict">
       <div class="analytics-verdict-head">
         <div class="analytics-verdict-text">
-          <h2 class="analytics-verdict-title serif-display">${esc(title)}</h2>
+          <h2 class="analytics-verdict-title">${esc(title)}</h2>
           ${sub ? html`<p class="analytics-verdict-sub">${esc(sub)}</p>` : html``}
         </div>
         <div class="analytics-verdict-score">
