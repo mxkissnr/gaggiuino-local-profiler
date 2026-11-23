@@ -129,9 +129,8 @@ function _wholeOrNull(raw: string): number | null {
 function _firstInvalidField(minInput: HTMLInputElement | null, maxInput: HTMLInputElement | null): HTMLInputElement | null {
   const minS = _wholeOrNull(minInput?.value ?? '');
   const maxS = _wholeOrNull(maxInput?.value ?? '');
-  if (minS === null || minS < MIN_S || minS > MAX_S) return minInput;
-  if (maxS === null || maxS < MIN_S || maxS > MAX_S || minS >= maxS) return maxInput;
-  return minInput;
+  const minBad = minS === null || minS < MIN_S || minS > MAX_S || (maxS !== null && minS >= maxS);
+  return minBad ? minInput : maxInput;
 }
 
 export async function saveProfileTimeTargetFromSheet(): Promise<void> {
