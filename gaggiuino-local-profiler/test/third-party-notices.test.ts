@@ -99,9 +99,9 @@ describe('THIRD_PARTY_NOTICES.md', () => {
 
     it('names the same version in a Server module heading and its licence link', () => {
         const modules = serverModules();
-        const headings = modules.map((module) => module.heading);
+        const titles = modules.map((module) => module.heading);
         // The parser must reach the section, not just return nothing.
-        expect(headings.some((heading) => heading.startsWith('github.com/gorilla/websocket '))).toBe(true);
+        expect(titles.some((title) => title.startsWith('github.com/gorilla/websocket '))).toBe(true);
         const bad = modules
             .filter(({ heading, licenceLink }) => {
                 const space = heading.indexOf(' ');
