@@ -275,7 +275,7 @@ describe('machine backups sheet (#1878)', () => {
     for (const [ms, text] of cases) expect(relativeTime(ms, 0, 'en-US')).toBe(text);
   });
   it('offers the row action and the firmware override', async () => {
-    expect(machineBackupsButtonHtml()).toBe('<button type="button" class="lib-sheet-menu-item machine-backups-btn">Backups</button>');
+    expect(machineBackupsButtonHtml()).toBe('<button type="button" class="lib-sheet-menu-item machine-backups-btn"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v4H4zM5 8v12h14V8M12 11v6M9 14l3 3 3-3"/></svg> Backups</button>');
     const message = 'The backup before the update failed, so the update did not start.\n\nUpdate the firmware without a backup now?';
     confirmMock.mockResolvedValue(true);
     await expect(confirmUpdateWithoutBackup()).resolves.toBe(true);
