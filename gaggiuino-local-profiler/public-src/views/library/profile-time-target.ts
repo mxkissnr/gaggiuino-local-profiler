@@ -42,8 +42,12 @@ export function setProfileTimeTargetsChanged(fn: (() => void) | null): void {
 
 export async function loadProfileTimeTargets(machineId: number | null): Promise<void> {
   if (machineId === null) return;
-  const list = await getProfileTimeTargets(machineId);
-  if (list) _byMachine.set(machineId, list);
+  // The row entry and badge are an enhancement: this read runs alongside the
+  // profile list, so a failure here must not take that list down with it.
+  try {
+    const list = await getProfileTimeTargets(machineId);
+    if (Array.isArray(list)) _byMachine.set(machineId, list);
+  } catch { /* keep whatever windows are already cached */ }
 }
 
 export function profileTimeTargetFor(machineId: number | null, profileName: string): ProfileTimeTarget | null {

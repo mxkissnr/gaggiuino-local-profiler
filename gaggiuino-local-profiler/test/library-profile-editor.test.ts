@@ -336,8 +336,14 @@ describe('loadMachineProfileList (#521 race)', () => {
     let resolveB!: (value: Response) => void;
     const pA = new Promise<Response>(res => { resolveA = res; });
     const pB = new Promise<Response>(res => { resolveB = res; });
-    fetchSpy.mockImplementationOnce(() => pA); // call A — fired first
-    fetchSpy.mockImplementationOnce(() => pB); // call B — fired second, while A is still pending
+    // Each list load also reads the machine's target times; only the profile
+    // list request itself is raced here.
+    const lists = [pA, pB];
+    fetchSpy.mockImplementation((url: string) => (
+      url.startsWith('api/machine/profiles')
+        ? (lists.shift() ?? Promise.resolve({ ok: true, json: () => Promise.resolve({ optionsRaw: [] }) } as unknown as Response))
+        : Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as unknown as Response)
+    )); // call A fired first, call B fired second, while A is still pending
 
     const callA = loadMachineProfileList();
     const callB = loadMachineProfileList();
@@ -796,6 +802,28 @@ describe('profile target time (#1504)', () => {
 
     const urls = (fetchSpy.mock.calls as unknown as [string][]).map(c => c[0]);
     expect(urls).toContain('api/profile-time-targets?machineId=1');
+  });
+
+  // The window read is an enhancement next to the profile list, not part of
+  // it: an older backend, an offline GLP or a relative-URL test stub that
+  // fails here must not empty the Profiles tab.
+  it('a failing target-time read still loads the profile list', async () => {
+    fetchSpy.mockImplementation((url: string) => Promise.resolve(
+      url.startsWith('api/machine/profiles')
+        ? ({ ok: true, json: () => Promise.resolve({ optionsRaw: [{ id: 1, name: 'Adaptive v2' }] }) } as unknown as Response)
+        : Promise.reject(new TypeError('Failed to parse URL from api/profile-time-targets')),
+    ));
+    const el = { innerHTML: '' };
+    g.document = {
+      getElementById: (id: string) => (id === 'profileListUI' ? el : undefined),
+      querySelectorAll: () => [],
+    };
+    S.activeMachineId = 1;
+
+    await expect(loadMachineProfileList()).resolves.toBeUndefined();
+
+    expect(S.machineProfiles).toEqual([{ id: 1, name: 'Adaptive v2' }]);
+    expect(el.innerHTML).toContain('Adaptive v2');
   });
 
   it('a rejected save keeps the sheet data and reports the status', async () => {
