@@ -274,6 +274,16 @@ well above the 10 % the issue asks for, so a 15 % threshold could not tell a
 real regression from noise. Bundle size and the API timings above cover the
 frontend instead.
 
+## Dependency updates
+
+THIRD_PARTY_NOTICES.md (in gaggiuino-local-profiler/public-src/public/) names every library the app bundles and every Go module compiled into the server, each at its exact version, and two tests guard it. Renovate does not edit that file, so a pull request that bumps a runtime dependency turns those tests red. Fix it on the branch with one command and commit the result:
+
+    cd gaggiuino-local-profiler
+    npm ci
+    npm run notices:sync
+
+The script reads the versions from package-lock.json and from `go list -deps` (the same set the tests check, for the three image architectures) and rewrites only the version numbers of existing headings, including the pkg.go.dev licence link of a Go module. It needs the Go toolchain on PATH. When a package or module is new or gone it leaves it alone, prints the heading to add or remove and exits non-zero: a new library needs a person to check its licence and add the licence text by hand.
+
 ## Versioning
 
 `MAJOR.MINOR.PATCH` — patch for fixes, minor for new features. `gaggiuino-local-profiler/config.yaml`'s `version:` is canonical; three more spots must be bumped to match it in the same commit: `package.json`, `go/internal/system/version.go` (`glpVersion`) and `go/internal/backup/bundle.go` (`glpVersion`). `test/version-sync.test.ts` and `scripts/release-check.mts` enforce the match.
