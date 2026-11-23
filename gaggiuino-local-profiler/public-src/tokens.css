@@ -276,10 +276,9 @@
 
         /* #404: bundled locally (public-src/fonts/) so it renders fully
            offline / behind HA ingress — no external font CDN. Applied ONLY
-           via .serif-display: bean names in the Bibliothek view and the
-           shot-card share image. Never on numeric/data displays —
-           tabular-nums UI stays sans-serif everywhere else, regardless of
-           theme. */
+           via .serif-display: bean names in the Bibliothek view. Never on
+           numeric/data displays — tabular-nums UI stays sans-serif everywhere
+           else, regardless of theme. */
         @font-face {
             font-family: 'Fraunces';
             font-style: normal;

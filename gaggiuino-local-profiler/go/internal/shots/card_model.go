@@ -105,7 +105,7 @@ func newCardModel(shot Shot, score *int, format, accent, theme, lang string, dep
 type cardLayout struct {
 	headBase, headMax, headMin float64 // headline baseline and its font-size steps
 	subSize                    float64 // profile / machine line
-	scoreSize, verdictSize     float64 // Fraunces score, verdict sentence
+	scoreSize, verdictSize     float64 // score, verdict sentence
 	chartMaxH                  float64 // chart block height cap
 	figValSize, figLblSize     float64 // figure value and label
 }
@@ -404,7 +404,7 @@ func (c *cardModel) svg() string {
 		}
 	}
 
-	// ── VERDICT ── like the shot page: the score in Fraunces, the verdict
+	// ── VERDICT ── like the shot page: the score in Figtree SemiBold, the verdict
 	// sentence (or the score phrase), the change against the compared shot.
 	sentence := c.verdict.text
 	if sentence == "" {
@@ -416,8 +416,8 @@ func (c *cardModel) svg() string {
 	if c.score != nil {
 		num := strconv.Itoa(*c.score)
 		base := blockTop + L.scoreSize*0.8
-		s.serif(cardPX, base, L.scoreSize, scoreColor(c.score, p), num)
-		textX = cardPX + serifWidth(num, L.scoreSize) + 28
+		s.text(cardPX, base, L.scoreSize, true, scoreColor(c.score, p), "", num)
+		textX = cardPX + textWidth(num, L.scoreSize, true) + 28
 		blockBottom = base + 14
 	}
 	lineGap := L.verdictSize * 1.25
