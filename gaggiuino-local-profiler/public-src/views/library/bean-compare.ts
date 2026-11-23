@@ -254,7 +254,7 @@ function _verdict({ verdict }: BeanComparison, beanA: BeanListRow, beanB: BeanLi
     <div class="analytics-verdict-head">
       <div class="analytics-verdict-text"><p class="analytics-verdict-title">${esc(sentence)}</p></div>
       <div class="analytics-verdict-score">
-        <span class="analytics-verdict-score-num serif-display">${esc(num)}</span>
+        <span class="analytics-verdict-score-num">${esc(num)}</span>
         <span class="analytics-verdict-score-lbl">${tHtml('bean_cmp_points')}</span>
       </div>
     </div>
