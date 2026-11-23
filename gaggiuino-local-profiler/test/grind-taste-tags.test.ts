@@ -54,13 +54,13 @@ function series(weight: { x: number; y: number }[] = [], pressures: number[] = [
 }
 
 // Duration is in tenths of a second, as the shot rows store it.
-function singleShot(duration: number, tag?: string | null, window?: { minS: number; maxS: number }): GrindShot {
+function singleShot(duration: number, tag?: string | null, win?: { minS: number; maxS: number }): GrindShot {
   const shot: GrindShot = {
     id: 1,
     duration,
     annotation: tag === undefined ? {} : { tasteTag: tag },
   };
-  if (window) shot.timeTarget = window;
+  if (win) shot.timeTarget = win;
   return shot;
 }
 
@@ -339,26 +339,26 @@ describe('calcComparativeGrindAdvice applies the tag', () => {
 
 describe('the advice edges follow the profile window (#1504)', () => {
   it('a 25-35 window gives exactly the advice without a window', () => {
-    const window = { minS: 25, maxS: 35 };
+    const win = { minS: 25, maxS: 35 };
     for (let duration = 80; duration <= 700; duration++) {
       for (const tag of [undefined, 'sour'] as const) {
-        expect(calcGrindAdvice(singleShot(duration, tag, window), series()))
+        expect(calcGrindAdvice(singleShot(duration, tag, win), series()))
           .toEqual(calcGrindAdvice(singleShot(duration, tag), series()));
       }
     }
   });
 
   it('window 40-48: 45 s holds, 29 s grinds finer', () => {
-    const window = { minS: 40, maxS: 48 };
-    const hold = calcGrindAdvice(singleShot(450, null, window), series());
+    const win = { minS: 40, maxS: 48 };
+    const hold = calcGrindAdvice(singleShot(450, null, win), series());
     expect(hold?.type).not.toBe('finer');
     expect(hold?.type).not.toBe('coarser');
 
-    expectAdvice(calcGrindAdvice(singleShot(290, null, window), series()),
+    expectAdvice(calcGrindAdvice(singleShot(290, null, win), series()),
       { type: 'finer', key: 'grind_short', args: ['29'] });
-    expectAdvice(calcGrindAdvice(singleShot(580, null, window), series()),
+    expectAdvice(calcGrindAdvice(singleShot(580, null, win), series()),
       { type: 'coarser', key: 'grind_long_slight', args: ['58'] });
-    expectAdvice(calcGrindAdvice(singleShot(640, null, window), series()),
+    expectAdvice(calcGrindAdvice(singleShot(640, null, win), series()),
       { type: 'coarser', key: 'grind_long', args: ['64'] });
   });
 });
