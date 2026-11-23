@@ -172,7 +172,7 @@ CSS selectors for goquery.
 - Copyright (c) 2011 Andy Balholm.
 - Licensed under the BSD 2-Clause License.
 - Source: https://github.com/andybalholm/cascadia
-- Licence: https://pkg.go.dev/github.com/andybalholm/cascadia@v1.3.4?tab=licenses
+- Licence: https://pkg.go.dev/github.com/andybalholm/cascadia@v1.3.5?tab=licenses
 
 ### github.com/coder/websocket v1.8.15
 
@@ -265,7 +265,7 @@ Reads recipe and bean pages for the importer.
 - Copyright (c) 2012-2021, Martin Angers & Contributors
 - Licensed under the BSD 3-Clause License.
 - Source: https://github.com/PuerkitoBio/goquery
-- Licence: https://pkg.go.dev/github.com/PuerkitoBio/goquery@v1.13.0?tab=licenses
+- Licence: https://pkg.go.dev/github.com/PuerkitoBio/goquery@v1.14.0?tab=licenses
 
 ### github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec
 
@@ -319,7 +319,7 @@ Key derivation for encrypted backups.
 - Copyright 2009 The Go Authors.
 - Licensed under the BSD 3-Clause License.
 - Source: https://github.com/golang/crypto
-- Licence: https://pkg.go.dev/golang.org/x/crypto@v0.58.0?tab=licenses
+- Licence: https://pkg.go.dev/golang.org/x/crypto@v0.59.0?tab=licenses
 
 ### golang.org/x/image v0.48.0
 
@@ -328,7 +328,7 @@ Image decoding, scaling and text drawing for photos, charts and the shot card; i
 - Copyright 2009 The Go Authors.
 - Licensed under the BSD 3-Clause License.
 - Source: https://github.com/golang/image
-- Licence: https://pkg.go.dev/golang.org/x/image@v0.47.0?tab=licenses
+- Licence: https://pkg.go.dev/golang.org/x/image@v0.48.0?tab=licenses
 
 ### golang.org/x/net v0.62.0
 
@@ -355,7 +355,7 @@ Merges duplicate update and firmware checks into one request.
 - Copyright 2009 The Go Authors.
 - Licensed under the BSD 3-Clause License.
 - Source: https://github.com/golang/sync
-- Licence: https://pkg.go.dev/golang.org/x/sync@v0.24.0?tab=licenses
+- Licence: https://pkg.go.dev/golang.org/x/sync@v0.25.0?tab=licenses
 
 ### golang.org/x/sys v0.50.0
 
@@ -364,7 +364,7 @@ Operating-system calls for the SQLite runtime.
 - Copyright 2009 The Go Authors.
 - Licensed under the BSD 3-Clause License.
 - Source: https://github.com/golang/sys
-- Licence: https://pkg.go.dev/golang.org/x/sys@v0.49.0?tab=licenses
+- Licence: https://pkg.go.dev/golang.org/x/sys@v0.50.0?tab=licenses
 
 ### golang.org/x/text v0.44.0
 
@@ -373,7 +373,7 @@ Text encodings used by the font code.
 - Copyright 2009 The Go Authors.
 - Licensed under the BSD 3-Clause License.
 - Source: https://github.com/golang/text
-- Licence: https://pkg.go.dev/golang.org/x/text@v0.43.0?tab=licenses
+- Licence: https://pkg.go.dev/golang.org/x/text@v0.44.0?tab=licenses
 
 ### golang.org/x/time v0.16.0
 
@@ -401,7 +401,7 @@ C runtime for the SQLite database engine. It includes code from musl libc, go-ne
 - Copyright (c) 2017 The Libc Authors.
 - Licensed under the BSD 3-Clause License.
 - Source: https://gitlab.com/cznic/libc
-- Licence: https://pkg.go.dev/modernc.org/libc@v1.79.0?tab=licenses
+- Licence: https://pkg.go.dev/modernc.org/libc@v1.80.1?tab=licenses
 
 ### modernc.org/mathutil v1.7.1
 
@@ -430,7 +430,7 @@ The SQLite database that stores all app data, without CGo. It contains SQLite 3.
 - Copyright (c) 2017 The Sqlite Authors.
 - Licensed under the BSD 3-Clause License.
 - Source: https://gitlab.com/cznic/sqlite
-- Licence: https://pkg.go.dev/modernc.org/sqlite@v1.61.1?tab=licenses
+- Licence: https://pkg.go.dev/modernc.org/sqlite@v1.62.0?tab=licenses
 
 ## Full licence texts
 
