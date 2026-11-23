@@ -27,6 +27,7 @@ import { confirmDialog } from '../components/confirm-dialog.js';
 import { markFieldInvalid } from '../components/field-error.js';
 import { bindPillSelects } from '../components/pill-select.js';
 import { phaseTimelineHtml, phaseHeadHtml, stopsFoldHtml, removePhaseButtonHtml } from '../components/phase-timeline.js';
+import { profileTimeTargetMenuItem, profileTimeTargetBadge, loadProfileTimeTargets, setProfileTimeTargetsChanged } from './library/profile-time-target.js';
 
 const ICON_COPY: Html   = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M19,21H8V7H19V21Z"/></svg>`;
 
@@ -94,6 +95,8 @@ let _formMachineId: number | null = null;
 // #2154: the phase whose row is visible (0-based); the timeline marks it.
 let _selectedPhase = 0;
 
+setProfileTimeTargetsChanged(() => renderProfileList());
+
 // Kept as its own (non-async) function so the read of S.activeMachineId
 // happens in a separate code path from loadMachineProfileList's own —
 // otherwise eslint's require-atomic-updates can't tell that the later
@@ -105,7 +108,7 @@ function _profileListRequest(): Promise<MachineProfileList | null> {
 
 export async function loadMachineProfileList(): Promise<void> {
   const token = ++_profileListReqToken;
-  const data = await _profileListRequest();
+  const [data] = await Promise.all([_profileListRequest(), loadProfileTimeTargets(concreteActiveMachineId())]);
   if (!data) return;
   if (token !== _profileListReqToken) return;
   S.machineProfiles = Array.isArray(data.optionsRaw) ? data.optionsRaw : [];
@@ -134,6 +137,7 @@ export function renderProfileList(): void {
         <span class="lib-item-name-row">
           <span class="lib-item-name">${esc(p.name)}</span>
           ${p.utility ? html`<span class="badge">${tHtml('profile_utility_badge')}</span>` : html``}
+          ${profileTimeTargetBadge(p)}
           ${p.syncStatus && p.syncStatus !== 'synced' ? html`<span class="badge badge--warn" title="${tHtml('profile_not_synced')}">⏳</span>` : html``}
         </span>
       </button>
@@ -141,6 +145,7 @@ export function renderProfileList(): void {
         <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
         <div class="lib-sheet-menu-list">
           <button type="button" class="lib-sheet-menu-item" data-action="start-profile-dialin" data-id="${esc(p.id as string | number)}">${TARGET_ICON_SVG} ${tHtml('profile_dialin_start')}</button>
+          ${profileTimeTargetMenuItem(p)}
           <button type="button" class="lib-sheet-menu-item" data-action="duplicate-profile" data-id="${esc(p.id as string | number)}">${ICON_COPY} ${tHtml('profile_btn_duplicate')}</button>
           <span class="lib-sheet-menu-sep"></span>
           <button type="button" class="lib-sheet-menu-item del" data-action="delete-profile" data-id="${esc(p.id as string | number)}">${ICON_TRASH} ${tHtml('lib_btn_delete')}</button>

@@ -14,6 +14,8 @@ import {
 import { renderSidebar, updateSidebarHighlighting } from '../../components/sidebar.js';
 import { apiPortClosedHtml }                                  from '../../components/api-port-notice.js';
 import { calcShotScore, shotUsedBeanTarget, shotPressureNote, findPreviousComparableShot, buildGrinderGrindLabel, shotBeanAge, beanFreshnessContext } from './utils.js';
+import type { ShotLike } from './utils.js';
+import { formatTimeWindow } from '../library/profile-time-target.js';
 import { mapShotDatapoints } from '../../utils.js';
 import { ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
 import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
@@ -667,7 +669,9 @@ export async function updateView(): Promise<void> {
   syncShotCompareButton(!!shotB);
 
   const totalSecs = (shotA.duration || 0) / 10;
-  _el('duration').innerText = formatTimeLabel(totalSecs);
+  // #1504: name the profile's target window next to the time it was judged against.
+  const timeWindow = !shotB ? (shotA as ShotLike).timeTarget ?? null : null;
+  _el('duration').innerText = formatTimeLabel(totalSecs) + (timeWindow ? ` / ${formatTimeWindow(timeWindow.minS, timeWindow.maxS)}` : '');
 
   const pressureVals  = dA.pressure.map(p => p.y);
   const pressureTimes = dA.pressure.map(p => p.x);
