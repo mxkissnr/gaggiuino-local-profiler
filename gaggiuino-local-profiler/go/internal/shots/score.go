@@ -36,6 +36,14 @@ type Bean struct {
 	BrewRatio string
 }
 
+// ScoreTargets is everything resolved per shot that replaces a generic
+// band: the library bean (#450) and the profile's target time window
+// (#1504). The zero value scores against the generic bands.
+type ScoreTargets struct {
+	Bean *Bean
+	Time *TimeTarget
+}
+
 // PressureNote values explain the pressure part when it was not scored
 // against the fixed >=5-bar band. See ScoreDetail.PressureNote (#1538).
 const (
@@ -64,6 +72,10 @@ type ScoreDetail struct {
 	// #1538 added. It lets the shot detail and explain_score say why the
 	// pressure part looks the way it does instead of hard-coding one reason.
 	PressureNote string
+	// TimeTarget is the target time window resolved for this shot's machine
+	// and profile, nil when none is stored (#1504). It is filled by
+	// Service.DetailScorer, not by a model, and read by the shot responses.
+	TimeTarget *TimeTarget
 }
 
 // ScoreComponent is one weighted part of CalcShotScoreDetail's score.
@@ -164,16 +176,42 @@ func parseBrewRatioTarget(brewRatio string) (float64, bool) {
 	return v, true
 }
 
-// CalcShotScoreDetail scores a shot, operating on the Shot map hydrateRow
+// durationScore is the duration part's 0-100 curve measured from the window
+// edges lo..hi (#1504). With lo=25, hi=35 it is exactly the pre-#1504
+// generic band: the edges lo-5, hi+7, hi+20 are 20, 42, 55.
+func durationScore(secs, lo, hi float64) float64 {
+	farLow, nearHigh, farHigh := lo-5, hi+7, hi+20
+	switch {
+	case secs >= lo && secs <= hi:
+		return 100
+	case (secs >= farLow && secs < lo) || (secs > hi && secs <= nearHigh):
+		return 82
+	case secs > nearHigh && secs <= farHigh:
+		return 62
+	case secs < farLow:
+		return math.Max(15, 70-(farLow-secs)*5)
+	default:
+		return math.Max(15, 62-(secs-farHigh)*3)
+	}
+}
+
+// CalcShotScoreDetail scores against the bean only, without a time window.
+func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
+	return CalcShotScoreTargets(shot, ScoreTargets{Bean: bean})
+}
+
+// CalcShotScoreTargets scores a shot, operating on the Shot map hydrateRow
 // produces (a shot's "datapoints"/"duration"/"annotation" fields).
 //
-// bean is the shot's resolved library bean target (#450), or nil when none
-// resolves — see service.go's ComputeScoreDetail and library.ScoreBean.
-// bean == nil yields the generic bands, used whenever no bean is resolved (no
-// beanId/coffee match, or an install with an empty library). A non-nil bean
-// replaces the generic temperature/ratio targets with its own
-// brewTempC/brewRatio recommendations.
-func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
+// targets.Bean is the shot's resolved library bean target (#450), or nil
+// when none resolves — see service.go's ComputeScoreDetail and
+// library.ScoreBean. A nil Bean yields the generic bands, used whenever no
+// bean is resolved (no beanId/coffee match, or an install with an empty
+// library); a non-nil bean replaces the generic temperature/ratio targets
+// with its own brewTempC/brewRatio recommendations. targets.Time, when set,
+// replaces the generic duration band with the profile's target window.
+func CalcShotScoreTargets(shot Shot, targets ScoreTargets) ScoreDetail {
+	bean := targets.Bean
 	if shot == nil {
 		return ScoreDetail{}
 	}
@@ -353,28 +391,24 @@ func CalcShotScoreDetail(shot Shot, bean *Bean) ScoreDetail {
 	durationRaw, _ := toFloat(shot["duration"])
 	secs := durationRaw / 10
 	if secs > 5 {
-		var sDur float64
-		switch {
-		case secs >= 25 && secs <= 35:
-			sDur = 100
-		case (secs >= 20 && secs < 25) || (secs > 35 && secs <= 42):
-			sDur = 82
-		case secs > 42 && secs <= 55:
-			sDur = 62
-		case secs < 20:
-			sDur = math.Max(15, 70-(20-secs)*5)
-		default:
-			sDur = math.Max(15, 62-(secs-55)*3)
+		lo, hi, durTarget := 25.0, 35.0, "generic"
+		if targets.Time != nil {
+			lo, hi, durTarget = float64(targets.Time.MinS), float64(targets.Time.MaxS), "profile"
 		}
-		durationScore := jsRound(sDur)
-		scores = append(scores, durationScore)
+		durScore := jsRound(durationScore(secs, lo, hi))
+		scores = append(scores, durScore)
 		weights = append(weights, 20)
+		durInputs := map[string]float64{"seconds": secs}
+		if durTarget == "profile" {
+			durInputs["min_s"] = lo
+			durInputs["max_s"] = hi
+		}
 		components = append(components, ScoreComponent{
 			Name:   "duration",
-			Score:  durationScore,
+			Score:  durScore,
 			Weight: 20,
-			Inputs: map[string]float64{"seconds": secs},
-			Target: "generic",
+			Inputs: durInputs,
+			Target: durTarget,
 		})
 	}
 

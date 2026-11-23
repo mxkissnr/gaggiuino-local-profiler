@@ -13,6 +13,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -43,6 +44,10 @@ type ProfileTimeTarget struct {
 
 // timeTargetsMu serialises the PUT handler's read-merge-write over the kv row.
 var timeTargetsMu sync.Mutex
+
+// timeTargetErrOnce logs a failing store only once — a DB read error would
+// otherwise print on every scored shot without ever being actionable.
+var timeTargetErrOnce sync.Once
 
 // NormalizeProfileName is the one profile-name comparison key: trimmed and
 // lower-cased. Matching is per machine and case-insensitive.
@@ -225,4 +230,63 @@ func (h *Handlers) putProfileTimeTarget(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, sortedTimeTargets(list))
+}
+
+// scoreProfileName is the profile name a shot was brewed with: the top-level
+// profileName when non-empty after trimming, otherwise profile.name.
+// Gaggiuino history shots carry profileName: null and name the profile only
+// in profile.name.
+func scoreProfileName(shot Shot) string {
+	if name, ok := shot["profileName"].(string); ok && strings.TrimSpace(name) != "" {
+		return name
+	}
+	if profile, ok := shot["profile"].(map[string]any); ok {
+		if name, ok := profile["name"].(string); ok {
+			return name
+		}
+	}
+	return ""
+}
+
+// loadTimeTargetLookup reads the stored windows once and returns a per-shot
+// lookup over that snapshot. A read error yields a lookup that always returns
+// nil — the shot is handled exactly as without a window, and the request
+// never fails over a target-time problem.
+func (r *Repository) loadTimeTargetLookup() func(Shot) *TimeTarget {
+	none := func(Shot) *TimeTarget { return nil }
+	stored, err := r.GetProfileTimeTargets()
+	if err != nil {
+		timeTargetErrOnce.Do(func() {
+			log.Printf("shots: profile time targets unavailable, scoring against the generic band: %v", err)
+		})
+		return none
+	}
+	lookup := make(map[int64]map[string]TimeTarget, len(stored))
+	for machine, list := range stored {
+		id, err := strconv.ParseInt(machine, 10, 64)
+		if err != nil || id < 1 {
+			continue
+		}
+		byName := make(map[string]TimeTarget, len(list))
+		for _, target := range list {
+			if !validTimeWindow(target.MinS, target.MaxS) {
+				continue
+			}
+			byName[NormalizeProfileName(target.ProfileName)] = TimeTarget{MinS: target.MinS, MaxS: target.MaxS}
+		}
+		if len(byName) > 0 {
+			lookup[id] = byName
+		}
+	}
+	return func(shot Shot) *TimeTarget {
+		name := NormalizeProfileName(scoreProfileName(shot))
+		if name == "" {
+			return nil
+		}
+		target, ok := lookup[shot.machineID()][name]
+		if !ok {
+			return nil
+		}
+		return &target
+	}
 }
