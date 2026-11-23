@@ -13,7 +13,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"sort"
 	"strconv"
@@ -45,30 +44,10 @@ type ProfileTimeTarget struct {
 // timeTargetsMu serialises the PUT handler's read-merge-write over the kv row.
 var timeTargetsMu sync.Mutex
 
-// timeTargetErrOnce logs a failing store only once — a DB read error would
-// otherwise print on every scored shot without ever being actionable.
-var timeTargetErrOnce sync.Once
-
 // NormalizeProfileName is the one profile-name comparison key: trimmed and
 // lower-cased. Matching is per machine and case-insensitive.
 func NormalizeProfileName(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
-}
-
-// scoreProfileName is the profile name a shot was brewed with: the top-level
-// profileName when non-empty after trimming, otherwise profile.name.
-// Gaggiuino history shots carry profileName: null and name the profile only
-// in profile.name.
-func scoreProfileName(shot Shot) string {
-	if name, ok := shot["profileName"].(string); ok && strings.TrimSpace(name) != "" {
-		return name
-	}
-	if profile, ok := shot["profile"].(map[string]any); ok {
-		if name, ok := profile["name"].(string); ok {
-			return name
-		}
-	}
-	return ""
 }
 
 func validTimeWindow(minS, maxS int) bool {
@@ -117,113 +96,6 @@ func (r *Repository) SaveProfileTimeTargets(m map[string][]ProfileTimeTarget) er
 		return fmt.Errorf("shots: saving profile time targets: %w", err)
 	}
 	return nil
-}
-
-// SanitizeProfileTimeTargetsForRestore validates an untrusted
-// profile_time_targets blob (e.g. one carried in a restored backup bundle)
-// and field-picks the known keys, returning ok=false when anything is off so
-// the caller can leave the stored windows untouched. SaveProfileTimeTargets
-// itself does no validation and a restored bundle is untrusted input, so the
-// restore path must go through here.
-func SanitizeProfileTimeTargetsForRestore(v any) (map[string][]ProfileTimeTarget, bool) {
-	obj, ok := v.(map[string]any)
-	if !ok {
-		return nil, false
-	}
-	out := make(map[string][]ProfileTimeTarget, len(obj))
-	for machine, raw := range obj {
-		id, err := strconv.ParseInt(machine, 10, 64)
-		if err != nil || id < 1 {
-			return nil, false
-		}
-		entries, ok := raw.([]any)
-		if !ok || len(entries) > maxTimeTargetsPerMachine {
-			return nil, false
-		}
-		list := make([]ProfileTimeTarget, 0, len(entries))
-		seen := make(map[string]int, len(entries)) // normalized name → index in list
-		for _, rawEntry := range entries {
-			entry, ok := rawEntry.(map[string]any)
-			if !ok {
-				return nil, false
-			}
-			name, ok := entry["profileName"].(string)
-			if !ok {
-				return nil, false
-			}
-			name = strings.TrimSpace(name)
-			if name == "" || utf8.RuneCountInString(name) > maxProfileNameRunes {
-				return nil, false
-			}
-			minS, minOK := wholeSeconds(entry["minS"])
-			maxS, maxOK := wholeSeconds(entry["maxS"])
-			if !minOK || !maxOK || !validTimeWindow(minS, maxS) {
-				return nil, false
-			}
-			target := ProfileTimeTarget{ProfileName: name, MinS: minS, MaxS: maxS}
-			if i, dup := seen[NormalizeProfileName(name)]; dup {
-				list[i] = target
-				continue
-			}
-			seen[NormalizeProfileName(name)] = len(list)
-			list = append(list, target)
-		}
-		out[machine] = list
-	}
-	return out, true
-}
-
-// wholeSeconds reads one already-decoded JSON value as a whole number of
-// seconds. ok is false for anything that is not a finite whole number.
-func wholeSeconds(v any) (int, bool) {
-	f, ok := v.(float64)
-	if !ok || !isJSONInt(f) || f < -1e9 || f > 1e9 {
-		return 0, false
-	}
-	return int(f), true
-}
-
-// loadTimeTargetLookup reads the stored windows once and returns a per-shot
-// lookup over that snapshot. A read error yields a lookup that always returns
-// nil — the shot is handled exactly as without a window, and the request
-// never fails over a target-time problem.
-func (r *Repository) loadTimeTargetLookup() func(Shot) *TimeTarget {
-	none := func(Shot) *TimeTarget { return nil }
-	stored, err := r.GetProfileTimeTargets()
-	if err != nil {
-		timeTargetErrOnce.Do(func() {
-			log.Printf("shots: profile time targets unavailable, scoring against the generic band: %v", err)
-		})
-		return none
-	}
-	lookup := make(map[int64]map[string]TimeTarget, len(stored))
-	for machine, list := range stored {
-		id, err := strconv.ParseInt(machine, 10, 64)
-		if err != nil || id < 1 {
-			continue
-		}
-		byName := make(map[string]TimeTarget, len(list))
-		for _, target := range list {
-			if !validTimeWindow(target.MinS, target.MaxS) {
-				continue
-			}
-			byName[NormalizeProfileName(target.ProfileName)] = TimeTarget{MinS: target.MinS, MaxS: target.MaxS}
-		}
-		if len(byName) > 0 {
-			lookup[id] = byName
-		}
-	}
-	return func(shot Shot) *TimeTarget {
-		name := NormalizeProfileName(scoreProfileName(shot))
-		if name == "" {
-			return nil
-		}
-		target, ok := lookup[shot.machineID()][name]
-		if !ok {
-			return nil
-		}
-		return &target
-	}
 }
 
 // sortedTimeTargets returns a copy of list ordered by normalized profile name,
