@@ -4,7 +4,8 @@
 // round-trip. Pure function — no DOM deps. Inputs are the raw shot object
 // (×10 integer curves). It mirrors the `classic` model only: the other models
 // registered for dev builds (#1922) are server-only, so a real shot always
-// shows the score the server computed.
+// shows the score the server computed. The duration part accepts the
+// profile's own time window (#1504), the same per-profile target Go resolves.
 
 import { detectChanneling } from '../utils.js';
 import type { ShotDatapoints } from '../utils.js';
@@ -36,6 +37,25 @@ export interface ScoreDetailResult {
 interface ScorableBean {
   brewTempC?: unknown;
   brewRatio?: unknown;
+}
+
+/** A profile's target shot time window, in seconds (#1504). */
+export interface TimeWindow {
+  minS: number;
+  maxS: number;
+}
+
+// #1504: the duration part's 0-100 curve measured from the window edges
+// lo..hi, mirroring Go's durationScore (go/internal/shots/score.go). With
+// lo=25, hi=35 it is exactly the pre-#1504 generic band: the edges lo-5,
+// hi+7, hi+20 are 20, 42, 55.
+export function durationScore(secs: number, lo: number, hi: number): number {
+  const farLow = lo - 5, nearHigh = hi + 7, farHigh = hi + 20;
+  if (secs >= lo && secs <= hi) return 100;
+  if ((secs >= farLow && secs < lo) || (secs > hi && secs <= nearHigh)) return 82;
+  if (secs > nearHigh && secs <= farHigh) return 62;
+  if (secs < farLow) return Math.max(15, 70 - (farLow - secs) * 5);
+  return Math.max(15, 62 - (secs - farHigh) * 3);
 }
 
 function _stddev(vals: number[]): number {
@@ -114,7 +134,14 @@ function _profilePressureMAE(
 // against this bean's target" hint. calcShotScore stays a thin wrapper
 // around it so every existing caller that only wants the number (there are
 // many, across both backend and frontend) is untouched.
-function calcShotScoreDetail(shot: unknown, bean?: unknown): ScoreDetailResult {
+//
+// `timeTarget` (#1504) is the profile's own duration window, the classic
+// model's per-profile target; callers that pass none get the generic band.
+function calcShotScoreDetail(
+  shot: unknown,
+  bean?: unknown,
+  timeTarget?: TimeWindow | null,
+): ScoreDetailResult {
   if (!shot) return { score: null, usedBeanTarget: false, pressureNote: null };
   const sh = shot as ScorableShot;
   const beanRec = bean as ScorableBean | null | undefined;
@@ -183,11 +210,11 @@ function calcShotScoreDetail(shot: unknown, bean?: unknown): ScoreDetailResult {
 
   const secs = (sh.duration || 0) / 10;
   if (secs > 5) {
-    s = secs >= 25 && secs <= 35 ? 100
-      : (secs >= 20 && secs < 25) || (secs > 35 && secs <= 42) ? 82
-      : secs > 42 && secs <= 55   ? 62
-      : secs < 20 ? Math.max(15, 70 - (20 - secs) * 5)
-                  : Math.max(15, 62 - (secs - 55) * 3);
+    // #1504: the profile's own time window when the caller resolved one and
+    // it is a real interval, else the generic 25-35 band.
+    const win = timeTarget && Number.isFinite(timeTarget.minS) && Number.isFinite(timeTarget.maxS)
+      && timeTarget.minS < timeTarget.maxS ? timeTarget : null;
+    s = durationScore(secs, win ? win.minS : 25, win ? win.maxS : 35);
     scores.push(Math.round(s)); weights.push(20);
   }
 
@@ -232,8 +259,12 @@ function calcShotScoreDetail(shot: unknown, bean?: unknown): ScoreDetailResult {
   return { score, usedBeanTarget: score !== null && usedBeanTarget, pressureNote: score !== null ? pressureNote : null };
 }
 
-function calcShotScore(shot: unknown, bean?: unknown): number | null {
-  return calcShotScoreDetail(shot, bean).score;
+function calcShotScore(
+  shot: unknown,
+  bean?: unknown,
+  timeTarget?: TimeWindow | null,
+): number | null {
+  return calcShotScoreDetail(shot, bean, timeTarget).score;
 }
 
 export { calcShotScore, calcShotScoreDetail };
