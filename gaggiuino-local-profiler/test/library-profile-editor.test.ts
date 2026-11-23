@@ -590,13 +590,20 @@ describe('profile target time (#1504)', () => {
 
   function stubSheet(values: Record<string, string>): Record<string, StubField> {
     const fields: Record<string, StubField> = {};
-    const field = (id: string): StubField => (fields[id] ??= {
-      value: values[id] ?? '', style: {}, classList: { add() {}, remove() {} },
-      focus() {}, attrs: {},
-      setAttribute(name: string, value: string) { this.attrs[name] = value; },
-      removeAttribute(name: string) { delete this.attrs[name]; },
-      addEventListener() {},
-    });
+    const field = (id: string): StubField => {
+      const existing = fields[id];
+      if (existing) return existing;
+      const attrs: Record<string, string> = {};
+      const created: StubField = {
+        value: values[id] ?? '', style: {}, classList: { add() {}, remove() {} },
+        focus() {}, attrs,
+        setAttribute(name: string, value: string) { attrs[name] = value; },
+        removeAttribute(name: string) { Reflect.deleteProperty(attrs, name); },
+        addEventListener() {},
+      };
+      fields[id] = created;
+      return created;
+    };
     const host = {
       innerHTML: '',
       classList: { add() {}, remove() {} },
