@@ -22,6 +22,9 @@ import * as libraryView from '../library.js';
 // rule is stroke-only, so filled circles would vanish).
 const ICON_SHOT_LOG = `<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5h.01M5 12h.01M5 17.5h.01"/><path d="M9 6.5h11M9 12h11M9 17.5h11"/></svg>` as Html;
 const ICON_QR = `<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M3,11H5V13H3V11M11,5H13V9H11V5M9,11H13V15H11V13H9V11M15,11H17V13H19V11H21V13H19V15H21V19H19V21H17V19H13V21H11V17H15V15H17V13H15V11M19,19V15H17V19H19M15,3H21V9H15V3M17,5V7H19V5H17M3,3H9V9H3V3M5,5V7H7V5H5M3,15H9V21H3V15M5,17V19H7V17H5Z"/></svg>` as Html;
+// #2165: the archive and restore entries of the sheet's ⋯ menu.
+const ICON_ARCHIVE: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v4H4zM5 8v12h14V8M10 12h4"/></svg>`;
+const ICON_RESTORE: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v4H4zM5 8v12h14V8M12 18v-6M9 15l3-3 3 3"/></svg>`;
 
 // Bean ids with an in-flight toggle-active request — disables the archive /
 // restore button for that bean so a slow connection can't double-fire the
@@ -134,7 +137,7 @@ function _sheetMenu(b: BeanListRow): Html {
       <button type="button" class="lib-sheet-menu-item" data-action="toggle-bean-qr" data-id="${esc(b.id)}">${ICON_QR} ${tHtml('bean_qr_label')}</button>
       ${beanCompareMenuItem(b.id)}
       <span class="lib-sheet-menu-sep"></span>
-      <button type="button" class="lib-sheet-menu-item" data-action="toggle-bean-active" data-id="${esc(b.id)}"${esc(_pendingBeanActiveToggles.has(b.id) ? ' disabled' : '')}>${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}</button>
+      <button type="button" class="lib-sheet-menu-item" data-action="toggle-bean-active" data-id="${esc(b.id)}"${esc(_pendingBeanActiveToggles.has(b.id) ? ' disabled' : '')}>${disabled ? ICON_RESTORE : ICON_ARCHIVE} ${tHtml(disabled ? 'lib_btn_restore' : 'lib_btn_archive')}</button>
       <span class="lib-sheet-menu-sep"></span>
       <button type="button" class="lib-sheet-menu-item del" data-action="delete-bean" data-id="${esc(b.id)}">${ICON_TRASH} ${tHtml('lib_btn_delete')}</button>
     </div>

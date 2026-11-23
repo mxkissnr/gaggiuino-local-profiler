@@ -19,7 +19,7 @@ vi.mock('../public-src/components/confirm-dialog.js', () => ({ confirmDialog: di
 const { S } = await import('../public-src/state/index.js');
 const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
-const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProfile, selectProfilePhase, editProfile, sendProfileToMachine, loadProfileForEditing } = await import('../public-src/views/library-profile-editor.js');
+const { _synthesizeSeries, _collectPhases, loadMachineProfileList, duplicateProfile, selectProfilePhase, editProfile, sendProfileToMachine, loadProfileForEditing, renderProfileList } = await import('../public-src/views/library-profile-editor.js');
 const { t } = await import('../public-src/i18n.js');
 
 // _collectPhases reads phase rows straight off `document` (DOM-as-state, no
@@ -444,5 +444,43 @@ describe('one sheet header and chart first (#2154)', () => {
     const delegation = readFileSync(join(SRC, 'boot', 'delegation.ts'), 'utf8');
     expect(delegation).toContain("case 'select-profile-phase':");
     expect(delegation).toContain("case 'add-profile-phase':");
+  });
+});
+
+describe('profile list rows (#2165)', () => {
+  const el = { innerHTML: '' };
+
+  const render = (): string => {
+    el.innerHTML = '';
+    g.document = { getElementById: (id: string) => (id === 'profileListUI' ? el : undefined), querySelectorAll: () => [] };
+    S.machineProfiles = [{ id: 7, name: 'Turbo' }];
+    S.machineProfilesStale = false;
+    renderProfileList();
+    return el.innerHTML;
+  };
+
+  it('opens the editor on a row tap and keeps the rest in a ⋯ menu', () => {
+    const markup = render();
+    expect(markup).toContain('<button type="button" class="lib-item-open" data-action="edit-profile" data-id="7">');
+    expect(markup.split('data-action="edit-profile"').length - 1).toBe(1);
+    expect(markup).toContain('<details class="lib-sheet-more">');
+    expect(markup).toContain('<summary aria-label="' + t('lib_sheet_more') + '">');
+    const positions = [
+      'data-action="start-profile-dialin"',
+      'data-action="duplicate-profile"',
+      'class="lib-sheet-menu-sep"',
+      'class="lib-sheet-menu-item del" data-action="delete-profile" data-id="7"',
+    ].map(part => markup.indexOf(part));
+    expect(positions.every(i => i > 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+    expect(markup).not.toContain('btn--icon');
+    expect(markup).not.toContain('lib-item-actions');
+  });
+
+  it('gives every menu entry an icon and a label', () => {
+    const markup = render();
+    expect(markup).toContain('</svg> ' + t('profile_dialin_start') + '</button>');
+    expect(markup).toContain('</svg> ' + t('profile_btn_duplicate') + '</button>');
+    expect(markup).toContain('</svg> ' + t('lib_btn_delete') + '</button>');
   });
 });

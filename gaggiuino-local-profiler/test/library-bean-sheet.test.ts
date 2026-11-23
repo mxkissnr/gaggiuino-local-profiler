@@ -109,7 +109,7 @@ describe('bean detail sheet (#1330 part 2)', () => {
     expect(html).toContain('data-action="open-new-bag"');     // Bag +
     expect(html).toContain('data-action="open-freeze-form"'); // Freeze
     expect(html).toContain('data-action="toggle-bean-active"');
-    expect(html).toContain('>' + t('lib_btn_archive') + '<');
+    expect(html).toContain('</svg> ' + t('lib_btn_archive') + '</button>');
     expect(html).toContain(t('lib_sheet_shot_log'));
     expect(html).toContain('data-action="close-bean-sheet"');
   });
@@ -119,8 +119,22 @@ describe('bean detail sheet (#1330 part 2)', () => {
     openBeanSheet(1);
 
     const html = sheetHtml(elements);
-    expect(html).toContain('>' + t('lib_btn_restore') + '<');
-    expect(html).not.toContain('>' + t('lib_btn_archive') + '<');
+    expect(html).toContain('</svg> ' + t('lib_btn_restore') + '</button>');
+    expect(html).not.toContain('</svg> ' + t('lib_btn_archive') + '</button>');
+  });
+
+  it('gives Archive an icon (#2165)', () => {
+    const { elements } = setup();
+    openBeanSheet(1);
+
+    expect(sheetHtml(elements)).toContain('M10 12h4"/></svg> ' + t('lib_btn_archive') + '</button>');
+  });
+
+  it('gives Restore an icon (#2165)', () => {
+    const { elements } = setup({ enabled: false });
+    openBeanSheet(1);
+
+    expect(sheetHtml(elements)).toContain('M9 15l3-3 3 3"/></svg> ' + t('lib_btn_restore') + '</button>');
   });
 
   it('renders the embedded card without the toolbar but with the bag history', () => {

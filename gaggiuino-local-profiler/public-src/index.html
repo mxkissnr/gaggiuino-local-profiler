@@ -206,13 +206,19 @@
                     <p id="topSubtitle" class="settings-row-sub"><span id="machineSubtitle">gaggiuino</span><span id="freshnessBadge" class="badge" style="display:none"></span><span id="firmwareVersionBadge" class="badge" style="display:none"></span></p>
                 </div>
                 <button type="button" class="lib-sheet-iconbtn" id="shotCompareBtn" aria-haspopup="dialog" aria-label="Mit anderem Shot vergleichen" data-i18n-aria-label="shot_compare_pick" title="Mit anderem Shot vergleichen" data-i18n-title="shot_compare_pick"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3M17 17H6l3 3"/></svg></button>
-                <button type="button" class="lib-sheet-iconbtn" id="shareCardBtn" aria-haspopup="dialog" data-i18n-title="share_card_tooltip" title="Shot als PNG-Karte exportieren / teilen" aria-label="Teilen" data-i18n-aria-label="share_card"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 14v5h14v-5"/></svg></button>
+                <details class="lib-sheet-more shot-share" id="shotShare">
+                    <summary id="shareCardBtn" data-i18n-title="share_card_tooltip" title="Shot als PNG-Karte exportieren / teilen" aria-label="Teilen" data-i18n-aria-label="share_card"><svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 8l5-5 5 5M5 14v5h14v-5"/></svg></summary>
+                    <div class="lib-sheet-menu-list">
+                        <button type="button" class="lib-sheet-menu-item" data-action="share-shot-card" data-format="square"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg> <span data-i18n="card_fmt_square">Quadrat (1:1)</span></button>
+                        <button type="button" class="lib-sheet-menu-item" data-action="share-shot-card" data-format="story"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="3" width="10" height="18" rx="2"/></svg> <span data-i18n="card_fmt_story">Story (9:16)</span></button>
+                    </div>
+                </details>
                 <details class="lib-sheet-more shot-more" id="shotMore">
                     <summary aria-label="Weitere Aktionen" data-i18n-aria-label="lib_sheet_more">⋯</summary>
                     <div class="lib-sheet-menu-list">
-                        <button type="button" class="lib-sheet-menu-item" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)">↓ .shot</button>
-                        <button type="button" class="lib-sheet-menu-item" id="exportProfileBtn" data-i18n="btn_export_profile" data-i18n-title="btn_export_profile_tooltip" title="Profil exportieren">↓ Profil</button>
-                        <button type="button" class="lib-sheet-menu-item" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren">↓ CSV</button>
+                        <button type="button" class="lib-sheet-menu-item" id="exportShotBtn" data-i18n-title="export_shot_title" title="Aktuellen Shot als .shot exportieren (Decent Espresso Format)"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg> <span data-i18n="export_shot_menu">.shot-Datei herunterladen</span></button>
+                        <button type="button" class="lib-sheet-menu-item" id="exportProfileBtn" data-i18n-title="btn_export_profile_tooltip" title="Gaggiuino-Profil aus Shot exportieren"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17c3 0 4-8 7-8s3 4 5 4 3-5 6-5M3 21h18"/></svg> <span data-i18n="btn_export_profile">Profil herunterladen</span></button>
+                        <button type="button" class="lib-sheet-menu-item" id="exportAllCsvBtn" data-i18n-title="export_csv_title" title="Alle Shots als CSV exportieren"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4zM4 10h16M4 15h16M10 5v14"/></svg> <span data-i18n="export_csv_title">Alle Shots als CSV exportieren</span></button>
                     </div>
                 </details>
             </div>

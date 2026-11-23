@@ -2,8 +2,8 @@
 // "Page anatomy"). Pins what the shot page module builds or opens: the notes
 // sheet (the static note fields moved into the shared detail sheet, a pending
 // save flushed on close and the page redrawn once a changed note has saved),
-// the share and compare sheets, the Process group, the verdict's comparison
-// line and the similar-shots title. Fake DOM, no jsdom (same style as the
+// the share menu, the compare sheet, the Process group, the verdict's
+// comparison line and the similar-shots title. Fake DOM, no jsdom (same style as the
 // orders page test).
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { ShotLike } from '../public-src/views/shots/utils.js';
@@ -307,23 +307,16 @@ describe('Coffee rows (#2164)', () => {
   });
 });
 
-describe('share sheet (#2152)', () => {
-  it('offers the square and the story card next to the share button', () => {
-    const anchor = fakeEl('shareCardBtn');
-    page.openShotShare(anchor as unknown as HTMLElement);
-    const opts = lastSheet();
-    expect(opts.title).toBe(t('share_card'));
-    expect(opts.anchor).toBe(anchor);
-    expect(opts.body).toContain('data-action="share-shot-card" data-format="square"');
-    expect(opts.body).toContain('data-action="share-shot-card" data-format="story"');
-    expect(opts.body).toContain(t('card_fmt_square'));
-    expect(opts.body).toContain(t('card_fmt_story'));
+describe('share menu (#2165)', () => {
+  it('shares the chosen format without a sheet', () => {
+    page.chooseShareFormat('story');
+    expect(card.shareCard).toHaveBeenCalledWith('story');
+    expect(sheet.openDetailSheet).not.toHaveBeenCalled();
+    expect(sheet.closeDetailSheet).not.toHaveBeenCalled();
   });
 
-  it('shares the chosen format and closes the sheet', () => {
-    page.chooseShareFormat('story');
-    expect(sheet.closeDetailSheet).toHaveBeenCalledTimes(1);
-    expect(card.shareCard).toHaveBeenCalledWith('story');
+  it('has no share sheet any more', () => {
+    expect('openShotShare' in page).toBe(false);
   });
 });
 
@@ -470,10 +463,35 @@ describe('shot page markup (#2152)', () => {
   it('opens with a top app bar: title, compare, share and the downloads in the overflow menu', () => {
     expect(bar).toContain('<h1 id="topTitle" class="settings-bar-title">');
     expect(bar).toContain('class="lib-sheet-iconbtn" id="shotCompareBtn"');
-    expect(bar).toContain('class="lib-sheet-iconbtn" id="shareCardBtn"');
+    expect(bar).toContain('<summary id="shareCardBtn"');
     const more = between('<details class="lib-sheet-more shot-more" id="shotMore">', '</details>');
     for (const id of ['exportShotBtn', 'exportProfileBtn', 'exportAllCsvBtn']) {
       expect(more, id).toContain(`class="lib-sheet-menu-item" id="${id}"`);
+    }
+  });
+
+  it('puts the share formats into a menu in the shared pattern (#2165)', () => {
+    const share = between('<details class="lib-sheet-more shot-share" id="shotShare">', '</details>');
+    expect(share).toContain('<summary id="shareCardBtn" data-i18n-title="share_card_tooltip"');
+    expect(share).toContain('<button type="button" class="lib-sheet-menu-item" data-action="share-shot-card" data-format="square">');
+    expect(share).toContain('<button type="button" class="lib-sheet-menu-item" data-action="share-shot-card" data-format="story">');
+    expect(share).toContain('<span data-i18n="card_fmt_square">');
+    expect(share).toContain('<span data-i18n="card_fmt_story">');
+    expect(count(share, '<svg class="rail-icon sm"')).toBe(2);
+    expect(count(indexHtml, 'id="shareCardBtn"')).toBe(1);
+  });
+
+  it('gives every download an icon and a label that says what it does (#2165)', () => {
+    const more = between('<details class="lib-sheet-more shot-more" id="shotMore">', '</details>');
+    expect(count(more, '<svg class="rail-icon sm"')).toBe(3);
+    for (const key of ['export_shot_menu', 'btn_export_profile', 'export_csv_title']) {
+      expect(more, key).toContain(`<span data-i18n="${key}">`);
+    }
+    expect(more).not.toContain('\u2193');
+    for (const lang of ['de', 'en', 'es', 'fr', 'it', 'nl']) {
+      const locale = read('i18n/' + lang + '.ts');
+      expect(locale, lang).toContain(`export_shot_menu:'`);
+      expect(locale, lang).not.toContain(`btn_export_profile:'\u2193`);
     }
   });
 
@@ -537,7 +555,8 @@ describe('shot page wiring (#2152)', () => {
   it('wires the bar buttons and the rows that open the notes', () => {
     const src = read('boot/shot-detail.ts');
     expect(src).toContain('onShotCompareClick(compareBtn)');
-    expect(src).toContain('openShotShare(shareBtn)');
+    expect(src).not.toContain('openShotShare');
+    expect(src).not.toContain("getElementById('shotMore')");
     expect(src).toContain("if (row) openShotNotes(row.dataset.shotNotesOpen || undefined);");
     expect(src).not.toContain('cardFmtMenu');
   });

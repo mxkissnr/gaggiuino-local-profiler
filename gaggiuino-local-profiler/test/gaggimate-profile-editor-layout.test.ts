@@ -210,9 +210,27 @@ describe('GaggiMate editor layout (#2154)', () => {
     expect(standard.powerData.map(p => p.y)).toEqual([30, 100, 100]);
   });
 
+  it('offers the stop conditions in the shared menu (#2165)', async () => {
+    const markup = await open(PRO);
+    expect(markup).toContain('<details class="lib-sheet-more gm-stop-add">');
+    expect(markup).toContain(`<summary class="btn btn--tonal">${t('gm_add_condition')}</summary>`);
+    expect(markup.match(/class="lib-sheet-menu-item" data-action="gm-pro-add-target"/g)).toHaveLength(6);
+    expect(markup).not.toContain('gm-dropdown');
+    expect(markup).not.toContain('gm-pro-target-menu');
+  });
+
+  it('adds a picked stop condition and drops it from the menu (#2165)', async () => {
+    await open(PRO);
+    handleGmEditorAction('gm-pro-add-target', { dataset: { idx: '0', type: 'flow', op: 'lte' } } as unknown as HTMLElement);
+    const markup = body();
+    expect(markup).toContain('data-action="gm-pro-target-value" data-idx="0" data-tidx="0"');
+    expect(markup.match(/data-action="gm-pro-add-target"/g)).toHaveLength(5);
+    expect(markup).not.toContain('data-type="flow" data-op="lte"');
+  });
+
   it('leaves no style for the retired GaggiMate editor parts', () => {
     const css = readFileSync(join(import.meta.dirname, '..', 'public-src', 'style.css'), 'utf8');
-    for (const cls of ['.gm-chart-container', '.gm-phase-nav', '.gm-phase-sep', '.gm-empty']) {
+    for (const cls of ['.gm-chart-container', '.gm-phase-nav', '.gm-phase-sep', '.gm-empty', '.gm-dropdown']) {
       expect(css).not.toContain(cls);
     }
   });

@@ -17,6 +17,7 @@ import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWh
 import { highlightSheetFlavor } from '../components/flavor-mini-wheel.js';
 import { closeDetailSheet } from '../components/detail-sheet.js';
 import { chooseShareFormat, pickCompareShot } from '../views/shots/detail-page.js';
+import { wireOverflowMenus } from '../components/overflow-menu.js';
 import { openDialinShot } from '../views/dialin.js';
 import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrinder, deleteGrinder,
          resetGrinderBurrs, deleteGrinderZeroPointEntry, toggleBeanQR, openNewBagForm, closeNewBagForm,
@@ -54,6 +55,9 @@ export function activateActionFromKeyboard(e: KeyboardEvent): void {
 }
 
 export function wireDelegation(): void {
+  // #2165: Escape, a press outside, close after a pick and the upward flip
+  // for every overflow menu in the shared pattern.
+  wireOverflowMenus();
   // ── Global click delegation for dynamic content ────────────────────────
   document.body.addEventListener('keydown', activateActionFromKeyboard);
   document.body.addEventListener('click', e => {
