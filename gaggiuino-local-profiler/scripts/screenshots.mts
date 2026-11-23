@@ -435,6 +435,7 @@ async function main(): Promise<void> {
                 .catch(() => console.warn('bean-sheet: current bag card did not expand, capturing anyway'));
         }
         await waitForImages(page, '#beanSheet .lib-bean-thumb');
+        await waitForImages(page, '#beanSheet img[src]');
         await page.screenshot({ path: path.join(outDir, 'bean-sheet.png') });
         await checkFill(page, 'bean-sheet', '#beanSheet .lib-sheet');
 
