@@ -5,6 +5,7 @@ import {
     readNpmLock,
     syncNotices,
     type Installed,
+    type NpmLock,
 } from '../scripts/notices-sync.mts';
 
 // #2183: the two notices guards turn red whenever Renovate bumps a runtime
@@ -64,13 +65,19 @@ const fixture = [
     '',
 ].join('\n');
 
-function installed(overrides: Partial<Installed> = {}): Installed {
+interface Overrides {
+    npmDirect?: string[];
+    npm?: NpmLock;
+    goModules?: Map<string, string>;
+    goStdlib?: string;
+}
+
+function installed(overrides: Overrides = {}): Installed {
     return {
-        npmDirect: ['echarts'],
-        npm: { top: new Map([['echarts', '6.1.0'], ['tslib', '2.3.0']]), nested: new Map() },
-        goModules: new Map([['golang.org/x/sys', 'v0.49.0']]),
-        goStdlib: '1.27.4',
-        ...overrides,
+        npmDirect: overrides.npmDirect ?? ['echarts'],
+        npm: overrides.npm ?? { top: new Map([['echarts', '6.1.0'], ['tslib', '2.3.0']]), nested: new Map() },
+        goModules: overrides.goModules ?? new Map([['golang.org/x/sys', 'v0.49.0']]),
+        goStdlib: overrides.goStdlib ?? '1.27.4',
     };
 }
 
@@ -112,10 +119,16 @@ describe('syncNotices (#2183)', () => {
     });
 
     it('reports a new npm dependency and adds nothing', () => {
-        const result = syncNotices(fixture, {
-            ...withNpm([['echarts', '6.1.0'], ['tslib', '2.3.0'], ['newlib', '1.0.0']]),
-            npmDirect: ['echarts', 'newlib'],
-        });
+        const result = syncNotices(
+            fixture,
+            installed({
+                npmDirect: ['echarts', 'newlib'],
+                npm: {
+                    top: new Map([['echarts', '6.1.0'], ['tslib', '2.3.0'], ['newlib', '1.0.0']]),
+                    nested: new Map(),
+                },
+            }),
+        );
 
         expect(result.text).toBe(fixture);
         expect(result.problems).toHaveLength(1);
@@ -175,11 +188,14 @@ describe('syncNotices (#2183)', () => {
     });
 
     it('never touches Fonts, Models or licence-text headings', () => {
-        const result = syncNotices(fixture, {
-            ...withNpm([['echarts', '6.2.0'], ['tslib', '2.8.1']]),
-            goModules: new Map([['golang.org/x/sys', 'v0.50.0']]),
-            goStdlib: '1.27.5',
-        });
+        const result = syncNotices(
+            fixture,
+            installed({
+                npm: { top: new Map([['echarts', '6.2.0'], ['tslib', '2.8.1']]), nested: new Map() },
+                goModules: new Map([['golang.org/x/sys', 'v0.50.0']]),
+                goStdlib: '1.27.5',
+            }),
+        );
 
         expect(result.text).toContain('### Figtree 400, 600');
         expect(result.text).toContain('### Segment Anything');
