@@ -414,19 +414,17 @@ func TestTextWidth_ConcurrentUse(t *testing.T) {
 	}
 }
 
-// TestCardFonts_EmbeddedFontsParse pins the three TTFs embedded from fonts/
+// TestCardFonts_EmbeddedFontsParse pins the two TTFs embedded from fonts/
 // (#2166): each must parse, carry the family name resvg is asked for, and
 // have a glyph for a digit the card draws.
 func TestCardFonts_EmbeddedFontsParse(t *testing.T) {
 	tests := []struct {
-		name      string
-		data      []byte
-		wantPfx   string
-		exactName bool
+		name    string
+		data    []byte
+		wantPfx string
 	}{
-		{"figtree-400", figtreeRegularTTF, "Figtree Light", false},
-		{"figtree-600", figtreeSemiBoldTTF, "Figtree Light", false},
-		{"fraunces-600", frauncesTTF, "Fraunces", true},
+		{"figtree-400", figtreeRegularTTF, "Figtree Light"},
+		{"figtree-600", figtreeSemiBoldTTF, "Figtree Light"},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -438,11 +436,7 @@ func TestCardFonts_EmbeddedFontsParse(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Name(NameIDFamily): %v", err)
 			}
-			if tc.exactName {
-				if family != tc.wantPfx {
-					t.Errorf("family = %q, want %q", family, tc.wantPfx)
-				}
-			} else if !strings.HasPrefix(family, tc.wantPfx) {
+			if !strings.HasPrefix(family, tc.wantPfx) {
 				t.Errorf("family = %q, want prefix %q", family, tc.wantPfx)
 			}
 			if idx, err := f.GlyphIndex(nil, '8'); err != nil || idx == 0 {
@@ -461,30 +455,6 @@ func TestCardSVG_TextUsesFigtree(t *testing.T) {
 	}
 	if strings.Contains(svg, `font-family="Go"`) {
 		t.Errorf("card SVG still uses the Go family alone")
-	}
-}
-
-// TestSvgBufSerif_UsesFraunces checks the score's display text helper.
-func TestSvgBufSerif_UsesFraunces(t *testing.T) {
-	var b svgBuf
-	b.serif(52, 200, 96, "#5cb98a", "92")
-	got := b.b.String()
-	for _, want := range []string{`font-family="Fraunces"`, `font-weight="600"`, ">92</text>"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("serif output %q does not contain %q", got, want)
-		}
-	}
-}
-
-// TestSerifWidth_MeasuresFraunces proves the serif measuring path uses
-// Fraunces rather than the Figtree bold face.
-func TestSerifWidth_MeasuresFraunces(t *testing.T) {
-	serif := serifWidth("88", 96)
-	if serif <= 0 {
-		t.Fatalf("serifWidth(%q, 96) = %v, want > 0", "88", serif)
-	}
-	if sans := textWidth("88", 96, true); serif == sans {
-		t.Errorf("serifWidth and textWidth both returned %v; Fraunces is not measured", sans)
 	}
 }
 
@@ -664,10 +634,10 @@ func TestCard_NoEmptyTextElements(t *testing.T) {
 	}
 }
 
-// TestCard_VerdictSentenceDeltaAndSerifScore covers #2166's verdict block: the
-// score in Fraunces, the sentence with its arrow, the delta chip and the
-// compared shot, and no tier phrase next to a passed sentence.
-func TestCard_VerdictSentenceDeltaAndSerifScore(t *testing.T) {
+// TestCard_VerdictSentenceDeltaAndScore covers #2166's verdict block: the
+// score, the sentence with its arrow, the delta chip and the compared shot,
+// and no tier phrase next to a passed sentence.
+func TestCard_VerdictSentenceDeltaAndScore(t *testing.T) {
 	score := 89
 	d := -11
 	m := newCardModel(Shot(cardShotData()), &score, "square", "", "dark", "en", cardDeps{})
@@ -675,7 +645,7 @@ func TestCard_VerdictSentenceDeltaAndSerifScore(t *testing.T) {
 	svg := m.svg()
 
 	for _, want := range []string{
-		`font-family="Fraunces"`, ">89</text>", ">↑</text>", "Shot ran long (55 s)",
+		">89</text>", ">↑</text>", "Shot ran long (55 s)",
 		">−11</text>", ">vs shot 306</text>",
 	} {
 		if !strings.Contains(svg, want) {
@@ -684,6 +654,40 @@ func TestCard_VerdictSentenceDeltaAndSerifScore(t *testing.T) {
 	}
 	if strings.Contains(svg, "Really dialed in") {
 		t.Error("card draws the tier phrase next to a passed verdict sentence")
+	}
+}
+
+// TestCard_ScoreInFigtreeSemiBold covers #2191: the score is set in the card's
+// Figtree SemiBold at the layout's score size, no Fraunces is asked for, and
+// the verdict arrow and the delta chip start 28 px after the score measured in
+// that same face.
+func TestCard_ScoreInFigtreeSemiBold(t *testing.T) {
+	for _, format := range []string{"square", "story"} {
+		t.Run(format, func(t *testing.T) {
+			score := 89
+			d := -11
+			m := newCardModel(Shot(cardShotData()), &score, format, "", "dark", "en", cardDeps{})
+			m.verdict = cardVerdict{kind: "coarser", text: "Shot ran long (55 s) – grind coarser", delta: &d, vs: "vs shot 306"}
+			svg := m.svg()
+			L := m.layout()
+
+			scoreRe := regexp.MustCompile(`<text x="` + regexp.QuoteMeta(fnum(cardPX)) + `" y="[0-9.]+" font-family="'Figtree Light', Go" font-size="` +
+				regexp.QuoteMeta(fnum(L.scoreSize)) + `" font-weight="600" fill="[^"]+">89</text>`)
+			if !scoreRe.MatchString(svg) {
+				t.Errorf("score is not drawn in Figtree SemiBold at size %s", fnum(L.scoreSize))
+			}
+			if strings.Contains(svg, "Fraunces") {
+				t.Error("card still asks for Fraunces")
+			}
+
+			textX := regexp.QuoteMeta(fnum(cardPX + textWidth("89", L.scoreSize, true) + 28))
+			if !regexp.MustCompile(`<text x="` + textX + `"[^>]*>↑</text>`).MatchString(svg) {
+				t.Errorf("verdict arrow does not start 28 px after the Figtree score (x=%s)", textX)
+			}
+			if !regexp.MustCompile(`<rect x="` + textX + `" `).MatchString(svg) {
+				t.Errorf("delta chip does not start 28 px after the Figtree score (x=%s)", textX)
+			}
+		})
 	}
 }
 
