@@ -261,4 +261,3 @@ func TestRegisterDevScoreModels_DevBuildOnly(t *testing.T) {
 		t.Fatalf("dev build: ids = %v, want %v", got, want)
 	}
 }
-

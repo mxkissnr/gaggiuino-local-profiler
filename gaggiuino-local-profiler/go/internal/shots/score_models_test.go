@@ -680,4 +680,3 @@ func TestRegisterDevScoreModels_ClassicSelectedUnchanged(t *testing.T) {
 		t.Errorf("ActiveScoreModelID = %q, want %q", got, AdherenceScoreModel)
 	}
 }
-
