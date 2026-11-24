@@ -11,7 +11,7 @@ import type { AnalyticsPageFilter } from './analytics-summary.js';
 import { WARNING_ICON_SVG } from '../icons.js';
 import { openDetailSheet } from '../components/detail-sheet.js';
 import type { DetailAnchorPoint } from '../components/detail-sheet.js';
-import type { ChartConfiguration, TooltipItem } from 'chart.js';
+import type { ChartConfiguration, ScriptableScaleContext, TooltipItem } from 'chart.js';
 import { _chartCanvas, _counterPeriod, _counterText, _dateFromKey, _dayKeyNum, _dayKeyOf, _keyFromNum, _libCollection, _machineScopeSuffix, _machines, _mutedTickColor, _pageFilter, _pageShots, _profileNameOf, _saveAnalyticsFilter, _scoreChartColor, computeRecipeSummary } from './analytics/shared.js';
 import type { EquipKey, EquipStat, EquipStatEntry, ShotRow } from './analytics/shared.js';
 import { buildCalendar, openCalendarDayDetail } from './analytics/calendar.js';
@@ -729,7 +729,7 @@ export function buildTrendChart() {
         x: { ticks: { color: _mutedTickColor(), font: { size: 10 }, autoSkip: false, maxRotation: 0,
             callback: (_value: string | number, index: number) => tickLabels[index] ?? '' },
           // Grid lines only under a drawn date, as before when autoSkip thinned the ticks.
-          grid: { color: (c: { index: number }) => (tickLabels[c.index] ? gridColor : 'transparent') } },
+          grid: { color: (c: ScriptableScaleContext) => (tickLabels[c.index] ? gridColor : 'transparent') } },
         y: { min: _trendAxisMin(scoreData), max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
       }
     }
