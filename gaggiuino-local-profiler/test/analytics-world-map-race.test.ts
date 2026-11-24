@@ -35,7 +35,7 @@ function fakeWrap() {
 }
 
 describe('buildWorldMap (#648 fetch race guard)', () => {
-  it('a stale (earlier-fired, later-resolving) call\'s rejection does not overwrite a newer call\'s completed result', async () => {
+  it("a stale (earlier-fired, later-resolving) call's rejection does not overwrite a newer call's completed result", async () => {
     const wrap = fakeWrap();
     g.document = { getElementById: (id: string) => (id === 'worldMapWrap' ? wrap : null) };
 

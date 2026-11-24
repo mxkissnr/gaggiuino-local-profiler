@@ -40,7 +40,8 @@ describe('collectWorldMapData (#2200 filtered shots only)', () => {
     for (const entry of data.entries) {
       expect(data.countries).toContain(entry.origins[0]?.code);
     }
-    expect([...(data.byCode.ET?.beans ?? [])]).toEqual(['Blend']);
+    const et = data.byCode.ET;
+    expect(et ? [...et.beans] : []).toEqual(['Blend']);
     expect(data.byCode.BR).toBeUndefined();
   });
 
@@ -52,12 +53,12 @@ describe('collectWorldMapData (#2200 filtered shots only)', () => {
     expect(Object.keys(data.byCode)).toEqual([]);
   });
 
-  it('all machines count every brewed bean\'s country', () => {
+  it("all machines count every brewed bean's country", () => {
     const data = collectWorldMapData(beans, filterShotsByMachine(shots, 'all'), scoreOf);
 
     expect([...data.countries].sort()).toEqual(['BR', 'CO', 'ET', 'KE']);
     expect(data.entries).toHaveLength(4);
     const yirga = data.entries.find(e => e.bean.name === 'Yirga');
-    expect(yirga ? data.shotCounts.get(yirga) : undefined).toBe(2);
+    expect(yirga === undefined ? undefined : data.shotCounts.get(yirga)).toBe(2);
   });
 });
