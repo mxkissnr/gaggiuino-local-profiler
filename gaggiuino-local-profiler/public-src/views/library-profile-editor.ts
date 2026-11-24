@@ -24,6 +24,8 @@ import { suggestProfileFromBean } from '../profile-suggestion.js';
 import type { ProfileSuggestion } from '../profile-suggestion.js';
 import { TARGET_ICON_SVG, ICON_TRASH } from '../icons.js';
 import { confirmDialog } from '../components/confirm-dialog.js';
+import { attachDialogKeyboard } from '../components/dialog-a11y.js';
+import type { DialogKeyboardHandle } from '../components/dialog-a11y.js';
 import { markFieldInvalid } from '../components/field-error.js';
 import { bindPillSelects } from '../components/pill-select.js';
 import { phaseTimelineHtml, phaseHeadHtml, stopsFoldHtml, removePhaseButtonHtml } from '../components/phase-timeline.js';
@@ -94,6 +96,8 @@ let _formMachineId: number | null = null;
 
 // #2154: the phase whose row is visible (0-based); the timeline marks it.
 let _selectedPhase = 0;
+
+let _editorKeyboard: DialogKeyboardHandle | null = null;
 
 setProfileTimeTargetsChanged(() => renderProfileList());
 
@@ -214,10 +218,17 @@ export function openProfileForm(profile?: MachineProfile | null, beanId?: string
   renderProfilePreviewChart();
   // #2154: the name row sits at the bottom of the phone sheet now; start
   // at the top, on the sheet's close button.
-  document.getElementById('closeProfileFormBtn')?.focus();
+  _editorKeyboard?.release();
+  _editorKeyboard = attachDialogKeyboard(
+    document.getElementById('profileEditorModal'),
+    closeProfileForm,
+    { initialFocus: document.getElementById('closeProfileFormBtn') },
+  );
 }
 
 export function closeProfileForm(): void {
+  _editorKeyboard?.release();
+  _editorKeyboard = null;
   _formMachineId      = null;
   _selectedPhase      = 0;
   S.profileEditId     = null;
