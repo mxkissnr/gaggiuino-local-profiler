@@ -1,20 +1,30 @@
 package system
 
-import "net/http"
+import (
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
+)
 
 // This file implements the machine-switch endpoints: GET /api/switch and
-// POST /api/switch/toggle — a read/toggle of the default machine's HA switch
-// entity, used by the app's "turn the machine on/off" control and by
+// POST /api/switch/toggle — a read/toggle of a machine's HA switch
+// entity (?machineId, the default machine when absent, #2202), used by the
+// app's "turn the machine on/off" control and by
 // glp-integration. Both route through the same ha.Client + registry the
 // preheat watcher (poll.go) already uses, so the switch state this reports
 // and the one checkAndApplyMachinePower() acts on never diverge.
 
 // getSwitch serves GET /api/switch: `{ configured: false }` when no
-// switch_entity is set on the default machine, otherwise `{ configured:
-// true, entity, state }` where state is true/false/null (null = HA
-// unreachable or no token).
+// switch_entity is set on the requested machine (default machine without
+// ?machineId), otherwise `{ configured: true, entity, state }` where state is
+// true/false/null (null = HA unreachable or no token).
 func (h *Handlers) getSwitch(w http.ResponseWriter, r *http.Request) {
-	entity := h.poller.defaultSwitchEntity()
+	entity, ok := h.switchEntityForRequest(w, r)
+	if !ok {
+		return
+	}
 	if entity == "" {
 		writeJSON(w, http.StatusOK, map[string]any{"configured": false})
 		return
@@ -32,7 +42,10 @@ func (h *Handlers) getSwitch(w http.ResponseWriter, r *http.Request) {
 // falls through to turn_on). 400 when no token/entity, 500 when the service
 // call itself fails.
 func (h *Handlers) postSwitchToggle(w http.ResponseWriter, r *http.Request) {
-	entity := h.poller.defaultSwitchEntity()
+	entity, ok := h.switchEntityForRequest(w, r)
+	if !ok {
+		return
+	}
 	if !h.poller.ha.Enabled() || entity == "" {
 		writeError(w, http.StatusBadRequest, "switch_entity nicht konfiguriert")
 		return
@@ -48,4 +61,33 @@ func (h *Handlers) postSwitchToggle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "state": !on})
+}
+
+// switchEntityForRequest resolves the request's ?machineId to that machine's
+// HA switch entity through the machine registry (#2202), "" when the machine
+// has none. No machineId keeps the default machine (glp-integration and the
+// Orders view call without one). ok is false once an error response has been
+// written: 400 for a machineId that is not a number, 404 for one that names no
+// machine (never silently the default machine's switch), 500 for a registry
+// error.
+func (h *Handlers) switchEntityForRequest(w http.ResponseWriter, r *http.Request) (string, bool) {
+	raw := r.URL.Query().Get("machineId")
+	if raw == "" {
+		return h.poller.defaultSwitchEntity(), true
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Invalid machineId")
+		return "", false
+	}
+	machine, err := h.poller.registry.ResolveMachine(&id)
+	if errors.Is(err, machines.ErrUnknownMachine) {
+		writeError(w, http.StatusNotFound, "Unknown machine")
+		return "", false
+	}
+	if err != nil {
+		internalError(w, err)
+		return "", false
+	}
+	return switchEntityOf(machine), true
 }

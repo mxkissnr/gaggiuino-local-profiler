@@ -6,7 +6,7 @@ import type { Html } from '../../utils.js';
 import { openDetailSheet } from '../../components/detail-sheet.js';
 import type { DetailAnchorPoint } from '../../components/detail-sheet.js';
 import { _beans, _counterPeriod, _pageShots } from './shared.js';
-import type { SharedBean, ShotAnnotation } from './shared.js';
+import type { SharedBean, ShotAnnotation, ShotRow } from './shared.js';
 
 // World map: a bean's origins (a blend carries several), the per-country
 // stats the tooltip reads back off a series datum, and the params ECharts
@@ -58,9 +58,10 @@ interface TopojsonModule {
 
 // ── Origin world map ──────────────────────────────────────────────────────
 // Choropleth + region points of coffee origins: shots are joined to library
-// beans by name (case-insensitive, same precedent as the stock math) and
-// colored by shot count; beans with an origin but no shots yet are still
-// highlighted. Rendered with Apache ECharts (roam/zoom + scatter points),
+// beans by name (case-insensitive, same precedent as the stock math). #2200:
+// only beans with at least one shot in the current filter (machine, period,
+// search) are drawn; the regions, points, chips, routes, heading count and
+// empty state all come from that one set. Rendered with Apache ECharts (roam/zoom + scatter points),
 // registered from countries-110m.json via topojson-client — both bundled
 // as real npm deps (no CDN), the topojson data file itself is served
 // locally (CSP connect-src 'self') and cached after the first Analytics visit.
@@ -569,6 +570,89 @@ function _onMapClick(raw: unknown): void {
   _openCountryDetail(code, anchor);
 }
 
+// #2200: everything the map draws, built from the filtered shots only. A bean
+// is on the map when at least one shot in `shots` used it; a country is in
+// byCode (highlighted, counted, given a chip and a route) when at least one such
+// bean comes from it. Library beans with an origin but no shot here are left
+// out, so the heading count and the drawn regions/points always match.
+interface WorldMapData {
+  entries: MapEntry[];               // brewed beans with an origin, library order
+  shotCounts: Map<MapEntry, number>; // whole shots per brewed bean
+  byCode: Record<string, MapStats>;  // origin countries of those beans only
+  countries: string[];               // the keys of byCode, most-brewed first
+}
+
+export function collectWorldMapData(
+  beans: readonly SharedBean[],
+  shots: readonly ShotRow[],
+  scoreOf: (shot: ShotRow) => number | null,
+): WorldMapData {
+  // bean name (lowercased) → { bean, origins:[{code, weight}] }, restricted to
+  // known coffee countries. A blend's weights come from its per-country
+  // percent when set (normalized to sum to 1), else split equally across its
+  // origin countries — so one shot of a 2-country blend contributes 0.5 to
+  // each by default, or e.g. 0.7/0.3 when weighted.
+  const nameToBean = new Map<string, MapEntry>();
+  const idToBean   = new Map<number, MapEntry>();
+  const allEntries: MapEntry[] = [];
+  for (const b of beans) {
+    const rawOrigins: { code?: string | null; percent?: number | null }[] =
+      Array.isArray(b.origins) && b.origins.length ? b.origins : (b.origin ? [{ code: b.origin }] : []);
+    const valid = rawOrigins.filter(o => COFFEE_COUNTRIES.some(c => c.code === o.code));
+    if (!valid.length) continue;
+    const totalPercent = valid.reduce((sum, o) => sum + (o.percent || 0), 0);
+    const origins = valid.map(o => ({
+      code: o.code as string,
+      weight: totalPercent > 0 ? (o.percent || 0) / totalPercent : 1 / valid.length,
+    }));
+    const entry = { bean: b, origins };
+    allEntries.push(entry);
+    nameToBean.set(String(b.name || '').toLowerCase(), entry);
+    if (b.id != null) idToBean.set(b.id, entry);
+  }
+  // #456: beanId-first lookup (survives bean renames), falling back to the
+  // name key for annotations that predate beanId or a name that no longer
+  // resolves to any current bean.
+  const resolveMapEntry = (ann: ShotAnnotation | null | undefined): MapEntry | undefined =>
+    (ann?.beanId != null && idToBean.get(ann.beanId))
+    || nameToBean.get(String(ann?.coffee || '').toLowerCase());
+
+  // code → { shots, beans, beanShots, ... }, built from the filtered shots
+  // only; beanShots tracks each bean's own weighted contribution to this
+  // country (only interesting, i.e. non-integer, for blends) for the tooltip.
+  const shotCounts = new Map<MapEntry, number>();
+  const byCode: Record<string, MapStats> = {};
+  for (const s of shots) {
+    const entry = resolveMapEntry(s.annotation);
+    if (!entry) continue;
+    shotCounts.set(entry, (shotCounts.get(entry) ?? 0) + 1);
+    const score = scoreOf(s);
+    for (const o of entry.origins) {
+      let stats = byCode[o.code];
+      if (!stats) {
+        stats = { shots: 0, beans: new Set(), beanShots: new Map(), scoreSum: 0, scoreCount: 0, beanScoreSum: new Map(), beanScoreCount: new Map() };
+        byCode[o.code] = stats;
+      }
+      stats.beans.add(entry.bean.name);
+      stats.shots += o.weight;
+      stats.beanShots.set(entry.bean.name, (stats.beanShots.get(entry.bean.name) ?? 0) + o.weight);
+      if (score !== null) {
+        stats.scoreSum += score;
+        stats.scoreCount++;
+        stats.beanScoreSum.set(entry.bean.name, (stats.beanScoreSum.get(entry.bean.name) ?? 0) + score);
+        stats.beanScoreCount.set(entry.bean.name, (stats.beanScoreCount.get(entry.bean.name) ?? 0) + 1);
+      }
+    }
+  }
+  for (const stats of Object.values(byCode)) {
+    stats.shots = Math.round(stats.shots * 10) / 10;
+    for (const [name, val] of stats.beanShots) stats.beanShots.set(name, Math.round(val * 10) / 10);
+  }
+  const countries = Object.keys(byCode)
+    .sort((a, b) => (byCode[b]?.shots ?? 0) - (byCode[a]?.shots ?? 0));
+  return { entries: allEntries.filter(e => shotCounts.has(e)), shotCounts, byCode, countries };
+}
+
 export async function buildWorldMap() {
   const token = ++_worldMapReqToken;
   const wrap = document.getElementById('worldMapWrap');
@@ -589,84 +673,20 @@ export async function buildWorldMap() {
     _worldMapThemeListenerRegistered = true;
   }
 
-  // bean name (lowercased) → { bean, origins:[{code, weight}] }, restricted to
-  // known coffee countries. A blend's weights come from its per-country
-  // percent when set (normalized to sum to 1), else split equally across its
-  // origin countries — so one shot of a 2-country blend contributes 0.5 to
-  // each by default, or e.g. 0.7/0.3 when weighted.
-  const nameToBean = new Map<string, MapEntry>();
-  const idToBean   = new Map<number, MapEntry>();
-  for (const b of _beans()) {
-    const rawOrigins: { code?: string | null; percent?: number | null }[] =
-      Array.isArray(b.origins) && b.origins.length ? b.origins : (b.origin ? [{ code: b.origin }] : []);
-    const valid = rawOrigins.filter(o => COFFEE_COUNTRIES.some(c => c.code === o.code));
-    if (!valid.length) continue;
-    const totalPercent = valid.reduce((sum, o) => sum + (o.percent || 0), 0);
-    const origins = valid.map(o => ({
-      code: o.code as string,
-      weight: totalPercent > 0 ? (o.percent || 0) / totalPercent : 1 / valid.length,
-    }));
-    const entry = { bean: b, origins };
-    nameToBean.set(String(b.name || '').toLowerCase(), entry);
-    if (b.id != null) idToBean.set(b.id, entry);
-  }
-  // #456: beanId-first lookup (survives bean renames), falling back to the
-  // name key for annotations that predate beanId or a name that no longer
-  // resolves to any current bean.
-  const resolveMapEntry = (ann: ShotAnnotation | null | undefined): MapEntry | undefined =>
-    (ann?.beanId != null && idToBean.get(ann.beanId))
-    || nameToBean.get(String(ann?.coffee || '').toLowerCase());
+  const { entries, shotCounts, byCode, countries: countriesWithShots } = collectWorldMapData(
+    _beans(),
+    _pageShots(),
+    // typeof guard: the headless race test runs this without a window global.
+    s => (typeof window !== 'undefined' && window.calcShotScore ? window.calcShotScore(s) : null),
+  );
 
-  // code → { shots, beans:Set, beanShots:Map } — beans with an origin count
-  // even without shots; beanShots tracks each bean's own weighted
-  // contribution to this country (only interesting — i.e. non-integer —
-  // for blends), used to annotate the tooltip.
-  const byCode: Record<string, MapStats> = {};
-  for (const { bean, origins } of nameToBean.values()) {
-    for (const o of origins) {
-      let codeStats = byCode[o.code];
-      if (!codeStats) {
-        codeStats = { shots: 0, beans: new Set(), beanShots: new Map(), scoreSum: 0, scoreCount: 0, beanScoreSum: new Map(), beanScoreCount: new Map() };
-        byCode[o.code] = codeStats;
-      }
-      codeStats.beans.add(bean.name);
-      if (!codeStats.beanShots.has(bean.name)) codeStats.beanShots.set(bean.name, 0);
-    }
-  }
-  for (const s of _pageShots()) {
-    const entry = resolveMapEntry(s.annotation);
-    if (!entry) continue;
-    const score = window.calcShotScore ? window.calcShotScore(s) : null;
-    for (const o of entry.origins) {
-      const stats = byCode[o.code];
-      if (!stats) continue;
-      stats.shots += o.weight;
-      stats.beanShots.set(entry.bean.name, (stats.beanShots.get(entry.bean.name) ?? 0) + o.weight);
-      if (score !== null) {
-        stats.scoreSum += score;
-        stats.scoreCount++;
-        stats.beanScoreSum.set(entry.bean.name, (stats.beanScoreSum.get(entry.bean.name) ?? 0) + score);
-        stats.beanScoreCount.set(entry.bean.name, (stats.beanScoreCount.get(entry.bean.name) ?? 0) + 1);
-      }
-    }
-  }
-  for (const stats of Object.values(byCode)) {
-    stats.shots = Math.round(stats.shots * 10) / 10;
-    for (const [name, val] of stats.beanShots) stats.beanShots.set(name, Math.round(val * 10) / 10);
-  }
-
-  if (Object.keys(byCode).length === 0) {
+  if (countriesWithShots.length === 0) {
     if (_echartsInstance) { _echartsInstance.dispose(); _echartsInstance = null; }
     wrap.innerHTML = html`<p class="empty-note">${tHtml('analytics_map_empty')}</p>`;
     _clearMapExtras(wrap);
     return;
   }
 
-  // #1467: origin countries that actually have shots, most-brewed first —
-  // the chips row, the heading counter and the routes all key off this list.
-  const countriesWithShots = Object.keys(byCode)
-    .filter(code => (byCode[code]?.shots ?? 0) > 0)
-    .sort((a, b) => (byCode[b]?.shots ?? 0) - (byCode[a]?.shots ?? 0));
   if (!wrap.querySelector('.world-map-canvas')) {
     wrap.innerHTML = html`<div class="world-map-canvas" style="width:100%;height:100%"></div>
       <div class="world-map-hint">${tHtml('analytics_map_zoom_hint')}</div>`;
@@ -754,7 +774,8 @@ export async function buildWorldMap() {
   // (jittered a few tenths of a degree per extra bean so points don't stack).
   const seenAtCentroid: Record<string, number> = {};
   const points: { name: string; value: number[]; _region: string | null; _code: string }[] = [];
-  for (const { bean, origins } of nameToBean.values()) {
+  for (const entry of entries) {
+    const { bean, origins } = entry;
     // Even a blend gets exactly one map point — from its geocoded growing
     // region if resolved, else a centroid fallback keyed on its primary
     // (first-listed) origin country.
@@ -769,9 +790,7 @@ export async function buildWorldMap() {
       const jitter = n * 0.35;
       coord = [centroid[0] + (n % 2 === 0 ? jitter : -jitter), centroid[1] + (n % 3) * 0.2];
     }
-    const shots = byCode[primaryCode]?.beans.has(bean.name)
-      ? _pageShots().filter(s => resolveMapEntry(s.annotation)?.bean === bean).length
-      : 0;
+    const shots = shotCounts.get(entry) ?? 0;
     // #1467: the always-visible bean-name labels are gone (the chips below
     // the map replace them); the tooltip still names the bean. _code keys the
     // point back to its primary origin country for click-through.
