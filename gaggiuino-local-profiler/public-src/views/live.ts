@@ -399,7 +399,7 @@ export function initLiveChart(): void {
         tooltip: { callbacks: { title: (ctx: { parsed: { x: number } }[]) => t('chart_time', formatTimeLabel(ctx[0]?.parsed.x ?? 0)) } }
       },
       scales: {
-        x:  { type: 'linear', min: 0, max: 60, ticks: { color: C.tick, callback: (v: number) => formatTimeLabel(v), stepSize: 5 }, grid: { color: C.grid } },
+        x:  { type: 'linear', min: 0, max: 60, ticks: { color: C.tick, ...chartRegistry.chartTimeTicks() }, grid: { color: C.grid } },
         y:  { type: 'linear', position: 'left',  min: 0, max: 12, ticks: { color: C.tick }, grid: { color: C.grid } },
         y1: { type: 'linear', position: 'right', min: 0, max: 100, ticks: { color: C.tick }, grid: { drawOnChartArea: false } }
       }
