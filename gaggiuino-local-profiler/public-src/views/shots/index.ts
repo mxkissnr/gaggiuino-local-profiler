@@ -1036,7 +1036,7 @@ export async function updateView(): Promise<void> {
           },
           scales: {
             x:  { type:'linear', min:0, max:Math.max(maxTimeA, maxTimeB, maxTimePrev), clip:false,
-                  ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:(v: number)=>formatTimeLabel(v), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
+                  ticks:{ color:C.tick, font:{family:'Figtree'}, ...chartRegistry.chartTimeTicks(), maxTicksLimit: window.innerWidth <= 600 ? 6 : 12 },
                   grid:{ color:C.grid } },
             y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:C.tick, maxTicksLimit:6}, grid:{color:C.grid} },
             y1: { type:'linear', position:'right', min:0, max:Number(tempMaxScale), ticks:{color:C.tick, maxTicksLimit:6}, grid:{drawOnChartArea:false} }

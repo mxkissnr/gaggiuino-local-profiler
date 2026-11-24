@@ -1,5 +1,6 @@
 import type { Chart } from 'chart.js';
 import { S } from './index.js';
+import { formatTimeLabel } from '../utils.js';
 
 // Every long-lived Chart.js instance occupies one named slot on S. The old
 // code repeated `if (S.x) { S.x.destroy(); S.x = null; }` before each
@@ -65,4 +66,17 @@ export function chartLegendLabels(textColor: string): {
   font: { family: string };
 } {
   return { color: textColor, font: { family: 'Figtree' } };
+}
+
+/** #2201: the x-axis ticks of every shot-time chart (shot, fullscreen, live):
+ *  5-second steps as mm:ss. includeBounds is off because the axis max is the
+ *  shot's own length (e.g. 34 s): Chart.js would otherwise add it as an extra
+ *  tick right beside the last step (30 s) and draw "00:30" and "00:34" on top
+ *  of each other on a phone. Callers spread this next to their colour/font. */
+export function chartTimeTicks(): {
+  stepSize: number;
+  includeBounds: false;
+  callback: (value: number | string) => string;
+} {
+  return { stepSize: 5, includeBounds: false, callback: (value) => formatTimeLabel(Number(value)) };
 }
