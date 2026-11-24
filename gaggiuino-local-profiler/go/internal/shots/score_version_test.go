@@ -18,7 +18,7 @@ const (
 	// pinnedScoreVersion and pinnedParityDigest are updated together, and
 	// only together with a scoreVersion bump when an expected score changed.
 	pinnedScoreVersion = "v3"
-	pinnedParityDigest = "81214ed4f6be277f4f159a0bd14a31d022507f256f050bd91b7372cfc9a7c28c"
+	pinnedParityDigest = "43efad1cd7ebc3aab1a771e0a717395965d284524746631116aabd4e001fa9e9"
 )
 
 // parityExpectedDigest hashes the fixture's case names and expected scores

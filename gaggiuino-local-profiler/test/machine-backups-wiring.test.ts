@@ -80,6 +80,7 @@ vi.mock('../public-src/components/machine-backups.js', async (importOriginal) =>
 
 const realApi = await vi.importActual<MachinesApi>('../public-src/api/machines.js');
 const { S } = await import('../public-src/state/index.js');
+const { t } = await import('../public-src/i18n.js');
 const { machineDialogActionsHtml, renderMachinesList, triggerMachineFirmwareUpdate, wireMachineDialogActions }
   = await import('../public-src/components/machines-settings.js');
 
@@ -205,7 +206,8 @@ describe('the Backups action in the machine dialog (#1878, #2038)', () => {
     if (!gaggiuino || !gaggimate) throw new Error('expected two machines');
 
     const gMarkup = machineDialogActionsHtml(gaggiuino);
-    const backups = gMarkup.indexOf('class="machine-backups-btn">Backups</button>');
+    const backups = gMarkup.indexOf('class="lib-sheet-menu-item machine-backups-btn"><svg class="rail-icon sm"');
+    expect(gMarkup).toContain('</svg> Backups</button>');
     expect(backups).toBeGreaterThanOrEqual(0);
     expect(gMarkup.indexOf('machine-delete-btn')).toBeGreaterThan(backups);
     expect(gMarkup).not.toContain('machine-set-default-btn');
@@ -220,6 +222,28 @@ describe('the Backups action in the machine dialog (#1878, #2038)', () => {
     wireMachineDialogActions(asRow(root), gaggiuino);
     root.querySelector('.machine-backups-btn').handlers.click?.();
     expect(sheetMock.openMachineBackups).toHaveBeenCalledWith(1, list.querySelector('.machine-row[data-machine-id="1"]'));
+  });
+
+  it('gives every dialog menu entry an icon and puts Delete after a separator (#2172)', () => {
+    const [gaggiuino, gaggimate] = S.machines as unknown as MachineFormArg[];
+    if (!gaggiuino || !gaggimate) throw new Error('expected two machines');
+
+    const gMarkup = machineDialogActionsHtml(gaggiuino);
+    const backups = gMarkup.indexOf('class="lib-sheet-menu-item machine-backups-btn"');
+    const sep = gMarkup.indexOf('class="lib-sheet-menu-sep"');
+    const del = gMarkup.indexOf('class="lib-sheet-menu-item del machine-delete-btn">');
+    expect(backups).toBeGreaterThanOrEqual(0);
+    expect(sep).toBeGreaterThan(backups);
+    expect(del).toBeGreaterThan(sep);
+    expect(gMarkup).toContain(`</svg> ${t('settings_machine_delete')}</button>`);
+
+    const mMarkup = machineDialogActionsHtml(gaggimate);
+    expect(mMarkup).toContain('class="lib-sheet-menu-item machine-set-default-btn"><svg class="rail-icon sm star-glyph"');
+    expect(mMarkup.indexOf('class="lib-sheet-menu-sep"')).toBeLessThan(mMarkup.indexOf('machine-delete-btn'));
+
+    const defaultMarkup = machineDialogActionsHtml({ ...gaggimate, isDefault: true });
+    expect(defaultMarkup).toContain('machine-delete-btn');
+    expect(defaultMarkup).not.toContain('lib-sheet-menu-sep');
   });
 
   it('renders machine rows without action buttons', () => {
@@ -248,10 +272,10 @@ describe('the shipped docs, styles and changelog (#1878)', () => {
     expect(read('../../README.md')).toContain('- **Machine settings backups** - ');
   });
 
-  it('styles the sheet with 44 px targets and theme tokens', () => {
+  it('styles the sheet with the shared buttons and a 44 px pick target', () => {
     const css = read('../public-src/style.css');
     expect(css).toContain('.mbk-sheet {');
-    expect(css).toContain('.mbk-btn { min-height:44px;');
+    expect(read('../public-src/components/machine-backups.ts')).toContain('class="btn btn--primary" data-mbk-action="backup"');
     const pickWrap = css.slice(css.indexOf('.mbk-pick-wrap {'));
     expect(pickWrap.slice(0, pickWrap.indexOf('}'))).toContain('min-height:44px');
   });

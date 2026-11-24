@@ -78,6 +78,8 @@ export type BackupContext = 'backup' | 'upload' | 'download' | 'delete' | 'resto
 const KIND_KEYS: Record<MachineBackupKind, string> = {
   manual: 'mbk_kind_manual', scheduled: 'mbk_kind_scheduled', pre_update: 'mbk_kind_pre_update', uploaded: 'mbk_kind_uploaded',
 };
+// #2094: the backup kind as a status badge; scheduled and uploaded stay neutral.
+const KIND_BADGE: Partial<Record<MachineBackupKind, string>> = { manual: 'badge badge--accent', pre_update: 'badge badge--warn' };
 const ERROR_KEYS: Record<MachineBackupErrorCode, string> = {
   unsupported_machine: 'mbk_err_unsupported_machine', unsupported_firmware: 'mbk_err_unsupported_firmware',
   machine_unreachable: 'mbk_err_unreachable', invalid_backup: 'mbk_err_invalid_backup',
@@ -303,16 +305,20 @@ export function parseBackupFile(text: string): MachineBackupDocument | null {
   return parsed.format === 'gaggiuino-settings' ? parsed : null;
 }
 
-/** The row action slice W adds to every Gaggiuino machine row. */
+// #2172: the Backups entry's icon, an archive box with a down arrow (single-use, stays local).
+
+const ICON_BACKUPS: Html = html`<svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v4H4zM5 8v12h14V8M12 11v6M9 14l3 3 3-3"/></svg>`;
+
+/** The Backups entry of a Gaggiuino machine's dialog ⋯ menu. */
 export function machineBackupsButtonHtml(): Html {
-  return html`<button type="button" class="machine-backups-btn">${tHtml('mbk_row_action')}</button>`;
+  return html`<button type="button" class="lib-sheet-menu-item machine-backups-btn">${ICON_BACKUPS} ${tHtml('mbk_row_action')}</button>`;
 }
 
 /** The update did not start because the backup before it failed. True is the user's
  *  deliberate "update without a backup" (Max decision 1); slice W resends with skipBackup.
  *  The app dialog, not a native confirm (#1962). */
 export function confirmUpdateWithoutBackup(): Promise<boolean> {
-  return confirmDialog(`${t('mbk_preupdate_failed')}\n\n${t('mbk_preupdate_confirm')}`);
+  return confirmDialog(`${t('mbk_preupdate_failed')}\n\n${t('mbk_preupdate_confirm')}`, { destructive: true });
 }
 
 /** Trimmed note, or undefined when the user typed nothing (then no note is sent). 200 code points. */
@@ -329,13 +335,13 @@ function renderRow(b: MachineBackup, locale: string, owner: Html | null, restore
   const noRestore = restoreDisabled ? html` disabled` : esc('');
   return html`<div class="mbk-row">
     ${owner === null ? esc('') : html`<div class="mbk-owner">${owner}</div>`}
-    <div class="mbk-row-head"><label class="mbk-pick-wrap"><input type="checkbox" class="mbk-pick" data-id="${esc(b.id)}" aria-label="${esc(t('mbk_pick', date))}"${picked ? html` checked` : esc('')}></label><span class="mbk-date">${esc(date)}</span><span class="mbk-chip mbk-chip-${esc(b.kind)}">${esc(t(KIND_KEYS[b.kind]))}</span></div>
+    <div class="mbk-row-head"><label class="mbk-pick-wrap"><input type="checkbox" class="mbk-pick" data-id="${esc(b.id)}" aria-label="${esc(t('mbk_pick', date))}"${picked ? html` checked` : esc('')}></label><span class="mbk-date">${esc(date)}</span><span class="${esc(KIND_BADGE[b.kind] ?? 'badge')}">${esc(t(KIND_KEYS[b.kind]))}</span></div>
     <div class="mbk-meta">${esc(meta.join(' · '))}</div>
     ${b.note === '' ? esc('') : html`<div class="mbk-note">${esc(b.note)}</div>`}
     <div class="mbk-row-actions">
-      <button type="button" class="mbk-btn" data-mbk-action="download" data-id="${esc(b.id)}">${tHtml('mbk_download')}</button>
-      <button type="button" class="mbk-btn" data-mbk-action="restore" data-id="${esc(b.id)}"${noRestore}>${tHtml('mbk_restore')}</button>
-      <button type="button" class="mbk-btn" data-mbk-action="delete" data-id="${esc(b.id)}">${tHtml('mbk_delete')}</button>
+      <button type="button" class="btn btn--quiet" data-mbk-action="download" data-id="${esc(b.id)}">${tHtml('mbk_download')}</button>
+      <button type="button" class="btn btn--quiet" data-mbk-action="restore" data-id="${esc(b.id)}"${noRestore}>${tHtml('mbk_restore')}</button>
+      <button type="button" class="btn btn--danger" data-mbk-action="delete" data-id="${esc(b.id)}">${tHtml('mbk_delete')}</button>
     </div>
   </div>`;
 }
@@ -349,7 +355,7 @@ function renderRestore(sheet: SheetState, draft: RestoreDraft, entry: MachineBac
   const blocked = targetId === null || _busy.has(targetId) || _restoreWaits.has(targetId);
   const noConfirm = blocked ? html` disabled` : esc('');
   const parts: Html[] = [html`<section class="mbk-restore">
-    <h3 class="mbk-restore-title">${esc(t('mbk_restore_title', formatBackupDate(entry.createdAt, locale)))}</h3>
+    <h3 class="card-title">${esc(t('mbk_restore_title', formatBackupDate(entry.createdAt, locale)))}</h3>
     <p>${tHtml('mbk_restore_body')}</p>
     <p class="mbk-hint">${tHtml('mbk_restore_before')}</p>`];
   if (firmwareDiffers(entry.firmwareCore, draft.installed)) {
@@ -360,8 +366,8 @@ function renderRestore(sheet: SheetState, draft: RestoreDraft, entry: MachineBac
     parts.push(html`<label class="mbk-field"><span>${tHtml('mbk_restore_target')}</span><select class="mbk-select mbk-target">${joinHtml(options)}</select></label>`);
   }
   parts.push(html`<div class="mbk-actions">
-      <button type="button" class="mbk-btn" data-mbk-action="restore-cancel">${tHtml('settings_machine_cancel')}</button>
-      <button type="button" class="mbk-btn mbk-btn-danger" data-mbk-action="restore-confirm"${noConfirm}>${tHtml('mbk_restore_confirm')}</button>
+      <button type="button" class="btn btn--quiet" data-mbk-action="restore-cancel">${tHtml('settings_machine_cancel')}</button>
+      <button type="button" class="btn btn--danger" data-mbk-action="restore-confirm"${noConfirm}>${tHtml('mbk_restore_confirm')}</button>
     </div>
   </section>`);
   return joinHtml(parts);
@@ -382,7 +388,7 @@ function renderSettings(settings: MachineBackupSettings, open: boolean, keepErro
 function renderCompare(view: CompareView, locale: string): Html {
   const n = view.changes.length;
   const parts: Html[] = [html`<section class="mbk-cmp">
-    <div class="mbk-actions"><button type="button" class="mbk-btn" data-mbk-action="cmp-back">${tHtml('mbk_cmp_back')}</button></div>
+    <div class="mbk-actions"><button type="button" class="btn btn--quiet" data-mbk-action="cmp-back">${tHtml('mbk_cmp_back')}</button></div>
     <p class="mbk-verdict">${esc(`${formatBackupDate(view.from.createdAt, locale)} → ${formatBackupDate(view.to.createdAt, locale)}`)}${n > 0 ? esc(` · ${t('mbk_cmp_count', n)}`) : esc('')}</p>`];
   if (n > 0) {
     parts.push(html`<ul class="mbk-cmp-list">${joinHtml(view.changes.map(c => html`<li>${esc(describeChange(c))}</li>`))}</ul>`);
@@ -413,9 +419,9 @@ export function renderSheetBody(sheet: SheetState, nowMs: number, openFolds: Rea
   const compareDisabled = picked.length === 2 && !sheet.comparing ? esc('') : html` disabled`;
   const parts: Html[] = [html`<div class="mbk-toolbar">
     <label class="mbk-field mbk-note-field"><span>${tHtml('mbk_note_label')}</span><input type="text" class="mbk-input mbk-note-input" maxlength="200" autocomplete="off" placeholder="${esc(t('mbk_note_placeholder'))}" value="${esc(sheet.note)}"></label>
-    <button type="button" class="mbk-btn mbk-btn-primary" data-mbk-action="backup"${busy}>${tHtml('mbk_backup_now')}</button>
-    <button type="button" class="mbk-btn" data-mbk-action="upload"${busy}>${tHtml('mbk_upload')}</button>
-    ${comparable ? html`<button type="button" class="mbk-btn" data-mbk-action="compare"${compareDisabled}>${tHtml('mbk_compare')}</button>` : esc('')}
+    <button type="button" class="btn btn--primary" data-mbk-action="backup"${busy}>${tHtml('mbk_backup_now')}</button>
+    <button type="button" class="btn btn--quiet" data-mbk-action="upload"${busy}>${tHtml('mbk_upload')}</button>
+    ${comparable ? html`<button type="button" class="btn btn--quiet" data-mbk-action="compare"${compareDisabled}>${tHtml('mbk_compare')}</button>` : esc('')}
     <input type="file" class="mbk-file" accept=".json,application/json" hidden>
   </div>`];
   if (picked.length > 0 && picked.length !== 2) parts.push(html`<p class="mbk-hint">${tHtml('mbk_compare_hint')}</p>`);
@@ -738,7 +744,7 @@ async function backUpNow(machineId: number, note: string | undefined): Promise<v
 }
 
 async function deleteBackup(machineId: number, id: number): Promise<void> {
-  if (!await confirmDialog(t('mbk_delete_confirm'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('mbk_delete_confirm'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await deleteMachineBackup(id);
   if (r.ok) showToast(t('mbk_deleted'));
   else showToast(backupErrorText(r, 'delete'), 6000);

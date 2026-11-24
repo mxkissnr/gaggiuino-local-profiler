@@ -60,6 +60,12 @@ type MachineStatus struct {
 	// byte-identical, since it reports neither.
 	Warnings        []string `json:"warnings,omitempty"`
 	UpdateAvailable bool     `json:"updateAvailable,omitempty"`
+	// #2139: GaggiMate display system state (evt:status sys.s, firmware
+	// v1.9.0+) when it is not "ready", and the controller error code (sys.c)
+	// for "error". omitempty: both are empty for "ready", a missing sys and
+	// every Gaggiuino, so Gaggiuino's /api/machine/status stays byte-identical.
+	SystemState     string `json:"systemState,omitempty"`
+	SystemErrorCode int    `json:"systemErrorCode,omitempty"`
 }
 
 // RawStatus is the subset of a raw /api/system/status poll's fields
@@ -81,6 +87,8 @@ type RawStatus struct {
 	SteamSwitchState  bool
 	Warnings          []string
 	UpdateAvailable   bool
+	SystemState       string
+	SystemErrorCode   int
 }
 
 // DeriveInput bundles one poll tick's raw REST status plus whatever's
@@ -189,6 +197,8 @@ func deriveMachineState(in DeriveInput) DeriveResult {
 		UpdatedAt:         in.Now,
 		Warnings:          in.Status.Warnings,
 		UpdateAvailable:   in.Status.UpdateAvailable,
+		SystemState:       in.Status.SystemState,
+		SystemErrorCode:   in.Status.SystemErrorCode,
 	}
 
 	if in.Status.PumpFlow != nil && in.SensorSnap == nil {

@@ -13,7 +13,7 @@ The app runs inside Home Assistant, so every page follows Home Assistant's inter
 7. **Settings are a grouped list** that leads to sub-pages, like Home Assistant's settings. On desktop the list sits on the left and the open sub-page on the right; on a phone the sub-page replaces the list and has a back arrow. A sub-page is a list of rows with the control on the right: a switch, pills, a dropdown, or a value with a chevron that opens a dialog.
 8. **Rarely used things are folded away.** Like "Empty & archive" in the library.
 
-Statistics (#1467), maintenance (#1923) and the coffee library's shelf still follow the earlier style: one sticky toolbar with search and chips, boxless sections under an accent heading, sticker tiles, and details in a popover next to the target on desktop. Their verdict, folds and two-column desktop layout already match these rules; the rest moves over in a later pass. Until then, a change to those pages keeps their current style rather than mixing the two.
+Statistics (#1467), maintenance (#1923) and the coffee library's shelf still follow the earlier style: one sticky toolbar with search and chips, boxless sections under a section title, sticker tiles, and details in a popover next to the target on desktop. Their verdict, folds and two-column desktop layout already match these rules; the rest moves over in a later pass. Until then, a change to those pages keeps their current style rather than mixing the two.
 
 ## Rules
 
@@ -22,11 +22,48 @@ Statistics (#1467), maintenance (#1923) and the coffee library's shelf still fol
 - **Long periods stay calm.** Past a month or so, the score trend draws one point per calendar day — a 7-day rolling mean with a low/high band and month-first tick labels — and a day opens its own detail. The coffee year sizes its cells so the last 22 weeks fill a phone's width and scrolls to the newest week, with a legend for the heat scale and the crema dot.
 - **Love for detail.** Every view gets small coffee touches (a crema dot for a 100, ice for frozen beans, cup streaks, travelling bean routes, fact cards). They respect `prefers-reduced-motion` and are never loud. Easter eggs never appear in release notes, docs or public issues.
 - **Mobile is designed, not shrunk.** Design at 390 px first; touch targets are at least 44 px.
-- **One sheet header.** Every bottom sheet and its desktop dialog share the same bar: close on the left, the title, then the main actions as 44 px icons on the right, each with an `aria-label` through `t()`. There is no extra Cancel button; closing is the cancel. The bar stays at the top while the content scrolls and only then draws a hairline. The more menu keeps only what the bar does not already show. The pages that still use popovers (see above) give them the same bar.
-- **One visual system.** One radius token, surface colour instead of borders, `tabular-nums` for numbers, one score colour scale (ok / warn / err), Figtree for text and Fraunces for large display numbers, warmth through colour rather than typography.
+- **One sheet header.** Every bottom sheet and its desktop dialog share the same bar: close on the left, the title, then the main actions as 44 px icons on the right, each with an `aria-label` through `t()`. There is no extra Cancel button; closing is the cancel. A confirmation keeps both answers next to each other (the brew confirmation, a backup export or restore), and its header close does the same as its Back or Cancel answer. The bar stays at the top while the content scrolls and only then draws a hairline. The more menu keeps only what the bar does not already show. The pages that still use popovers (see above) give them the same bar.
+- **One visual system.** The role decides the shape (see "Shapes and components"), surface colour instead of borders, `tabular-nums` for numbers, one score colour scale (ok / warn / err), Figtree for text and numbers (titles and big numbers alike), Fraunces only for bean names, warmth through colour rather than typography.
 - **Readable.** Contrast of at least 4.5:1, labels included; both light and dark theme.
 - **No generic look.** No default font stacks, no purple gradients, no emoji, no interchangeable dashboard cards; every element earns its place with real data.
 - **Six languages.** Every visible string goes through `t()` in all six language files.
+
+## Shapes and components
+
+The role decides the shape. A page picks a role, never a look.
+
+| Token | Used for |
+|---|---|
+| `--radius-ctl` (8 px) | everything interactive: filter chips, buttons, inputs, dropdowns, segments, input chips (flavour/origin) |
+| `--radius` (10 px) | cards and containers |
+| `--radius-lg` (16 px) | bottom sheets and dialogs |
+| `--radius-full` | only non-interactive status badges, avatars, dots and progress bars |
+
+Round therefore means "status", not "clickable". Heat map and calendar cells are square.
+
+The shared components live in one block near the top of the stylesheet. A page class keeps only layout (position, grid area, gap), never colour, radius or padding.
+
+Chips, buttons, and the search fields and dropdowns that share a row with chips have one height, `--ctl-height`: 44 px on touch devices (`pointer: coarse`), 36 px with a fine pointer. Input chips with a remove button (flavour, origin, order menu variants) and the aroma chips are `.chip--input`; their page class only sets the tint.
+
+| Role | Class | Variants | Active state |
+|---|---|---|---|
+| Filter chip, single-choice pills | `.chip` | none | `aria-pressed="true"`: accent tint and accent border; never an `.active` class |
+| Button | `.btn` | `.btn--primary` (the one main action of a view), `.btn--tonal` (positive secondary action), `.btn--quiet` (neutral secondary action), `.btn--danger` (destructive); `.btn--icon` makes any of them an icon-only square | none; a control that stays on is a chip |
+| Status badge | `.badge` | neutral (no modifier), `.badge--ok`, `.badge--warn`, `.badge--err`, `.badge--info`, `.badge--accent`; the score scale `.badge--score-great`, `.badge--score-good`, `.badge--score-ok`, `.badge--score-low`, `.badge--score-bad`; `.badge--scrim` for a badge on a photo | none; a badge is never clickable, a clickable status is a `.btn` or a `.chip` |
+| Input chip | `.chip--input`, on its own, never with `.chip` | the tint through `--input-chip-c` (background, border) and `--input-chip-ink` (text) | none |
+| Section title | `.section-title` | optional counter in `.section-title__count` | none |
+| Card title | `.card-title` | none | none |
+| Overflow menu | `details.lib-sheet-more` > `summary` + `.lib-sheet-menu-list` > `button.lib-sheet-menu-item` | every entry is an icon and its label; `.del` for delete (red, last, after a `.lib-sheet-menu-sep`); the summary is the ⋯ or an icon, or a `.btn` when the trigger needs a label | `open` on the details; one menu open at a time, a pick, a press outside and Escape close it |
+
+Every status label is a `.badge`. A page class next to it only places it (margin, grid area, position); a badge never has a border or its own tint.
+
+Every action button outside the navigation is a `.btn` with exactly one of the four variants, and a view has at most one `.btn--primary`. The icon buttons in a sheet header keep their 44 px size with `--radius-ctl`; top bar tabs and the bottom navigation are not buttons in this sense. Sync and the machine power toggle in the top bar are actions, so they are `.btn--quiet` (the power toggle as `.btn--icon`, coloured by the machine's on/off state).
+
+A card or form names itself with a `.card-title`: a settings card, the result at the end of a wizard. A group inside a card or form is headed by a `.section-title`. A dialog or bottom sheet uses neither for its own title: the title sits in the sheet header bar (`lib-sheet-bar`, the close button first, then `lib-sheet-bar-title`), see "One sheet header". The barcode scanner is the one exception: it is a full-screen camera overlay, not a sheet, so its title is a `.card-title` and its Close button stays below the camera.
+
+The ordering kiosk is the one page with its own controls. It is a separate page for guests at a wall tablet or an e-ink screen and loads only the tokens, not the app stylesheet: its main actions are 56 px tall for a standing user, its drinks are large tiles, a press scales the control instead of a hover, and the e-ink mode redraws every control in black and white with a 3 px border. Colours, spacing, radii and fonts still come from the tokens; `.btn` and `.chip` are not used there.
+
+A guard test fails on any literal radius, literal px padding, `transition: all` or page class named `*-chip`, `*-badge`, `*-pill`, `*-tag` or `*-btn` that sets colour, background, border or radius, and on radius or padding in an inline style that a view or component writes, and on a menu outside the overflow menu pattern: its own `*dropdown*`, `*popover*`, `*popup*` or `*-menu*` class, a menu list outside `details.lib-sheet-more`, a menu entry that is not a button, or a menu entry without an icon (text-only only where the label is the meaning: the GaggiMate stop conditions). Navigation items, menu entries and notification dots are not buttons or badges, so their classes say what they are (`bottom-nav-item`, `lib-sheet-menu-item`, `maint-dot`).
 
 ## Interaction rules
 
@@ -46,6 +83,7 @@ The same kind of control behaves the same way on every page.
 - [ ] Verdict first.
 - [ ] No bare title bar; a top app bar only for back, search or overflow; filter chips first if the page filters.
 - [ ] Lists are cards of rows (icon, title, subtitle, value, chevron), not card stacks or tile grids.
+- [ ] Chips, buttons, badges, section titles and card titles use the shared components only; a dialog's title sits in the sheet header.
 - [ ] No number twice.
 - [ ] Screenshot at 390 px and at 1280 px attached.
 - [ ] Every clickable row opens its details: a dialog on desktop, a bottom sheet on phones, close top left and no extra Cancel.

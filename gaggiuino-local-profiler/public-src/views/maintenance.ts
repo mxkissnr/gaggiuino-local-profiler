@@ -119,6 +119,13 @@ export function maintStatusLabel(status: string): string {
   return labels[status] || '';
 }
 
+// #2094: the status badge per maintenance state; never and paused stay neutral.
+const MAINT_STATUS_BADGE: Record<string, string> = { ok: 'badge--ok', soon: 'badge--warn', due: 'badge--err' };
+function _maintStatusClass(status: string): string {
+  const variant = MAINT_STATUS_BADGE[status];
+  return variant ? `badge ${variant} maint-row-status` : 'badge maint-row-status';
+}
+
 // ── Local view scope (#393) ────────────────────────────────────────────────
 // Independent of the global machine switcher (S.activeMachineId) — this view
 // gets its own filter so browsing "all machines" here never changes what the
@@ -277,7 +284,7 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
     ${_maintVerdictHtml(verdict)}
     <section class="analytics-sec maint-tasks-sec">
       <div class="analytics-card-head">
-        <h3 class="analytics-section-title">${esc(t('maint_tasks_title'))}</h3>
+        <h3 class="section-title">${esc(t('maint_tasks_title'))}</h3>
         <span class="analytics-shelf-count">${esc(active.length)}</span>
       </div>
       <div class="maint-rows" id="maintGrid"></div>
@@ -289,10 +296,10 @@ export function renderMaintenanceDashboard(data: MaintResponse, scope: MaintScop
   if (seg) {
     // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
     seg.innerHTML = joinHtml([
-      html`<button type="button" class="${esc(scope === 'all' ? 'analytics-filter-btn active' : 'analytics-filter-btn')}" data-action="set-maint-scope" data-scope="all" aria-pressed="${esc(scope === 'all' ? 'true' : 'false')}">${tHtml('machine_switcher_all')}</button>`,
+      html`<button type="button" class="chip" data-action="set-maint-scope" data-scope="all" aria-pressed="${esc(scope === 'all' ? 'true' : 'false')}">${tHtml('machine_switcher_all')}</button>`,
       ...S.machines.map(m => {
         const on = scope === m.id;
-        return html`<button type="button" class="${esc(on ? 'analytics-filter-btn active' : 'analytics-filter-btn')}" data-action="set-maint-scope" data-scope="${esc(m.id)}" aria-pressed="${esc(on ? 'true' : 'false')}">${esc(m.name as string)}</button>`;
+        return html`<button type="button" class="chip" data-action="set-maint-scope" data-scope="${esc(m.id)}" aria-pressed="${esc(on ? 'true' : 'false')}">${esc(m.name as string)}</button>`;
       }),
     ]);
     seg.hidden = !hasMachines;
@@ -323,7 +330,7 @@ function _renderDisabledSection(container: HTMLElement, tiles: MaintTile[]): voi
     return html`<div class="maint-disabled-row">
       <span class="maint-row-icon">${taskIconSvg(tile.task)}</span>
       <span class="maint-disabled-title">${esc(title)}</span>
-      <button class="maint-reenable-btn" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-disabled="false">${tHtml('maint_enable_btn')}</button>
+      <button class="btn btn--tonal" data-action="toggle-maint-disabled" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-disabled="false">${tHtml('maint_enable_btn')}</button>
     </div>`;
   }));
   // codeql[js/xss-through-dom] false positive: esc() applied
@@ -355,7 +362,7 @@ export function _maintVerdictHtml(state: MaintVerdictState): Html {
   }
 
   const doneBtn = state.kind === 'due' && tile
-    ? html`<button type="button" class="maint-banner-btn" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>`
+    ? html`<button type="button" class="btn btn--primary" data-action="mark-maint-done" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('maint_next_action')}</button>`
     : html``;
   const numClass = state.dueCount > 0 ? 'due' : 'ok';
   const cup = state.kind === 'ok'
@@ -367,7 +374,7 @@ export function _maintVerdictHtml(state: MaintVerdictState): Html {
     <section class="analytics-sec analytics-verdict-card maint-verdict" id="maintVerdict">
       <div class="analytics-verdict-head">
         <div class="analytics-verdict-text">
-          <h2 class="analytics-verdict-title serif-display">${esc(title)}</h2>
+          <h2 class="analytics-verdict-title">${esc(title)}</h2>
           ${sub ? html`<p class="analytics-verdict-sub">${esc(sub)}</p>` : html``}
         </div>
         <div class="analytics-verdict-score">
@@ -440,11 +447,11 @@ export function _maintRowHtml(tile: MaintTile, fresh = false): Html {
   return html`<button type="button" class="${esc(rowClass)}" data-action="open-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" aria-haspopup="dialog" title="${esc(t('maint_tile_details'))}">
     <span class="maint-row-icon">${taskIconSvg(task)}</span>
     <span class="maint-row-title">${esc(title)}</span>
-    <span class="maint-chip ${esc(d.status)}">${esc(maintStatusLabel(d.status))}</span>
+    <span class="${esc(_maintStatusClass(d.status))}">${esc(maintStatusLabel(d.status))}</span>
     <span class="maint-row-meta">
-      ${machineTagText ? html`<span class="shot-machine-badge">${esc(machineTagText)}</span>` : html``}
+      ${machineTagText ? html`<span class="badge">${esc(machineTagText)}</span>` : html``}
       <span class="num">${esc(countText)}</span>
-      ${isAutoSynced(d) ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
+      ${isAutoSynced(d) ? html`<span class="badge badge--info" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>` : html``}
     </span>
     <span class="maint-row-bar" aria-hidden="true"><span class="maint-row-fill ${esc(d.status)}" style="width:${esc(pct)}%"></span></span>
   </button>`;
@@ -611,7 +618,7 @@ export async function addCustomMaintTask(machineId?: string | number | null): Pr
 }
 
 export async function deleteCustomMaintTask(task: string, machineId?: string | number | null): Promise<void> {
-  if (!await confirmDialog(t('maint_confirm_delete_custom', task.replace('custom_', '')), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('maint_confirm_delete_custom', task.replace('custom_', '')), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   try {
     const r = await deleteCustomMaintenanceTask(task, _writeMachineId(machineId));
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
@@ -672,14 +679,14 @@ export function renderMaintLog(entries: MaintLogEntry[]): void {
     return html`<div class="maint-log-row">
       <span class="maint-log-date num">${esc(dateStr)}</span>
       <span class="maint-log-main">
-        <span class="maint-log-task">${esc(taskTitle(e.task, e))}${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}</span>
-        ${machineTag ? html`<span class="shot-machine-badge">${esc(machineTag as string)}</span>` : html``}
+        <span class="maint-log-task">${esc(taskTitle(e.task, e))}${isManual ? html`<span class="badge">${tHtml('maint_log_manual_badge')}</span>` : html``}</span>
+        ${machineTag ? html`<span class="badge">${esc(machineTag as string)}</span>` : html``}
         ${e.notes === AUTO_SYNCED_NOTE
-          ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
+          ? html`<span class="badge badge--info" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
           : e.notes ? html`<span class="maint-log-note">${esc(e.notes)}</span>` : html``}
       </span>
       <span class="maint-log-shots num">${shotsText}</span>
-      <button type="button" class="lib-sheet-iconbtn maint-log-del-btn" data-action="delete-maint-log" data-id="${esc(e.id)}" aria-label="${esc(t('maint_log_delete'))}" title="${esc(t('maint_log_confirm_delete'))}">${ICON_TRASH}</button>
+      <button type="button" class="lib-sheet-iconbtn" data-action="delete-maint-log" data-id="${esc(e.id)}" aria-label="${esc(t('maint_log_delete'))}" title="${esc(t('maint_log_confirm_delete'))}">${ICON_TRASH}</button>
     </div>`;
   };
 
@@ -721,7 +728,7 @@ export function openMaintLogForm(anchor: HTMLElement | null = null): void {
   openDetailSheet({
     title: t('maint_log_add'),
     body: maintLogFormBody(_maintLogTaskOptions(_lastActiveTiles), todayIsoDate()),
-    actions: html`<button type="button" class="lib-sheet-save" data-action="submit-maint-log">${tHtml('maint_log_save')}</button>`,
+    actions: html`<button type="button" class="btn btn--primary lib-sheet-save" data-action="submit-maint-log">${tHtml('maint_log_save')}</button>`,
     anchor,
   });
 }
@@ -739,7 +746,7 @@ export function openMaintCustomForm(anchor: HTMLElement | null = null): void {
   openDetailSheet({
     title: t('maint_custom_add_summary'),
     body: maintCustomFormBody(),
-    actions: html`<button type="button" class="lib-sheet-save" data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">${tHtml('maint_custom_add')}</button>`,
+    actions: html`<button type="button" class="btn btn--primary lib-sheet-save" data-action="add-custom-maint-task" data-machine-id="${esc(writeMid)}">${tHtml('maint_custom_add')}</button>`,
     anchor,
   });
 }
@@ -760,7 +767,7 @@ export async function submitMaintLogEntry(): Promise<void> {
 }
 
 export async function deleteMaintLogEntry(id: number | string): Promise<void> {
-  if (!await confirmDialog(t('maint_log_confirm_delete'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('maint_log_confirm_delete'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   try {
     const r = await deleteMaintenanceLogEntry(id);
     if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }

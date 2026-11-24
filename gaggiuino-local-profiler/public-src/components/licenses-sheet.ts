@@ -47,14 +47,14 @@ function _componentRow(component: NoticeComponent): Html {
 function _group(group: NoticeGroup, components: readonly NoticeComponent[]): Html {
     const items = components.filter(component => component.group === group);
     if (items.length === 0) return esc('');
-    return html`<h3 class="licenses-heading">${tHtml(GROUP_KEYS[group])} <span class="licenses-count">${esc(items.length)}</span></h3>
+    return html`<h3 class="section-title licenses-heading">${tHtml(GROUP_KEYS[group])} <span class="section-title__count">${esc(items.length)}</span></h3>
                 <div class="settings-group">${joinHtml(items.map(_componentRow))}</div>`;
 }
 
 function _licenceTexts(notices: ParsedNotices): Html {
     if (notices.licences.length === 0) return esc('');
     const items = notices.licences.map(licence => html`<details class="licenses-text"><summary><span class="settings-row-text"><span class="settings-row-title">${esc(licence.name)}</span><span class="settings-row-sub">${esc(licence.covers)}</span></span></summary><pre>${esc(licence.text)}</pre></details>`);
-    return html`<h3 class="licenses-heading">${tHtml('licenses_texts')} <span class="licenses-count">${esc(notices.licences.length)}</span></h3>
+    return html`<h3 class="section-title licenses-heading">${tHtml('licenses_texts')} <span class="section-title__count">${esc(notices.licences.length)}</span></h3>
                 <div class="settings-group">${joinHtml(items)}</div>`;
 }
 

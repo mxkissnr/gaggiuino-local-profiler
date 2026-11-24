@@ -122,7 +122,7 @@ function fakeTab(id: string, width: number, opts: { active?: boolean; badge?: st
         getBoundingClientRect: () => ({ width: tab.width }),
         querySelector: (selector: string) => {
             if (selector === '.rail-label') return { textContent: label };
-            if (selector === '.maint-badge') return tab.badge;
+            if (selector === '.maint-dot') return tab.badge;
             return null;
         },
     };
@@ -264,13 +264,13 @@ describe('layoutTopbarNav() (#2079)', () => {
         expect(row.barClasses.has('topbar-compact')).toBe(false);
         expect(hiddenIds(row)).toEqual([]);
         expect(row.more.hidden).toBe(true);
-        expect(row.moreClasses.has('has-badge')).toBe(false);
+        expect(row.moreClasses.has('has-dot')).toBe(false);
     });
 
     it('flags the menu when a hidden tab carries a badge', () => {
         const row = makeRow({ room: 640, compactSaving: 60, activeId: 'btn0', badgeOn: { id: 'btn5', text: '2' } });
         layoutTopbarNav(row.els);
-        expect(row.moreClasses.has('has-badge')).toBe(true);
+        expect(row.moreClasses.has('has-dot')).toBe(true);
         const entry = topbarMenuEntries(row.tabs as unknown as HTMLElement[]).find(e => e.target === 'btn5');
         expect(entry?.badge).toBe('2');
     });
@@ -280,7 +280,7 @@ describe('layoutTopbarNav() (#2079)', () => {
         const badge = row.tabs[5]?.badge;
         if (badge) badge.style.display = 'none';
         layoutTopbarNav(row.els);
-        expect(row.moreClasses.has('has-badge')).toBe(false);
+        expect(row.moreClasses.has('has-dot')).toBe(false);
         const entry = topbarMenuEntries(row.tabs as unknown as HTMLElement[]).find(e => e.target === 'btn5');
         expect(entry?.badge).toBe('');
     });
@@ -312,6 +312,6 @@ describe('top bar markup and stylesheet (#2079)', () => {
     it('compacts the status group through the bar class', () => {
         expect(CSS).toContain('#content-topbar.topbar-compact #syncTime');
         expect(CSS).toContain('#content-topbar.topbar-compact #syncBtn');
-        expect(CSS).toContain('.topbar-nav-more.has-badge .rail-icon-slot::after');
+        expect(CSS).toContain('.topbar-nav-more.has-dot .rail-icon-slot::after');
     });
 });

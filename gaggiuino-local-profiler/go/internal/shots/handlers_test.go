@@ -108,6 +108,198 @@ func TestLastShot_NullWhenEmptyAndPopulatedOtherwise(t *testing.T) {
 	}
 }
 
+// ── profile time window on the shot responses (#1504) ──────────────────
+
+// timeTargetShotData is a scoreable series for the time-window tests: a
+// 30-second shot (duration is stored in deciseconds) that scores differently
+// against the generic 25-35 s band than against a 40-48 s window.
+func timeTargetShotData() map[string]any {
+	return map[string]any{"datapoints": map[string]any{
+		"pressure":    []any{80.0, 81.0, 82.0, 80.0, 81.0},
+		"temperature": []any{900.0, 901.0, 899.0, 900.0, 901.0, 900.0},
+		"timeInShot":  []any{0.0, 10.0, 20.0, 30.0, 40.0, 50.0},
+		"weight":      []any{0.0, 100.0, 200.0, 300.0, 400.0, 450.0},
+	}}
+}
+
+// saveV60Window stores a time window for profile "V60" on machine 1.
+func saveV60Window(t testing.TB, repo *Repository, minS, maxS int) {
+	t.Helper()
+	if err := repo.SaveProfileTimeTargets(map[string][]ProfileTimeTarget{
+		"1": {{ProfileName: "V60", MinS: minS, MaxS: maxS}},
+	}); err != nil {
+		t.Fatalf("SaveProfileTimeTargets: %v", err)
+	}
+}
+
+// assertTimeTarget checks a response body's timeTarget field.
+func assertTimeTarget(t testing.TB, label string, body map[string]any, wantMin, wantMax float64) {
+	t.Helper()
+	v, ok := body["timeTarget"]
+	if !ok {
+		t.Fatalf("%s: timeTarget key missing from response: %+v", label, body)
+	}
+	if wantMin < 0 {
+		if v != nil {
+			t.Fatalf("%s: timeTarget = %+v, want null", label, v)
+		}
+		return
+	}
+	m, ok := v.(map[string]any)
+	if !ok {
+		t.Fatalf("%s: timeTarget = %+v, want an object", label, v)
+	}
+	if m["minS"] != wantMin || m["maxS"] != wantMax {
+		t.Fatalf("%s: timeTarget = %+v, want {minS:%v maxS:%v}", label, m, wantMin, wantMax)
+	}
+}
+
+// listShotsBody GETs /api/shots and returns its rows.
+func listShotsBody(t testing.TB, mux *http.ServeMux) []map[string]any {
+	t.Helper()
+	rec := doJSON(t, mux, http.MethodGet, "/api/shots", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/api/shots status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var page struct {
+		Shots []map[string]any `json:"shots"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
+		t.Fatalf("decoding /api/shots: %v", err)
+	}
+	return page.Shots
+}
+
+// listShotsJSONBody GETs /shots.json (the HA shape) and returns its rows.
+func listShotsJSONBody(t testing.TB, mux *http.ServeMux) []map[string]any {
+	t.Helper()
+	rec := doJSON(t, mux, http.MethodGet, "/shots.json", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("/shots.json status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	var list []map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decoding /shots.json: %v", err)
+	}
+	return list
+}
+
+func TestShotResponses_CarryTimeTarget(t *testing.T) {
+	h, repo, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "V60", timeTargetShotData(), map[string]any{"dose": 18.0})
+
+	byID := func() map[string]any {
+		rec := doJSON(t, mux, http.MethodGet, "/api/shots/1", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("/api/shots/1 status = %d; body=%s", rec.Code, rec.Body.String())
+		}
+		return decodeBody(t, rec.Body.Bytes())
+	}
+	last := func() map[string]any {
+		rec := doJSON(t, mux, http.MethodGet, "/api/shots/last", nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("/api/shots/last status = %d; body=%s", rec.Code, rec.Body.String())
+		}
+		return decodeBody(t, rec.Body.Bytes())
+	}
+
+	// No window stored: the field is present and null on all three routes.
+	assertTimeTarget(t, "GET /api/shots/1", byID(), -1, -1)
+	assertTimeTarget(t, "GET /api/shots/last", last(), -1, -1)
+	rows := listShotsBody(t, mux)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row from /api/shots, got %d", len(rows))
+	}
+	assertTimeTarget(t, "GET /api/shots", rows[0], -1, -1)
+
+	// With a window for "V60" on machine 1, all three report it.
+	saveV60Window(t, repo, 40, 48)
+	assertTimeTarget(t, "GET /api/shots/1", byID(), 40, 48)
+	assertTimeTarget(t, "GET /api/shots/last", last(), 40, 48)
+	rows = listShotsBody(t, mux)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row from /api/shots, got %d", len(rows))
+	}
+	assertTimeTarget(t, "GET /api/shots", rows[0], 40, 48)
+}
+
+func TestShotsJSON_ShapeUnchangedByTimeTarget(t *testing.T) {
+	h, repo, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "V60", timeTargetShotData(), map[string]any{"dose": 18.0})
+	saveV60Window(t, repo, 40, 48)
+
+	rows := listShotsJSONBody(t, mux)
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 row from /shots.json, got %d", len(rows))
+	}
+	if _, ok := rows[0]["timeTarget"]; ok {
+		t.Fatalf("/shots.json must not carry timeTarget: %+v", rows[0])
+	}
+
+	rec := doJSON(t, mux, http.MethodGet, "/api/shots/1", nil)
+	byID := decodeBody(t, rec.Body.Bytes())
+	if rows[0]["score"] != byID["score"] {
+		t.Fatalf("/shots.json score %v != /api/shots/1 score %v (both windowed)",
+			rows[0]["score"], byID["score"])
+	}
+}
+
+func TestTimeTarget_SetEditClearRescoresViaAPI(t *testing.T) {
+	h, _, sqlDB := newTestHandlers(t)
+	mux := newMux(h)
+	dur := int64(300)
+	insertShot(t, sqlDB, 1, 1000, &dur, "V60", timeTargetShotData(), map[string]any{"dose": 18.0})
+
+	scoreList := func(label string) float64 {
+		t.Helper()
+		rows := listShotsBody(t, mux)
+		if len(rows) != 1 {
+			t.Fatalf("%s: expected 1 row, got %d", label, len(rows))
+		}
+		s, ok := rows[0]["score"].(float64)
+		if !ok {
+			t.Fatalf("%s: no numeric score: %+v", label, rows[0])
+		}
+		return s
+	}
+	put := func(body string) {
+		t.Helper()
+		rec := doJSON(t, mux, http.MethodPut, "/api/profile-time-targets", []byte(body))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("PUT %s status = %d; body=%s", body, rec.Code, rec.Body.String())
+		}
+	}
+
+	base := scoreList("without window")
+
+	put(`{"machineId":1,"profileName":"V60","minS":40,"maxS":48}`)
+	w40 := scoreList("window 40/48")
+	if w40 == base {
+		t.Fatalf("score unchanged after setting the 40/48 window: %v", w40)
+	}
+	rec := doJSON(t, mux, http.MethodGet, "/api/shots/1", nil)
+	byID := decodeBody(t, rec.Body.Bytes())
+	if byID["score"] != w40 {
+		t.Fatalf("/api/shots/1 score %v != /api/shots row score %v", byID["score"], w40)
+	}
+	assertTimeTarget(t, "GET /api/shots/1 after PUT", byID, 40, 48)
+
+	put(`{"machineId":1,"profileName":"V60","minS":38,"maxS":46}`)
+	w38 := scoreList("window 38/46")
+	if w38 == w40 {
+		t.Fatalf("score unchanged after editing the window to 38/46: %v", w38)
+	}
+
+	put(`{"machineId":1,"profileName":"V60","minS":null,"maxS":null}`)
+	if cleared := scoreList("window cleared"); cleared != base {
+		t.Fatalf("score after clearing = %v, want the unwindowed %v", cleared, base)
+	}
+}
+
 // ── /api/shots/defaults ────────────────────────────────────────────────
 
 func TestShotDefaults_RoundTrip(t *testing.T) {

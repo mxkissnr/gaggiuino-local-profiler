@@ -308,6 +308,61 @@ func TestExplainScoreComponents(t *testing.T) {
 	}
 }
 
+// TestExplainScoreProfileTimeTarget (#1504): with a window saved for the
+// shot's profile and machine, the duration component scores against it and
+// reports target "profile" with the window inputs; without one it stays
+// "generic".
+func TestExplainScoreProfileTimeTarget(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 43, 1000, map[string]any{"datapoints": map[string]any{
+		"pressure":    []any{80.0, 81.0, 82.0, 80.0, 81.0},
+		"temperature": []any{900.0, 901.0, 899.0, 900.0, 901.0, 900.0},
+		"timeInShot":  []any{0.0, 10.0, 20.0, 30.0, 40.0, 50.0},
+		"weight":      []any{0.0, 100.0, 200.0, 300.0, 400.0, 450.0},
+	}}, map[string]any{"dose": 18.0})
+	if _, err := sqlDB.Exec(`UPDATE shots SET duration = 300 WHERE id = 43`); err != nil {
+		t.Fatalf("setting duration: %v", err)
+	}
+
+	session := connect(t, ts.URL+Path)
+	durationComponent := func() (string, map[string]any) {
+		t.Helper()
+		out := structured(t, call(t, session, "explain_score", map[string]any{"id": 43}))
+		for _, raw := range objects(out, "components") {
+			c, _ := raw.(map[string]any)
+			if name, _ := c["name"].(string); name == "duration" {
+				inputs, _ := c["inputs"].(map[string]any)
+				target, _ := c["target"].(string)
+				return target, inputs
+			}
+		}
+		t.Fatalf("no duration component: %+v", out)
+		return "", nil
+	}
+
+	if target, _ := durationComponent(); target != "generic" {
+		t.Fatalf("duration target = %q, want generic without a window", target)
+	}
+
+	repo := shots.NewRepository(sqlDB)
+	if err := repo.SaveProfileTimeTargets(map[string][]shots.ProfileTimeTarget{
+		"1": {{ProfileName: "Test Profile", MinS: 40, MaxS: 48}},
+	}); err != nil {
+		t.Fatalf("SaveProfileTimeTargets: %v", err)
+	}
+
+	target, inputs := durationComponent()
+	if target != "profile" {
+		t.Fatalf("duration target = %q, want profile with a window", target)
+	}
+	if got, _ := inputs["min_s"].(float64); got != 40 {
+		t.Fatalf("duration min_s = %v, want 40", inputs["min_s"])
+	}
+	if got, _ := inputs["max_s"].(float64); got != 48 {
+		t.Fatalf("duration max_s = %v, want 48", inputs["max_s"])
+	}
+}
+
 func TestExplainScoreSkipsRatioAndExtractionYieldWithoutDose(t *testing.T) {
 	ts, sqlDB := newDeveloperServer(t, true, false)
 	insertShot(t, sqlDB, 42, 1000, map[string]any{"datapoints": map[string]any{
@@ -1355,5 +1410,194 @@ func TestExportShotsDatasetListsEveryScoreModel(t *testing.T) {
 	}
 	if len(classicScores) != 2 {
 		t.Fatalf("got %d rows, want 2", len(classicScores))
+	}
+}
+
+// adherenceDatapoints is a shot with target pressure data in a PRESSURE phase:
+// 9 bar against a 7.5 bar target, so the adherence part's mean deviation is
+// exactly 1.5 bar and it scores 50. classic sees a 9 bar average and scores
+// its pressure part 100, so the combined score is strictly lower.
+func adherenceDatapoints() map[string]any {
+	return map[string]any{
+		"profile": map[string]any{"phases": []any{map[string]any{"type": "PRESSURE"}}},
+		"datapoints": map[string]any{
+			"pressure":       []any{90.0, 90.0, 90.0, 90.0, 90.0},
+			"targetPressure": []any{75.0, 75.0, 75.0, 75.0, 75.0},
+			"timeInShot":     []any{0.0, 10.0, 20.0, 30.0, 40.0},
+			"phaseIndex":     []any{0.0, 0.0, 0.0, 0.0, 0.0},
+		},
+	}
+}
+
+// componentOf returns the named entry of an explain_score components array.
+func componentOf(t *testing.T, out map[string]any, name string) map[string]any {
+	t.Helper()
+	for _, raw := range objects(out, "components") {
+		c, _ := raw.(map[string]any)
+		if c["name"] == name {
+			return c
+		}
+	}
+	t.Fatalf("no %q component in %v", name, out["components"])
+	return nil
+}
+
+// skippedReason returns the skipped reason for the named part, or "" when the
+// part is not listed as skipped.
+func skippedReason(out map[string]any, name string) string {
+	for _, raw := range objects(out, "skipped") {
+		s, _ := raw.(map[string]any)
+		if s["name"] == name {
+			reason, _ := s["reason"].(string)
+			return reason
+		}
+	}
+	return ""
+}
+
+// TestExplainScoreAdherenceComponent covers #2186: with the adherence model
+// active, explain_score lists its extra part with its inputs and reports the
+// combined score for both the score and the adherence model entry.
+func TestExplainScoreAdherenceComponent(t *testing.T) {
+	t.Cleanup(shots.RegisterDevScoreModels())
+	t.Cleanup(func() { shots.SetScoreModelSource(nil) })
+	shots.SetScoreModelSource(func() string { return shots.AdherenceScoreModel })
+
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 51, 1000, adherenceDatapoints(), map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+
+	out := structured(t, call(t, session, "explain_score", map[string]any{"id": 51}))
+	if got, _ := out["score_model"].(string); got != shots.AdherenceScoreModel {
+		t.Fatalf("score_model = %q, want %q", got, shots.AdherenceScoreModel)
+	}
+
+	part := componentOf(t, out, shots.PressureAdherenceComponent)
+	if got := numberField(t, part, "score"); got != 50 {
+		t.Errorf("%s score = %v, want 50", shots.PressureAdherenceComponent, got)
+	}
+	if got := numberField(t, part, "weight"); got != 15 {
+		t.Errorf("%s weight = %v, want 15", shots.PressureAdherenceComponent, got)
+	}
+	if got, _ := part["target"].(string); got != "profile" {
+		t.Errorf("%s target = %q, want profile", shots.PressureAdherenceComponent, got)
+	}
+	inputs := object(part, "inputs")
+	if got := numberField(t, inputs, "pressure_mae_bar"); math.Abs(got-1.5) > 1e-9 {
+		t.Errorf("pressure_mae_bar = %v, want 1.5", got)
+	}
+	if got := numberField(t, inputs, "samples"); got != 5 {
+		t.Errorf("samples = %v, want 5", got)
+	}
+
+	shareSum := 0.0
+	for _, raw := range objects(out, "components") {
+		c, _ := raw.(map[string]any)
+		shareSum += numberField(t, c, "weight_share")
+	}
+	if math.Abs(shareSum-1) > 1e-9 {
+		t.Errorf("weight_share values sum to %v, want 1", shareSum)
+	}
+	if reason := skippedReason(out, shots.PressureAdherenceComponent); reason != "" {
+		t.Errorf("%s listed as skipped (%q) although it scored", shots.PressureAdherenceComponent, reason)
+	}
+
+	scores := modelScoresOf(t, out)
+	if len(scores) != 2 || scores[0].Model != shots.ClassicScoreModel || scores[1].Model != shots.AdherenceScoreModel {
+		t.Fatalf("model_scores = %+v, want classic then adherence", scores)
+	}
+	shown := int(numberField(t, out, "score"))
+	if scores[1].Score == nil || *scores[1].Score != shown {
+		t.Fatalf("adherence model score = %v, want the shown score %d", scores[1].Score, shown)
+	}
+}
+
+// TestExplainScoreAdherenceNotApplicable covers #2186's other half: a shot with
+// no target pressure data gets classic's ScoreDetail from the adherence model,
+// so explain_score labels the part as skipped instead of listing it.
+func TestExplainScoreAdherenceNotApplicable(t *testing.T) {
+	t.Cleanup(shots.RegisterDevScoreModels())
+	t.Cleanup(func() { shots.SetScoreModelSource(nil) })
+	shots.SetScoreModelSource(func() string { return shots.AdherenceScoreModel })
+
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 52, 1000, scoreableDatapoints(), map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+
+	out := structured(t, call(t, session, "explain_score", map[string]any{"id": 52}))
+	for _, raw := range objects(out, "components") {
+		c, _ := raw.(map[string]any)
+		if c["name"] == shots.PressureAdherenceComponent {
+			t.Fatalf("%s listed as a component for a shot without target data", shots.PressureAdherenceComponent)
+		}
+	}
+	if reason := skippedReason(out, shots.PressureAdherenceComponent); reason == "" {
+		t.Fatalf("skipped has no %s entry with a reason: %v", shots.PressureAdherenceComponent, out["skipped"])
+	}
+	shown := int(numberField(t, out, "score"))
+	for _, s := range modelScoresOf(t, out) {
+		if s.Score == nil || *s.Score != shown {
+			t.Fatalf("model %s score = %v, want the shown score %d (no target data means classic's result)", s.Model, s.Score, shown)
+		}
+	}
+
+	// The reason is the adherence model's, not a generic one: with classic
+	// active the same shot reports nothing about the part at all.
+	shots.SetScoreModelSource(nil)
+	out = structured(t, call(t, session, "explain_score", map[string]any{"id": 52}))
+	if got, _ := out["score_model"].(string); got != shots.ClassicScoreModel {
+		t.Fatalf("score_model = %q, want %q", got, shots.ClassicScoreModel)
+	}
+	if reason := skippedReason(out, shots.PressureAdherenceComponent); reason != "" {
+		t.Errorf("classic reported the adherence part as skipped: %q", reason)
+	}
+}
+
+// TestExportShotsDatasetListsAdherenceScore covers #2186's dataset half: every
+// row carries both models side by side, the adherence score equals classic's
+// on a shot without target data and is lower on one with it.
+func TestExportShotsDatasetListsAdherenceScore(t *testing.T) {
+	t.Cleanup(shots.RegisterDevScoreModels())
+	t.Cleanup(func() { shots.SetScoreModelSource(nil) })
+	shots.SetScoreModelSource(nil)
+
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 61, 1000, adherenceDatapoints(), map[string]any{"coffee": "Alpha"})
+	insertShot(t, sqlDB, 62, 1001, scoreableDatapoints(), map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+
+	out := structured(t, call(t, session, "export_shots_dataset", map[string]any{}))
+	if got, _ := out["score_model"].(string); got != shots.ClassicScoreModel {
+		t.Fatalf("score_model = %q, want %q", got, shots.ClassicScoreModel)
+	}
+
+	rows := objects(out, "shots")
+	if len(rows) != 2 {
+		t.Fatalf("got %d rows, want 2", len(rows))
+	}
+	for _, raw := range rows {
+		row, _ := raw.(map[string]any)
+		id := numberField(t, row, "id")
+		classic := int(numberField(t, row, "score"))
+		scores := modelScoresOf(t, row)
+		if len(scores) != 2 || scores[0].Model != shots.ClassicScoreModel || scores[1].Model != shots.AdherenceScoreModel {
+			t.Fatalf("row %v model_scores = %+v, want classic then adherence", id, scores)
+		}
+		if scores[0].Score == nil || *scores[0].Score != classic {
+			t.Fatalf("row %v classic model score = %v, want the row's score %d", id, scores[0].Score, classic)
+		}
+		if scores[1].Score == nil {
+			t.Fatalf("row %v has no adherence score", id)
+		}
+		switch int(id) {
+		case 62:
+			if *scores[1].Score != classic {
+				t.Errorf("row 62 (no target data) adherence score = %d, want classic's %d", *scores[1].Score, classic)
+			}
+		case 61:
+			if *scores[1].Score >= classic {
+				t.Errorf("row 61 (1.5 bar deviation) adherence score = %d, want lower than classic's %d", *scores[1].Score, classic)
+			}
+		}
 	}
 }

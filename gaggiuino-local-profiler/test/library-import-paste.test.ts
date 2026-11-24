@@ -126,7 +126,7 @@ beforeEach(() => {
 
   g.document = {
     getElementById: (id: string) => elements[id] ?? null,
-    querySelector: (selector: string) => (selector === '#urlImportRow .lib-url-btn' ? importUrlBtn : null),
+    querySelector: (selector: string) => (selector === '#urlImportRow .btn' ? importUrlBtn : null),
   };
 
   api.importFromUrl.mockReset();

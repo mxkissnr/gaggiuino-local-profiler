@@ -88,6 +88,9 @@ type PageRow struct {
 	UsedBeanTarget   bool
 	HasChartData     bool
 	TempStabilityDev *float64
+	// TimeTarget is the shot's resolved profile time window (#1504), nil
+	// when none is stored.
+	TimeTarget *TimeTarget
 }
 
 // Page is a slice of PageRows plus the keyset state to fetch the next one.
@@ -198,8 +201,9 @@ func (r *Repository) runPageQuery(query string, args []any, limit int, lookup be
 		backfill []scoreCacheRow
 	)
 	model := activeScoreModel()
+	times := r.loadTimeTargetLookup()
 	for rows.Next() {
-		row, bf, err := r.scanPageRow(rows, lookup, model, true)
+		row, bf, err := r.scanPageRow(rows, lookup, times, model, true)
 		if err != nil {
 			return Page{}, err
 		}
@@ -255,8 +259,9 @@ func (r *Repository) scoredShots(query string, args []any, lookup beanLookup) ([
 		backfill []scoreCacheRow
 	)
 	model := activeScoreModel()
+	times := r.loadTimeTargetLookup()
 	for rows.Next() {
-		row, bf, err := r.scanPageRow(rows, lookup, model, false)
+		row, bf, err := r.scanPageRow(rows, lookup, times, model, false)
 		if err != nil {
 			return nil, err
 		}
@@ -306,10 +311,11 @@ func (r *Repository) EachScoredExcludingTrash(lookup func(Shot) *Bean, fn func(s
 	}
 	var backfill []scoreCacheRow
 	model := activeScoreModel()
+	times := r.loadTimeTargetLookup()
 	err = func() error {
 		defer rows.Close()
 		for rows.Next() {
-			row, bf, err := r.scanPageRow(rows, lookup, model, false)
+			row, bf, err := r.scanPageRow(rows, lookup, times, model, false)
 			if err != nil {
 				return err
 			}
@@ -460,11 +466,14 @@ type scoreCacheRow struct {
 // lookup (nil = generic bands) resolves each shot's bean target; that target
 // is folded into the fingerprint, so editing a bean's brewTempC/brewRatio
 // misses the cache and recomputes instead of serving the old score forever.
-// The model's id is part of the fingerprint too (#1922), so switching models
-// misses the cache and rescores on the next read; switching back rescores
-// again. withChart fills HasChartData/TempStabilityDev; callers that only need
-// the score (comparative advice, /shots.json) skip them.
-func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, model ScoreModel, withChart bool) (PageRow, *scoreCacheRow, error) {
+// times (nil = no windows) resolves each shot's profile time window (#1504),
+// which is part of the fingerprint too: a window only adds bytes when one is
+// set, so pre-#1504 cache rows stay valid. The model's id is part of the
+// fingerprint as well (#1922), so switching models misses the cache and
+// rescores on the next read; switching back rescores again. withChart fills
+// HasChartData/TempStabilityDev; callers that only need the score
+// (comparative advice, /shots.json) skip them.
+func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, times func(Shot) *TimeTarget, model ScoreModel, withChart bool) (PageRow, *scoreCacheRow, error) {
 	var (
 		id, timestamp, machineID int64
 		duration                 sql.NullInt64
@@ -490,9 +499,13 @@ func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, model ScoreMo
 	if lookup != nil {
 		bean = lookup(shot)
 	}
-	fp := fingerprint + "|" + beanTargetSignature(bean) + model.fingerprintSuffix()
+	targets := ScoreTargets{Bean: bean}
+	if times != nil {
+		targets.Time = times(shot)
+	}
+	fp := fingerprint + "|" + beanTargetSignature(bean) + timeTargetSignature(targets.Time) + model.fingerprintSuffix()
 
-	row := PageRow{id: id, Shot: shot}
+	row := PageRow{id: id, Shot: shot, TimeTarget: targets.Time}
 	// hasChartData / tempStabilityDev are derived from the raw datapoints
 	// bytes on every row (cache hit or miss) — one shared split of the blob
 	// (#1616: it used to be split once per value), bounded by page size.
@@ -509,7 +522,7 @@ func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, model ScoreMo
 		return row, nil, nil
 	}
 
-	detail := model.Score(shot, bean)
+	detail := model.Score(shot, targets)
 	row.Score = detail.Score
 	row.UsedBeanTarget = detail.UsedBeanTarget
 	return row, &scoreCacheRow{
@@ -518,6 +531,15 @@ func (r *Repository) scanPageRow(sc rowScanner, lookup beanLookup, model ScoreMo
 		usedBeanTarget: detail.UsedBeanTarget,
 		fingerprint:    fp,
 	}, nil
+}
+
+// timeTargetSignature folds a profile's time window into the fingerprint
+// (#1504). Empty for no window, so pre-#1504 cache rows stay valid.
+func timeTargetSignature(t *TimeTarget) string {
+	if t == nil {
+		return ""
+	}
+	return "|w=" + strconv.Itoa(t.MinS) + "-" + strconv.Itoa(t.MaxS)
 }
 
 // beanTargetSignature renders a resolved *Bean into a stable string appended

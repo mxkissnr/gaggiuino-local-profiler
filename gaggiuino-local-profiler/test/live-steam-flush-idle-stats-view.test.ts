@@ -63,21 +63,31 @@ describe('setLiveBadge() steaming/flushing labels (#902)', () => {
 
   it('sets the steaming badge class/label', () => {
     setLiveBadge('steaming');
-    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge steaming');
+    expect(doc.getElementById('live-status-badge').className).toBe('badge badge--accent steaming');
     expect(doc.getElementById('live-status-text').textContent).toBe('Steaming …');
   });
 
   it('sets the flushing badge class/label', () => {
     setLiveBadge('flushing');
-    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge flushing');
+    expect(doc.getElementById('live-status-badge').className).toBe('badge badge--accent flushing');
     expect(doc.getElementById('live-status-text').textContent).toBe('Flushing …');
   });
 
   // #983: descale mirrors steaming/flushing's own badge treatment.
   it('sets the descaling badge class/label', () => {
     setLiveBadge('descaling');
-    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge descaling');
+    expect(doc.getElementById('live-status-badge').className).toBe('badge badge--accent descaling');
     expect(doc.getElementById('live-status-text').textContent).toBe('Descaling …');
+  });
+
+  // #2096: the state picks the shared badge variant; standby stays neutral.
+  it('gives ready, unreachable and standby their badge variant', () => {
+    setLiveBadge('ready');
+    expect(doc.getElementById('live-status-badge').className).toBe('badge badge--ok ready');
+    setLiveBadge('unreachable');
+    expect(doc.getElementById('live-status-badge').className).toBe('badge badge--err unreachable');
+    setLiveBadge('standby');
+    expect(doc.getElementById('live-status-badge').className).toBe('badge standby');
   });
 });
 
@@ -99,7 +109,7 @@ describe('handleLiveData() steam/flush live-content branches (#902)', () => {
       temperature: 91, targetTemperature: 93, pressure: 0.1, waterLevel: 70,
     });
 
-    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge steaming');
+    expect(doc.getElementById('live-status-badge').className).toBe('badge badge--accent steaming');
     expect(doc.getElementById('live-meta').textContent).toBe('Steaming …');
     expect(doc.getElementById('live-content').style.display).toBe('block');
     expect(doc.getElementById('live-idle').style.display).toBe('none');
@@ -116,7 +126,7 @@ describe('handleLiveData() steam/flush live-content branches (#902)', () => {
       temperature: 93, targetTemperature: 93, pressure: 0.5, waterLevel: 70,
     });
 
-    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge flushing');
+    expect(doc.getElementById('live-status-badge').className).toBe('badge badge--accent flushing');
     expect(doc.getElementById('live-meta').textContent).toBe('Flushing …');
     expect(doc.getElementById('live-content').style.display).toBe('block');
     expect(doc.getElementById('livePressure').textContent).toBe('0.5');
@@ -131,7 +141,7 @@ describe('handleLiveData() steam/flush live-content branches (#902)', () => {
       temperature: 80, targetTemperature: 93, pressure: 0.2, waterLevel: 70,
     });
 
-    expect(doc.getElementById('live-status-badge').className).toBe('live-status-badge descaling');
+    expect(doc.getElementById('live-status-badge').className).toBe('badge badge--accent descaling');
     expect(doc.getElementById('live-meta').textContent).toBe('Descaling …');
     expect(doc.getElementById('live-content').style.display).toBe('block');
     expect(doc.getElementById('livePressure').textContent).toBe('0.2');

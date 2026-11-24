@@ -162,7 +162,7 @@ describe('form sheets follow the shared sheet and i18n conventions (#1923)', () 
 
   it("uses the library form sheet's .lib-sheet-save for the bar action only", () => {
     openMaintLogForm();
-    expect(host.innerHTML).toContain('class="lib-sheet-save"');
+    expect(host.innerHTML).toContain('class="btn btn--primary lib-sheet-save"');
     expect((host.innerHTML.match(/lib-sheet-save/g) || []).length).toBe(1);
 
     openMaintCustomForm();
@@ -206,7 +206,7 @@ describe('openMaintLogForm in the shared sheet (#1923)', () => {
     openMaintLogForm();
 
     expect(host.innerHTML).toContain('lib-sheet-bar-actions');
-    expect(host.innerHTML).toContain('class="lib-sheet-save"');
+    expect(host.innerHTML).toContain('class="btn btn--primary lib-sheet-save"');
     expect(host.innerHTML).toContain('data-action="submit-maint-log"');
     expect(host.innerHTML).toContain('id="maintLogForm"');
     expect(host.innerHTML).toContain('id="maintLogTask"');
@@ -237,7 +237,7 @@ describe('openMaintCustomForm in the shared sheet (#1923)', () => {
   it('carries the write machine id on the bar action', () => {
     openMaintCustomForm();
 
-    expect(host.innerHTML).toContain('class="lib-sheet-save"');
+    expect(host.innerHTML).toContain('class="btn btn--primary lib-sheet-save"');
     expect(host.innerHTML).toContain('data-action="add-custom-maint-task"');
     expect(host.innerHTML).toContain('data-machine-id="4"');
     expect(host.innerHTML).toContain('id="customTaskLabel"');

@@ -297,16 +297,10 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// annotate_shot tool and Home Assistant's assistant store what the browser
 	// stores. Same import-cycle injection as the bean source above; a library
 	// read error leaves the merged annotation's own value alone.
-	shots.SetBeanAgeSource(func() (func(map[string]any, int64) (int, bool), error) {
-		lib, err := libRepo.GetLibrary()
-		if err != nil {
-			return nil, err
-		}
-		beans := lib.Beans
-		return func(ann map[string]any, shotSec int64) (int, bool) {
-			return library.BeanAgeForAnnotation(beans, ann, shotSec)
-		}, nil
-	})
+	shots.SetBeanAgeSource(beanAgeLoader(libRepo))
+	// #2100: annotations saved before the shared rule hold the old age; re-derive
+	// them once, gated by a kv flag like the image migration below.
+	recomputeStoredBeanAgesOnce(sqlDB, shotsRepo, beanAgeLoader(libRepo))
 	// #1961: same injection as the bean source above. A library read error
 	// leaves the advice on its no-scale behaviour.
 	shots.SetGrinderScaleSource(func(grinder string) *grindscale.Scale {
@@ -423,6 +417,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	ordersRepo := orders.NewRepository(sqlDB)
 	// #1835: shared by the ui-prefs routes and the low-stock threshold read.
 	uiprefsRepo := uiprefs.NewRepository(sqlDB)
+	// #2186: the experimental score models exist on a dev build only; a stable
+	// build keeps classic as its only registered model.
+	registerDevScoreModels()
 	// #1922: which score model this process scores with. internal/shots cannot
 	// read ui-prefs (or the dev-build flag) itself, so the source is injected
 	// here for the same import-cycle reason as SetBeanSource; scoreModelPref
@@ -640,6 +637,14 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	// internal/library/doc.go).
 	libraryHandlers.SetOnGrinderDeleted(maintenanceRepo.DeleteGrinderTask)
 
+	// #2138: marking backflush or descaling done (the REST route and the MCP
+	// tool mark_maintenance_done both run maintenance.MarkTaskDone) also asks a
+	// GaggiMate on firmware v1.10.0+ to reset its own counter, only through the
+	// opt-in machine-control gate. A callback because the live GaggiMate session
+	// lives on machinesHandlers. Best effort: it returns at once and never fails
+	// or delays marking done.
+	maintenanceRepo.SetOnTaskDone(machinesHandlers.ResetMaintenanceCounter)
+
 	// #1136: a firmware update triggered from the app shows up in the
 	// machine's maintenance log. Wired as a callback (not a direct import)
 	// for the same import-cycle reason as the grinder-delete hook above --
@@ -828,6 +833,61 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	return handler, sqlDB, nil
 }
 
+// beanAgeLoader returns the loader injected as the shots package's bean age
+// source: it loads the library's beans once and hands back a per-annotation age
+// function over that snapshot, using the shared rule in internal/library.
+// internal/shots cannot import internal/library (library imports shots), which
+// is why the rule is injected (#2025).
+func beanAgeLoader(libRepo *library.Repository) func() (func(map[string]any, int64) (int, bool), error) {
+	return func() (func(map[string]any, int64) (int, bool), error) {
+		lib, err := libRepo.GetLibrary()
+		if err != nil {
+			return nil, err
+		}
+		beans := lib.Beans
+		return func(ann map[string]any, shotSec int64) (int, bool) {
+			return library.BeanAgeForAnnotation(beans, ann, shotSec)
+		}, nil
+	}
+}
+
+// beanAgesRecomputedKey gates the one-time #2100 pass. The kv table is not part
+// of a backup restore, so a restored database runs the pass again — which is
+// harmless, because it only rewrites values that differ.
+const beanAgesRecomputedKey = "bean_ages_recomputed_v1"
+
+// recomputeStoredBeanAgesOnce re-derives every stored annotation age with the
+// shared rule once, then sets the kv flag. It never fails buildApp: every error
+// is only logged, and the flag stays unset so the next start retries.
+func recomputeStoredBeanAgesOnce(sqlDB *sql.DB, repo *shots.Repository, load func() (func(map[string]any, int64) (int, bool), error)) {
+	done, err := db.GetKVBool(sqlDB, beanAgesRecomputedKey)
+	if err != nil {
+		log.Printf("bean ages: reading the recompute flag, leaving the pass for the next start: %v", err)
+		return
+	}
+	if done {
+		return
+	}
+	fn, err := load()
+	if err != nil {
+		log.Printf("bean ages: library unavailable, leaving the pass for the next start: %v", err)
+		return
+	}
+	if fn == nil {
+		log.Print("bean ages: no age function loaded, leaving the pass for the next start")
+		return
+	}
+	changed, err := repo.RecomputeStoredBeanAges(fn)
+	if err != nil {
+		log.Printf("bean ages: recomputing the stored shot ages, leaving the pass for the next start: %v", err)
+		return
+	}
+	log.Printf("bean ages: recomputed the stored age of %d shot(s) with the shared rule (#2100)", changed)
+	if err := db.SetKVBool(sqlDB, beanAgesRecomputedKey, true); err != nil {
+		log.Printf("bean ages: storing the recompute flag (the pass reruns next start): %v", err)
+	}
+}
+
 func getEnv(name, def string) string {
 	if v := os.Getenv(name); v != "" {
 		return v
@@ -883,6 +943,16 @@ func scoreModelPref(repo *uiprefs.Repository) string {
 		return shots.ClassicScoreModel
 	}
 	return id
+}
+
+// registerDevScoreModels registers the dev-channel score models (#2186) when
+// this is a dev build (GLP_DEV_BUILD) and does nothing on a stable build. The
+// returned func undoes the registration; buildApp ignores it, tests use it.
+func registerDevScoreModels() (restore func()) {
+	if !mcp.DevBuild() {
+		return func() {}
+	}
+	return shots.RegisterDevScoreModels()
 }
 
 // lowStockThresholdG reads the remaining-grams threshold for the "bean

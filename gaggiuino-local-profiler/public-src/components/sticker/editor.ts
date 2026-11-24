@@ -10,6 +10,7 @@
 // (autoCutout, tapMask, resetCutout); segment.ts also forwards the cut-out's
 // progress, which drives the bar below.
 import { t } from '../../i18n.js';
+import { CLOSE_ICON_SVG } from '../../icons.js';
 import { applyTap, featherAlpha, paintBrush } from './mask.js';
 import { autoCutout, resetCutout, tapMask, type CutoutProgress } from './segment.js';
 
@@ -354,8 +355,17 @@ function buildEditor(
   const overlay = element('div', 'crop-editor-overlay sticker-overlay');
   const modal = element('div', 'crop-editor-modal');
 
-  const title = element('h3', 'crop-editor-title');
+  // #2141: the shared sheet header bar: close first, then the title. The
+  // close is the editor's only way to cancel (docs/DESIGN.md, "One sheet header").
+  const bar = element('div', 'lib-sheet-bar');
+  const cancelBtn = element('button', 'lib-sheet-close sticker-cancel');
+  cancelBtn.type = 'button';
+  cancelBtn.setAttribute('aria-label', t('lib_sheet_close'));
+  cancelBtn.innerHTML = CLOSE_ICON_SVG;
+  const title = element('h3', 'lib-sheet-bar-title');
   title.textContent = t('sticker_title');
+  bar.appendChild(cancelBtn);
+  bar.appendChild(title);
 
   const viewport = element('div', 'sticker-viewport');
   const canvas = element('canvas', 'sticker-canvas');
@@ -394,8 +404,8 @@ function buildEditor(
 
   const modeGroup = element('div', 'sticker-mode');
   modeGroup.setAttribute('role', 'group');
-  const addBtn = themedButton('sticker-mode-btn sticker-mode-add', t('sticker_add'));
-  const removeBtn = themedButton('sticker-mode-btn sticker-mode-remove', t('sticker_remove'));
+  const addBtn = themedButton('chip sticker-mode-add', t('sticker_add'));
+  const removeBtn = themedButton('chip sticker-mode-remove', t('sticker_remove'));
   modeGroup.appendChild(addBtn);
   modeGroup.appendChild(removeBtn);
 
@@ -409,23 +419,20 @@ function buildEditor(
   const sizeLabel = element('label', 'sticker-size');
   sizeLabel.textContent = t('sticker_brush_size');
   sizeLabel.appendChild(sizeInput);
-  const undoBtn = themedButton('lib-btn-sm sticker-undo', t('sticker_undo'));
-  const resetBtn = themedButton('lib-btn-sm sticker-reset', t('sticker_reset'));
-  const originalBtn = themedButton('lib-btn-sm sticker-original', t('sticker_original'));
-  const fitBtn = themedButton('lib-btn-sm sticker-fit', t('sticker_fit'));
+  const undoBtn = themedButton('btn btn--quiet sticker-undo', t('sticker_undo'));
+  const resetBtn = themedButton('btn btn--quiet sticker-reset', t('sticker_reset'));
+  const originalBtn = themedButton('chip sticker-original', t('sticker_original'));
+  const fitBtn = themedButton('btn btn--quiet sticker-fit', t('sticker_fit'));
   fitBtn.hidden = true;
   for (const child of [sizeLabel, undoBtn, originalBtn, fitBtn, resetBtn]) {
     tools.appendChild(child);
   }
 
   const actions = element('div', 'crop-editor-actions');
-  const cancelBtn = themedButton('lib-btn-sm crop-editor-cancel sticker-cancel', t('lib_cancel'));
-  const applyBtn = themedButton('lib-save-btn crop-editor-apply sticker-apply', t('sticker_apply'));
-  const closeBtn = themedButton('lib-btn-sm sticker-close', t('sticker_close'));
-  closeBtn.style.display = 'none';
-  for (const child of [cancelBtn, applyBtn, closeBtn]) actions.appendChild(child);
+  const applyBtn = themedButton('btn btn--primary crop-editor-apply sticker-apply', t('sticker_apply'));
+  actions.appendChild(applyBtn);
 
-  for (const child of [title, viewport, workingLine, progress, hint, modeGroup, tools, actions]) modal.appendChild(child);
+  for (const child of [bar, viewport, workingLine, progress, hint, modeGroup, tools, actions]) modal.appendChild(child);
   overlay.appendChild(modal);
   document.body.appendChild(overlay);
 
@@ -677,9 +684,8 @@ function buildEditor(
     progress.style.display = 'none';
     tools.style.display = 'none';
     modeGroup.style.display = 'none';
-    cancelBtn.style.display = 'none';
-    applyBtn.style.display = 'none';
-    closeBtn.style.display = '';
+    // #2141: nothing to apply; the header close stays as the way out.
+    actions.style.display = 'none';
     refreshControls();
   }
 
@@ -1065,7 +1071,6 @@ function buildEditor(
   viewport.addEventListener('lostpointercapture', (event) => finishPointer(event, true));
 
   cancelBtn.addEventListener('click', () => close(null));
-  closeBtn.addEventListener('click', () => close(null));
   overlay.addEventListener('click', (event) => {
     if (event.target === overlay) close(null);
   });

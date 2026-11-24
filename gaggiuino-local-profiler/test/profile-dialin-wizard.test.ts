@@ -15,6 +15,7 @@ const apiModule = await import('../public-src/api/transport.js');
 const fetchSpy = vi.spyOn(apiModule, 'apiFetch');
 const { profileDialinOverride, openProfileDialinWizard, closeProfileDialinWizard, startProfileDialinFromList }
   = await import('../public-src/views/profile-dialin-wizard.js');
+const { t } = await import('../public-src/i18n.js');
 
 // _sendUpdatedProfile isn't exported — drive the race through
 // profileDialinOverride(), the exported click handler that calls it.
@@ -216,5 +217,23 @@ describe('profile dial-in captures the machine it was started for (#1605)', () =
     const put = fetchSpy.mock.calls[1];
     const body = JSON.parse((put?.[1] as RequestInit).body as string) as Record<string, unknown>;
     expect('machineId' in body).toBe(false);
+  });
+
+  it('startProfileDialinFromList shows the not-stored toast on a 503 and opens no wizard', async () => {
+    g.document = dialinDocument('94');
+    g.window = { showToast: vi.fn() };
+    S.activeMachineId = 2;
+    fetchSpy.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: () => Promise.resolve({ error: 'x' }),
+    } as unknown as Response);
+
+    await startProfileDialinFromList(42);
+
+    expect(S.profileDialinSession).toBeNull();
+    expect((g.window as { showToast: ReturnType<typeof vi.fn> }).showToast)
+      .toHaveBeenCalledWith(t('profile_not_stored_offline'));
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });

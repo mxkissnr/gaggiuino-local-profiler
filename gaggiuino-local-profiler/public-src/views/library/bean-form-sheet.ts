@@ -38,7 +38,6 @@ let _formSheetBody: HTMLElement | null = null;
 let _formSheetBackdrop: HTMLElement | null = null;
 let _formSheetSection: HTMLElement | null = null;
 let _formSheetTitle: HTMLElement | null = null;
-let _formSheetConfirm: HTMLElement | null = null;
 let _formSheetKeyHandler: ((e: KeyboardEvent) => void) | null = null;
 let _formHomeParent: Node | null = null;
 let _formHomeNext: Node | null = null;
@@ -49,9 +48,6 @@ let _beanFormDirtyBound = false;
 // openBeanForm). saveBeanInternal compares against it so an edit that leaves
 // the field untouched sends no roastDate at all (#1606).
 let _beanFormPrefilledRoastDate = '';
-// The sheet header's Save button (built once with the persistent host); one of
-// the buttons disabled while a save is in flight.
-let _formSheetSaveBtn: HTMLButtonElement | null = null;
 // True from just before the save POST until it settles. A second Save tap
 // while the first is pending is ignored instead of creating the bean twice
 // (#1614 slice 4).
@@ -65,9 +61,12 @@ let _beanSaveQueued = false;
 // the returned reset runs on every open so the last entry's state never shows
 // on the next one (#2098).
 let _resetAutosave: (() => void) | null = null;
-// The sheet bar's action row, kept so the autosave status can sit next to the
-// bar's Save button: the form's own action row is hidden while editing.
+// The sheet bar's action row, kept so the autosave status can sit in the bar:
+// the form's own action row is hidden while editing.
 let _formSheetHeadActions: HTMLElement | null = null;
+// True while the discard question is up (#2144): a second close neither
+// asks twice nor lets the sheet's own keys act under the dialog.
+let _askingDiscard = false;
 
 function _rememberFormHome(): void {
   const form = typeof document !== 'undefined' ? document.getElementById('beanAddForm') : null;
@@ -137,49 +136,12 @@ function _beanFormSheetHost(): HTMLElement | null {
   head.appendChild(title);
   const headActions = document.createElement('div');
   headActions.className = 'lib-sheet-bar-actions';
-  // #1489: creating saves the bean and opens its new-bag form right away
-  // (#1933). Editing saves itself, so this button is hidden while editing
-  // (#1962, #2098). The create action row keeps "save without bag" available.
-  const save = document.createElement('button');
-  save.type = 'button';
-  save.className = 'lib-sheet-save';
-  save.setAttribute('aria-label', t('lib_save'));
-  save.textContent = t('lib_save');
-  save.setAttribute('data-i18n-aria-label', 'lib_save');
-  save.setAttribute('data-i18n', 'lib_save');
-  save.addEventListener('click', () => { void (S.beanEditId != null ? saveBean() : saveBeanAddBag()); });
-  headActions.appendChild(save);
-  _formSheetSaveBtn = save;
+  // The bar has no Save (#2135): editing saves itself and shows its saved
+  // state here (#1962, #2098); creating uses the form's own two saves,
+  // "save without bag" and "save and add bag", so the bar repeats neither.
   _formSheetHeadActions = headActions;
   head.appendChild(headActions);
   section.appendChild(head);
-
-  const confirm = document.createElement('div');
-  confirm.className = 'lib-form-confirm';
-  confirm.setAttribute('hidden', '');
-  const question = document.createElement('span');
-  question.className = 'lib-form-confirm-q';
-  question.textContent = t('lib_form_discard_q');
-  question.setAttribute('data-i18n', 'lib_form_discard_q');
-  confirm.appendChild(question);
-  const confirmActions = document.createElement('div');
-  confirmActions.className = 'lib-form-confirm-actions';
-  const discard = document.createElement('button');
-  discard.type = 'button';
-  discard.className = 'lib-btn-sm';
-  discard.textContent = t('lib_form_discard');
-  discard.setAttribute('data-i18n', 'lib_form_discard');
-  discard.addEventListener('click', () => discardBeanForm());
-  confirmActions.appendChild(discard);
-  const keep = document.createElement('button');
-  keep.type = 'button';
-  keep.className = 'lib-save-btn';
-  keep.textContent = t('lib_form_keep_editing');
-  keep.setAttribute('data-i18n', 'lib_form_keep_editing');
-  keep.addEventListener('click', () => _hideFormConfirm());
-  confirmActions.appendChild(keep);
-  confirm.appendChild(confirmActions);
-  section.appendChild(confirm);
 
   const body = document.createElement('div');
   body.className = 'lib-form-sheet-body';
@@ -198,16 +160,7 @@ function _beanFormSheetHost(): HTMLElement | null {
   _formSheetBackdrop = backdrop;
   _formSheetSection = section;
   _formSheetTitle = title;
-  _formSheetConfirm = confirm;
   return host;
-}
-
-function _showFormConfirm(): void {
-  _formSheetConfirm?.removeAttribute('hidden');
-}
-
-function _hideFormConfirm(): void {
-  _formSheetConfirm?.setAttribute('hidden', '');
 }
 
 // One delegated listener: anything the user touches inside the form marks it
@@ -231,7 +184,8 @@ function _formSheetVisible(): boolean {
 }
 
 function _onFormSheetKeydown(e: KeyboardEvent): void {
-  if (!_formSheetVisible()) return;
+  // While the discard question is up, the dialog owns Esc and Tab (#2144).
+  if (!_formSheetVisible() || _askingDiscard) return;
   if (e.key === 'Escape') {
     if (_overlayShieldsSheets()) return;
     const tag = document.activeElement?.tagName?.toLowerCase() || '';
@@ -271,11 +225,8 @@ function _showBeanFormSheet(): void {
   }
   // #1489: hide the form's own action row only when editing; creating keeps it
   // so both "save without / with a bag" choices stay reachable. Editing saves
-  // itself, so the bar's Save is hidden too — the bar shows the saved state in
-  // its place (#2098).
+  // itself and the bar shows the saved state (#2098).
   _formSheetSection?.classList?.toggle('is-editing', isEdit);
-  if (_formSheetSaveBtn) _formSheetSaveBtn.style.display = isEdit ? 'none' : '';
-  _hideFormConfirm();
   const form = document.getElementById('beanAddForm');
   if (form) {
     const photo = document.getElementById('beanFormImageField');
@@ -435,7 +386,6 @@ export function closeBeanForm(): void {
   if (adjustBtn) adjustBtn.style.display = 'none';
   const extraEl = document.getElementById('beanFormExtraRecipes');
   if (extraEl) { extraEl.style.display = 'none'; extraEl.innerHTML = html``; }
-  _hideFormConfirm();
   _restoreFormHome();
   _formSheetHost?.classList?.remove('open');
   _unwireFormSheetKeys();
@@ -459,16 +409,28 @@ function _animateFormSheetOut(done: () => void): void {
   animateSheetOut(section, _formSheetBackdrop, done);
 }
 
-// Dirty-aware close: a form with unsaved edits asks before discarding. A real
-// close (X, backdrop, Esc, swipe, discard) slides the sheet out first. Returns
-// false when it only showed the confirm bar, so a swipe can spring back.
+// Dirty-aware close (X, backdrop, Esc, swipe): an untouched form slides out at
+// once; a form with unsaved edits stays open and asks in the shared confirm
+// dialog (#2144). Returns false while it asks, so a swipe springs back.
 export function requestCloseBeanForm(): boolean {
-  if (_beanFormDirty) { _showFormConfirm(); return false; }
+  if (_beanFormDirty) { void _askDiscardBeanForm(); return false; }
   _animateFormSheetOut(closeBeanForm);
   return true;
 }
 
-// Cancel / confirm-bar discard: an explicit "throw my edits away", no prompt.
+async function _askDiscardBeanForm(): Promise<void> {
+  if (_askingDiscard) return;
+  _askingDiscard = true;
+  try {
+    const discard = await confirmDialog(t('lib_form_discard_q'), { confirmLabel: t('lib_form_discard'), destructive: true });
+    // Nothing to discard once the sheet has closed meanwhile.
+    if (discard && _formSheetVisible()) discardBeanForm();
+  } finally {
+    _askingDiscard = false;
+  }
+}
+
+// The discard question's "Discard": an explicit "throw my edits away".
 export function discardBeanForm(): void {
   _beanFormDirty = false;
   _animateFormSheetOut(closeBeanForm);
@@ -487,10 +449,9 @@ export async function saveBeanNoBag(): Promise<void> { return saveBeanInternal(f
 export async function saveBeanAddBag(): Promise<void> { return saveBeanInternal(true); }
 
 // Enables/disables every Save control the bean form can be submitted with (the
-// sheet header's Save plus the create/edit action-row buttons) so a double tap
-// during an in-flight save is visibly a no-op (#1614 slice 4).
+// create/edit action-row buttons) so a double tap during an in-flight save is
+// visibly a no-op (#1614 slice 4).
 function _setBeanSaveButtonsDisabled(disabled: boolean): void {
-  if (_formSheetSaveBtn) _formSheetSaveBtn.disabled = disabled;
   for (const id of ['saveBeanBtn', 'saveBeanNoBagBtn', 'saveBeanAddBagBtn']) {
     const btn = document.getElementById(id) as HTMLButtonElement | null;
     if (btn) btn.disabled = disabled;
@@ -686,7 +647,7 @@ async function saveBeanInternal(openBagDialogAfter: boolean): Promise<void> {
 }
 
 export async function deleteBean(id: number): Promise<void> {
-  if (!await confirmDialog(t('lib_confirm_delete_bean'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('lib_confirm_delete_bean'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await libraryApi.deleteBeanPermanently(id);
   if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   S.coffeeLibrary.beans = S.coffeeLibrary.beans.filter(b => b.id !== id);

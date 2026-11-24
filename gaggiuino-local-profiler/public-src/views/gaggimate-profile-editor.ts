@@ -1,5 +1,8 @@
 // GaggiMate profile editor — Standard + Pro. _profile is the source of
-// truth; _render() rebuilds #gmEditorBody from it on every change.
+// truth; _render() rebuilds #gmEditorBody from it on every change. #2154:
+// the layout both profile editors share (chart, phase timeline, the
+// selected phase, recipe rows); selecting a phase or opening its stop
+// conditions never writes _profile.
 import Chart from 'chart.js/auto';
 import type { ChartConfiguration } from 'chart.js';
 import { concreteActiveMachineId } from '../state/index.js';
@@ -9,10 +12,14 @@ import type { MachineProfile } from '../api/types.js';
 import { esc, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { phasePlugin, buildGmPhaseRanges } from '../constants.js';
+import type { GmPhaseRange } from '../constants.js';
 import { bindPillSelects } from '../components/pill-select.js';
 import { markFieldInvalid } from '../components/field-error.js';
-import { loadMachineProfileList } from './library-profile-editor.js';
+import { attachDialogKeyboard } from '../components/dialog-a11y.js';
+import type { DialogKeyboardHandle } from '../components/dialog-a11y.js';
+import { loadMachineProfileList, loadProfileForEditing } from './library-profile-editor.js';
 import { invalidateGmPhaseCache } from './shots/index.js';
+import { phaseTimelineHtml, phaseHeadHtml, stopsFoldHtml, removePhaseButtonHtml, recipeTitleHtml } from '../components/phase-timeline.js';
 
 // The GaggiMate phase shape this editor reads and writes. api/types.ts's
 // MachineProfile documents this variant (label/description/temperature/phases)
@@ -58,7 +65,8 @@ interface GmProfile extends Loose<Pick<MachineProfile, 'id' | 'label' | 'descrip
 // ── State ─────────────────────────────────────────────────────────────────
 
 let _profile: GmProfile | null = null;
-let _currentPhaseIdx = 0; // active phase for pro editor
+let _currentPhaseIdx = 0; // the phase whose fields show (#2154: both types)
+let _stopsOpen = false;   // #2154: the selected phase's stop conditions fold
 let _saving = false;
 let _chart: Chart | null = null;
 let _inputsBound = false; // guards against accumulating body change-listeners across renders
@@ -68,12 +76,14 @@ let _inputsBound = false; // guards against accumulating body change-listeners a
 // the default machine.
 let _editorMachineId: number | null = null;
 
+let _editorKeyboard: DialogKeyboardHandle | null = null;
+
 // ── Entry points ──────────────────────────────────────────────────────────
 
 export async function openGaggiMateProfileEditor(id: string): Promise<void> {
   _editorMachineId = concreteActiveMachineId();
-  const profile = await machinesApi.getMachineProfile(id, _editorMachineId ?? undefined);
-  if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
+  const profile = await loadProfileForEditing(id, _editorMachineId ?? undefined, 'gm_toast_load_error');
+  if (!profile) return;
   _openEditor(profile);
 }
 
@@ -83,8 +93,8 @@ export async function openGaggiMateProfileEditor(id: string): Promise<void> {
 // its source in the list.
 export async function duplicateGaggiMateProfile(id: string): Promise<void> {
   _editorMachineId = concreteActiveMachineId();
-  const profile = await machinesApi.getMachineProfile(id, _editorMachineId ?? undefined);
-  if (!profile) { window.showToast?.(t('gm_toast_load_error')); return; }
+  const profile = await loadProfileForEditing(id, _editorMachineId ?? undefined, 'gm_toast_load_error');
+  if (!profile) return;
   _openEditor({ ...profile, id: undefined, label: `${profile.label ?? ''}${t('profile_duplicate_suffix')}` });
 }
 
@@ -102,10 +112,13 @@ export function openNewGaggiMateProfile(): void {
 }
 
 export function closeGaggiMateEditor(): void {
+  _editorKeyboard?.release();
+  _editorKeyboard = null;
   (document.getElementById('gmProfileEditorModal') as HTMLElement).style.display = 'none';
   _profile = null;
   _saving = false;
   _inputsBound = false;
+  _stopsOpen = false;
   _editorMachineId = null;
   if (_chart) { _chart.destroy(); _chart = null; }
 }
@@ -153,13 +166,20 @@ export async function saveGaggiMateProfile(): Promise<void> {
 function _openEditor(profile: GmProfile): void {
   _profile = profile;
   _currentPhaseIdx = 0;
+  _stopsOpen = false;
   _saving = false;
   _inputsBound = false;
   const modal = document.getElementById('gmProfileEditorModal') as HTMLElement;
   modal.style.display = 'flex';
   (document.getElementById('gmEditorTitle') as HTMLElement).textContent =
-    profile.id != null ? t('gm_editor_title_edit', profile.label) : t('gm_editor_title_new');
+    profile.id != null ? t('gm_editor_title_edit') : t('gm_editor_title_new');
   _render();
+  _editorKeyboard?.release();
+  _editorKeyboard = attachDialogKeyboard(modal, closeGaggiMateEditor, {
+    initialFocus: typeof modal.querySelector === 'function'
+      ? modal.querySelector<HTMLElement>('.lib-sheet-close')
+      : null,
+  });
 }
 
 function _set(updates: Partial<GmProfile>): void {
@@ -181,6 +201,7 @@ function _addPhase(): void {
   const phases = [...(_profile!.phases || []), phase];
   _profile = { ..._profile, phases };
   _currentPhaseIdx = phases.length - 1;
+  _stopsOpen = false;
   _render();
 }
 
@@ -214,7 +235,7 @@ function _render(): void {
     _initChart();
   } catch (e) {
     console.error('[GLP] GaggiMate editor render error:', e);
-    body.innerHTML = html`<div style="padding:1rem;color:var(--red-400)">${tHtml('gm_render_error', esc(e instanceof Error ? e.message : String(e)))}</div>`;
+    body.innerHTML = html`<div class="gm-render-error">${tHtml('gm_render_error', esc(e instanceof Error ? e.message : String(e)))}</div>`;
   }
   // Stub DOMs in other views' tests hand over a body without querySelectorAll.
   if (typeof body.querySelectorAll === 'function') bindPillSelects(body);
@@ -223,12 +244,38 @@ function _render(): void {
 
 function _renderBody(isPro: boolean): Html {
   const phases = _profile!.phases || [];
-  return html`
-    ${_renderInfo()}
+  // #2154: the layout both profile editors share (stylesheet, "Machine
+  // profile editors"): chart, timeline, the selected phase, recipe.
+  return html`<div class="pe-layout">
     ${_renderChart()}
-    ${isPro ? _renderProPhases(phases) : _renderStandardPhases(phases)}
-    ${_saving ? html`<div style="text-align:center;padding:.5rem;opacity:.6">${tHtml('autosave_pending')}</div>` : html``}
-  `;
+    <div class="pe-timeline">${_renderTimeline(phases, isPro)}</div>
+    <div class="pe-phase">${_renderSelectedPhase(phases, isPro)}</div>
+    <div class="pe-recipe">
+      ${_renderInfo()}
+      ${_saving ? html`<div class="gm-note">${tHtml('autosave_pending')}</div>` : html``}
+    </div>
+  </div>`;
+}
+
+// One chip per phase, as wide as its share of the time the chart draws.
+function _renderTimeline(phases: GmPhase[], isPro: boolean): Html {
+  return phaseTimelineHtml(phases.map(ph => ({ name: ph.name ?? '', seconds: _phaseDur(ph) })), _currentPhaseIdx, {
+    title: t(isPro ? 'gm_phases_pro_header' : 'gm_phases_header'),
+    selectAction: 'gm-select-phase',
+    addAction: 'gm-add-phase',
+    addLabel: t('gm_add_phase'),
+    emptyText: t(isPro ? 'gm_no_phases_add' : 'gm_no_phases'),
+  });
+}
+
+// Only the selected phase's fields, under "Phase 2 of 3".
+function _renderSelectedPhase(phases: GmPhase[], isPro: boolean): Html {
+  const i = _currentPhaseIdx;
+  const ph = phases[i];
+  if (!ph) return html``;
+  return html`${phaseHeadHtml(i, phases.length)}
+    ${isPro ? _renderProPhase(ph, i) : _renderStandardPhase(ph, i)}
+    ${removePhaseButtonHtml('gm-remove-phase', i)}`;
 }
 
 // ── Profile chart (Chart.js) ───────────────────────────────────────────────
@@ -251,6 +298,23 @@ function _applyEasing(x: number, type: string | undefined): number {
     case 'instant':
     default: return 1;
   }
+}
+
+// #2163: the preview's time axis steps in whole seconds, at most 8 steps,
+// so Chart.js never falls back to a fractional spacing.
+const TIME_AXIS_STEPS = [5, 10, 15, 20, 30, 60, 120];
+export function gmTimeAxisStep(totalSeconds: number): number {
+  return TIME_AXIS_STEPS.find(s => totalSeconds / s <= 8) ?? 120;
+}
+// A tick label: whole seconds; the unit sits in the axis title.
+export function gmTimeTickLabel(value: number): string {
+  return String(Math.round(value));
+}
+// #2163: a profile whose pump sets a pressure or flow target is charted and
+// edited with targets: every Pro profile, and a standard profile as soon as
+// one phase has an object pump (GaggiMate runs it the same way).
+function _usesPumpTargets(p: GmProfile): boolean {
+  return p.type === 'pro' || (p.phases ?? []).some(ph => typeof ph.pump === 'object');
 }
 
 const CHART_POINT_INTERVAL = 0.1; // s — matches GaggiMate's ExtendedProfileChart
@@ -309,24 +373,33 @@ function _preparePumpSeries(phases: GmPhase[], target: string): { x: number; y: 
   return data;
 }
 
-function _buildChartData() {
-  const phases = _profile?.phases || [];
+export interface GmChartData {
+  pressureData: { x: number; y: number; target: boolean }[];
+  flowData: { x: number; y: number; target: boolean }[];
+  powerData: { x: number; y: number }[];
+  gmPhases: GmPhaseRange[];
+  totalTime: number;
+  pumpChart: boolean;
+}
+
+export function buildGmChartData(profile: GmProfile | null): GmChartData | null {
+  const phases = profile?.phases || [];
   if (!phases.length) return null;
-  const isPro = _profile!.type === 'pro';
+  const pumpChart = _usesPumpTargets(profile!);
 
   const gmPhases = buildGmPhaseRanges(phases);
   const lastGmPhase = gmPhases.at(-1);
   const totalTime = lastGmPhase ? lastGmPhase.t1 : 0;
 
-  if (isPro) {
+  if (pumpChart) {
     const pressureData = _preparePumpSeries(phases, 'pressure');
     const flowData = _preparePumpSeries(phases, 'flow');
-    return { pressureData, flowData, powerData: [], gmPhases, totalTime };
+    return { pressureData, flowData, powerData: [], gmPhases, totalTime, pumpChart: true };
   }
 
-  // Standard: pump is a plain 0-100 power % (0 = off). GaggiMate itself
+  // Standard with numeric pumps only: a plain 0-100 power % (0 = off). GaggiMate itself
   // doesn't chart these — GLP shows a simple stepped power line instead.
-  const powerData = [];
+  const powerData: { x: number; y: number }[] = [];
   let running = 0, lastPct = 0;
   for (const ph of phases) {
     const pct = typeof ph.pump === 'number' ? ph.pump : 0;
@@ -336,13 +409,13 @@ function _buildChartData() {
   }
   if (powerData.length) powerData.push({ x: running, y: lastPct });
 
-  return { pressureData: [], flowData: [], powerData, gmPhases, totalTime };
+  return { pressureData: [], flowData: [], powerData, gmPhases, totalTime, pumpChart: false };
 }
 
 function _renderChart(): Html {
   const phases = _profile?.phases || [];
   if (!phases.length) return html``;
-  return html`<div class="gm-chart-container"><canvas id="gmProfileChart"></canvas></div>`;
+  return html`<div class="pe-preview"><canvas id="gmProfileChart"></canvas></div>`;
 }
 
 function _initChart(): void {
@@ -352,18 +425,17 @@ function _initChart(): void {
   if (!canvas) return;
   if (_chart) { _chart.destroy(); _chart = null; }
 
-  const d = _buildChartData();
+  const d = buildGmChartData(_profile);
   if (!d) return;
 
-  const { pressureData, flowData, powerData, gmPhases, totalTime } = d;
-  const isPro = _profile!.type === 'pro';
+  const { pressureData, flowData, powerData, gmPhases, totalTime, pumpChart } = d;
 
   // Dashed+dimmed where the point isn't the phase's controlled parameter.
   const dashed = (color: string | number[]) => (ctx: { p0: { raw: { target: boolean } } }): string | number[] | undefined =>
     (!ctx.p0.raw.target ? color : undefined);
 
   const datasets: Record<string, unknown>[] = [];
-  if (isPro) {
+  if (pumpChart) {
     datasets.push({
       label: t('gm_chart_pressure'),
       data: pressureData,
@@ -419,9 +491,9 @@ function _initChart(): void {
     text: 'rgba(180,180,180,0.85)',
   };
 
-  const yMax = isPro ? 12 : 100;
+  const yMax = pumpChart ? 12 : 100;
   const y1Max = 10;
-  const yTickCb = isPro ? (v: number): string => `${v}` : (v: number): string => `${v}%`;
+  const yTickCb = pumpChart ? (v: number): string => `${v}` : (v: number): string => `${v}%`;
 
   try {
     _chart = new Chart(canvas as HTMLCanvasElement, {
@@ -437,7 +509,7 @@ function _initChart(): void {
         plugins: {
           phases: { gaggimatePhases: gmPhases },
           legend: {
-            display: isPro,
+            display: pumpChart,
             position: 'bottom',
             labels: { color: C.text, font: { family: 'Figtree', size: 10 }, boxWidth: 10, padding: 6 },
           },
@@ -454,7 +526,8 @@ function _initChart(): void {
         scales: {
           x: {
             type: 'linear', min: 0, max: totalTime, clip: false,
-            ticks: { color: C.tick, font: { family: 'Figtree' }, stepSize: 5, callback: (v: number): string => `${v}s`, maxTicksLimit: 10 },
+            title: { display: true, text: t('profile_preview_x_axis'), color: C.tick, font: { family: 'Figtree' } },
+            ticks: { color: C.tick, font: { family: 'Figtree' }, stepSize: gmTimeAxisStep(totalTime), callback: (v: number): string => gmTimeTickLabel(v) },
             grid: { color: C.grid },
           },
           y: {
@@ -462,7 +535,7 @@ function _initChart(): void {
             ticks: { color: C.tick, maxTicksLimit: 6, callback: yTickCb },
             grid: { color: C.grid },
           },
-          ...(isPro ? {
+          ...(pumpChart ? {
             y1: {
               type: 'linear', position: 'right', min: 0, max: y1Max,
               ticks: { color: C.tick, maxTicksLimit: 6 },
@@ -481,7 +554,7 @@ function _initChart(): void {
 function _toggleGroup(action: string, options: { val: string; label: string }[], activeVal: string | number | undefined, idx?: number): Html {
   const idxAttr: Html = idx != null ? html` data-idx="${esc(idx)}"` : html``;
   return html`<div class="gm-toggle-group">${joinHtml(options.map(o =>
-    html`<button type="button" class="lib-btn-sm${o.val === activeVal ? html` active` : html``}" data-action="${esc(action)}"${idxAttr} data-val="${esc(o.val)}">${esc(o.label)}</button>`
+    html`<button type="button" class="chip" aria-pressed="${esc(String(o.val === activeVal))}" data-action="${esc(action)}"${idxAttr} data-val="${esc(o.val)}">${esc(o.label)}</button>`
   ))}</div>`;
 }
 
@@ -514,53 +587,69 @@ function _pumpMode(ph: GmPhase): { pumpIsNumber: boolean; mode: string | undefin
   };
 }
 
+// #2154: the profile-level values as grouped rows, label left, control right.
 function _renderInfo(): Html {
-  return html`
-    <div class="lib-form-grid">
-      <div class="lib-form-field">
-        <label for="gmLabel">${tHtml('gm_field_name')}</label>
-        <input type="text" id="gmLabel" value="${esc(_profile!.label || '')}" maxlength="48" title="${esc(t('gm_toast_name_required'))}" placeholder="${esc(t('gm_field_name_placeholder'))}">
+  const p = _profile!;
+  return html`${recipeTitleHtml()}
+    <div class="settings-group">
+      <div class="settings-row settings-row-static">
+        <label class="settings-row-title" for="gmLabel">${tHtml('gm_field_name')}</label>
+        <input type="text" id="gmLabel" class="lib-input pe-row-input pe-row-name" value="${esc(p.label || '')}" maxlength="48" title="${esc(t('gm_toast_name_required'))}" placeholder="${esc(t('gm_field_name_placeholder'))}">
       </div>
-      <div class="lib-form-field">
-        <label for="gmDescription">${tHtml('gm_field_description')}</label>
-        <textarea id="gmDescription" class="lib-input" rows="2" style="width:100%;resize:vertical">${esc(_profile!.description || '')}</textarea>
-      </div>
-      <div class="lib-form-field">
-        <label for="gmTemperature">${tHtml('gm_field_temperature')}</label>
-        <input type="number" id="gmTemperature" value="${esc(_profile!.temperature ?? 93)}" min="0" max="150" step="0.5">
-      </div>
-      <div class="lib-form-field">
-        <label>${tHtml('gm_field_type')}</label>
-        ${_toggleGroup('gm-type', [{ val: 'standard', label: t('gm_type_standard') }, { val: 'pro', label: t('gm_type_pro') }], _profile!.type)}
-      </div>
-      <div class="lib-form-field" style="flex-direction:row;align-items:center;gap:.75rem">
-        <label for="gmFavorite" style="margin:0">${tHtml('gm_field_favorite')}</label>
-        <input type="checkbox" id="gmFavorite" class="toggle toggle-sm" ${_profile!.favorite ? html`checked` : html``}>
-        <label for="gmUtility" style="margin:0;margin-left:1rem">${tHtml('gm_field_utility')}</label>
-        <input type="checkbox" id="gmUtility" class="toggle toggle-sm" ${_profile!.utility ? html`checked` : html``}>
+      <div class="settings-row settings-row-static">
+        <label class="settings-row-title" for="gmTemperature">${tHtml('gm_field_temperature')}</label>
+        <input type="number" id="gmTemperature" class="lib-input pe-row-input" value="${esc(p.temperature ?? 93)}" min="0" max="150" step="0.5">
       </div>
     </div>
-  `;
+    <div class="settings-group">
+      <div class="settings-row settings-row-static">
+        <span class="settings-row-title">${tHtml('gm_field_type')}</span>
+        ${_toggleGroup('gm-type', [{ val: 'standard', label: t('gm_type_standard') }, { val: 'pro', label: t('gm_type_pro') }], p.type)}
+      </div>
+      <div class="settings-row settings-row-static">
+        <label class="settings-row-title" for="gmFavorite">${tHtml('gm_field_favorite')}</label>
+        <input type="checkbox" id="gmFavorite" class="toggle toggle-sm" ${p.favorite ? html`checked` : html``}>
+      </div>
+      <div class="settings-row settings-row-static">
+        <label class="settings-row-title" for="gmUtility">${tHtml('gm_field_utility')}</label>
+        <input type="checkbox" id="gmUtility" class="toggle toggle-sm" ${p.utility ? html`checked` : html``}>
+      </div>
+      <div class="settings-row settings-row-static pe-row-stack">
+        <label class="settings-row-title" for="gmDescription">${tHtml('gm_field_description')}</label>
+        <textarea id="gmDescription" class="lib-input" rows="2">${esc(p.description || '')}</textarea>
+      </div>
+    </div>`;
 }
 
 // ── Standard profile phases ───────────────────────────────────────────────
 
-function _renderStandardPhases(phases: GmPhase[]): Html {
-  const sep = html`<div style="text-align:center;padding:.25rem;opacity:.4">↓</div>`;
-  const rows = joinHtml(phases.map((ph, i) => (i ? html`${sep}${_renderStandardPhase(ph, i)}` : _renderStandardPhase(ph, i))));
+// The pressure and flow fields of a pump target; `prefix` names the view
+// ('std' or 'pro') in the ids and actions.
+function _pumpTargetFields(mode: string | undefined, pressure: number, flow: number, i: number, prefix: 'std' | 'pro'): Html {
   return html`
-    <div class="lib-recipe-steps-section">
-      <div class="lib-recipe-steps-header">
-        <span>${tHtml('gm_phases_header')}</span>
-        <button class="lib-btn-sm" data-action="gm-add-phase">${tHtml('gm_add_phase')}</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
+      <div class="lib-form-field">
+        <label for="gm-${esc(prefix)}-pressure-${esc(i)}">${mode === 'pressure' ? tHtml('gm_field_pressure_target') : tHtml('gm_field_pressure_max')} (bar)</label>
+        <input type="number" class="lib-input" value="${esc(pressure)}" min="0.1" max="20" step="0.01" id="gm-${esc(prefix)}-pressure-${esc(i)}"
+          data-action="gm-${esc(prefix)}-pressure" data-idx="${esc(i)}">
       </div>
-      <div id="gmPhaseList">${rows || html`<div style="opacity:.5;padding:.5rem">${tHtml('gm_no_phases')}</div>`}</div>
-    </div>
-  `;
+      <div class="lib-form-field">
+        <label for="gm-${esc(prefix)}-flow-${esc(i)}">${mode === 'flow' ? tHtml('gm_field_flow_target') : tHtml('gm_field_flow_max')} (ml/s)</label>
+        <input type="number" class="lib-input" value="${esc(flow)}" min="0.1" max="20" step="0.01" id="gm-${esc(prefix)}-flow-${esc(i)}"
+          data-action="gm-${esc(prefix)}-flow" data-idx="${esc(i)}">
+      </div>
+    </div>`;
 }
 
 function _renderStandardPhase(ph: GmPhase, i: number): Html {
   const { mode, pumpPower } = _pumpMode(ph);
+  // #2163: a standard profile with pump targets (GaggiMate's Pressure/Flow
+  // modes) shows and edits them like GaggiMate's own standard form.
+  const withTargets = _usesPumpTargets(_profile!);
+  const pressure = typeof ph.pump === 'object' ? (ph.pump.pressure ?? 0) : 0;
+  const flow = typeof ph.pump === 'object' ? (ph.pump.flow ?? 0) : 0;
+  const pumpModes = [{ val: 'off', label: t('gm_pump_off') }, { val: 'power', label: t('gm_pump_power') }];
+  if (withTargets) pumpModes.push({ val: 'pressure', label: t('gm_pump_pressure') }, { val: 'flow', label: t('gm_pump_flow') });
   const volTarget = (ph.targets || []).find(tg => tg.type === 'volumetric');
   const volValue = volTarget?.value ?? 0;
 
@@ -570,25 +659,17 @@ function _renderStandardPhase(ph: GmPhase, i: number): Html {
         ${_phaseTypeSelect(ph, i, 'gm-std-phase-type')}
         <input type="text" class="lib-input flex-1" aria-label="${esc(t('gm_phase_name_placeholder'))}" value="${esc(ph.name || '')}"
           data-action="gm-std-phase-name" data-idx="${esc(i)}" placeholder="${esc(t('gm_phase_name_placeholder'))}">
-        <button class="lib-btn-sm del" data-action="gm-remove-phase" data-idx="${esc(i)}" title="${esc(t('gm_remove_phase_title'))}">✕</button>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
         ${_durationField(ph, i, 'gm-std-duration')}
         <div class="lib-form-field">
-          <label for="gm-std-vol-${esc(i)}">${tHtml('gm_field_stop_weight')}</label>
-          <input type="number" class="lib-input" value="${esc(volValue)}" min="0" max="2000" step="0.1" id="gm-std-vol-${esc(i)}"
-            data-action="gm-std-vol-target" data-idx="${esc(i)}">
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
-        <div class="lib-form-field">
           <label>${tHtml('gm_field_valve')}</label>
           ${_valveToggle(ph, i, 'gm-std-valve')}
         </div>
-        <div class="lib-form-field">
-          <label>${tHtml('gm_field_pump')}</label>
-          ${_toggleGroup('gm-std-pump-mode', [{ val: 'off', label: t('gm_pump_off') }, { val: 'power', label: t('gm_pump_power') }], mode, i)}
-        </div>
+      </div>
+      <div class="lib-form-field">
+        <label>${tHtml('gm_field_pump')}</label>
+        ${_toggleGroup('gm-std-pump-mode', pumpModes, mode, i)}
       </div>
       ${mode === 'power' ? html`
         <div class="lib-form-field" style="margin-top:.5rem">
@@ -596,6 +677,12 @@ function _renderStandardPhase(ph: GmPhase, i: number): Html {
           <input type="number" class="lib-input" value="${esc(pumpPower)}" min="0" max="100" step="1" id="gm-std-pump-power-${esc(i)}"
             data-action="gm-std-pump-power" data-idx="${esc(i)}">
         </div>` : html``}
+      ${(mode === 'pressure' || mode === 'flow') ? _pumpTargetFields(mode, pressure, flow, i, 'std') : html``}
+      ${stopsFoldHtml(html`<div class="lib-form-field">
+          <label for="gm-std-vol-${esc(i)}">${tHtml('gm_field_stop_weight')}</label>
+          <input type="number" class="lib-input" value="${esc(volValue)}" min="0" max="2000" step="0.1" id="gm-std-vol-${esc(i)}"
+            data-action="gm-std-vol-target" data-idx="${esc(i)}">
+        </div>`, _stopsOpen)}
     </div>
   `;
 }
@@ -612,30 +699,6 @@ function _targetTypes() {
     { label: t('gm_target_flow_gte'),       type: 'flow',       operator: 'gte', unit: 'ml/s' },
     { label: t('gm_target_flow_lte'),       type: 'flow',       operator: 'lte', unit: 'ml/s' },
   ];
-}
-
-function _renderProPhases(phases: GmPhase[]): Html {
-  const n = phases.length;
-  const i = _currentPhaseIdx;
-  const ph = phases[i];
-  const nav: Html = html`
-    <div class="gm-phase-nav">
-      <button class="lib-btn-sm" data-action="gm-phase-prev" ${i === 0 ? html`disabled` : html``}>◀</button>
-      <span>${n > 0 ? html`${esc(i + 1)} / ${esc(n)}` : html`0 / 0`}</span>
-      <button class="lib-btn-sm" data-action="gm-phase-next" ${i >= n - 1 ? html`disabled` : html``}>▶</button>
-      <button class="lib-btn-sm" data-action="gm-add-phase">${tHtml('gm_add_phase')}</button>
-      <button class="lib-btn-sm del" data-action="gm-remove-phase" data-idx="${esc(i)}" ${n === 0 ? html`disabled` : html``}>✕ ${tHtml('gm_remove_phase_label')}</button>
-    </div>
-  `;
-  return html`
-    <div class="lib-recipe-steps-section">
-      <div class="lib-recipe-steps-header"><span>${tHtml('gm_phases_pro_header')}</span></div>
-      ${nav}
-      <div id="gmProPhaseDetail">
-        ${ph ? _renderProPhase(ph, i) : html`<div style="opacity:.5;padding:.5rem">${tHtml('gm_no_phases_add')}</div>`}
-      </div>
-    </div>
-  `;
 }
 
 function _renderProPhase(ph: GmPhase, i: number): Html {
@@ -691,19 +754,7 @@ function _renderProPhase(ph: GmPhase, i: number): Html {
             data-action="gm-pro-pump-power" data-idx="${esc(i)}">
         </div>` : html``}
 
-      ${(mode === 'pressure' || mode === 'flow') ? html`
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.5rem">
-          <div class="lib-form-field">
-            <label for="gm-pro-pressure-${esc(i)}">${mode === 'pressure' ? tHtml('gm_field_pressure_target') : tHtml('gm_field_pressure_max')} (bar)</label>
-            <input type="number" class="lib-input" value="${esc(pressure)}" min="0.1" max="20" step="0.01" id="gm-pro-pressure-${esc(i)}"
-              data-action="gm-pro-pressure" data-idx="${esc(i)}">
-          </div>
-          <div class="lib-form-field">
-            <label for="gm-pro-flow-${esc(i)}">${mode === 'flow' ? tHtml('gm_field_flow_target') : tHtml('gm_field_flow_max')} (ml/s)</label>
-            <input type="number" class="lib-input" value="${esc(flow)}" min="0.1" max="20" step="0.01" id="gm-pro-flow-${esc(i)}"
-              data-action="gm-pro-flow" data-idx="${esc(i)}">
-          </div>
-        </div>` : html``}
+      ${(mode === 'pressure' || mode === 'flow') ? _pumpTargetFields(mode, pressure, flow, i, 'pro') : html``}
 
       <div class="lib-form-field" style="margin-bottom:.5rem">
         <label>${tHtml('gm_field_ramp_style')}</label>
@@ -733,22 +784,18 @@ function _renderProPhase(ph: GmPhase, i: number): Html {
             rampTarget, i)}
         </div>` : html``}
 
-      <div style="margin-top:.5rem">
-        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.25rem">
-          <span style="font-weight:500">${tHtml('gm_stop_conditions')}</span>
-          ${availTargets.length ? html`
-            <div class="gm-dropdown">
-              <button type="button" class="lib-btn-sm" data-action="gm-pro-target-menu" data-idx="${esc(i)}">${tHtml('gm_add_condition')}</button>
-              <ul class="gm-dropdown-menu" id="gmTargetMenu${esc(i)}" style="display:none">
-                ${joinHtml(availTargets.map(tt => html`
-                  <li><button type="button" class="gm-dropdown-item" data-action="gm-pro-add-target"
-                    data-idx="${esc(i)}" data-type="${esc(tt.type)}" data-op="${esc(tt.operator)}">${esc(tt.label)}</button></li>`))}
-              </ul>
-            </div>` : html``}
-        </div>
+      ${stopsFoldHtml(html`
+        ${availTargets.length ? html`
+          <details class="lib-sheet-more gm-stop-add">
+            <summary class="btn btn--tonal">${tHtml('gm_add_condition')}</summary>
+            <div class="lib-sheet-menu-list">
+              ${joinHtml(availTargets.map(tt => html`
+                <button type="button" class="lib-sheet-menu-item" data-action="gm-pro-add-target"
+                  data-idx="${esc(i)}" data-type="${esc(tt.type)}" data-op="${esc(tt.operator)}">${esc(tt.label)}</button>`))}
+            </div>
+          </details>` : html``}
         ${joinHtml(targets.map((tg, ti) => (ti ? html`<div style="text-align:center;font-size:.8em;opacity:.5">${tHtml('gm_or')}</div>${_renderProTarget(tg, i, ti)}` : _renderProTarget(tg, i, ti))))}
-        ${!targets.length ? html`<div style="opacity:.5;font-size:.85em">${tHtml('gm_no_stop_conditions')}</div>` : html``}
-      </div>
+        ${!targets.length ? html`<div style="opacity:.5;font-size:.85em">${tHtml('gm_no_stop_conditions')}</div>` : html``}`, _stopsOpen)}
     </div>
   `;
 }
@@ -763,7 +810,7 @@ function _renderProTarget(tg: GmTarget, phaseIdx: number, targetIdx: number): Ht
       <input type="number" class="lib-input" style="width:80px" aria-label="${esc(tt.label)}" value="${esc(tg.value ?? 0)}" min="0" max="2000" step="0.1"
         data-action="gm-pro-target-value" data-idx="${esc(phaseIdx)}" data-tidx="${esc(targetIdx)}">
       <span style="opacity:.6;font-size:.85em">${esc(tt.unit)}</span>
-      <button type="button" class="lib-btn-sm del" data-action="gm-pro-remove-target"
+      <button type="button" class="btn btn--danger btn--icon" data-action="gm-pro-remove-target"
         data-idx="${esc(phaseIdx)}" data-tidx="${esc(targetIdx)}">✕</button>
     </div>
   `;
@@ -796,6 +843,12 @@ function _bindInputs(): void {
   if (_inputsBound) return;
   _inputsBound = true;
   const body = document.getElementById('gmEditorBody');
+  // #2154: the stop conditions fold is re-rendered on every change; remember
+  // whether it is open. `toggle` does not bubble, so listen while capturing.
+  body?.addEventListener('toggle', e => {
+    const fold = e.target as HTMLElement;
+    if (fold.classList?.contains('pe-stops')) _stopsOpen = (fold as HTMLDetailsElement).open;
+  }, true);
   body?.addEventListener('change', e => {
     const el = e.target as HTMLInputElement;
     const action = el.dataset.action;
@@ -812,7 +865,9 @@ function _bindInputs(): void {
       case 'gm-pro-temperature':  _setPhase(idx, { temperature: num() }); break;
       case 'gm-std-pump-power':
       case 'gm-pro-pump-power': { const pv = parseFloat(el.value); _setPhase(idx, { pump: isNaN(pv) ? 100 : pv }); break; }
+      case 'gm-std-pressure':
       case 'gm-pro-pressure': { const pump = ph().pump; _setPhase(idx, { pump: { ...(typeof pump === 'object' ? pump : {}), pressure: num() } }); break; }
+      case 'gm-std-flow':
       case 'gm-pro-flow':     { const pump = ph().pump; _setPhase(idx, { pump: { ...(typeof pump === 'object' ? pump : {}), flow: num() } }); break; }
       case 'gm-pro-ramp-duration':
         _setPhase(idx, { transition: { ...(ph().transition ?? {}), duration: num() } });
@@ -870,8 +925,12 @@ export function handleGmEditorAction(action: string, el: HTMLElement): void {
 
     case 'gm-add-phase':     _addPhase(); break;
     case 'gm-remove-phase':  _removePhase(idx); break;
-    case 'gm-phase-prev':    _currentPhaseIdx = Math.max(0, _currentPhaseIdx - 1); _render(); break;
-    case 'gm-phase-next':    _currentPhaseIdx = Math.min((_profile.phases?.length ?? 1) - 1, _currentPhaseIdx + 1); _render(); break;
+    // #2154: a timeline chip shows that phase's fields; the profile is untouched.
+    case 'gm-select-phase':
+      _currentPhaseIdx = Math.max(0, Math.min(idx, (_profile.phases?.length ?? 1) - 1));
+      _stopsOpen = false;
+      _render();
+      break;
 
     // Shared between Standard and Pro — identical body either way.
     case 'gm-std-phase-type':
@@ -881,7 +940,11 @@ export function handleGmEditorAction(action: string, el: HTMLElement): void {
 
     case 'gm-std-pump-mode': {
       const v = el.dataset.val;
-      _setPhase(idx, { pump: v === 'off' ? 0 : v === 'power' ? existingPower() : { target: v, pressure: 0, flow: 0 } });
+      // #2163: the selected mode keeps its values; Pressure <-> Flow keeps both numbers.
+      if (v === _pumpMode(ph()).mode) break;
+      const pump = ph().pump;
+      const keep: GmPump = typeof pump === 'object' ? pump : {};
+      _setPhase(idx, { pump: v === 'off' ? 0 : v === 'power' ? existingPower() : { target: v, pressure: keep.pressure ?? 0, flow: keep.flow ?? 0 } });
       break;
     }
     case 'gm-pro-pump-mode': {
@@ -909,26 +972,6 @@ export function handleGmEditorAction(action: string, el: HTMLElement): void {
     case 'gm-pro-ramp-target':
       _setPhase(idx, { transition: { ...(ph().transition ?? {}), target: el.dataset.val } });
       break;
-    case 'gm-pro-target-menu': {
-      const menu = document.getElementById(`gmTargetMenu${idx}`);
-      if (!menu) break;
-      const opening = menu.style.display === 'none';
-      if (opening) {
-        // The trigger ("+ Hinzufügen") usually sits near the bottom of a
-        // long scrollable phase-editor panel — always opening downward
-        // (the CSS default, top:100%) routinely pushed the menu past the
-        // panel/viewport bottom, forcing a scroll to even see it (2026-09-09
-        // bug report). Flip to open upward when there isn't enough room
-        // below, same as any standard dropdown/select would.
-        menu.classList.remove('gm-dropdown-menu-up');
-        menu.style.display = 'block';
-        const fitsBelow = menu.getBoundingClientRect().bottom <= window.innerHeight;
-        menu.classList.toggle('gm-dropdown-menu-up', !fitsBelow);
-      } else {
-        menu.style.display = 'none';
-      }
-      break;
-    }
     case 'gm-pro-add-target':
       _setPhase(idx, { targets: [...(ph().targets || []), { type: el.dataset.type, operator: el.dataset.op, value: 0 }] });
       break;

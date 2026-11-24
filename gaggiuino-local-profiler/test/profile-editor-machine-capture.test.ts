@@ -20,6 +20,8 @@ const { openProfileForm, sendProfileToMachine, closeProfileForm }
   = await import('../public-src/views/library-profile-editor.js');
 const { openGaggiMateProfileEditor, saveGaggiMateProfile }
   = await import('../public-src/views/gaggimate-profile-editor.js');
+const { t } = await import('../public-src/i18n.js');
+const { loadProfileTimeTargets, profileTimeTargetFor } = await import('../public-src/views/library/profile-time-target.js');
 
 // A DOM-as-state harness: everything the two editors read or render into comes
 // off `document`, so one cached fake element per id serves both the library
@@ -88,6 +90,10 @@ describe('profile editors capture the machine they were opened for (#1605)', () 
   beforeEach(() => {
     fetchSpy.mockReset();
     S.activeMachineId = 2;
+    // The list reload after a save also reads that machine's target times, a
+    // GLP-only read (#1504); these tests pin the machine request, so the
+    // fallback answers the window read with none.
+    fetchSpy.mockImplementation(() => Promise.resolve(response([])));
   });
 
   it('the library profile form saves to the machine it was opened on, not the one active at save time', async () => {
@@ -124,5 +130,75 @@ describe('profile editors capture the machine they were opened for (#1605)', () 
     await saveGaggiMateProfile();
 
     expect(putBody().machineId).toBe(2);
+  });
+
+  it("neither profile editor sends a target time to the machine", async () => {
+    const gmProfile = {
+      id: 'p1', label: 'Turbo', description: '', type: 'standard', utility: false, favorite: false,
+      temperature: 93,
+      phases: [{ name: 'Brew', phase: 'brew', valve: 1, pump: 100, duration: 25000, targets: [{ type: 'volumetric', operator: 'gte', value: 36 }] }],
+    };
+    const bodies: Record<string, unknown>[] = [];
+    fetchSpy.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT' && url.startsWith('api/machine/profile')) {
+        bodies.push(JSON.parse(init.body as string) as Record<string, unknown>);
+        return Promise.resolve(response({ syncStatus: 'synced' }));
+      }
+      if (url.startsWith('api/machine/profiles')) return Promise.resolve(response({ optionsRaw: [] }));
+      // The window this profile has in GLP — a GLP-only setting.
+      if (url.startsWith('api/profile-time-targets')) return Promise.resolve(response([{ profileName: 'Turbo', minS: 40, maxS: 48 }]));
+      return Promise.resolve(response(gmProfile));
+    });
+
+    // The window is known to both editors' module state, so "absent from the
+    // save body" below is a real result, not an empty cache.
+    await loadProfileTimeTargets(2);
+    expect(profileTimeTargetFor(2, 'Turbo')).toEqual({ profileName: 'Turbo', minS: 40, maxS: 48 });
+
+    g.document = fakeDocument([fakePhaseRow()]);
+    openProfileForm({
+      id: 'p1', name: 'Turbo', waterTemperature: 93,
+      recipe: { coffeeIn: 18, coffeeOut: 36, ratio: 2 },
+      globalStopConditions: { weight: 36 },
+      phases: [],
+    });
+    await sendProfileToMachine();
+    closeProfileForm();
+
+    g.document = fakeDocument([]);
+    await openGaggiMateProfileEditor('p1');
+    await saveGaggiMateProfile();
+
+    // One PUT per editor, both carrying the profile the window belongs to.
+    expect(bodies).toHaveLength(2);
+    expect(bodies.map(b => b['name'] ?? b['label'])).toEqual(['Turbo', 'Turbo']);
+    expect(bodies.map(b => b['machineId'])).toEqual([2, 2]);
+
+    // The GaggiMate export takes no target time (#1605): neither the top level
+    // nor any nested phase/target may grow one.
+    const serialized = JSON.stringify(bodies);
+    expect(serialized).not.toContain('minS');
+    expect(serialized).not.toContain('maxS');
+    expect(serialized).not.toContain('timeTarget');
+    const leaked = bodies.flatMap(b => Object.keys(b).filter(k => k === 'minS' || k === 'maxS' || k === 'timeTarget'));
+    expect(leaked).toEqual([]);
+  });
+
+  it('the GaggiMate editor does not open on a 503 and shows the not-stored toast', async () => {
+    g.document = fakeDocument([]);
+    const showToast = vi.fn();
+    g.window = { showToast };
+    fetchSpy.mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: () => Promise.resolve({ error: 'x' }),
+    } as unknown as Response);
+
+    await openGaggiMateProfileEditor('p1');
+
+    const modal = (g.document as { getElementById(id: string): { style: Record<string, string> } })
+      .getElementById('gmProfileEditorModal');
+    expect(modal.style.display).not.toBe('flex');
+    expect(showToast).toHaveBeenCalledWith(t('profile_not_stored_offline'));
   });
 });

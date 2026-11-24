@@ -5,14 +5,29 @@
             color-scheme: dark;
 
             /* ── Radius ── #811: a short scale, not eight values.
-               --radius-sm is for controls (inputs, chips, small
-               buttons), --radius for containers. #1618 adds the third
-               step those always implied: --radius-lg, for sheets and
-               popovers that sit above a container. A value off this
-               scale is a regression, not a nuance. */
+               #2091: the role decides the radius (docs/DESIGN.md, "Shapes
+               and components"): --radius-ctl for everything interactive,
+               --radius for cards and containers, --radius-lg for sheets
+               and dialogs, --radius-full only for non-interactive status
+               badges, avatars, dots and progress bars. Radii do not
+               change with the theme, so they
+               live here only and the light block inherits them. A value
+               off this scale is a regression, not a nuance. */
             --radius: 10px;
-            --radius-sm: 4px;
             --radius-lg: 16px;
+            --radius-ctl: 8px;
+            --radius-full: 999px;
+
+            /* ── Control height ── #2093: chips, buttons and the search
+               fields and dropdowns in a chip row share one height, 36 px
+               with a fine pointer. The pointer: coarse rule after the
+               light block raises it to the 44 px touch target. */
+            --ctl-height: 36px;
+
+            /* ── Bottom navigation ── #2096: the height of the phone's
+               bottom navigation row; the scroll areas above it keep this
+               much room at their bottom edge. */
+            --bottom-nav-h: 56px;
 
             /* ── z-index scale ── #1618: named layers instead of magic
                numbers scattered through style.css. The numbers keep the
@@ -183,8 +198,6 @@
             --flavor-tint: #a855f7;
             --flavor-ink: #c084fc;
             --beans-ink: #a78bfa;
-            --brew-tint: #6366f1;
-            --brew-ink: #818cf8;
             --milk-ink: #7dd3fc;
             --stat-pressure: #3498db;
             --stat-flow: #f39c12;
@@ -239,6 +252,13 @@
             --night-from: #dfe6f5;
             --on-fill: #fff;
         }
+
+        /* #2093: on a touch screen every chip, button and input in a chip
+           row grows to the 44 px touch target (docs/DESIGN.md, "Shapes
+           and components"). */
+        @media (pointer: coarse) {
+            :root { --ctl-height: 44px; }
+        }
         /* #1019: the per-accent --accent-ink light-theme audit (#811, plus
            Crema's whole separate warm-paper light block) was retired along
            with the old 6-swatch [data-accent="..."] set, and those
@@ -256,10 +276,9 @@
 
         /* #404: bundled locally (public-src/fonts/) so it renders fully
            offline / behind HA ingress — no external font CDN. Applied ONLY
-           via .serif-display: bean names in the Bibliothek view and the
-           shot-card share image. Never on numeric/data displays —
-           tabular-nums UI stays sans-serif everywhere else, regardless of
-           theme. */
+           via .serif-display: bean names in the Bibliothek view. Never on
+           numeric/data displays — tabular-nums UI stays sans-serif everywhere
+           else, regardless of theme. */
         @font-face {
             font-family: 'Fraunces';
             font-style: normal;

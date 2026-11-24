@@ -2,6 +2,8 @@
 
 Bug reports, feature ideas and pull requests are welcome!
 
+Working with an AI coding agent? Point it at [AGENTS.md](AGENTS.md), the short checklist every pull request has to meet.
+
 The [roadmap board](https://github.com/users/mxkissnr/projects/2/views/2) shows what is planned for the next release, what comes later and
 where help is wanted.
 
@@ -55,10 +57,11 @@ contributors pick `dev` as the PR base by hand.
 
 Branch protection enforces these bases. `dev` and `feature/**` require the CI checks
 **Test and build**, **Go backend test/vet/build/vuln gate** and **E2E smoke test**; `dev`
-additionally requires **Analyze (go)**, **Analyze (javascript-typescript)** and **AI
-assistance disclosure present**. `main` and `release/**` additionally require the three
-Docker image smoke tests (`Docker image build+smoke test` per architecture). Force-pushes
-and branch deletion are blocked on protected branches.
+additionally requires **Analyze (go)**, **Analyze (javascript-typescript)**, **AI
+assistance disclosure present** and **Docker image build+smoke test (amd64)**. `main` and
+`release/**` require everything `dev` requires plus the arm64 and armv7 Docker image smoke
+tests (`Docker image build+smoke test` per architecture). Force-pushes and branch deletion
+are blocked on protected branches.
 
 ## Pull requests
 
@@ -187,13 +190,27 @@ is missing, the script falls back to the built-in demo seed. `gaggiuino-local-pr
 is git-ignored, so keep a personal backup there or outside the repo — never commit it. Review the
 resulting PNGs for personal data before committing them.
 
-In backup mode — the default — every screenshot except `live.png` and `orders.png` comes from the
-restored backup:
-`shots.png`, `library.png`, `flavor-wheel.png`, `analytics.png`, `analytics-machines.png`,
-`maintenance.png`, `dialin.png` and `settings.png`. `live.png` and `orders.png` always come from the
-seeded demo instance — a real backup is normally all completed orders against a machine the
-throwaway instance cannot reach, so those two views would render empty, and backup mode leaves the
-seeded PNGs in place instead of regenerating them.
+Every PNG comes from the one instance loaded for the run (the restored backup by default, the
+built-in demo seed as fallback). For `orders.png` the script first places three demo orders through
+the instance's API, so the queue is never empty; `live.png` shows the offline state, because the
+throwaway instance has no machine to reach.
+
+### README images fill their frame
+
+The six images in the README screenshot table must show the app up to the frame edges, not a band
+of empty app background below a short view (#2189). Each of those views is captured in a state that
+fills the 1400×900 window: the library with its "Empty & archive" fold open, the bean sheet with its
+current bag expanded, Analytics at its top and at the machine comparison, Maintenance with its task
+list and log. The flavor wheel is cropped to the wheel dialog at the same 14:9 aspect ratio instead
+of showing the dimmed page around it.
+
+After each of those captures the script measures, in the page, the lowest visible content (text,
+images, charts, controls) inside the view, sheet or dialog the image shows. When more than 10 % of
+the image height below it is empty, the run still writes every PNG for inspection, then exits with
+an error that names each such view, before it updates `.source-tree` or copies anything into the
+wiki. Fix such a failure by giving that view a fuller state in the script, not by raising the limit.
+A new image in the README table needs its own fill check in the script; the unit test of the check
+fails until it has one.
 
 ## Demo fixtures
 
@@ -270,6 +287,16 @@ Lighthouse is deliberately not measured: its run-to-run noise on CI runners is
 well above the 10 % the issue asks for, so a 15 % threshold could not tell a
 real regression from noise. Bundle size and the API timings above cover the
 frontend instead.
+
+## Dependency updates
+
+THIRD_PARTY_NOTICES.md (in gaggiuino-local-profiler/public-src/public/) names every library the app bundles and every Go module compiled into the server, each at its exact version, and two tests guard it. Renovate does not edit that file, so a pull request that bumps a runtime dependency turns those tests red. Fix it on the branch with one command and commit the result:
+
+    cd gaggiuino-local-profiler
+    npm ci
+    npm run notices:sync
+
+The script reads the versions from package-lock.json and from `go list -deps` (the same set the tests check, for the three image architectures) and rewrites only the version numbers of existing headings, including the pkg.go.dev licence link of a Go module. It needs the Go toolchain on PATH. When a package or module is new or gone it leaves it alone, prints the heading to add or remove and exits non-zero: a new library needs a person to check its licence and add the licence text by hand.
 
 ## Versioning
 

@@ -16,6 +16,7 @@ import { esc, formatDate, html, joinHtml } from '../utils.js';
 import type { Html } from '../utils.js';
 import { localeFor } from '../constants.js';
 import { confirmDialog } from '../components/confirm-dialog.js';
+import { closeDetailSheet, openDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
 import { showToast } from '../components/toast.js';
 import { textEntryFocused } from '../live-sync.js';
 // #416: stroke-SVG replacements for the 🫘/🥛 decorative glyphs (same
@@ -24,7 +25,7 @@ import { textEntryFocused } from '../live-sync.js';
 // BEAN_ICON_SVG now lives in ../icons.ts (also used by boot/annotation.ts's bean-age
 // hint, #419 follow-up); MILK_ICON_SVG moved there too once the library
 // and annotation milk pickers reused it as their no-emoji fallback (#1328).
-import { CLOCK_ICON_SVG, BELL_ICON_SVG, BEAN_ICON_SVG, MILK_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG } from '../icons.js';
+import { BELL_ICON_SVG, BEAN_ICON_SVG, MILK_ICON_SVG, CLOSE_ICON_SVG, CHECK_ICON_SVG, ICON_TRASH } from '../icons.js';
 
 // Two orders-runtime fields that state/index.ts's OrdersSlice does not
 // declare: they are written and read only by this view, so they get a local
@@ -36,7 +37,7 @@ type OrdersRuntimeState = typeof S & {
 const SO = S as OrdersRuntimeState;
 
 // Hand-built view of GET /api/switch as loadOrdersView reads it.
-interface SwitchState { configured?: boolean; state?: boolean }
+export interface SwitchState { configured?: boolean; state?: boolean }
 
 // S._ordersEtaSelected / S._ordersDeclineOpen are keyed by the order id that
 // arrives as a dataset string — keep the runtime key a string and type the
@@ -86,12 +87,6 @@ async function _getNotifyServicesOrNull(): Promise<NotifyService[] | null> {
   try { return await getNotifyServices(); } catch { return null; }
 }
 
-export function toggleOrdersMenu(): void {
-  S._ordersMenuOpen = !S._ordersMenuOpen;
-  (document.getElementById('ordersMenuBody') as HTMLElement).style.display = S._ordersMenuOpen ? '' : 'none';
-  (document.getElementById('ordersMenuToggle') as HTMLElement).textContent = S._ordersMenuOpen ? '▾' : '▸';
-}
-
 function _playOrderChime(): void {
   try {
     const Ctor = (window.AudioContext
@@ -125,11 +120,18 @@ function _notifyNewOrders(newOrders: Order[]): void {
 // text field focused inside #orders-view, or a decline-reason input left with a
 // value (its row stays open even without focus, so `textEntryFocused()` alone
 // misses it).
+// #2148: or a text field inside an open Manage panel.
 function _ordersDraftOpen(): boolean {
   if (textEntryFocused()) {
-    const view = document.getElementById('orders-view');
     const active = document.activeElement;
+    const view = document.getElementById('orders-view');
     if (view && active && view.contains(active)) return true;
+    // #2148: the Manage panels (menu inputs, kiosk link) sit in the detail
+    // sheet while open, outside #orders-view.
+    for (const row of ORDERS_MANAGE_ROWS) {
+      const panel = document.getElementById(row.panelId);
+      if (panel && active && panel.contains(active)) return true;
+    }
   }
   for (const el of document.querySelectorAll<HTMLInputElement>('[id^="declineReason_"]')) {
     if (el.value.trim() !== '') return true;
@@ -172,17 +174,13 @@ export async function setOrdersEnabled(enabled: boolean): Promise<void> {
 
 export function _updateOrdersToggleUI(enabled: boolean): void {
   const toggle = document.getElementById('ordersEnabledToggle') as HTMLInputElement | null;
-  const label  = document.getElementById('ordersEnabledLabel');
   if (toggle) toggle.checked = enabled;
-  if (label) {
-    label.textContent = t(enabled ? 'orders_accept_on' : 'orders_accept_off');
-    label.className   = 'orders-toggle-state ' + (enabled ? 'on' : 'off');
-  }
 }
 
 export async function loadOrdersView(): Promise<void> {
   // #1962: only a view that has nothing on screen yet says it is loading, so a
   // background refresh never flashes over the list the user is reading.
+  renderOrdersManage();
   const pendingListEl = document.getElementById('orders-pending-list');
   const listShowedNothing = pendingListEl?.innerHTML === '';
   if (listShowedNothing && pendingListEl) {
@@ -192,9 +190,6 @@ export async function loadOrdersView(): Promise<void> {
     _getSwitchState(),
     _getSettingsOr({ enabled: true }),
   ]);
-  const machineOff = sw.configured && sw.state === false;
-  const banner = document.getElementById('orders-machine-off-banner');
-  if (banner) { banner.style.display = machineOff ? '' : 'none'; banner.textContent = t('orders_machine_off'); }
   _updateOrdersToggleUI(!!settings.enabled);
 
   let ordersFailed = false;
@@ -215,6 +210,7 @@ export async function loadOrdersView(): Promise<void> {
     }
   } else {
     renderOrdersList(orders);
+    renderOrdersVerdict(ordersVerdictText(orders, queueEta, sw, milkStock));
   }
   renderOrdersMenuAdmin(menu);
   renderMilkStock(milkStock);
@@ -240,14 +236,18 @@ export async function loadOrdersView(): Promise<void> {
 // Tiered relative time (#320) — raw minutes was unreadable once an order
 // sat for hours/days (e.g. "Vor 3904 Min"): minutes under an hour, hours
 // under a day, days beyond that.
-export function _orderTimeAgo(ts: number): Html {
-  const min = Math.round((Date.now() - ts) / 60000);
-  if (min < 1) return tHtml('orders_just_now');
-  if (min < 60) return tHtml('orders_ago', min);
+export function _orderTimeAgoText(ts: number, now = Date.now()): string {
+  const min = Math.round((now - ts) / 60000);
+  if (min < 1) return t('orders_just_now');
+  if (min < 60) return t('orders_ago', min);
   const hours = Math.round(min / 60);
-  if (hours < 24) return tHtml('orders_ago_hours', hours);
+  if (hours < 24) return t('orders_ago_hours', hours);
   const days = Math.round(hours / 24);
-  return tHtml('orders_ago_days', days);
+  return t('orders_ago_days', days);
+}
+
+export function _orderTimeAgo(ts: number): Html {
+  return esc(_orderTimeAgoText(ts));
 }
 
 export function renderMilkStock(milks: MilkStock[]): void {
@@ -255,25 +255,44 @@ export function renderMilkStock(milks: MilkStock[]): void {
   if (!el) return;
   if (!milks?.length) { el.style.display = 'none'; return; }
   el.style.display = '';
-  el.innerHTML = html`<p class="orders-milk-title">${MILK_ICON_SVG} ${tHtml('orders_milk_title')}</p>${joinHtml(
+  el.innerHTML = html`<p class="section-title">${MILK_ICON_SVG} ${tHtml('orders_milk_title')}</p><div class="settings-group">${joinHtml(
     milks.map(m => {
-      const cls = (m.stockMl as number) <= 0 ? 'empty' : m.remaining < 300 ? 'low' : 'ok';
-      const label = (m.stockMl as number) <= 0 ? tHtml('lib_milk_empty')
-        : m.remaining < 300 ? html`${esc(m.remaining)} ml`
-        : html`${esc(m.remaining)} ml`;
-      return html`<div class="orders-milk-row">
-        <span class="orders-milk-emoji">${m.emoji ? esc(m.emoji) : MILK_ICON_SVG}</span>
-        <span class="orders-milk-name">${esc(m.name)}</span>
-        ${m.demand > 0 ? html`<span style="font-size:.72rem;color:var(--gray-500)">${tHtml('lib_milk_demand', m.demand)}</span>` : html``}
-        <span class="orders-milk-badge ${esc(cls)}">${label}</span>
+      const empty = (m.stockMl as number) <= 0;
+      const cls = empty ? 'badge badge--err' : m.remaining < 300 ? 'badge badge--warn' : 'badge badge--ok';
+      const label = empty ? tHtml('lib_milk_empty') : html`${esc(m.remaining)} ml`;
+      return html`<div class="settings-row settings-row-static">
+        <span class="settings-row-icon" aria-hidden="true">${m.emoji ? esc(m.emoji) : MILK_ICON_SVG}</span>
+        <span class="settings-row-text"><span class="settings-row-title">${esc(m.name)}</span>${m.demand > 0 ? html`<span class="settings-row-sub">${tHtml('lib_milk_demand', m.demand)}</span>` : html``}</span>
+        <span class="${esc(cls)}">${label}</span>
       </div>`;
-    }))}`;
+    }))}</div>`;
+}
+
+// #2148: the orders last rendered, so the ETA choice can name its drink.
+let _lastOrders: Order[] = [];
+
+// The minutes an accept sends: the barista's own choice, else the queue's
+// suggestion for this order, else 5 — the same value the row's time shows.
+export function _orderEta(id: string): number {
+  return S._ordersEtaSelected[_idKey(id)] ?? SO._ordersQueueEta?.positions?.[id]?.suggestedEta ?? 5;
+}
+
+function _syncEtaLabel(id: string): void {
+  document.getElementById('orders-pending-list')?.querySelectorAll<HTMLElement>('[data-order-eta-open]').forEach(btn => {
+    if (btn.dataset.orderEtaOpen === id) btn.textContent = `${_orderEta(id)} min`;
+  });
+}
+
+function _emptyRow(key: string): Html {
+  return html`<div class="settings-row settings-row-static"><span class="settings-row-sub">${tHtml(key)}</span></div>`;
 }
 
 export function renderOrdersList(orders: Order[]): void {
+  _lastOrders = orders;
   const pending  = orders.filter(o => o.status === 'pending');
   const accepted = orders.filter(o => o.status === 'accepted');
-  const history  = orders.filter(o => ['done', 'declined'].includes(o.status)).slice(0, 20);
+  const allHistory = orders.filter(o => ['done', 'declined'].includes(o.status));
+  const history  = allHistory.slice(0, 20);
 
   const pendingEl  = document.getElementById('orders-pending-list');
   const acceptedEl = document.getElementById('orders-accepted-list');
@@ -281,146 +300,154 @@ export function renderOrdersList(orders: Order[]): void {
   const clearHistBtn = document.getElementById('orders-clear-history');
   if (!pendingEl) return;
 
-  // Queue banner — only when 2+ orders active
-  const totalActive = pending.length + accepted.length;
-  const totalEta = SO._ordersQueueEta
-    ? Math.ceil((SO._ordersQueueEta.acceptedRemaining || 0) + (SO._ordersQueueEta.pendingCount || 0) * (SO._ordersQueueEta.prepTime || 4))
-    : 0;
-  const queueBanner = totalActive >= 2 && totalEta > 0
-    ? html`<div class="orders-queue-banner">${CLOCK_ICON_SVG} ${tHtml('orders_queue_banner', totalActive, totalEta)}</div>`
-    : html``;
+  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+  pendingEl.innerHTML = pending.length ? joinHtml(pending.map(o => renderOrderCard(o, 'pending'))) : _emptyRow('orders_empty');
+
+  // #2148: one primary per view — only the first order in progress gets it.
+  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
+  (acceptedEl as HTMLElement).innerHTML = joinHtml(accepted.map((o, i) => renderOrderCard(o, 'accepted', i === 0)));
+  const progress = document.getElementById('ordersProgress');
+  if (progress) progress.hidden = accepted.length === 0;
 
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  pendingEl.innerHTML = html`${queueBanner}${pending.length ? joinHtml(pending.map(o => renderOrderCard(o, 'pending'))) :
-    html`<div class="orders-empty">${tHtml('orders_empty')}</div>`}`;
-
-  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  (acceptedEl as HTMLElement).innerHTML = accepted.length ? joinHtml(accepted.map(o => renderOrderCard(o, 'accepted'))) :
-    html`<div class="orders-empty">${tHtml('orders_empty')}</div>`;
-
-  // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
-  (historyEl as HTMLElement).innerHTML = history.length ? joinHtml(history.map(o => renderOrderCard(o, 'history'))) : html``;
+  (historyEl as HTMLElement).innerHTML = history.length ? joinHtml(history.map(o => renderOrderCard(o, 'history'))) : _emptyRow('orders_stats_no_data');
   if (clearHistBtn) clearHistBtn.style.display = history.length ? '' : 'none';
+  const historySub = document.getElementById('ordersHistorySub');
+  if (historySub) historySub.textContent = ordersHistorySub(allHistory);
 
   // Bind buttons after render
   pendingEl.querySelectorAll<HTMLElement>('[data-order-accept]').forEach(btn => {
     btn.addEventListener('click', () => { void acceptOrder(btn.dataset.orderAccept as string); });
   });
-  pendingEl.querySelectorAll<HTMLElement>('[data-order-decline-toggle]').forEach(btn => {
-    btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle as string));
+  pendingEl.querySelectorAll<HTMLElement>('[data-order-eta-open]').forEach(btn => {
+    btn.addEventListener('click', () => openOrderEta(btn.dataset.orderEtaOpen as string, btn));
   });
-  pendingEl.querySelectorAll<HTMLElement>('[data-order-decline-submit]').forEach(btn => {
-    btn.addEventListener('click', () => { void submitDecline(btn.dataset.orderDeclineSubmit as string); });
-  });
-  pendingEl.querySelectorAll<HTMLElement>('[data-eta-btn]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id  = btn.dataset.orderId as string;
-      const val = parseInt(btn.dataset.etaBtn as string);
-      S._ordersEtaSelected[_idKey(id)] = val;
-      btn.closest('.order-eta-picker')?.querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      const inp = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
-      if (inp) inp.value = String(val);
+  for (const el of [pendingEl, acceptedEl as HTMLElement]) {
+    el.querySelectorAll<HTMLElement>('[data-order-decline-toggle]').forEach(btn => {
+      btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle as string));
     });
-  });
-  pendingEl.querySelectorAll<HTMLInputElement>('.order-eta-custom').forEach(inp => {
-    inp.addEventListener('input', () => {
-      const id = inp.id.replace('etaCustom_', '');
-      S._ordersEtaSelected[_idKey(id)] = parseInt(inp.value) || 5;
-      inp.closest('.order-eta-picker')?.querySelectorAll('.order-eta-btn').forEach(b => b.classList.remove('selected'));
+    el.querySelectorAll<HTMLElement>('[data-order-decline-submit]').forEach(btn => {
+      btn.addEventListener('click', () => { void submitDecline(btn.dataset.orderDeclineSubmit as string); });
     });
-  });
+  }
   (acceptedEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-complete]').forEach(btn => {
     btn.addEventListener('click', () => { void completeOrder(btn.dataset.orderComplete as string); });
   });
-  (acceptedEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-decline-toggle]').forEach(btn => {
-    btn.addEventListener('click', () => toggleDeclineRow(btn.dataset.orderDeclineToggle as string));
-  });
-  (acceptedEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-decline-submit]').forEach(btn => {
-    btn.addEventListener('click', () => { void submitDecline(btn.dataset.orderDeclineSubmit as string); });
-  });
   (historyEl as HTMLElement).querySelectorAll<HTMLElement>('[data-order-delete]').forEach(btn => {
     btn.addEventListener('click', () => { void deleteOrder(btn.dataset.orderDelete as string); });
+  });
+  // The shot link sits in the open History sheet; close it before the
+  // global delegation switches to the shot (a tab switch does not).
+  (historyEl as HTMLElement).querySelectorAll<HTMLElement>('[data-action="goto-shot"]').forEach(btn => {
+    btn.addEventListener('click', () => closeDetailSheet());
   });
   if (clearHistBtn) {
     clearHistBtn.onclick = () => { void clearOrderHistory(); };
   }
 }
 
-export function renderOrderCard(o: Order, ctx: string): Html {
-  const etaBtns    = [2, 5, 10, 15, 20];
-  // Use queue-suggested ETA if barista hasn't manually overridden
-  const queuePos  = SO._ordersQueueEta?.positions?.[String(o.id)];
-  const suggested = queuePos?.suggestedEta ?? 5;
-  const selectedEta = S._ordersEtaSelected[_idKey(String(o.id))] ?? suggested;
-  const isNew = (Date.now() - o.createdAt) < 60000;
+// #2148: one grouped row per order (docs "Cards group list rows").
+function _orderTitle(o: Order, extra: Html = html``): Html {
+  return html`<span class="settings-row-title">${esc(o.item)}${o.variant ? html` · ${esc(o.variant)}` : html``}${extra}</span>`;
+}
+
+function _declineToggle(o: Order): Html {
+  return html`<button type="button" class="btn btn--quiet btn--icon" data-order-decline-toggle="${esc(o.id)}" aria-label="${esc(t('orders_decline'))}" title="${esc(t('orders_decline'))}">${CLOSE_ICON_SVG}</button>`;
+}
+
+function _declineRow(o: Order): Html {
+  if (!S._ordersDeclineOpen[_idKey(String(o.id))]) return html``;
+  return html`<div class="order-decline">
+      <input class="lib-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
+      <button type="button" class="btn btn--danger" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
+    </div>`;
+}
+
+export function renderOrderCard(o: Order, ctx: string, primary = false): Html {
+  const customer = html`${tHtml('orders_for')} ${esc(o.customer)}${o.note ? html` · ${esc(o.note)}` : html``}`;
 
   if (ctx === 'pending') {
-    const declineOpen = S._ordersDeclineOpen[_idKey(String(o.id))];
-    const queueHint = queuePos
-      ? html`<span class="order-queue-hint">${tHtml('orders_queue_pos', queuePos.position, queuePos.suggestedEta)}</span>`
-      : html``;
-    return html`<div class="order-card status-pending">
-      <div class="order-card-top">
-        <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : html``}${isNew ? html`<span class="orders-new-badge">${tHtml('orders_new_badge')}</span>` : html``}</span>
-        <span class="order-meta">${_orderTimeAgo(o.createdAt)}${queueHint}</span>
-      </div>
-      <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
-      <div class="order-eta-picker">
-        ${joinHtml(etaBtns.map(m => html`<button class="order-eta-btn${selectedEta === m ? html` selected` : html``}" data-order-id="${esc(o.id)}" data-eta-btn="${esc(m)}">${esc(m)} min</button>`))}
-        <input class="order-eta-custom" type="number" min="1" max="60" step="1" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" aria-label="${esc(t('orders_eta_label'))}" placeholder="min">
-        ${queuePos ? html`<span class="order-eta-suggest">${tHtml('orders_suggested_eta', queuePos.suggestedEta)}</span>` : html``}
-      </div>
-      <div class="order-actions">
-        <button class="order-btn accept" data-order-accept="${esc(o.id)}">${tHtml('orders_accept')}</button>
-        <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
-      </div>
-      ${declineOpen ? html`<div class="order-actions">
-        <input class="order-decline-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
-        <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
-      </div>` : html``}
+    const isNew = (Date.now() - o.createdAt) < 60000;
+    return html`<div class="settings-row settings-row-static order-row">
+      <span class="settings-row-text">
+        ${_orderTitle(o, isNew ? html` <span class="badge badge--err">${tHtml('orders_new_badge')}</span>` : html``)}
+        <span class="settings-row-sub">${customer} · ${_orderTimeAgo(o.createdAt)}</span>
+      </span>
+      <span class="order-row-actions">
+        <span class="order-accept" role="group">
+          <button type="button" class="btn btn--tonal" data-order-accept="${esc(o.id)}">${tHtml('orders_accept')}</button>
+          <button type="button" class="btn btn--tonal" data-order-eta-open="${esc(o.id)}" aria-haspopup="dialog" aria-label="${esc(t('orders_eta_label'))}">${esc(_orderEta(String(o.id)))} min</button>
+        </span>
+        ${_declineToggle(o)}
+      </span>
+      ${_declineRow(o)}
     </div>`;
   }
 
   if (ctx === 'accepted') {
     const etaDone  = (o.acceptedAt as number) + (o.eta as number) * 60000;
     const minsLeft = Math.max(0, Math.ceil((etaDone - Date.now()) / 60000));
-    const declineOpen = S._ordersDeclineOpen[_idKey(String(o.id))];
-    return html`<div class="order-card status-accepted">
-      <div class="order-card-top">
-        <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : html``}</span>
-        <span class="order-eta-tag">${tHtml('orders_eta_in', minsLeft)}</span>
-      </div>
-      <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.note ? html` · <span class="order-note">${esc(o.note)}</span>` : html``}</div>
-      <div class="order-actions">
-        <button class="order-btn complete" data-order-complete="${esc(o.id)}">${CHECK_ICON_SVG} ${tHtml('orders_complete')}</button>
-        <button class="order-btn decline" data-order-decline-toggle="${esc(o.id)}">${tHtml('orders_decline')}</button>
-      </div>
-      ${declineOpen ? html`<div class="order-actions">
-        <input class="order-decline-input" id="declineReason_${esc(o.id)}" aria-label="${esc(t('orders_decline_ph'))}" placeholder="${tHtml('orders_decline_ph')}">
-        <button class="order-btn decline" data-order-decline-submit="${esc(o.id)}">${tHtml('orders_decline')}</button>
-      </div>` : html``}
+    return html`<div class="settings-row settings-row-static order-row">
+      <span class="settings-row-text">
+        ${_orderTitle(o)}
+        <span class="settings-row-sub">${customer}</span>
+      </span>
+      <span class="settings-row-value">${tHtml('orders_eta_in', minsLeft)}</span>
+      <span class="order-row-actions">
+        <button type="button" class="btn ${esc(primary ? 'btn--primary' : 'btn--tonal')}" data-order-complete="${esc(o.id)}">${CHECK_ICON_SVG} ${tHtml('orders_complete')}</button>
+        ${_declineToggle(o)}
+      </span>
+      ${_declineRow(o)}
     </div>`;
   }
 
   // history
   const statusLabel = o.status === 'done' ? tHtml('orders_done') : tHtml('orders_declined');
-  return html`<div class="order-card status-${esc(o.status)}">
-    <div class="order-card-top">
-      <span class="order-item-name">${esc(o.item)}${o.variant ? html` <span class="order-variant-badge">· ${esc(o.variant)}</span>` : html``}</span>
-      <span class="order-history-right">
-        <span class="order-meta">${statusLabel} · ${_orderTimeAgo(o.completedAt || o.createdAt)}</span>
-        <button class="order-hist-del" data-order-delete="${esc(o.id)}" title="${tHtml('orders_delete_entry')}"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg></button>
-      </span>
-    </div>
-    <div class="order-customer">${tHtml('orders_for')} <b>${esc(o.customer)}</b>${o.declineReason ? html` · <span class="order-decline-tag">${esc(o.declineReason)}</span>` : html``}${o.shotId != null ? html` <button type="button" class="order-shot-link" data-action="goto-shot" data-id="${esc(o.shotId)}">${esc(t('orders_shot_link', o.shotId))}</button>` : html``}</div>
+  return html`<div class="settings-row settings-row-static order-row">
+    <span class="settings-row-text">
+      ${_orderTitle(o)}
+      <span class="settings-row-sub">${tHtml('orders_for')} ${esc(o.customer)}${o.declineReason ? html` · ${esc(o.declineReason)}` : html``}</span>
+    </span>
+    <span class="settings-row-value">${statusLabel} · ${_orderTimeAgo(o.completedAt || o.createdAt)}</span>
+    <span class="order-row-actions">
+      ${o.shotId != null ? html`<button type="button" class="btn btn--quiet" data-action="goto-shot" data-id="${esc(o.shotId)}">${esc(t('orders_shot_link', o.shotId))}</button>` : html``}
+      <button type="button" class="btn btn--quiet btn--icon" data-order-delete="${esc(o.id)}" aria-label="${esc(t('orders_delete_entry'))}" title="${esc(t('orders_delete_entry'))}">${ICON_TRASH}</button>
+    </span>
   </div>`;
 }
 
+// #2148: the existing ETA choice, now in the detail sheet next to the time.
+export function openOrderEta(id: string, anchor: HTMLElement | null): void {
+  const o = _lastOrders.find(x => String(x.id) === id);
+  if (!o) return;
+  const selectedEta = _orderEta(id);
+  const queuePos = SO._ordersQueueEta?.positions?.[id];
+  const etaBtns = [2, 5, 10, 15, 20];
+  openDetailSheet({
+    title: o.variant ? `${o.item} · ${o.variant}` : o.item,
+    ...(queuePos ? { sub: t('orders_suggested_eta', queuePos.suggestedEta) } : {}),
+    body: html`<div class="order-eta-picker">
+        ${joinHtml(etaBtns.map(m => html`<button type="button" class="chip" aria-pressed="${esc(selectedEta === m ? 'true' : 'false')}" data-order-id="${esc(o.id)}" data-eta-btn="${esc(m)}">${esc(m)} min</button>`))}
+        <input class="lib-input order-eta-custom" type="number" min="1" max="60" step="1" value="${esc(selectedEta)}" id="etaCustom_${esc(o.id)}" aria-label="${esc(t('orders_eta_label'))}" placeholder="min">
+      </div>`,
+    anchor,
+  });
+  document.getElementById('detailSheet')?.querySelectorAll<HTMLElement>('[data-eta-btn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      S._ordersEtaSelected[_idKey(id)] = parseInt(btn.dataset.etaBtn as string);
+      _syncEtaLabel(id);
+      requestCloseDetailSheet();
+    });
+  });
+  const inp = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
+  inp?.addEventListener('input', () => {
+    S._ordersEtaSelected[_idKey(id)] = parseInt(inp.value) || 5;
+    _syncEtaLabel(id);
+  });
+}
+
 export async function acceptOrder(id: string): Promise<void> {
-  const etaCustom = document.getElementById(`etaCustom_${id}`) as HTMLInputElement | null;
-  const eta = etaCustom ? (parseInt(etaCustom.value) || S._ordersEtaSelected[_idKey(id)] || 5) : (S._ordersEtaSelected[_idKey(id)] || 5);
-  const r = await postOrderAccept(id, eta);
+  const r = await postOrderAccept(id, _orderEta(id));
   if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
 }
@@ -453,29 +480,29 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
     const useBeans   = !!item.useBeans;
     const useMilks   = !!item.useMilks;
     const chipHtml   = joinHtml(variants.map(v =>
-      html`<span class="orders-menu-variant-chip">${esc(v)}<button class="orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}">×</button></span>`
+      html`<span class="chip--input orders-menu-variant-chip">${esc(v)}<button type="button" class="flavor-chip-x orders-menu-variant-del" data-menu-id="${esc(item.id)}" data-variant="${esc(v)}" aria-label="${esc(t('lib_btn_delete'))}">${CLOSE_ICON_SVG}</button></span>`
     ));
     const variantSection = useBeans
-      ? html`<span class="orders-use-beans-note">${BEAN_ICON_SVG} ${tHtml('orders_use_beans_note')}</span>`
+      ? html`<span class="settings-row-sub orders-use-beans-note">${BEAN_ICON_SVG} ${tHtml('orders_use_beans_note')}</span>`
       : useMilks
-      ? html`<span class="orders-use-beans-note">${MILK_ICON_SVG} ${tHtml('orders_use_milks_note')}</span>`
+      ? html`<span class="settings-row-sub orders-use-beans-note">${MILK_ICON_SVG} ${tHtml('orders_use_milks_note')}</span>`
       : html`${chipHtml}
-         <input class="orders-menu-variant-input" id="variantInput_${esc(item.id)}" aria-label="${esc(t('orders_variant_ph'))}" placeholder="${tHtml('orders_variant_ph')}">
-         <button class="orders-menu-variant-btn" data-variant-add="${esc(item.id)}">${tHtml('orders_variant_add_btn')}</button>`;
+         <input class="lib-input orders-menu-variant-input" id="variantInput_${esc(item.id)}" aria-label="${esc(t('orders_variant_ph'))}" placeholder="${tHtml('orders_variant_ph')}">
+         <button type="button" class="btn btn--tonal" data-variant-add="${esc(item.id)}">${tHtml('orders_variant_add_btn')}</button>`;
     const milkMl = item.milkMl || '';
     return html`
-    <div class="orders-menu-item">
+    <div class="settings-row settings-row-static orders-menu-item">
       <div class="orders-menu-item-top">
-        <span>${esc(item.emoji)}</span>
-        <span class="orders-menu-item-name">${esc(item.name)}</span>
-        <button class="orders-menu-use-beans${useBeans ? html` active` : html``}" data-menu-use-beans="${esc(item.id)}" title="${tHtml('orders_use_beans_toggle')}">${BEAN_ICON_SVG}</button>
-        <button class="orders-menu-use-milks${useMilks ? html` active` : html``}" data-menu-use-milks="${esc(item.id)}" title="${tHtml('orders_use_milks_toggle')}">${MILK_ICON_SVG}</button>
-        <button class="orders-menu-trend${item.trending ? html` active` : html``}" data-menu-trend="${esc(item.id)}" title="${tHtml('orders_trending_toggle')}"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></button>
-        <button class="orders-menu-del" data-menu-del="${esc(item.id)}" title="${tHtml('orders_confirm_delete_item')}">${CLOSE_ICON_SVG}</button>
+        <span class="settings-row-icon" aria-hidden="true">${esc(item.emoji)}</span>
+        <span class="settings-row-title orders-menu-item-name">${esc(item.name)}</span>
+        <button type="button" class="chip" aria-pressed="${esc(String(useBeans))}" data-menu-use-beans="${esc(item.id)}" title="${tHtml('orders_use_beans_toggle')}">${BEAN_ICON_SVG}</button>
+        <button type="button" class="chip" aria-pressed="${esc(String(useMilks))}" data-menu-use-milks="${esc(item.id)}" title="${tHtml('orders_use_milks_toggle')}">${MILK_ICON_SVG}</button>
+        <button type="button" class="chip" aria-pressed="${esc(String(!!item.trending))}" data-menu-trend="${esc(item.id)}" title="${tHtml('orders_trending_toggle')}"><svg class="rail-icon sm" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg></button>
+        <button type="button" class="btn btn--quiet btn--icon" data-menu-del="${esc(item.id)}" aria-label="${esc(t('orders_confirm_delete_item'))}" title="${tHtml('orders_confirm_delete_item')}">${CLOSE_ICON_SVG}</button>
       </div>
       <div class="orders-menu-variants">${variantSection}</div>
       <div class="orders-menu-milk-row">
-        ${MILK_ICON_SVG} <input class="orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" max="5000" step="10" data-milk-ml="${esc(item.id)}" aria-label="${esc(t('orders_milk_per_order'))}"> ${tHtml('orders_milk_per_order')}
+        ${MILK_ICON_SVG} <input class="lib-input orders-menu-milk-input" type="number" id="milkMl_${esc(item.id)}" value="${esc(milkMl)}" placeholder="0" min="0" max="5000" step="10" data-milk-ml="${esc(item.id)}" aria-label="${esc(t('orders_milk_per_order'))}"> ${tHtml('orders_milk_per_order')}
       </div>
     </div>`;
   }));
@@ -490,7 +517,7 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
   });
   list.querySelectorAll<HTMLElement>('[data-menu-del]').forEach(btn => {
     _onAsync(btn, 'click', async () => {
-      if (!await confirmDialog(t('orders_confirm_delete_item'), { confirmLabel: t('lib_btn_delete') })) return;
+      if (!await confirmDialog(t('orders_confirm_delete_item'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
       await deleteMenuItem(btn.dataset.menuDel as string);
       void loadOrdersView();
     });
@@ -546,40 +573,24 @@ export function renderOrdersMenuAdmin(menu: MenuItem[]): void {
   });
 }
 
-export function toggleOrdersStats(): void {
-  S._ordersStatsOpen = !S._ordersStatsOpen;
-  (document.getElementById('ordersStatsBody') as HTMLElement).style.display = S._ordersStatsOpen ? '' : 'none';
-  (document.getElementById('ordersStatsToggle') as HTMLElement).textContent = S._ordersStatsOpen ? '▾' : '▸';
-  if (S._ordersStatsOpen) void loadOrdersView();
-}
-
 export function renderOrdersStats(stats: OrderStats | null | undefined): void {
   const el = document.getElementById('ordersStatsContent');
   if (!el) return;
   if (!stats?.total) {
-    el.innerHTML = html`<div style="color:#52525b;font-size:.8rem;padding:8px 0">${tHtml('orders_stats_no_data')}</div>`;
+    el.innerHTML = html`<p class="settings-card-desc">${tHtml('orders_stats_no_data')}</p>`;
     return;
   }
 
   const fmtDate = (ts: number | null | undefined): Html => esc(ts ? formatDate(ts, localeFor(S.currentLang)) : '–');
-  const cards = joinHtml((stats.customers || []).map(c => html`<div class="orders-stats-card">
-      <div class="orders-stats-name" title="${esc(c.name)}">${esc(c.name)}</div>
-      <div class="orders-stats-row"><span>${tHtml('orders_stats_total')}</span><span class="orders-stats-val">${esc(c.count)} ${tHtml('orders_stats_orders')}</span></div>
-      <div class="orders-stats-row"><span>${tHtml('orders_stats_fav')}</span><span class="orders-stats-val">${c.favItem ? esc(c.favItem) : html`–`}</span></div>
-      <div class="orders-stats-row"><span>${tHtml('orders_stats_last')}</span><span class="orders-stats-val">${fmtDate(c.lastAt)}</span></div>
+  const summary = (label: Html, value: Html): Html => html`<div class="settings-row settings-row-static"><span class="settings-row-text"><span class="settings-row-title">${label}</span></span><span class="settings-row-value">${value}</span></div>`;
+  const customers = joinHtml((stats.customers || []).map(c => html`<div class="settings-row settings-row-static">
+      <span class="settings-row-text"><span class="settings-row-title">${esc(c.name)}</span><span class="settings-row-sub">${tHtml('orders_stats_fav')}: ${c.favItem ? esc(c.favItem) : html`–`} · ${tHtml('orders_stats_last')}: ${fmtDate(c.lastAt)}</span></span>
+      <span class="settings-row-value">${esc(c.count)} ${tHtml('orders_stats_orders')}</span>
     </div>`));
-  el.innerHTML = html`
-    <div class="orders-stats-global">
-      <div class="orders-stats-global-item">
-        <span class="orders-stats-global-label">${tHtml('orders_stats_total')}</span>
-        <span class="orders-stats-global-val">${esc(stats.total)}</span>
-      </div>
-      <div class="orders-stats-global-item">
-        <span class="orders-stats-global-label">${tHtml('orders_stats_popular')}</span>
-        <span class="orders-stats-global-val">${stats.mostPopular ? html`${esc(stats.mostPopular.item)} ×${esc(stats.mostPopular.count)}` : html`–`}</span>
-      </div>
-    </div>
-    <div class="orders-stats-grid">${cards}</div>`;
+  el.innerHTML = html`<div class="settings-group">
+      ${summary(tHtml('orders_stats_total'), esc(stats.total))}
+      ${summary(tHtml('orders_stats_popular'), stats.mostPopular ? html`${esc(stats.mostPopular.item)} ×${esc(stats.mostPopular.count)}` : html`–`)}
+    </div>${customers ? html`<div class="settings-group">${customers}</div>` : html``}`;
 }
 
 export async function deleteOrder(id: string): Promise<void> {
@@ -589,7 +600,7 @@ export async function deleteOrder(id: string): Promise<void> {
 }
 
 export async function clearOrderHistory(): Promise<void> {
-  if (!await confirmDialog(t('orders_confirm_clear_history'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('orders_confirm_clear_history'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await deleteOrderHistory();
   if (!r.ok) window.showToast?.(t('error_generic', r.status));
   void loadOrdersView();
@@ -606,7 +617,7 @@ export async function loadNotifyMappingView(): Promise<void> {
   ]);
 
   if (services === null) {
-    section.innerHTML = html`<p class="orders-notify-hint">${tHtml('orders_notify_no_ha')}</p>`;
+    section.innerHTML = html`<p class="settings-card-desc">${tHtml('orders_notify_no_ha')}</p>`;
     return;
   }
 
@@ -622,11 +633,11 @@ export async function loadNotifyMappingView(): Promise<void> {
 
   const typesHtml = html`
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_types_title')}</p>
-      <p class="orders-notify-hint">${tHtml('orders_types_desc')}</p>
+      <p class="section-title">${BELL_ICON_SVG} ${tHtml('orders_types_title')}</p>
+      <p class="settings-card-desc">${tHtml('orders_types_desc')}</p>
       <div class="orders-broadcast-list" id="ordersTypesList">${typesRows}</div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersTypesSaveBtn">${tHtml('orders_types_save')}</button>
+        <button type="button" class="btn btn--tonal" id="ordersTypesSaveBtn">${tHtml('orders_types_save')}</button>
       </div>
     </div>`;
 
@@ -637,15 +648,15 @@ export async function loadNotifyMappingView(): Promise<void> {
           <input type="checkbox" id="bc_${esc(s.id)}" data-svc="${esc(s.id)}"${savedRecipients.includes(s.id) ? html` checked` : html``}>
           <label for="bc_${esc(s.id)}">${esc(s.name)}</label>
         </div>`))
-    : html`<p class="orders-broadcast-empty">${tHtml('orders_notify_no_ha')}</p>`;
+    : html`<p class="settings-card-desc">${tHtml('orders_notify_no_ha')}</p>`;
 
   const broadcastHtml = html`
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_broadcast_title')}</p>
-      <p class="orders-notify-hint">${tHtml('orders_broadcast_desc')}</p>
+      <p class="section-title">${BELL_ICON_SVG} ${tHtml('orders_broadcast_title')}</p>
+      <p class="settings-card-desc">${tHtml('orders_broadcast_desc')}</p>
       <div class="orders-broadcast-list" id="ordersBroadcastList">${broadcastRows}</div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersBroadcastSaveBtn">${tHtml('orders_broadcast_save')}</button>
+        <button type="button" class="btn btn--tonal" id="ordersBroadcastSaveBtn">${tHtml('orders_broadcast_save')}</button>
       </div>
     </div>`;
 
@@ -655,11 +666,11 @@ export async function loadNotifyMappingView(): Promise<void> {
 
   const baristaHtml = html`
     <div class="orders-broadcast-section">
-      <p class="orders-broadcast-title">${BELL_ICON_SVG} ${tHtml('orders_barista_title')}</p>
-      <p class="orders-notify-hint">${tHtml('orders_barista_desc')}</p>
-      <select class="orders-notify-select" id="ordersBaristaSelect" aria-label="${esc(t('orders_barista_title'))}">${baristaOptions}</select>
+      <p class="section-title">${BELL_ICON_SVG} ${tHtml('orders_barista_title')}</p>
+      <p class="settings-card-desc">${tHtml('orders_barista_desc')}</p>
+      <select class="lib-select" id="ordersBaristaSelect" aria-label="${esc(t('orders_barista_title'))}">${baristaOptions}</select>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersBaristaSaveBtn">${tHtml('orders_barista_save')}</button>
+        <button type="button" class="btn btn--tonal" id="ordersBaristaSaveBtn">${tHtml('orders_barista_save')}</button>
       </div>
     </div>`;
 
@@ -669,21 +680,21 @@ export async function loadNotifyMappingView(): Promise<void> {
     const serviceOptions = joinHtml(services.map(s =>
       html`<option value="${esc(s.id)}">${esc(s.name)}</option>`));
     return html`
-      <p class="orders-notify-hint">${tHtml('orders_notify_desc')}</p>
-      <div class="orders-notify-list" id="ordersNotifyList">
+      <p class="settings-card-desc">${tHtml('orders_notify_desc')}</p>
+      <div class="settings-group" id="ordersNotifyList">
         ${joinHtml(haUserIds.map(uid => html`
-          <div class="orders-notify-row">
-            <span class="orders-notify-customer">${esc(customers[uid])}</span>
-            <select class="orders-notify-select" data-uid="${esc(uid)}" aria-label="${esc(t('orders_notify_desc'))}">
+          <div class="settings-row settings-row-static">
+            <span class="settings-row-text"><span class="settings-row-title">${esc(customers[uid])}</span></span>
+            <select class="lib-select" data-uid="${esc(uid)}" aria-label="${esc(t('orders_notify_desc'))}">
               <option value="">${tHtml('orders_notify_no_service')}</option>
               ${serviceOptions}
             </select>
           </div>`))}
       </div>
       <div class="orders-notify-actions">
-        <button class="orders-menu-save-btn" id="ordersNotifySaveBtn">${tHtml('orders_notify_save')}</button>
+        <button type="button" class="btn btn--tonal" id="ordersNotifySaveBtn">${tHtml('orders_notify_save')}</button>
       </div>`;
-  })() : html`<p class="orders-notify-hint">${tHtml('orders_notify_no_customers')}</p>`;
+  })() : html`<p class="settings-card-desc">${tHtml('orders_notify_no_customers')}</p>`;
 
   section.innerHTML = joinHtml([typesHtml, broadcastHtml, baristaHtml, perCustomerHtml]);
 
@@ -756,14 +767,129 @@ export async function saveNotifyMapping(): Promise<void> {
   }
 }
 
-export function toggleOrdersNotify(): void {
-  const body = document.getElementById('ordersNotifyBody');
-  const toggle = document.getElementById('ordersNotifyToggle');
-  if (!body || !toggle) return;
-  const open = body.style.display === 'none';
-  body.style.display = open ? '' : 'none';
-  toggle.textContent = open ? '▾' : '▸';
-  if (open) void loadNotifyMappingView();
+// ── Verdict and Manage (#2148) ──────────────────────────────────────────
+
+// Minutes until the whole queue is done: the server's rolling estimate when
+// it answered (accepted orders' remaining time plus one prep time per
+// waiting order), else the same sum from the orders themselves with the
+// server's default of 4 minutes per order.
+export function ordersQueueMinutes(orders: Order[], queueEta: QueueEta | null, now = Date.now()): number {
+  if (queueEta) {
+    return Math.ceil((queueEta.acceptedRemaining || 0) + (queueEta.pendingCount || 0) * (queueEta.prepTime || 4));
+  }
+  let minutes = 0;
+  for (const o of orders) {
+    if (o.status === 'pending') minutes += 4;
+    else if (o.status === 'accepted') {
+      minutes += Math.max(0, Math.ceil(((o.acceptedAt ?? now) + (o.eta ?? 0) * 60000 - now) / 60000));
+    }
+  }
+  return minutes;
+}
+
+export interface OrdersVerdict {
+  count: number;
+  title: string;
+  sub: string;
+}
+
+// The verdict: the big number is the orders waiting, the sentence how long
+// the queue takes; the sub line says whether the machine is on and how much
+// milk is left. No "running low" mark: there is no threshold for it.
+export function ordersVerdictText(orders: Order[], queueEta: QueueEta | null, sw: SwitchState, milks: MilkStock[], now = Date.now()): OrdersVerdict {
+  const waiting = orders.filter(o => o.status === 'pending').length;
+  const active = waiting + orders.filter(o => o.status === 'accepted').length;
+  const title = active === 0
+    ? t('orders_verdict_idle')
+    : t('orders_verdict_eta', Math.max(1, ordersQueueMinutes(orders, queueEta, now)));
+  const machine = !sw.configured ? ''
+    : sw.state === false ? t('orders_machine_off')
+    : sw.state === true ? t('orders_machine_on')
+    : '';
+  const milk = milks.map(m => `${m.name} ${(m.stockMl ?? 0) <= 0 ? t('lib_milk_empty') : `${m.remaining} ml`}`);
+  const sub = [machine, ...milk].filter(Boolean).join(' · ');
+  return { count: waiting, title, sub };
+}
+
+export function renderOrdersVerdict(v: OrdersVerdict): void {
+  const count = document.getElementById('ordersWaitingCount');
+  const lbl = document.getElementById('ordersWaitingLbl');
+  const title = document.getElementById('ordersVerdictTitle');
+  const sub = document.getElementById('ordersVerdictSub');
+  if (count) count.textContent = String(v.count);
+  if (lbl) lbl.textContent = t('orders_verdict_waiting');
+  if (title) title.textContent = v.title;
+  if (sub) {
+    sub.textContent = v.sub;
+    sub.hidden = v.sub === '';
+  }
+}
+
+// The History row's sub line: finished orders today and how long ago the
+// last one finished.
+export function ordersHistorySub(history: Order[], now = Date.now()): string {
+  if (!history.length) return t('orders_stats_no_data');
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const at = (o: Order): number => o.completedAt || o.createdAt;
+  const today = history.filter(o => at(o) >= start.getTime()).length;
+  const last = Math.max(...history.map(at));
+  return `${t('orders_history_today', today)} · ${_orderTimeAgoText(last, now)}`;
+}
+
+// The Manage group: each row opens its panel — static markup under
+// .orders-panels, so every existing id and handler stays — in the shared
+// detail sheet, the way the settings page opens its form cards (#2038).
+export interface OrdersManageRow {
+  id: string;
+  titleKey: string;
+  panelId: string;
+}
+
+export const ORDERS_MANAGE_ROWS: readonly OrdersManageRow[] = [
+  { id: 'history', titleKey: 'orders_history', panelId: 'ordersHistoryPanel' },
+  { id: 'menu', titleKey: 'orders_menu_title', panelId: 'ordersMenuPanel' },
+  { id: 'guests', titleKey: 'orders_stats_title', panelId: 'ordersGuestsPanel' },
+  { id: 'kiosk', titleKey: 'orders_manage_kiosk', panelId: 'ordersKioskPanel' },
+];
+
+// The data-i18n spans hold text only, so a language switch relabels them.
+export function ordersManageHtml(): Html {
+  return html`<h2 class="section-title" data-i18n="orders_manage">${tHtml('orders_manage')}</h2>
+    <div class="settings-group">${joinHtml(ORDERS_MANAGE_ROWS.map(row => html`<button type="button" class="settings-row" data-orders-manage="${esc(row.id)}" aria-haspopup="dialog">
+      <span class="settings-row-text"><span class="settings-row-title" data-i18n="${esc(row.titleKey)}">${tHtml(row.titleKey)}</span>${row.id === 'history' ? html`<span class="settings-row-sub" id="ordersHistorySub"></span>` : html``}</span>
+      <span class="settings-chev" aria-hidden="true"></span>
+    </button>`))}</div>`;
+}
+
+// Rendered once: the 10 s poll must not take the focus off a row.
+export function renderOrdersManage(): void {
+  const el = document.getElementById('ordersManage');
+  if (!el || el.innerHTML !== '') return;
+  // codeql[js/xss-through-dom] false positive: esc()/html already applied, see #760
+  el.innerHTML = ordersManageHtml();
+}
+
+export function openOrdersManage(id: string): void {
+  const row = ORDERS_MANAGE_ROWS.find(r => r.id === id);
+  if (!row) return;
+  const panel = document.getElementById(row.panelId);
+  if (!panel) return;
+  if (id === 'guests') {
+    S._ordersStatsOpen = true;
+    getOrdersStats().then(renderOrdersStats).catch(() => {});
+  }
+  if (id === 'kiosk') {
+    void loadKioskLinkView();
+    void loadNotifyMappingView();
+  }
+  openDetailSheet({
+    title: t(row.titleKey),
+    dialog: true,
+    body: html``,
+    content: panel,
+    onClose: () => { if (id === 'guests') S._ordersStatsOpen = false; },
+  });
 }
 
 // ── Kiosk link (#1731) ───────────────────────────────────────────────────
@@ -785,14 +911,14 @@ function renderKioskLink(section: HTMLElement, key: string): void {
   const link = kioskLinkFor(new URL('kiosk.html', document.baseURI).href, key);
   const ingress = servedThroughIngress();
   section.innerHTML = html`
-    <p class="orders-notify-hint">${esc(t('orders_kiosk_link_desc'))}</p>
+    <p class="settings-card-desc">${esc(t('orders_kiosk_link_desc'))}</p>
     <div class="orders-menu-add-row">
-      <input class="orders-menu-input" id="ordersKioskLink" style="flex:1;min-width:0" readonly
+      <input class="lib-input orders-kiosk-link" id="ordersKioskLink" readonly
              aria-label="${esc(t('orders_kiosk_link_title'))}" value="${esc(link)}">
-      <button class="orders-menu-save-btn" id="ordersKioskCopyBtn" type="button">${tHtml('orders_kiosk_link_copy')}</button>
-      <button class="orders-menu-save-btn" id="ordersKioskRotateBtn" type="button">${tHtml('orders_kiosk_link_rotate')}</button>
+      <button class="btn btn--quiet" id="ordersKioskCopyBtn" type="button">${tHtml('orders_kiosk_link_copy')}</button>
+      <button class="btn btn--danger" id="ordersKioskRotateBtn" type="button">${tHtml('orders_kiosk_link_rotate')}</button>
     </div>
-    ${ingress ? html`<p class="orders-notify-hint">${esc(t('orders_kiosk_link_ingress_hint'))}</p>` : html``}`;
+    ${ingress ? html`<p class="settings-card-desc">${esc(t('orders_kiosk_link_ingress_hint'))}</p>` : html``}`;
 
   document.getElementById('ordersKioskCopyBtn')?.addEventListener('click', () => {
     const input = document.getElementById('ordersKioskLink') as HTMLInputElement | null;
@@ -826,18 +952,8 @@ export async function loadKioskLinkView(): Promise<void> {
     renderKioskLink(section, (await getKioskKey()).kioskKey);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    section.innerHTML = html`<p class="orders-notify-hint">${esc(t('error_generic', message))}</p>`;
+    section.innerHTML = html`<p class="settings-card-desc">${esc(t('error_generic', message))}</p>`;
   }
-}
-
-export function toggleOrdersKiosk(): void {
-  const body = document.getElementById('ordersKioskBody');
-  const toggle = document.getElementById('ordersKioskToggle');
-  if (!body || !toggle) return;
-  const open = body.style.display === 'none';
-  body.style.display = open ? '' : 'none';
-  toggle.textContent = open ? '▾' : '▸';
-  if (open) void loadKioskLinkView();
 }
 
 export async function addOrderMenuItem(): Promise<void> {

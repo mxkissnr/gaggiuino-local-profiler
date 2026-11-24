@@ -30,8 +30,9 @@ type fakeGaggiuinoMachine struct {
 	profiles []proto.SavedProfileDto
 	nextID   uint32
 
-	restProfileDetail404 bool // force GetProfile's REST attempt to fail so it falls back to WS
-	restProfileCreate404 bool // force CreateProfile's REST attempt to fail so it falls back to WS
+	restProfileDetail404 bool   // force GetProfile's REST attempt to fail so it falls back to WS
+	restProfileCreate404 bool   // force CreateProfile's REST attempt to fail so it falls back to WS
+	lastCreateBody       []byte // raw bytes POSTed to /api/profile — captured for the REST body assertions (#2167)
 
 	settingsBody           []byte // raw bytes returned by GET /api/settings/{category} — set per test to exercise the bool-as-string quirk verbatim
 	lastUpdateSettingsBody []byte // raw bytes POSTed to /api/settings/{category} — captured for passthrough assertions
@@ -80,9 +81,11 @@ func (f *fakeGaggiuinoMachine) handleProfileCreate(w http.ResponseWriter, r *htt
 		http.NotFound(w, r)
 		return
 	}
+	raw, _ := io.ReadAll(r.Body)
 	var body map[string]any
-	_ = json.NewDecoder(r.Body).Decode(&body)
+	_ = json.Unmarshal(raw, &body)
 	f.mu.Lock()
+	f.lastCreateBody = raw
 	id := f.nextID
 	f.nextID++
 	name, _ := body["name"].(string)

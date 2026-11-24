@@ -21,10 +21,11 @@ export function showDevBuildBanner(devBuild?: string | null): void {
 
   const banner = document.createElement('div');
   banner.id = 'glpDevBanner';
+  banner.className = 'app-banner';
   Object.assign(banner.style, {
     position: 'fixed', top: '0', left: '0', right: '0', zIndex: '9999',
     background: '#f5c518', color: '#000',
-    padding: '6px 16px', textAlign: 'center',
+    textAlign: 'center',
     fontSize: '.8rem', fontWeight: '700', letterSpacing: '.02em',
     boxShadow: '0 2px 8px rgba(0,0,0,.35)',
   });

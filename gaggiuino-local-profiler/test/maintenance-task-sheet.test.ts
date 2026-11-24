@@ -17,6 +17,7 @@ let openMaintTaskSheet: SheetModule['openMaintTaskSheet'];
 let _maintCountText: MaintView['_maintCountText'];
 let AUTO_SYNCED_NOTE: MaintView['AUTO_SYNCED_NOTE'];
 let openGuidedMaint: MaintView['openGuidedMaint'];
+let closeGuidedMaint: MaintView['closeGuidedMaint'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -28,7 +29,7 @@ beforeAll(async () => {
     configurable: true, writable: true,
   });
   ({ maintTaskSheetBody, maintTaskSheetActions, openMaintTaskSheet } = await import('../public-src/views/maintenance-sheet.js'));
-  ({ _maintCountText, AUTO_SYNCED_NOTE, openGuidedMaint } = await import('../public-src/views/maintenance.js'));
+  ({ _maintCountText, AUTO_SYNCED_NOTE, openGuidedMaint, closeGuidedMaint } = await import('../public-src/views/maintenance.js'));
 });
 
 interface TaskOverrides {
@@ -94,7 +95,8 @@ describe('maintTaskSheetBody (#1923)', () => {
     expect((out.match(/data-action="set-maint-mode"/g) || []).length).toBe(3);
     expect((out.match(/data-machine-id="1"/g) || []).length).toBeGreaterThanOrEqual(5);
     // shots is the active mode
-    expect(out).toMatch(/class="analytics-filter-btn active"[^>]*data-mode="shots"/);
+    expect(out).toMatch(/class="chip"[^>]*data-mode="shots"[^>]*aria-pressed="true"/);
+    expect(out).not.toMatch(/class="[^"]*\bactive\b/);
     expect(out).toContain('aria-pressed="true"');
     expect(out).toContain('data-field="threshold_shots"');
     expect(out).toContain('data-action="toggle-maint-disabled"');
@@ -108,7 +110,7 @@ describe('maintTaskSheetBody (#1923)', () => {
     const out = maintTaskSheetBody(t0, []);
 
     expect((out.match(/data-action="set-maint-mode"/g) || []).length).toBe(4);
-    expect(out).toMatch(/class="analytics-filter-btn active"[^>]*data-mode="g"/);
+    expect(out).toMatch(/class="chip"[^>]*data-mode="g"[^>]*aria-pressed="true"/);
     expect(out).toContain('data-field="threshold_g"');
     expect(out).not.toContain('data-field="threshold_shots"');
   });
@@ -160,7 +162,7 @@ describe('maintTaskSheetBody (#1923)', () => {
       entry(2, 'backflush', { shotCountAtTime: 12, notes: 'a<b' }),
     ]);
 
-    expect(out).toContain('maint-auto-synced');
+    expect(out).toContain('class="badge badge--info"');
     expect(out).not.toContain(AUTO_SYNCED_NOTE);
     expect(out).toContain('a&lt;b');
     expect(out).not.toContain('a<b');
@@ -170,7 +172,7 @@ describe('maintTaskSheetBody (#1923)', () => {
     const out = maintTaskSheetBody(tile('backflush', { threshold_shots: 40 }), [
       entry(1, 'backflush', { shotCountAtTime: null }),
     ]);
-    expect(out).toContain('maint-log-manual-badge');
+    expect(out).toContain('<span class="badge">');
     expect(out).toContain('<span class="maint-hist-count">–</span>');
   });
 
@@ -186,7 +188,7 @@ describe('maintTaskSheetBody guide button (#1928)', () => {
     for (const task of ['backflush', 'descaling']) {
       const out = maintTaskSheetBody(tile(task, { threshold_shots: 40 }, { machineId: 7 }), []);
 
-      expect(out).toContain('class="analytics-filter-btn maint-guide-btn"');
+      expect(out).toContain('class="btn btn--tonal maint-guide"');
       expect(out).toContain('data-action="open-guided-maint"');
       expect(out).toContain(`data-task="${task}"`);
       expect(out).toContain('data-machine-id="7"');
@@ -197,7 +199,7 @@ describe('maintTaskSheetBody guide button (#1928)', () => {
     for (const task of ['grouphead', 'grinder_7', 'custom_clean']) {
       const out = maintTaskSheetBody(tile(task, { threshold_shots: 40 }, { machineId: 7 }), []);
 
-      expect(out).not.toContain('maint-guide-btn');
+      expect(out).not.toContain('maint-guide"');
       expect(out).not.toContain('data-action="open-guided-maint"');
     }
   });
@@ -389,6 +391,18 @@ describe('openGuidedMaint closes the task sheet (#1928)', () => {
 
     expect(host.innerHTML).toBe('open sheet');
     expect(nodes.modal.style.display).toBeUndefined();
+  });
+});
+
+describe('the header close ends the guided checklist (#2120)', () => {
+  it('hides the checklist, as the removed Cancel did', () => {
+    const nodes = installGuidedDom(makeHost(), false);
+
+    openGuidedMaint('backflush', 1);
+    expect(nodes.modal.style.display).toBe('flex');
+
+    closeGuidedMaint();
+    expect(nodes.modal.style.display).toBe('none');
   });
 });
 

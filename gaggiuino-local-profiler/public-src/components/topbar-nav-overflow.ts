@@ -17,7 +17,7 @@
 const OVERFLOW_CLASS = 'topbar-nav-overflow';
 const READY_CLASS = 'topbar-nav-ready';
 const COMPACT_CLASS = 'topbar-compact';
-const BADGE_CLASS = 'has-badge';
+const BADGE_CLASS = 'has-dot';
 
 // Sub-pixel widths are normal, so a row within a pixel of its room counts as
 // fitting.
@@ -85,7 +85,7 @@ export function queryTopbarNav(): TopbarNavEls | null {
 
 /** The badge text the user should see, or '' when there is none or it is inline-hidden. */
 function visibleBadge(tab: HTMLElement): string {
-    const badge = tab.querySelector<HTMLElement>('.maint-badge');
+    const badge = tab.querySelector<HTMLElement>('.maint-dot');
     if (!badge || badge.style.display === 'none') return '';
     return (badge.textContent ?? '').trim();
 }
@@ -116,7 +116,7 @@ function closeMenu(more: HTMLDetailsElement): void {
 function menuButton(tab: HTMLElement, entry: TopbarMenuEntry): HTMLButtonElement {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'lib-sheet-menu-btn';
+    button.className = 'lib-sheet-menu-item';
     button.setAttribute('data-nav-target', entry.target);
     const icon = tab.querySelector<HTMLElement>('.rail-icon-slot');
     if (icon) {
@@ -131,7 +131,7 @@ function menuButton(tab: HTMLElement, entry: TopbarMenuEntry): HTMLButtonElement
     button.append(label);
     if (entry.badge) {
         const badge = document.createElement('span');
-        badge.className = 'maint-badge';
+        badge.className = 'maint-dot';
         badge.textContent = entry.badge;
         button.append(badge);
     }

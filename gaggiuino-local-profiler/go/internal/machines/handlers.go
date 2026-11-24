@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"sync"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
@@ -86,6 +87,15 @@ type Handlers struct {
 	// internal/system already imports internal/machines. A nil hook is a
 	// no-op (and machineKnownOffline then always reports false).
 	knownUnreachable func(machineID int64) bool
+
+	// profilePrefetching marks the machines whose background profile-body
+	// prefetch (#2162, startProfilePrefetch in handlers_profiles.go) is
+	// running, keyed by machine id, so a second list request never starts a
+	// second run for the same machine.
+	profilePrefetching sync.Map // map[int64]struct{}
+
+	// profilePrefetchWG tracks running prefetches so a test can wait for them.
+	profilePrefetchWG sync.WaitGroup
 }
 
 // NewHandlers builds Handlers around registry (backed by the same *sql.DB

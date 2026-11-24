@@ -193,7 +193,7 @@ function _fillFromImport(data: UrlImportData, sourceUrl: string | null): void {
 
 export async function importFromUrl(): Promise<void> {
   const input = _field('urlImportInput');
-  const btn   = document.querySelector<HTMLButtonElement>('#urlImportRow .lib-url-btn')!;
+  const btn   = document.querySelector<HTMLButtonElement>('#urlImportRow .btn')!;
   const url   = input.value.trim();
   if (!url) return;
   _hidePastePanel();
@@ -323,7 +323,7 @@ function _renderExtraRecipeCandidates(extraRecipes: ExtraRecipe[] | null | undef
     r.targetTime_s != null ? `${r.targetTime_s}s` : null,
     r.waterTemp_c != null ? `${r.waterTemp_c}°C` : null,
   ].filter(Boolean).join(' · ');
-  el.innerHTML = html`<div class="lib-import-extra-recipes-title">${esc(t('lib_import_extra_recipes_title'))}</div>${joinHtml(extraRecipes.map((r, i) => html`
+  el.innerHTML = html`<div class="section-title">${esc(t('lib_import_extra_recipes_title'))}</div>${joinHtml(extraRecipes.map((r, i) => html`
       <label class="lib-import-extra-recipe-row">
         <input type="checkbox" data-extra-recipe-idx="${esc(i)}" checked>
         <span>${esc(r.name)} <span class="lib-import-extra-recipe-sub">${esc(sub(r))}</span></span>

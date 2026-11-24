@@ -62,7 +62,7 @@ function _query<T extends HTMLElement>(selector: string): T | null {
 }
 
 function _checkedTransport(): string {
-  return _query<HTMLElement>('#mqttTransportToggle .theme-btn.active')?.textContent?.trim() ?? '';
+  return _query<HTMLElement>('#mqttTransportToggle [aria-pressed="true"]')?.textContent?.trim() ?? '';
 }
 
 function _shotDefaultsValue(): string {
@@ -303,7 +303,7 @@ function _collectSettingsItems(): SettingsSearchItem[] {
   if (!view) return items;
   for (const page of Array.from(view.querySelectorAll<HTMLElement>('.settings-page'))) {
     const group = page.dataset.settingsPage ?? '';
-    const labels = page.querySelectorAll<HTMLElement>('.settings-card-title, .settings-row-title, label');
+    const labels = page.querySelectorAll<HTMLElement>('.card-title, .settings-row-title, label');
     for (const el of Array.from(labels)) {
       const label = el.textContent?.trim() ?? '';
       if (!label) continue;
@@ -385,12 +385,6 @@ export function wireSettingsPage(): void {
     if (target?.closest('[data-settings-back]')) {
       closeSettingsPage();
       return;
-    }
-    // The button's own handler (boot/settings.ts) ran first; folding the menu
-    // here keeps the bar's overflow closed after it was used.
-    if (target?.closest('#settingsMore .lib-sheet-menu-btn')) {
-      const more = document.getElementById('settingsMore') as HTMLDetailsElement | null;
-      if (more) more.open = false;
     }
   });
 

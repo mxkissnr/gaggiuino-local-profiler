@@ -147,7 +147,7 @@ beforeEach(() => {
 });
 
 describe('backup-modal.ts progress wiring (#960)', () => {
-  it('disables both modal buttons for the whole export transfer and drives the progress bar', async () => {
+  it('disables the modal buttons and the header close for the whole export transfer and drives the progress bar', async () => {
     let onProgress: ((received: number, total: number | null) => void) | undefined;
     let resolveBlob: (v: ApiFetchToBlobResult) => void = () => {};
     transport.apiFetchToBlob.mockImplementation((_url, opts) => {
@@ -158,11 +158,13 @@ describe('backup-modal.ts progress wiring (#960)', () => {
     openBackupExportModal();
     const confirm = doc.getElementById('backupModalConfirmBtn');
     const cancel = doc.getElementById('backupModalCancelBtn');
+    const close = doc.getElementById('backupModalCloseBtn');
     confirm.onclick?.();
     await flushPromises();
 
     expect(confirm.disabled).toBe(true);
     expect(cancel.disabled).toBe(true);
+    expect(close.disabled).toBe(true);
 
     onProgress?.(42, 100);
     expect(doc.getElementById('backupModalProgressLabel').textContent).toContain('42');
@@ -171,9 +173,10 @@ describe('backup-modal.ts progress wiring (#960)', () => {
     await flushPromises();
     expect(confirm.disabled).toBe(false);
     expect(cancel.disabled).toBe(false);
+    expect(close.disabled).toBe(false);
   });
 
-  it('disables both modal buttons while a restore upload is pending, updates the bar, then re-enables', async () => {
+  it('disables the modal buttons and the header close while a restore upload is pending, updates the bar, then re-enables', async () => {
     // The section-presence dry-run and the preview refresh go through apiFetch
     // and resolve at once; the actual apply has an upload progress callback and
     // goes through apiUpload, staying pending until we release it.
@@ -194,10 +197,12 @@ describe('backup-modal.ts progress wiring (#960)', () => {
 
     const confirm = doc.getElementById('backupModalConfirmBtn');
     const cancel = doc.getElementById('backupModalCancelBtn');
+    const close = doc.getElementById('backupModalCloseBtn');
     confirm.onclick?.();
     await flushPromises();
     expect(confirm.disabled).toBe(true);
     expect(cancel.disabled).toBe(true);
+    expect(close.disabled).toBe(true);
 
     onProgress?.(50, 100);
     expect(doc.getElementById('backupModalProgressLabel').textContent).toContain('50');
@@ -206,6 +211,38 @@ describe('backup-modal.ts progress wiring (#960)', () => {
     await flushPromises();
     expect(confirm.disabled).toBe(false);
     expect(cancel.disabled).toBe(false);
+    expect(close.disabled).toBe(false);
+  });
+});
+
+// #2141: the backup dialog's header close is a second way to its Cancel
+// answer: the same handler, so a restore also forgets the picked file.
+describe('backup modal header close (#2141)', () => {
+  it('runs the export Cancel and clears the passphrase', () => {
+    openBackupExportModal();
+    const close = doc.getElementById('backupModalCloseBtn');
+    expect(close.onclick).not.toBeNull();
+    expect(close.onclick).toBe(doc.getElementById('backupModalCancelBtn').onclick);
+
+    doc.getElementById('backupPassphraseInput').value = 'secret';
+    close.onclick?.();
+    expect(doc.getElementById('backupPassphraseInput').value).toBe('');
+  });
+
+  it('runs the restore Cancel and forgets the picked file', async () => {
+    transport.apiFetch.mockResolvedValue(
+      { ok: true, status: 200, json: () => Promise.resolve({ preview: { sectionsPresent: ['shots'] } }) } as unknown as Response,
+    );
+    const bytes = new Uint8Array([0x50, 0x4B, 0x03, 0x04, 0, 0, 0, 0]);
+    const input = { files: [{ arrayBuffer: () => Promise.resolve(bytes.buffer) }], value: 'backup.zip' };
+    await openBackupRestoreModal(input as unknown as HTMLInputElement);
+    await flushPromises();
+
+    const close = doc.getElementById('backupModalCloseBtn');
+    expect(close.onclick).not.toBeNull();
+    expect(close.onclick).toBe(doc.getElementById('backupModalCancelBtn').onclick);
+    close.onclick?.();
+    expect(input.value).toBe('');
   });
 });
 

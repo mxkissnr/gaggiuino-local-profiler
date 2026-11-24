@@ -22,7 +22,7 @@ export function apiPortClosedHtml(): Html {
   return html`<div class="loading-state" style="max-width:520px;margin:0 auto;text-align:center">
     <div style="font-weight:600;margin-bottom:6px">${tHtml('api_port_closed_title')}</div>
     <div style="font-size:var(--fs-2);line-height:1.45">${tHtml('api_port_closed_desc')}</div>
-    <button data-action="goto-settings" class="export-btn" style="margin-top:var(--sp-3)">${tHtml('api_port_closed_settings_btn')}</button>
+    <button type="button" data-action="goto-settings" class="btn btn--tonal" style="margin-top:var(--sp-3)">${tHtml('api_port_closed_settings_btn')}</button>
   </div>`;
 }
 
@@ -42,6 +42,7 @@ export function updateApiPortClosedBanner(): void {
 
   const banner = document.createElement('div');
   banner.id = 'glpApiPortClosedBanner';
+  banner.className = 'app-banner';
   Object.assign(banner.style, {
     position: 'fixed', left: '0', right: '0', zIndex: '9995',
     top: `${devBannerHeight()
@@ -51,7 +52,7 @@ export function updateApiPortClosedBanner(): void {
   // stayed dark-on-dark chips on a light page. --raised/--gray-200 are the
   // themed equivalents of exactly those two values.
   background: themeColor('--raised', '#3f3f46'), color: themeColor('--gray-200', '#e4e4e7'),
-    padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '12px',
+    display: 'flex', alignItems: 'center', gap: '12px',
     fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',
   });
 
@@ -61,19 +62,21 @@ export function updateApiPortClosedBanner(): void {
 
   const settingsBtn = document.createElement('button');
   settingsBtn.type = 'button';
+  settingsBtn.className = 'app-banner-action';
   settingsBtn.dataset.action = 'goto-settings';
   settingsBtn.textContent = t('api_port_closed_settings_btn');
   Object.assign(settingsBtn.style, {
     background: themeColor('--gray-900', '#18181b'), color: themeColor('--gray-200', '#e4e4e7'), border: `1px solid ${themeColor('--gray-700', '#52525b')}`,
-    borderRadius: '6px', padding: '3px 10px', cursor: 'pointer',
+    cursor: 'pointer',
     fontSize: '.8rem', whiteSpace: 'nowrap',
   });
 
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
+  closeBtn.className = 'app-banner-close';
   closeBtn.setAttribute?.('aria-label', t('lib_sheet_close'));
   closeBtn.innerHTML = CLOSE_ICON_SVG;
-  Object.assign(closeBtn.style, { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: themeColor('--gray-200', '#e4e4e7'), padding: '0 2px' });
+  Object.assign(closeBtn.style, { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: themeColor('--gray-200', '#e4e4e7') });
   closeBtn.addEventListener('click', () => {
     safeSessionStorage.setItem(DISMISS_KEY, '1');
     banner.remove();

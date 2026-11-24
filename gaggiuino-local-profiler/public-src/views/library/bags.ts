@@ -153,10 +153,10 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
     bg.batchNumber ? html`<span class="lib-bag-detail"><span class="lib-bag-detail-label">${tHtml('lib_bag_batch_number')}</span><span class="lib-bag-detail-val">${esc(bg.batchNumber)}</span></span>` : esc(''),
   ].filter(Boolean);
   const stateBadge: Html = state === 'current'
-    ? html`<span class="lib-bag-active-badge">${tHtml('lib_bag_state_current')}</span>`
+    ? html`<span class="badge badge--accent">${tHtml('lib_bag_state_current')}</span>`
     : state === 'upcoming'
-    ? html`<span class="lib-bag-upcoming-badge">${tHtml('lib_bag_state_upcoming')}</span>`
-    : html`<span class="lib-bag-past-badge">${tHtml('lib_bag_state_past')}</span>`;
+    ? html`<span class="badge badge--ok">${tHtml('lib_bag_state_upcoming')}</span>`
+    : html`<span class="badge">${tHtml('lib_bag_state_past')}</span>`;
   // stockG != null (tracked), not stockG > 0 — the last-emptied exception
   // is specifically for a bag sitting at 0, so requiring a positive stock
   // here would hide the fix for the exact case it exists for.
@@ -166,9 +166,9 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
   const stockRow: Html = editingStock
     ? html`<div class="lib-stock-edit-row">
          <input type="number" class="lib-new-bag-input" aria-label="${tHtml('lib_stock_adjust_ph')}" id="bagStockEditInput${esc(bg.id)}" value="${esc(remaining ?? 0)}" min="0" max="20000" step="1" placeholder="${tHtml('lib_stock_adjust_ph')}">
-         <button class="lib-save-btn" data-action="save-bag-stock-edit" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_save')}</button>
-         <button class="lib-btn-sm" data-action="mark-bag-empty" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_bag_mark_empty')}</button>
-         <button class="lib-btn-sm" data-action="close-bag-stock-edit" data-bean-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
+         <button type="button" class="btn btn--tonal" data-action="save-bag-stock-edit" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_save')}</button>
+         <button type="button" class="btn btn--quiet" data-action="mark-bag-empty" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_bag_mark_empty')}</button>
+         <button type="button" class="btn btn--quiet" data-action="close-bag-stock-edit" data-bean-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
        </div>`
     : esc('');
   // Full-detail edit (roastDate/original weight/price/batch number) — the
@@ -185,8 +185,8 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
            <input type="text" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_batch_number')}" id="editBagBatchNumber${esc(bg.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50" value="${esc(bg.batchNumber || '')}">
          </div>
          <div class="lib-form-actions">
-           <button class="lib-btn-sm" data-action="close-edit-bag" data-bean-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
-           <button class="lib-save-btn" data-action="save-edit-bag" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_bag_save')}</button>
+           <button type="button" class="btn btn--quiet" data-action="close-edit-bag" data-bean-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
+           <button type="button" class="btn btn--tonal" data-action="save-edit-bag" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}">${tHtml('lib_bag_save')}</button>
          </div>
        </div>`
     : esc('');
@@ -206,14 +206,14 @@ export function renderBagCard(b: BeanRow, entry: BagEntry, state: BagState, bean
     </div>
     <div class="lib-bag-card-body" style="${esc(expanded ? '' : 'display:none')}">
       <div class="lib-bag-card-actions">
-        ${canEdit && !editingFull ? html`<button class="lib-bag-edit-btn" data-action="open-edit-bag" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_edit')}">${ICON_PENCIL}</button>` : esc('')}
-        ${canDelete ? html`<button class="lib-bag-del" data-action="delete-bag" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_delete')}">${ICON_TRASH}</button>` : esc('')}
+        ${canEdit && !editingFull ? html`<button type="button" class="btn btn--quiet btn--icon" data-action="open-edit-bag" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_edit')}">${ICON_PENCIL}</button>` : esc('')}
+        ${canDelete ? html`<button type="button" class="btn btn--danger btn--icon" data-action="delete-bag" data-bean-id="${esc(b.id)}" data-bag-id="${esc(bg.id)}" title="${tHtml('lib_bag_delete')}">${ICON_TRASH}</button>` : esc('')}
       </div>
       ${editingFull ? esc('') : html`<div class="lib-bag-card-details">
         ${details.length ? joinHtml(details) : html`<span class="lib-bag-empty-note">${tHtml('lib_bag_stock_untracked')}</span>`}
       </div>`}
       ${canAdjust && !editingStock && !editingFull ? html`<div class="lib-bag-card-actions-row">
-        <button class="lib-btn-sm" data-action="open-bag-stock-edit" data-bag-id="${esc(bg.id)}">${tHtml('lib_stock_edit_btn')}</button>
+        <button type="button" class="btn btn--quiet" data-action="open-bag-stock-edit" data-bag-id="${esc(bg.id)}">${tHtml('lib_stock_edit_btn')}</button>
       </div>` : esc('')}
       ${stockRow}
       ${editRow}

@@ -1,6 +1,10 @@
 package shots
 
-import "testing"
+import (
+	"math"
+	"reflect"
+	"testing"
+)
 
 func TestStddev(t *testing.T) {
 	if got := stddev(nil); got != 0 {
@@ -457,4 +461,119 @@ func TestCalcShotScoreDetail_TemperatureOmittedWhenTooManyDropouts(t *testing.T)
 			t.Fatalf("expected no temperature component, got %+v", c)
 		}
 	}
+}
+
+// legacyDurationScore is the pre-#1504 generic duration band, copied
+// verbatim (score.go's switch before the window was threaded in). The
+// {25,35} window must reproduce it byte-for-byte.
+func legacyDurationScore(secs float64) float64 {
+	switch {
+	case secs >= 25 && secs <= 35:
+		return 100
+	case (secs >= 20 && secs < 25) || (secs > 35 && secs <= 42):
+		return 82
+	case secs > 42 && secs <= 55:
+		return 62
+	case secs < 20:
+		return math.Max(15, 70-(20-secs)*5)
+	default:
+		return math.Max(15, 62-(secs-55)*3)
+	}
+}
+
+// TestDurationScore_DefaultWindowEqualsLegacyBand pins that the generic
+// window {25,35} scores every duration exactly as the pre-#1504 band did,
+// and that a shot scored with that window scores like the bean-only path.
+func TestDurationScore_DefaultWindowEqualsLegacyBand(t *testing.T) {
+	for i := 51; i <= 1200; i++ {
+		secs := float64(i) / 10
+		if got, want := durationScore(secs, 25, 35), legacyDurationScore(secs); got != want {
+			t.Fatalf("durationScore(%v, 25, 35) = %v, want %v", secs, got, want)
+		}
+		shot := fullScoreShot(float64(i))
+		withWindow := CalcShotScoreTargets(shot, ScoreTargets{Time: &TimeTarget{MinS: 25, MaxS: 35}})
+		classic := CalcShotScoreDetail(shot, nil)
+		if withWindow.Score == nil || classic.Score == nil {
+			t.Fatalf("duration %v: expected scores", secs)
+		}
+		if *withWindow.Score != *classic.Score {
+			t.Fatalf("duration %v: window score = %d, classic = %d", secs, *withWindow.Score, *classic.Score)
+		}
+	}
+}
+
+// TestCalcShotScoreTargets_WindowEdges pins the window curve at its edges:
+// a {40,48} window moves 82 to 37..39s and 48..55s, 62 to 56..68s and the
+// falloff to the new far edges.
+func TestCalcShotScoreTargets_WindowEdges(t *testing.T) {
+	cases := []struct {
+		seconds float64
+		want    int
+	}{
+		{45, 100},
+		{37, 82},
+		{33, 60},
+		{29, 40},
+		{50, 82},
+		{60, 62},
+		{70, 56},
+	}
+	window := &TimeTarget{MinS: 40, MaxS: 48}
+	for _, tc := range cases {
+		detail := CalcShotScoreTargets(fullScoreShot(tc.seconds*10), ScoreTargets{Time: window})
+		comp, ok := durationComponent(detail)
+		if !ok {
+			t.Fatalf("%vs: no duration component in %+v", tc.seconds, detail)
+		}
+		if comp.Score != tc.want {
+			t.Errorf("%vs: duration score = %d, want %d", tc.seconds, comp.Score, tc.want)
+		}
+		if comp.Target != "profile" {
+			t.Errorf("%vs: duration target = %q, want profile", tc.seconds, comp.Target)
+		}
+		if got := comp.Inputs["min_s"]; got != 40 {
+			t.Errorf("%vs: min_s = %v, want 40", tc.seconds, got)
+		}
+		if got := comp.Inputs["max_s"]; got != 48 {
+			t.Errorf("%vs: max_s = %v, want 48", tc.seconds, got)
+		}
+	}
+}
+
+// TestCalcShotScoreTargets_NoWindowIsClassic pins that a ScoreTargets with
+// no window scores exactly like the legacy bean-only entry point.
+func TestCalcShotScoreTargets_NoWindowIsClassic(t *testing.T) {
+	temp := 93.0
+	beans := []*Bean{nil, {BrewTempC: &temp, BrewRatio: "1:2.5"}}
+	for _, bean := range beans {
+		shot := fullScoreShot(300)
+		got := CalcShotScoreTargets(shot, ScoreTargets{Bean: bean})
+		want := CalcShotScoreDetail(shot, bean)
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("no-window score = %+v, want %+v", got, want)
+		}
+		comp, ok := durationComponent(got)
+		if !ok {
+			t.Fatalf("no duration component in %+v", got)
+		}
+		if comp.Target != "generic" {
+			t.Errorf("duration target = %q, want generic", comp.Target)
+		}
+		if _, ok := comp.Inputs["min_s"]; ok {
+			t.Error("generic duration inputs carry min_s")
+		}
+		if _, ok := comp.Inputs["max_s"]; ok {
+			t.Error("generic duration inputs carry max_s")
+		}
+	}
+}
+
+// durationComponent returns the duration part of a detail.
+func durationComponent(detail ScoreDetail) (ScoreComponent, bool) {
+	for _, c := range detail.Components {
+		if c.Name == "duration" {
+			return c, true
+		}
+	}
+	return ScoreComponent{}, false
 }

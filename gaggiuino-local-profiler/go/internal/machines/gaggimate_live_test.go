@@ -292,6 +292,29 @@ func TestMergeGaggiMateStatus(t *testing.T) {
 	}
 }
 
+// TestMergeGaggiMateStatus_KeepsSystemState is the #2139 regression test:
+// since firmware v1.9.0 the display state sys comes only with the slow
+// frames, so a fast-only frame merged after a slow one must keep it, and the
+// next slow frame replaces it.
+func TestMergeGaggiMateStatus_KeepsSystemState(t *testing.T) {
+	slow := map[string]any{"tp": "evt:status", "m": 1.0, "sys": map[string]any{"s": "waiting", "m": "", "c": 0.0}}
+	fast := map[string]any{"tp": "evt:status", "ct": 91.5, "pr": 0.0, "fl": 0.0}
+
+	merged := mergeGaggiMateStatus(mergeGaggiMateStatus(nil, slow), fast)
+	sys, ok := merged["sys"].(map[string]any)
+	if !ok || sys["s"] != "waiting" {
+		t.Fatalf("sys after a fast-only frame = %v, want the slow frame's waiting state", merged["sys"])
+	}
+	if merged["ct"] != 91.5 {
+		t.Fatalf("fast key missing in merge: %+v", merged)
+	}
+
+	ready := mergeGaggiMateStatus(merged, map[string]any{"tp": "evt:status", "m": 1.0, "sys": map[string]any{"s": "ready", "m": "", "c": 0.0}})
+	if next, _ := ready["sys"].(map[string]any); next["s"] != "ready" {
+		t.Fatalf("sys after the next slow frame = %v, want ready", ready["sys"])
+	}
+}
+
 // TestMergeGaggiMateStatus_CapsKeyCount is the #1601 regression test: a device
 // (or anything on its WebSocket) sending ever-new keys must not grow the cached
 // status map without bound, while a key already present keeps updating.

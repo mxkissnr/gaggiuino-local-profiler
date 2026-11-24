@@ -77,15 +77,16 @@ describe('safeHttpUrl on every link sink (#1626)', () => {
   });
 
   describe('firmware changelog link', () => {
-    function row(): { row: FakeEl; link: FakeEl } {
-      const badge = fakeEl();
+    function row(): { row: FakeEl; link: FakeEl; status: FakeEl } {
+      const status = fakeEl();
+      const update = fakeEl();
       const msg = fakeEl();
       const link = fakeEl();
       const panel = fakeEl();
       panel.querySelector = (sel) => (sel === '.machine-firmware-changelog-link' ? link : sel === '.machine-firmware-update-msg' ? msg : null);
       const r = fakeEl();
-      r.querySelector = (sel) => (sel === '.machine-row-firmware-badge' ? badge : sel === '.machine-row-firmware-panel' ? panel : null);
-      return { row: r, link };
+      r.querySelector = (sel) => (sel === '.machine-row-firmware-status' ? status : sel === '.machine-row-firmware-update' ? update : sel === '.machine-row-firmware-panel' ? panel : null);
+      return { row: r, link, status };
     }
 
     it('keeps an https release URL', () => {
@@ -98,6 +99,12 @@ describe('safeHttpUrl on every link sink (#1626)', () => {
       const { row: r, link } = row();
       renderFirmwareRow(1, r as unknown as HTMLElement, { installed: '1.0', latest: '1.1', updateAvailable: true, releaseUrl: 'javascript:alert(1)' });
       expect(link.href).toBe('#');
+    });
+
+    it('marks an up-to-date firmware as an ok badge (#2094)', () => {
+      const { row: r, status } = row();
+      renderFirmwareRow(1, r as unknown as HTMLElement, { installed: '1.0', latest: '1.0', updateAvailable: false, releaseUrl: 'https://example.com/rel' });
+      expect(status.className).toBe('badge badge--ok machine-row-firmware-status');
     });
   });
 

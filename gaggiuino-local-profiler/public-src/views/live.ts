@@ -8,14 +8,15 @@ import { isApiPortBlocked } from '../api/transport.js';
 import { getPreheat, getLiveData } from '../api/system.js';
 import { annotateShot } from '../api/shots.js';
 import type { Bean, MachineControlState, ShotAnnotation } from '../api/types.js';
-import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, formatDate, html } from '../utils.js';
-import type { ShotSeries } from '../utils.js';
+import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, formatDate, html, esc, joinHtml, detectPhases } from '../utils.js';
+import type { ShotDatapoints, ShotSeries } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
          resolveMachineIconState, MACHINE_ICON_LIVE_CLASS } from '../machine-icon.js';
 import { getDefaultMachineId } from '../components/machines-settings.js';
 import { machineWarningLabel, renderMachineControl } from '../components/machine-control.js';
-import { localeFor } from '../constants.js';
+import { openDetailSheet, requestCloseDetailSheet } from '../components/detail-sheet.js';
+import { localeFor, buildRecordedGmPhaseRanges } from '../constants.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange,
          _renderBeanSelect, _renderBasketSelect, _renderPuckScreenSelect, _renderRecipeSelect } from './shots/annotation.js';
 import { safeLocalStorage } from '../storage.js';
@@ -51,6 +52,11 @@ interface LiveMessage {
   machineReachable?: boolean | null;
   machineWarnings?: string[];
   machineUpdateAvailable?: boolean;
+  // #2139: the GaggiMate display's system state when it is not ready (''
+  // when ready, without a sys object and for Gaggiuino), and the controller
+  // error code for 'error' (0 = none).
+  machineSystemState?: string;
+  machineSystemErrorCode?: number;
   isSteaming?: boolean;
   isFlushing?: boolean;
   isDescaling?: boolean;
@@ -158,12 +164,58 @@ function _saveLiveSetupDraft(draft: LiveSetupDraft): void {
     // experience, not a broken one.
     console.error('[GLP] saving live shot setup draft failed:', e);
   }
+  // #2153: the Live tab's next-shot rows show the draft.
+  renderLiveSetupSummary(draft);
+}
+
+// ── Next shot rows (#2153) ────────────────────────────────────────────────
+// The Live tab shows the draft as grouped rows (label left, value right);
+// any row opens the fields in the shared detail sheet. Text only, so a
+// re-render is a handful of textContent writes.
+const NO_VALUE = '–';
+
+function _libraryName(list: readonly { id: number; name: string }[] | undefined, id: number | null | undefined): string {
+  if (id == null) return NO_VALUE;
+  return list?.find(x => x.id === id)?.name || NO_VALUE;
+}
+
+export function renderLiveSetupSummary(draft: LiveSetupDraft = _loadLiveSetupDraft()): void {
+  const lib = S.coffeeLibrary;
+  const set = (id: string, text: string): void => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  const grind = [draft.grinder, draft.grindSetting].filter(Boolean).join(' · ');
+  set('liveSetupBean', draft.coffee || NO_VALUE);
+  set('liveSetupGrinder', grind || NO_VALUE);
+  set('liveSetupDose', draft.dose != null ? String(draft.dose) : NO_VALUE);
+  set('liveSetupBasket', _libraryName(lib?.baskets, draft.basketId));
+  set('liveSetupPuckScreen', _libraryName(lib?.puckScreens, draft.puckScreenId));
+  set('liveSetupRecipe', _libraryName(lib?.recipes, draft.recipeId));
+  // Same rule as the recipe field: no recipes in the library, no row.
+  const recipeRow = document.getElementById('liveSetupRecipeRow');
+  if (recipeRow) recipeRow.hidden = !(lib?.recipes || []).length;
+}
+
+// #2153: the fields stay one element with their ids and listeners; the
+// detail sheet holds it while open and puts it back on close (#2038).
+export function openLiveSetupSheet(): void {
+  const panel = document.getElementById('lsFields');
+  if (!panel) return;
+  openDetailSheet({
+    title: t('live_setup_toggle'),
+    dialog: true,
+    body: html``,
+    content: panel,
+    onClose: () => renderLiveSetupSummary(),
+  });
 }
 
 let _lsWired = false;
 
 export function renderLiveShotSetupPanel(): void {
   const draft = _loadLiveSetupDraft();
+  renderLiveSetupSummary(draft);
   _renderBeanSelect(draft.coffee || '', draft.beanId ?? null, 'lsBean');
   _renderBasketSelect(draft.basketId ?? null, 'lsBasket');
   _renderPuckScreenSelect(draft.puckScreenId ?? null, 'lsPuckScreen');
@@ -178,10 +230,6 @@ export function renderLiveShotSetupPanel(): void {
 
   if (_lsWired) return;
   _lsWired = true;
-
-  document.getElementById('lsToggle')?.addEventListener('click', () => {
-    document.getElementById('live-shot-setup')?.classList.toggle('open');
-  });
 
   const beanSelect = document.getElementById('lsBean') as HTMLSelectElement | null;
   beanSelect?.addEventListener('change', () => {
@@ -367,7 +415,10 @@ export function initLiveChart(): void {
 async function _applyRefShotById(shotId: number): Promise<void> {
   const dp = await getShotCurve(shotId);
   if (S.refShotId !== shotId) return; // ref changed while we were fetching
-  _applyRefDatasets(mapShotDatapoints(dp));
+  const series = mapShotDatapoints(dp);
+  _applyRefDatasets(series);
+  // #2153: the phase bar follows the reference shot's phases.
+  _setRefPhases(refPhaseRanges(dp, series));
 }
 
 function _applyRefDatasets(d: ShotSeries): void {
@@ -382,29 +433,144 @@ function _applyRefDatasets(d: ShotSeries): void {
   liveChart.update('none');
 }
 
+// ── Phase bar (#2153) ─────────────────────────────────────────────────────
+// The live payload carries no phase, so the bar follows the reference
+// shot: the phase changes it recorded (GaggiMate firmware v1.9.0+), else
+// the preinfusion/extraction split of its pressure curve, the same two
+// sources the shot page uses. Widths follow the reference's phase lengths;
+// the current phase is the one the elapsed time falls into (the last one
+// once past its end). No reference, no bar. Repainted only when the phase
+// changes, never per sample.
+export interface LivePhase {
+  name: string;
+  t0: number;
+  t1: number;
+}
+
+let _refPhases: LivePhase[] = [];
+let _phaseIdx = -2; // -2: not painted yet, -1: hidden
+
+export function refPhaseRanges(dp: ShotDatapoints, series: ShotSeries = mapShotDatapoints(dp)): LivePhase[] {
+  const end = series.rawTimes.at(-1) ?? 0;
+  const recorded = buildRecordedGmPhaseRanges(dp.phaseTransitions, end);
+  if (recorded.length) return recorded.map(r => ({ name: r.name, t0: r.t0, t1: r.t1 }));
+  const split = detectPhases(series.pressure.map(p => p.x), series.pressure.map(p => p.y));
+  if (!split) return [];
+  return [
+    { name: t('phase_preinfusion'), t0: 0, t1: split.preinfusion },
+    { name: t('phase_extraction'), t0: split.preinfusion, t1: end },
+  ];
+}
+
+export function currentPhaseIndex(phases: readonly LivePhase[], elapsed: number): number {
+  if (!phases.length) return -1;
+  const i = phases.findIndex(p => elapsed < p.t1);
+  return i === -1 ? phases.length - 1 : i;
+}
+
+// Exported for the tests, which set the phases without fetching a curve.
+export function _setRefPhases(phases: LivePhase[]): void {
+  _refPhases = phases;
+  _phaseIdx = -2;
+}
+
+// elapsed null (steam, flush, descale): no bar.
+function _syncPhaseBar(elapsed: number | null): void {
+  const idx = elapsed == null ? -1 : currentPhaseIndex(_refPhases, elapsed);
+  if (idx === _phaseIdx) return;
+  _phaseIdx = idx;
+  const phase = idx >= 0 ? _refPhases[idx] : undefined;
+  const bar  = document.getElementById('livePhases');
+  const text = document.getElementById('livePhaseText');
+  if (bar) {
+    // codeql[js/xss-through-dom] false positive: esc()/html already applied, see #760
+    bar.innerHTML = phase
+      ? joinHtml(_refPhases.map((p, i) => html`<span class="live-phase${esc(i < idx ? ' is-done' : i === idx ? ' is-current' : '')}" style="flex-grow: ${esc(Math.max(1, Math.round(p.t1 - p.t0)))}"></span>`))
+      : html``;
+    bar.hidden = !phase;
+  }
+  if (text) {
+    // Numbers and the phase's own name, so no translation is needed.
+    text.textContent = phase ? `${idx + 1}/${_refPhases.length} · ${phase.name}` : '';
+    text.hidden = !phase;
+  }
+}
+
+// #2153: the reference is a chip in the running view's toolbar that opens
+// the list (openRefPicker). The name stays: the mode switch and the machine
+// switch call it through window to repaint the chip.
 export function populateRefSelector(): void {
-  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
-  if (!sel) return;
-  sel.setAttribute('aria-label', t('ref_label'));
-  const prev = sel.value;
-  sel.innerHTML = html`<option value="">${tHtml('ref_none')}</option>`;
-  S.shots.filter(s => s.hasChartData)
+  renderRefChip();
+}
+
+// One row of the reference list: the newest 40 shots with a curve, the set
+// the old dropdown listed.
+export interface RefShotChoice {
+  id: number;
+  title: string;
+  sub: string;
+  score: number | null;
+}
+
+export function refShotChoices(): RefShotChoice[] {
+  return S.shots.filter(s => s.hasChartData)
     .slice().reverse().slice(0, 40)
-    .forEach(s => {
-      const date    = formatDate(s.timestamp * 1000, localeFor(S.currentLang));
-      const profile = (s.profile as { name?: string } | undefined)?.name || (s.profileName as string | undefined) || '?';
+    .map(s => {
       const ann     = (s.annotation as LiveShotAnnotation | undefined) || {};
-      const score   = ann.score != null ? ` · ${ann.score}` : '';
-      // #1853: a mixed shot names every bean here, like the shot list does;
-      // a single-bean shot keeps its plain coffee name.
-      const beans   = beanLabel(ann);
-      const coffee  = beans ? ` — ${beans}` : '';
-      const opt = document.createElement('option');
-      opt.value       = String(s.id);
-      opt.textContent = `${date} · ${profile}${coffee}${score}`;
-      if (String(s.id) === String(prev)) opt.selected = true;
-      sel.appendChild(opt);
+      const profile = (s.profile as { name?: string } | undefined)?.name || (s.profileName as string | undefined) || '?';
+      return {
+        id: s.id,
+        title: `${formatDate(s.timestamp * 1000, localeFor(S.currentLang))} · ${profile}`,
+        // #1853: a mixed shot names every bean, like the shot list does; a
+        // single-bean shot keeps its plain coffee name.
+        sub: beanLabel(ann),
+        score: ann.score ?? null,
+      };
     });
+}
+
+function _refChipLabel(): string {
+  const id = S.refShotId;
+  if (id == null) return t('ref_none');
+  const shot = S.shots.find(s => s.id === id);
+  if (!shot) return `#${id}`;
+  const score = ((shot.annotation as LiveShotAnnotation | undefined) || {}).score;
+  return `${formatDate(shot.timestamp * 1000, localeFor(S.currentLang))}${score != null ? ` · ${score}` : ''}`;
+}
+
+// The chip names the reference (or says there is none); Clear shows only
+// while there is one.
+export function renderRefChip(): void {
+  const chip  = document.getElementById('refChip');
+  const clear = document.getElementById('refClearBtn');
+  if (chip) {
+    chip.textContent = _refChipLabel();
+    chip.setAttribute('aria-pressed', S.refShotId != null ? 'true' : 'false');
+  }
+  if (clear) clear.style.display = S.refShotId != null ? '' : 'none';
+}
+
+// The chip opens the list in the shared detail sheet: a popover next to
+// the chip on desktop, a bottom sheet on a phone.
+export function openRefPicker(anchor: HTMLElement | null): void {
+  const current = S.refShotId;
+  const rows = refShotChoices().map(c => html`<button type="button" class="settings-row" data-action="live-ref-choose" data-id="${esc(c.id)}" aria-current="${esc(c.id === current ? 'true' : 'false')}">
+      <span class="settings-row-text"><span class="settings-row-title">${esc(c.title)}</span>${c.sub ? html`<span class="settings-row-sub">${esc(c.sub)}</span>` : html``}</span>
+      ${c.score != null ? html`<span class="settings-row-value">${esc(c.score)}</span>` : html``}
+    </button>`);
+  openDetailSheet({
+    title: t('live_ref_title'),
+    body: rows.length
+      ? html`<div class="settings-group live-ref-list">${joinHtml(rows)}</div>`
+      : html`<p class="settings-card-desc">${tHtml('ref_none')}</p>`,
+    anchor,
+  });
+}
+
+// A row of the list: apply that shot and close the sheet.
+export function chooseReferenceShot(id: string): void {
+  requestCloseDetailSheet();
+  onRefShotChange(id);
 }
 
 export function autoApplyRefShot(profileName: string): void {
@@ -414,24 +580,21 @@ export function autoApplyRefShot(profileName: string): void {
   if (!match) return;
   S.refShotId = match.id;
   void _applyRefShotById(match.id);
-  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
-  if (sel) sel.value = String(match.id);
-  const btn = document.getElementById('refClearBtn');
-  if (btn) btn.style.display = '';
+  renderRefChip();
 }
 
 export function onRefShotChange(val: string): void {
   if (!val) { clearReferenceShot(); return; }
   S.refShotId = parseInt(val);
+  renderRefChip();
   const shot = S.shots.find(s => s.id === S.refShotId);
   if (!shot) return;
   void _applyRefShotById(shot.id);
-  const btn = document.getElementById('refClearBtn');
-  if (btn) btn.style.display = '';
 }
 
 export function clearReferenceShot(): void {
   S.refShotId = null;
+  _setRefPhases([]);
   const liveChart = chartRegistry.get('liveChart') as Chart<'line'> | null;
   if (liveChart) {
     [4, 5, 6, 7].forEach(i => {
@@ -440,10 +603,24 @@ export function clearReferenceShot(): void {
     });
     liveChart.update('none');
   }
-  const sel = document.getElementById('refShotSelect') as HTMLSelectElement | null;
-  if (sel) sel.value = '';
-  const btn = document.getElementById('refClearBtn');
-  if (btn) btn.style.display = 'none';
+  renderRefChip();
+}
+
+function _setDisplay(ids: readonly string[], value: string): void {
+  for (const id of ids) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = value;
+  }
+}
+
+// #2153: the running state (a brew, steam, flush or descale, or a finished
+// shot) shows its verdict and toolbar (#live-content), the phase bar and
+// chart (#liveChartArea) and the four figures (#liveFigures, the right
+// column on desktop); the idle state shows #live-idle instead.
+function _showRunning(on: boolean): void {
+  _setDisplay(['live-content'], on ? 'block' : 'none');
+  _setDisplay(['liveChartArea', 'liveFigures'], on ? '' : 'none');
+  _setDisplay(['live-idle'], on ? 'none' : 'flex');
 }
 
 export function connectLiveStream(): void {
@@ -461,12 +638,18 @@ export function connectLiveStream(): void {
     // keep showing another machine's numbers.
     if (idle)    idle.style.display    = 'none';
     if (refBar)  refBar.style.display  = 'none';
+    // #2153: the chart, the figures and the next-shot rows sit outside
+    // #live-content; they hide with it.
+    _setDisplay(['liveChartArea', 'liveFigures', 'live-shot-setup'], 'none');
     setLiveBadge('error', t('live_machine_unavailable'));
     return;
   }
   if (banner)  banner.style.display  = 'none';
   if (content) content.style.display = '';
   if (refBar)  refBar.style.display  = '';
+  // #2153: the chart area must be visible before initLiveChart() sizes
+  // the canvas; handleLiveData() hides it again for the idle state.
+  _setDisplay(['liveChartArea', 'live-shot-setup'], '');
   disconnectLiveStream();
   initLiveChart();
   renderLiveShotSetupPanel();
@@ -543,11 +726,10 @@ export function syncMachineIcon(msg: LiveMessage | null): void {
 }
 
 export function updatePreheatWidget(d: PreheatData): void {
-  const readyBadge  = document.getElementById('preheat-ready-badge');
-  const warmingWrap = document.getElementById('preheat-warming-wrap') as HTMLElement;
+  const warmingWrap = document.getElementById('preheat-warming-wrap');
   const barFill     = document.getElementById('preheat-bar-fill') as HTMLElement;
   const countdown   = document.getElementById('preheat-countdown') as HTMLElement;
-  if (!readyBadge) return;
+  if (!warmingWrap) return;
   // #811: remembered so the icon can show heat progress on poll ticks that
   // carry live data but no preheat payload. #1383: resolve against the last
   // live message rather than null, so a machine we already know is off stays
@@ -555,28 +737,22 @@ export function updatePreheatWidget(d: PreheatData): void {
   _lastPreheat = d;
   syncMachineIcon(_lastLiveMsg);
 
-  // #1498: a GaggiMate in standby is off, so neither the "ready" badge nor a
-  // warming countdown may show — the payload can still carry a stale remaining.
-  // A machine whose last live message reported it unreachable is hidden the same
-  // way. The idle title is owned by the live-data handler (handleLiveData prefers
-  // machine_standby and keeps its unreachable branch first); don't write it here.
-  if (d.standby || _lastLiveMsg?.machineReachable === false) {
-    readyBadge.style.display  = 'none';
-    warmingWrap.style.display = 'none';
-  } else if (d.ready) {
-    readyBadge.style.display  = '';
-    warmingWrap.style.display = 'none';
-  } else if (d.remaining > 0) {
-    readyBadge.style.display  = 'none';
+  // #1498: a GaggiMate in standby is off, so no warm-up countdown may show;
+  // the payload can still carry a stale remaining. A machine whose last live
+  // message reported it unreachable is hidden the same way, and so is a
+  // display whose last live message reports a system state other than ready
+  // (#2139; handleLiveData re-applies this payload when it changes). The idle
+  // title is owned by handleLiveData; don't write it here. #2153: no "ready
+  // to brew" badge and no "warming up" text here any more: the idle title
+  // already says both.
+  const hidden = !!d.standby || _lastLiveMsg?.machineReachable === false || !!_lastLiveMsg?.machineSystemState;
+  if (!hidden && !d.ready && d.remaining > 0) {
     warmingWrap.style.display = '';
     barFill.style.width       = `${Math.round((d.pct || 0) * 100)}%`;
     const m = Math.floor(d.remaining / 60);
     const s = d.remaining % 60;
     countdown.textContent     = t('preheat_remain', m, s);
-    const statusEl = document.getElementById('preheat-status-text');
-    if (statusEl && d.preheatTime) statusEl.textContent = `${t('preheat_warming')} · ${d.preheatTime} min`;
   } else {
-    readyBadge.style.display  = 'none';
     warmingWrap.style.display = 'none';
   }
 
@@ -586,7 +762,7 @@ export function updatePreheatWidget(d: PreheatData): void {
   // owned by handleLiveData above.
   const idleEl = document.getElementById('live-idle');
   if (idleEl && idleEl.style.display !== 'none' && _lastLiveMsg?.machineReachable !== false) {
-    setLiveBadge(idlePhase());
+    setIdleBadge(idlePhase());
   }
 }
 
@@ -628,12 +804,49 @@ export function disconnectLiveStream(): void {
   S.liveBrewStartWall = null;
 }
 
+// #2096: the live status is a shared status badge; the state picks its
+// variant. #902/#983: steaming, flushing and descaling share the accent,
+// distinct from a brewing shot. #1541: standby, connecting and idle stay
+// neutral, warming takes the accent.
+const LIVE_BADGE_VARIANTS: Record<string, string> = {
+  ready: 'badge--ok',
+  brewing: 'badge--err',
+  error: 'badge--err',
+  unreachable: 'badge--err',
+  steaming: 'badge--accent',
+  flushing: 'badge--accent',
+  descaling: 'badge--accent',
+  warming: 'badge--accent',
+  // #2139: a display that is not ready warns; a controller error is an error.
+  'system-state': 'badge--warn',
+  'system-error': 'badge--err',
+};
+
+// #2139: the GaggiMate display's own system state (firmware v1.9.0+) while it
+// is reachable but not ready. The backend sends only these six states; a
+// controller error adds its code when the machine reports one.
+const MACHINE_SYSTEM_STATE_KEYS: Record<string, string> = {
+  starting: 'machine_system_starting',
+  waiting: 'machine_system_waiting',
+  updating: 'machine_system_updating',
+  autotuning: 'machine_system_autotuning',
+  mismatch: 'machine_system_mismatch',
+  error: 'machine_system_error',
+};
+
+export function machineSystemStateLabel(state: string, code?: number | null): string {
+  if (state === 'error' && code != null && code > 0) return t('machine_system_error_code', code);
+  const key = MACHINE_SYSTEM_STATE_KEYS[state];
+  return key ? t(key) : state;
+}
+
 export function setLiveBadge(state: string, detail = ''): void {
   const badge   = document.getElementById('live-status-badge') as HTMLElement;
   const textEl  = document.getElementById('live-status-text') as HTMLElement;
   const liveBtn = document.getElementById('btnLive') as HTMLElement;
 
-  badge.className = `live-status-badge ${state}`;
+  const variant = LIVE_BADGE_VARIANTS[state];
+  badge.className = variant ? `badge ${variant} ${state}` : `badge ${state}`;
   liveBtn.classList.remove('live-brewing', 'live-ready');
 
   const labels: Record<string, string> = {
@@ -651,6 +864,9 @@ export function setLiveBadge(state: string, detail = ''): void {
     // (no new translations -- the same keys the title already uses).
     standby:     t('machine_standby'),
     warming:     t('preheat_warming'),
+    // #2139: the caller passes the translated system state as detail.
+    'system-state': detail,
+    'system-error': detail,
     error:       detail || t('live_error_status'),
     idle:        t('live_ready_status'),
     unreachable: detail || t('live_unreachable_status')
@@ -702,11 +918,26 @@ export function handlePreheatUpdateEvent(payload: PreheatData): void {
 
 // #1541: one derivation of the machine's idle phase, shared by the idle title
 // and the status badge so the two can never disagree. Standby wins (a GaggiMate
-// in standby is off), then a preheat still counting down, else ready.
-function idlePhase(): 'standby' | 'warming' | 'ready' {
+// in standby is off), then a display that reports a system state other than
+// ready (#2139), then a preheat still counting down, else ready.
+type IdlePhase = 'standby' | 'system' | 'warming' | 'ready';
+function idlePhase(): IdlePhase {
   if (_lastPreheat?.standby) return 'standby';
+  if (_lastLiveMsg?.machineSystemState) return 'system';
   if (_lastPreheat && !_lastPreheat.ready && _lastPreheat.remaining > 0) return 'warming';
   return 'ready';
+}
+
+// #2139: sets the status badge for an idle phase. A display that is not ready
+// shows its own state, as a warning, or as an error for a controller error.
+function setIdleBadge(phase: IdlePhase): void {
+  if (phase !== 'system') {
+    setLiveBadge(phase);
+    return;
+  }
+  const systemState = _lastLiveMsg?.machineSystemState ?? '';
+  setLiveBadge(systemState === 'error' ? 'system-error' : 'system-state',
+    machineSystemStateLabel(systemState, _lastLiveMsg?.machineSystemErrorCode));
 }
 
 // #1613: the live-session transitions (reference-shot auto-apply at brew
@@ -776,7 +1007,6 @@ export function handleLiveData(msg: LiveMessage): void {
   const lastIdx = times.length - 1;
 
   const metaEl      = document.getElementById('live-meta') as HTMLElement;
-  const contentEl   = document.getElementById('live-content') as HTMLElement;
   const idleEl      = document.getElementById('live-idle') as HTMLElement;
   const idleTitleEl = document.getElementById('liveIdleTitle');
   const idleTextEl  = document.getElementById('liveIdleText');
@@ -787,13 +1017,15 @@ export function handleLiveData(msg: LiveMessage): void {
   // machine renders identically to an idle-but-reachable one (state.liveAccum
   // is null in both cases) and the live tab keeps showing "Ready to brew"
   // indefinitely, which was the reported bug.
+  // #2139: the system state of the previous live message, read before
+  // syncMachineIcon replaces it, to notice when it changes.
+  const prevSystemState = _lastLiveMsg?.machineSystemState ?? '';
   syncMachineIcon(msg);   // #811
 
   if (msg.machineReachable === false) {
     setLiveBadge('unreachable');
     metaEl.textContent = '–';
-    contentEl.style.display = 'none';
-    idleEl.style.display    = 'flex';
+    _showRunning(false);
     idleEl.classList.add('unreachable');
     if (idleTitleEl) idleTitleEl.textContent = t('machine_unreachable_title');
     if (idleTextEl)  idleTextEl.textContent  = t('live_unreachable_text');
@@ -815,12 +1047,10 @@ export function handleLiveData(msg: LiveMessage): void {
     const idleUpdateEl = document.getElementById('liveIdleUpdateHint');
     if (idleWarnEl)   idleWarnEl.style.display   = 'none';
     if (idleUpdateEl) idleUpdateEl.style.display = 'none';
-    // #1498 follow-up: an unreachable machine shows no preheat state -- hide the
-    // ready badge and the warming widget a stale preheat payload may have left
-    // visible (the same elements updatePreheatWidget toggles).
-    const preheatBadgeEl   = document.getElementById('preheat-ready-badge');
+    // #1498 follow-up: an unreachable machine shows no preheat state -- hide
+    // the warm-up countdown a stale preheat payload may have left visible
+    // (the element updatePreheatWidget toggles).
     const preheatWarmingEl = document.getElementById('preheat-warming-wrap');
-    if (preheatBadgeEl)   preheatBadgeEl.style.display   = 'none';
     if (preheatWarmingEl) preheatWarmingEl.style.display = 'none';
     // #1324: machine control is unavailable while unreachable -- hide the flush
     // button and close the brew-confirmation dialog (the machine answered it,
@@ -830,6 +1060,11 @@ export function handleLiveData(msg: LiveMessage): void {
   }
   idleEl.classList.remove('unreachable');
   renderMachineControl(msg.machineControl);
+  // #2139: a display that is not ready hides the preheat badge and countdown
+  // (updatePreheatWidget reads the state off the last live message). When the
+  // state changes, re-apply the last preheat payload so they hide at once and
+  // come back as soon as the display is ready again.
+  if ((msg.machineSystemState ?? '') !== prevSystemState && _lastPreheat) updatePreheatWidget(_lastPreheat);
   // #811: "machine_ready" means REACHABLE, but it reads as "ready to brew" —
   // and while preheating it sat directly under a widget counting down "heating
   // ... 20 min", flatly contradicting it. The animated icon made that obvious
@@ -842,7 +1077,10 @@ export function handleLiveData(msg: LiveMessage): void {
   const phase       = idlePhase();
   const neverPolled = msg.machineReachable == null;
   // #1498: a standby GaggiMate is off — say so instead of "warming"/"ready".
-  if (idleTitleEl) idleTitleEl.textContent = phase === 'standby' ? t('machine_standby') : neverPolled ? t('live_connecting') : phase === 'warming' ? t('preheat_warming') : t('machine_ready');
+  // #2139: a display that is not ready names its own state, after standby.
+  if (idleTitleEl) idleTitleEl.textContent = phase === 'standby' ? t('machine_standby')
+    : phase === 'system' ? machineSystemStateLabel(msg.machineSystemState ?? '', msg.machineSystemErrorCode)
+    : neverPolled ? t('live_connecting') : phase === 'warming' ? t('preheat_warming') : t('machine_ready');
   if (idleTextEl)  idleTextEl.textContent  = t('live_idle_text');
 
   // #902: idle stats row -- always kept current (not gated behind the true-
@@ -893,8 +1131,8 @@ export function handleLiveData(msg: LiveMessage): void {
 
     setLiveBadge(badgeState);
     metaEl.textContent       = t(`live_${badgeState}`);
-    contentEl.style.display  = 'block';
-    idleEl.style.display     = 'none';
+    _showRunning(true);
+    _syncPhaseBar(null);
 
     if (modeLastIdx >= 0) {
       const elapsed = (modeTimes[modeLastIdx] ?? 0) / 10;
@@ -916,15 +1154,13 @@ export function handleLiveData(msg: LiveMessage): void {
   if (!msg.isLive && times.length === 0) {
     // #1541: the badge follows the same standby/warming/ready phase as the
     // idle title above instead of always saying "Ready".
-    setLiveBadge(phase);
+    setIdleBadge(phase);
     metaEl.textContent = '–';
-    contentEl.style.display = 'none';
-    idleEl.style.display    = 'flex';
+    _showRunning(false);
     return;
   }
 
-  contentEl.style.display = 'block';
-  idleEl.style.display    = 'none';
+  _showRunning(true);
 
   if (msg.isLive) {
     setLiveBadge('brewing');
@@ -957,6 +1193,10 @@ export function handleLiveData(msg: LiveMessage): void {
     } else {
       stopElapsedTimer('liveTime', elapsed);
     }
+
+    // #2153: the phase bar follows the elapsed time and repaints only when
+    // the phase changes.
+    _syncPhaseBar(elapsed);
 
     document.getElementById('livePressure')!.textContent = pressure != null ? pressure.toFixed(1) : '–';
     document.getElementById('liveFlow')!.textContent     = flow     != null ? flow.toFixed(1)     : '–';

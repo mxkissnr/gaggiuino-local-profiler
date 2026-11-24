@@ -90,6 +90,8 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/shots/last", h.lastShot)
 	mux.HandleFunc("GET /api/shots/defaults", h.getDefaults)
 	mux.HandleFunc("POST /api/shots/defaults", h.postDefaults)
+	mux.HandleFunc("GET /api/profile-time-targets", h.getProfileTimeTargets)
+	mux.HandleFunc("PUT /api/profile-time-targets", h.putProfileTimeTarget)
 	mux.HandleFunc("GET /api/shots/{id}", h.getShot)
 	mux.HandleFunc("GET /api/shots/{id}/card", h.getCard)
 	mux.HandleFunc("GET /api/shots/{id}/chart.png", h.getChartPNG)
@@ -111,6 +113,18 @@ func withScore(shot Shot, detail ScoreDetail) Shot {
 	out := shot.clone()
 	out["score"] = detail.Score
 	out["usedBeanTarget"] = detail.UsedBeanTarget
+	return out
+}
+
+// withTimeTarget adds the shot's resolved profile time window (#1504), or
+// null. Never used by /shots.json, whose shape is fixed for the HA
+// integration.
+func withTimeTarget(out Shot, t *TimeTarget) Shot {
+	if t == nil {
+		out["timeTarget"] = nil
+	} else {
+		out["timeTarget"] = map[string]any{"minS": t.MinS, "maxS": t.MaxS}
+	}
 	return out
 }
 
@@ -267,7 +281,7 @@ func (h *Handlers) listShotsPage(w http.ResponseWriter, r *http.Request) {
 		out["usedBeanTarget"] = row.UsedBeanTarget
 		out["hasChartData"] = row.HasChartData
 		out["tempStabilityDev"] = row.TempStabilityDev
-		shotsOut[i] = out
+		shotsOut[i] = withTimeTarget(out, row.TimeTarget)
 	}
 
 	var nextCursor *string
@@ -295,7 +309,8 @@ func (h *Handlers) lastShot(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, nil)
 		return
 	}
-	writeJSON(w, http.StatusOK, withScore(last, h.service.ComputeScoreDetail(last)))
+	d := h.service.ComputeScoreDetail(last)
+	writeJSON(w, http.StatusOK, withTimeTarget(withScore(last, d), d.TimeTarget))
 }
 
 // getDefaults serves GET /api/shots/defaults (#654).
@@ -377,10 +392,12 @@ func (h *Handlers) getShot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	detail := h.service.DetailScorer()
-	resp := withScore(shot, detail(shot))
+	shotDetail := detail(shot)
+	resp := withTimeTarget(withScore(shot, shotDetail), shotDetail.TimeTarget)
 	if previous != nil {
+		prevDetail := detail(previous)
 		resp["previousShotId"] = previous["id"]
-		resp["previousShot"] = withScore(previous, detail(previous))
+		resp["previousShot"] = withTimeTarget(withScore(previous, prevDetail), prevDetail.TimeTarget)
 	} else {
 		resp["previousShotId"] = nil
 		resp["previousShot"] = nil
@@ -423,8 +440,9 @@ func (h *Handlers) getCard(w http.ResponseWriter, r *http.Request) {
 	accent := r.URL.Query().Get("accent")
 	theme := r.URL.Query().Get("theme")
 	lang := r.URL.Query().Get("lang")
+	verdict := parseCardVerdict(r.URL.Query())
 
-	png, err := renderShareCard(shot, h.service.ComputeScore(shot), format, accent, theme, lang, h.card)
+	png, err := renderShareCard(shot, h.service.ComputeScore(shot), format, accent, theme, lang, verdict, h.card)
 	if err != nil {
 		log.Printf("shots: share-card render for shot %d failed: %v", id, err)
 		writeError(w, http.StatusInternalServerError, "Internal server error")

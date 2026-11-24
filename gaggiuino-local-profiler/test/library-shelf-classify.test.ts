@@ -89,6 +89,7 @@ interface LibraryModule {
   saveBeanNoBag: () => Promise<void>;
   closeBeanForm: () => void;
   stageNewBeanImage: (input: HTMLInputElement) => Promise<void>;
+  resetShelfPrefs: (keepQuery?: boolean) => void;
 }
 const library = (await import('../public-src/views/library.js')) as unknown as LibraryModule;
 
@@ -286,10 +287,10 @@ describe('renderShelfTile (#1330 one shelf)', () => {
     expect(out).toContain('120 g');
     expect(out).toContain('+1 full');
     expect(out).toContain('lib-shelf-stack');
-    expect(out).toContain('lib-shelf-sealed-badge');
+    expect(out).toContain('class="badge badge--scrim lib-shelf-mark-top"');
     // The open badge left the photo; its word stays in the markup for screen
     // readers, without an aria-label replacing the tile's inner text.
-    expect(out).not.toContain('lib-shelf-open-badge');
+    expect(out).not.toContain('badge--accent');
     expect(out).not.toContain('aria-label');
     expect(out).toContain('class="lib-shelf-open-label"');
     expect(out).toContain('>open</span>');
@@ -306,7 +307,7 @@ describe('renderShelfTile (#1330 one shelf)', () => {
     const sticker = renderShelfTile(bean({ id: 22, name: 'Sticker', image: 'png', imageSticker: true, bags }), { muted: false });
     expect(sticker).toContain('is-sticker');
     expect(sticker).not.toContain('lib-shelf-stack');
-    expect(sticker).toContain('lib-shelf-sealed-badge');
+    expect(sticker).toContain('class="badge badge--scrim lib-shelf-mark-top"');
     expect(sticker).toContain('+1 full');
 
     const photo = renderShelfTile(bean({ id: 23, name: 'Photo', image: 'jpg', imageSticker: false, bags }), { muted: false });
@@ -341,7 +342,7 @@ describe('renderShelfRow (#1330 list view)', () => {
     expect(out).toContain('Brazil');
     expect(out).toContain('120 g');
     expect(out).toContain('+1 full');
-    expect(out).toContain('lib-shelf-open-badge');
+    expect(out).toContain('class="badge badge--accent"');
     expect(out).toContain('lib-shelf-bar');
   });
 
@@ -575,3 +576,37 @@ describe('staged new-bean photo (#1329 part 2)', () => {
   });
 });
 
+describe('shelf toolbar chips (#2093)', () => {
+  it('renders the filter and view chips as shared chips pressed through aria-pressed', () => {
+    const sections = { innerHTML: '' };
+    const list = { innerHTML: '', querySelector: () => sections };
+    g.document = {
+      getElementById: (id: string) => (id === 'beanListUI' ? list : null),
+      querySelector: () => null,
+      querySelectorAll: () => [],
+    };
+    S.coffeeLibrary = {
+      beans: [bean({ id: 1, name: 'Shelf Bean' })],
+      recipes: [],
+      grinders: [],
+    };
+
+    library.resetShelfPrefs();
+
+    const filterChips = [...list.innerHTML.matchAll(
+      /<button type="button" class="chip" data-shelf-filter="([a-z]+)" aria-pressed="(true|false)"/g,
+    )];
+    expect(filterChips).toHaveLength(4);
+    expect(filterChips.filter(m => m[2] === 'true')).toHaveLength(1);
+
+    const viewChips = [...list.innerHTML.matchAll(
+      /<button type="button" class="chip" data-shelf-view="([a-z]+)" aria-pressed="(true|false)"/g,
+    )];
+    expect(viewChips).toHaveLength(2);
+    expect(viewChips.filter(m => m[2] === 'true')).toHaveLength(1);
+
+    // The names must stand alone: the kept `lib-shelf-chips` row wrapper is not
+    // the retired chip class.
+    expect(list.innerHTML).not.toMatch(/(?<![\w-])(?:lib-shelf-chip|lib-shelf-view-btn)(?![\w-])|class="[^"]*\bactive\b/);
+  });
+});

@@ -5,7 +5,6 @@ import { t, tHtml } from '../../i18n.js';
 import * as libraryApi from '../../api/library.js';
 import { esc, html, joinHtml } from '../../utils.js';
 import { ICON_TRASH } from '../../icons.js';
-import type { Html } from '../../utils.js';
 import { cropAndUploadPhoto, adjustPhoto, savedPhotoRow } from '../../photo-upload.js';
 import type { PhotoCropShape } from '../../photo-upload.js';
 import { openLightbox } from '../../components/lightbox.js';
@@ -19,7 +18,6 @@ import type { Basket } from '../../api/types.js';
 // Same 1:1 crop the basket photo always had.
 const BASKET_PHOTO: PhotoCropShape = { shape: 'square' };
 
-const ICON_PENCIL: Html = html`<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" aria-hidden="true"><path d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/></svg>`;
 
 // state/index.ts's CoffeeLibrary types the basket collection as Basket[];
 // this section declares just the slice of S it reads (same pattern as
@@ -50,15 +48,17 @@ export function renderBasketList(): void {
     return html`
     <div class="lib-item">
       ${b.image ? html`<img class="lib-basket-thumb" data-basket-id="${esc(b.id)}" alt="">` : html``}
-      <div class="lib-item-info">
-        <div class="lib-item-name">${esc(b.name)}</div>
-        ${extra ? html`<div class="lib-item-sub lib-item-extra">${esc(extra)}</div>` : html``}
-        ${b.notes ? html`<div class="lib-item-sub">${esc(b.notes)}</div>` : html``}
-      </div>
-      <div class="lib-item-actions">
-        <button class="lib-btn-sm lib-btn-icon" data-action="edit-basket" data-id="${esc(b.id)}" title="${tHtml('lib_btn_edit')}">${ICON_PENCIL}</button>
-        <button class="lib-btn-sm del lib-btn-icon" data-action="delete-basket" data-id="${esc(b.id)}" title="${tHtml('lib_btn_delete')}">${ICON_TRASH}</button>
-      </div>
+      <button type="button" class="lib-item-open" data-action="edit-basket" data-id="${esc(b.id)}">
+        <span class="lib-item-name">${esc(b.name)}</span>
+        ${extra ? html`<span class="lib-item-sub lib-item-extra">${esc(extra)}</span>` : html``}
+        ${b.notes ? html`<span class="lib-item-sub">${esc(b.notes)}</span>` : html``}
+      </button>
+      <details class="lib-sheet-more">
+        <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
+        <div class="lib-sheet-menu-list">
+          <button type="button" class="lib-sheet-menu-item del" data-action="delete-basket" data-id="${esc(b.id)}">${ICON_TRASH} ${tHtml('lib_btn_delete')}</button>
+        </div>
+      </details>
     </div>`;
   }));
   loadBasketThumbnails();
@@ -201,7 +201,7 @@ async function _storeBasketPhoto(id: number, r: Response): Promise<void> {
 }
 
 export async function deleteBasket(id: number): Promise<void> {
-  if (!await confirmDialog(t('lib_confirm_delete_basket'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('lib_confirm_delete_basket'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await libraryApi.deleteBasketById(id);
   if (!r.ok) { showToast(t('error_generic', r.status)); return; }
   _state().coffeeLibrary.baskets = (_state().coffeeLibrary.baskets || []).filter(b => b.id !== id);

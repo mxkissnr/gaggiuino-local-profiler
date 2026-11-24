@@ -6,10 +6,12 @@ import { attachDialogKeyboard } from './dialog-a11y.js';
 // focus: Enter on an unread dialog must not delete anything.
 
 export interface ConfirmDialogOptions {
-  /** Label of the confirm button; defaults to OK. Use lib_btn_delete for a delete. */
+  /** Label of the confirm button; defaults to OK. Use lib_btn_delete (with destructive) for a delete. */
   confirmLabel?: string;
   /** Only an OK button: for a message the user must see before the page changes. */
   acknowledgeOnly?: boolean;
+  /** The action deletes, replaces or overwrites data, or skips a backup: the confirm button is .btn--danger, not .btn--primary (#2111). */
+  destructive?: boolean;
 }
 
 // Only one dialog may be up at a time (#2026): a quick double tap on delete
@@ -37,14 +39,14 @@ export function confirmDialog(message: string, opts: ConfirmDialogOptions = {}):
     actions.className = 'lib-form-actions';
     const accept = document.createElement('button');
     accept.type = 'button';
-    accept.className = 'lib-save-btn';
+    accept.className = opts.destructive === true ? 'btn btn--danger' : 'btn btn--primary';
     accept.textContent = opts.confirmLabel ?? t('maint_ok');
 
     let cancel: HTMLButtonElement | null = null;
     if (!opts.acknowledgeOnly) {
       cancel = document.createElement('button');
       cancel.type = 'button';
-      cancel.className = 'lib-btn-sm';
+      cancel.className = 'btn btn--quiet';
       cancel.textContent = t('lib_cancel');
       actions.appendChild(cancel);
     }

@@ -99,7 +99,7 @@ export function renderBeanProfiles(b: BeanListRow): Html {
   // A row without its machine is ambiguous only when "all machines" pools them.
   const showMachine = ctx.machineId == null && S.machines.length > 1;
   return html`<div class="lib-sheet-profiles">
-      <div class="lib-sheet-aromas-title lib-sheet-profiles-title">${tHtml(titleKey)}</div>
+      <div class="section-title">${tHtml(titleKey)}</div>
       ${joinHtml(rows.map(row => _rowHtml(b.id, row, showMachine, fromSimilar)))}
     </div>`;
 }

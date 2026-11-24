@@ -78,7 +78,7 @@ export function renderMqttSettingsCard(): void {
   if (card) card.style.display = isGaggiMate ? 'none' : '';
 
   document.querySelectorAll<HTMLElement>('#mqttTransportToggle [data-mqtt-transport]').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.mqttTransport === _selectedTransport);
+    btn.setAttribute('aria-pressed', String(btn.dataset.mqttTransport === _selectedTransport));
   });
   const fields = document.getElementById('mqttConnFields');
   if (fields) fields.style.display = _selectedTransport === 'mqtt' ? '' : 'none';

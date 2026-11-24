@@ -129,8 +129,8 @@ export function flavorChipsHtml(flavors: unknown): Html {
   const chips = list.map(raw => {
     const { matched } = matchFlavors([raw]);
     const nodeId = matched.size ? [...matched][0] : null;
-    if (!nodeId) return html`<span class="flavor-chip flavor-chip-static">${esc(raw)}</span>`;
-    return html`<button type="button" class="flavor-chip lib-aroma-chip" data-action="highlight-flavor" data-flavor-node="${esc(nodeId)}" style="--chip-color:${esc(colorForNode(nodeId))}">${esc(raw)}</button>`;
+    if (!nodeId) return html`<span class="chip--input flavor-chip-static">${esc(raw)}</span>`;
+    return html`<button type="button" class="chip--input lib-aroma-chip" data-action="highlight-flavor" data-flavor-node="${esc(nodeId)}" style="--chip-color:${esc(colorForNode(nodeId))}">${esc(raw)}</button>`;
   });
   return joinHtml(chips);
 }

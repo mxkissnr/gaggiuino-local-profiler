@@ -29,11 +29,33 @@ type Repository struct {
 	libRepo *library.Repository
 
 	lastLogID atomic.Int64
+
+	// onTaskDone runs after MarkTaskDone saved a task (#2138); see
+	// SetOnTaskDone. An atomic pointer so wiring it never races a request.
+	onTaskDone atomic.Pointer[func(machineID int64, task string)]
 }
 
 // NewRepository wraps db and libRepo.
 func NewRepository(db *sql.DB, libRepo *library.Repository) *Repository {
 	return &Repository{db: db, libRepo: libRepo}
+}
+
+// SetOnTaskDone wires the side effect to run after MarkTaskDone has saved a
+// task and its log entry (#2138). Both callers of MarkTaskDone, the REST route
+// and the MCP tool mark_maintenance_done, share this one hook because they
+// share this repository. cmd/server uses it to reset a GaggiMate's own
+// backflush/descaling counter. The hook gets the machine and the canonical
+// task key, runs on the request, so it must return quickly, and it cannot
+// fail marking done. A nil fn removes the hook.
+func (r *Repository) SetOnTaskDone(fn func(machineID int64, task string)) {
+	r.onTaskDone.Store(&fn)
+}
+
+// notifyTaskDone calls the task-done hook, if one is set.
+func (r *Repository) notifyTaskDone(machineID int64, task string) {
+	if fn := r.onTaskDone.Load(); fn != nil && *fn != nil {
+		(*fn)(machineID, task)
+	}
 }
 
 // GetMaintenance merges the maintenance defaults with whatever's actually

@@ -14,7 +14,7 @@ import { t, tHtml }              from '../i18n.js';
 import { saveBeanKnownGrind } from '../api/library.js';
 import { annotateShot }          from '../api/shots.js';
 import type { ShotAnnotationInput } from '../api/types.js';
-import { esc, html, detectChanneling, calcBrewRatio, scoreColor } from '../utils.js';
+import { esc, html, detectChanneling, calcBrewRatio } from '../utils.js';
 import { parseBrewRatio } from '../shared/score.js';
 import { markFieldInvalid } from '../components/field-error.js';
 import type { Html } from '../utils.js';
@@ -26,13 +26,13 @@ import { calcBestGrindCombosForBean, defaultGrinderName, suggestGrindDoseForBean
          _miniShotChart, _parseGrindNum } from './shots/grind.js';
 import { normalizeGrindToNow } from '../grind-zero.js';
 import { calcNextGrindSuggestion, isConverged } from '../dialin-convergence.js';
-import type { DialinSuggestion } from '../dialin-convergence.js';
+import type { DialinBand, DialinSuggestion } from '../dialin-convergence.js';
 import { prefillGrind, scaleForGrinder } from '../grind-scale.js';
 import type { GrindScale } from '../grind-scale.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange, _renderBeanSelect } from './shots/annotation.js';
 import { checkGrindField, forgetGrindField, getGrindFieldValue, grindFieldInvalid, refreshGrindField, renderGrindField } from './shots/grind-field.js';
-import { bestRound, checkForCandidate, createWizardSession, renderChips } from './wizard-session.js';
+import { bestRound, checkForCandidate, createWizardSession, renderChips, scoreBadgeClass } from './wizard-session.js';
 
 // state/index.ts types the session as Record<string, unknown> and shot rows
 // as metadata-only ShotMeta; these aliases name the fields this wizard
@@ -78,6 +78,9 @@ interface DialinSession extends Record<string, unknown> {
   awaitingShotSince: number | null;
   status: string;
   dismissedShotIds?: number[];
+  // The profile window snapshotted from the first confirmed round's shot
+  // (#1504); undefined until then, null when that shot had none.
+  timeBand?: DialinBand | null;
 }
 
 interface DialinPrefill {
@@ -207,6 +210,13 @@ function _sessionScale(s: DialinSession): GrindScale | null {
   return scaleForGrinder(S.coffeeLibrary?.grinders, s.grinder);
 }
 
+export function dialinBandFromShot(shot: { timeTarget?: { minS: number; maxS: number } | null } | null | undefined): DialinBand | null {
+  const tt = shot?.timeTarget;
+  return tt && Number.isFinite(tt.minS) && Number.isFinite(tt.maxS) && tt.minS < tt.maxS ? { low: tt.minS, high: tt.maxS } : null;
+}
+
+function _sessionBand(s: DialinSession): DialinBand | null { return s.timeBand ?? null; }
+
 // ── Round evaluation ────────────────────────────────────────────────────
 
 async function _evalShot(shot: DialinShotRow): Promise<{ secs: number; channeling: boolean; ratio: number | null; score: number | null }> {
@@ -253,10 +263,10 @@ export function dialinAcceptNext(): void {
 
   if (!s.reviewRound) return;
   s.rounds.push(s.reviewRound);
-  const suggestion = calcNextGrindSuggestion(s.rounds, _sessionScale(s));
+  const suggestion = calcNextGrindSuggestion(s.rounds, _sessionScale(s), _sessionBand(s));
   s.reviewRound = null;
   s.candidateShotId = null;
-  if (isConverged(s.rounds, _sessionScale(s))) {
+  if (isConverged(s.rounds, _sessionScale(s), _sessionBand(s))) {
     s.status = 'converged';
     wizard.persist();
     renderDialinWizard();
@@ -342,7 +352,11 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
     window.showToast?.(t('error_generic', ''));
   }
 
-  const evald = await _evalShot(wizard.shots().find(sh => sh.id === shotId) || shot);
+  // #1504: the first confirmed round snapshots the profile window into the
+  // session, so later window edits do not move the band mid-session.
+  const shotRow = wizard.shots().find(sh => sh.id === shotId) || shot;
+  if (s.timeBand === undefined) s.timeBand = dialinBandFromShot(shotRow);
+  const evald = await _evalShot(shotRow);
   // _parseGrindNum already returns a finite number or null, so fall back to
   // 0 only when there is no usable setting (never send NaN).
   const grindNum = _parseGrindNum(s.pendingGrind);
@@ -350,7 +364,7 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
     grindSetting: grindNum !== null && Number.isFinite(grindNum) ? grindNum : 0,
     shotId, score: evald.score, seconds: evald.secs, ratio: evald.ratio, channeling: evald.channeling,
   };
-  s.reviewRound.suggestion = calcNextGrindSuggestion([...s.rounds, s.reviewRound], _sessionScale(s));
+  s.reviewRound.suggestion = calcNextGrindSuggestion([...s.rounds, s.reviewRound], _sessionScale(s), _sessionBand(s));
   s.candidateShotId = null;
   wizard.persist();
   renderDialinWizard();
@@ -457,7 +471,7 @@ function _renderSetup(s: DialinSession): Html {
     </div>
   </div>
   <div class="lib-form-actions">
-    <button class="lib-save-btn" data-action="dialin-accept-next">${tHtml('dialin_wizard_setup_start_btn')}</button>
+    <button type="button" class="btn btn--primary" data-action="dialin-accept-next">${tHtml('dialin_wizard_setup_start_btn')}</button>
   </div>`;
 }
 
@@ -474,19 +488,19 @@ function _renderRound(s: DialinSession): Html {
     return html`<div class="dw-round">
       <div class="dw-round-label">${tHtml('dialin_wizard_round_label', roundNum)}</div>
       <div class="dw-score-row">
-        <div class="dw-score-chip" style="background:${esc(scoreColor(rr.score))}">${esc(rr.score ?? '–')}</div>
+        <div class="${esc(scoreBadgeClass(rr.score))}">${esc(rr.score ?? '–')}</div>
         <div class="dw-score-meta">${esc(rr.seconds.toFixed(0))} s${rr.ratio ? html` · 1:${esc(rr.ratio.toFixed(1))}` : html``}${rr.channeling ? html` · ${tHtml('grind_channeling_full')}` : html``}</div>
       </div>
       <div class="dw-suggestion">${esc(sugText)}</div>
       <div class="dw-actions">
-        <button class="lib-save-btn" data-action="dialin-accept-next">${tHtml('dialin_wizard_accept_next')}</button>
+        <button type="button" class="btn btn--primary" data-action="dialin-accept-next">${tHtml('dialin_wizard_accept_next')}</button>
         <div class="dw-override-row">
           <input type="text" id="dwOverrideInput" aria-label="${esc(t('dialin_wizard_override'))}" placeholder="${tHtml('dialin_wizard_override')}">
           <select id="grindSelect-dwOverrideInput" class="machine-form-input" style="flex:1 1 auto" aria-label="${esc(t('dialin_wizard_override'))}" hidden></select>
-          <button class="lib-btn-sm" data-action="dialin-override">${tHtml('dialin_wizard_override')}</button>
+          <button type="button" class="btn btn--quiet" data-action="dialin-override">${tHtml('dialin_wizard_override')}</button>
         </div>
         <div class="bf-error" id="grindHint-dwOverrideInput" role="alert" hidden></div>
-        <button class="lib-btn-sm del" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
+        <button type="button" class="btn btn--danger" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
       </div>
       ${chips}
     </div>`;
@@ -499,14 +513,14 @@ function _renderRound(s: DialinSession): Html {
     <div class="dw-grind-display">${esc(String(s.pendingGrind ?? ''))}</div>
     ${candidate ? html`
       <div class="dw-candidate">
-        <div class="dw-candidate-title">${tHtml('dialin_wizard_candidate_title')}</div>
+        <div class="section-title">${tHtml('dialin_wizard_candidate_title')}</div>
         ${_miniShotChart(candidate)}
         <div class="dw-candidate-actions">
-          <button class="lib-save-btn" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="1">${tHtml('dialin_wizard_candidate_confirm')}</button>
-          <button class="lib-btn-sm" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="0">${tHtml('dialin_wizard_candidate_reject')}</button>
+          <button type="button" class="btn btn--primary" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="1">${tHtml('dialin_wizard_candidate_confirm')}</button>
+          <button type="button" class="btn btn--quiet" data-action="dialin-confirm-shot" data-id="${esc(candidate.id)}" data-match="0">${tHtml('dialin_wizard_candidate_reject')}</button>
         </div>
       </div>` : html`<div class="dw-waiting">${tHtml('dialin_wizard_waiting')}</div>`}
-    <button class="lib-btn-sm del" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
+    <button type="button" class="btn btn--danger" data-action="dialin-end">${tHtml('dialin_wizard_end')}</button>
     ${chips}
   </div>`;
 }
@@ -515,18 +529,18 @@ function _renderSummary(s: DialinSession): Html {
   const best = bestRound(s.rounds);
   const title = s.status === 'converged' ? tHtml('dialin_wizard_converged_title') : tHtml('dialin_wizard_summary_title');
   const reasonText = s.status === 'converged' && s.rounds.length
-    ? t(calcNextGrindSuggestion(s.rounds, _sessionScale(s)).reason) : '';
+    ? t(calcNextGrindSuggestion(s.rounds, _sessionScale(s), _sessionBand(s)).reason) : '';
   return html`<div class="dw-summary">
-    <div class="dw-summary-title">${title}</div>
+    <div class="card-title">${title}</div>
     ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}
     ${best ? html`<div class="dw-summary-best">
-      <div class="dw-score-chip" style="background:${esc(scoreColor(best.score))}">${esc(best.score)}</div>
+      <div class="${esc(scoreBadgeClass(best.score))}">${esc(best.score)}</div>
       <div>${tHtml('dialin_wizard_summary_best')}: ${esc(String(best.grindSetting))} · ${esc(best.seconds.toFixed(0))} s</div>
     </div>` : html``}
     <div class="dw-actions">
-      ${best ? html`<button class="lib-save-btn" data-action="dialin-save-known-grind">${tHtml('dialin_wizard_save_known')}</button>` : html``}
-      ${best ? html`<button class="lib-btn-sm" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
-      <button class="lib-btn-sm" data-action="dialin-close">${tHtml('dialin_wizard_continue')}</button>
+      ${best ? html`<button type="button" class="btn btn--primary" data-action="dialin-save-known-grind">${tHtml('dialin_wizard_save_known')}</button>` : html``}
+      ${best ? html`<button type="button" class="btn btn--quiet" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
+      <button type="button" class="btn btn--quiet" data-action="dialin-close">${tHtml('dialin_wizard_continue')}</button>
     </div>
     ${renderChips(s.rounds, r => esc(String(r.grindSetting)))}
   </div>`;

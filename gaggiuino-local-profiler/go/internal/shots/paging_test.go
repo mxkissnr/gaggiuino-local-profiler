@@ -3,6 +3,7 @@ package shots
 import (
 	stdjson "encoding/json"
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -434,6 +435,143 @@ func TestListShotsPage_DoesNotShadowSiblingRoutes(t *testing.T) {
 		body := decodeBody(t, rec.Body.Bytes())
 		if _, ok := body[tc.wantKey]; !ok {
 			t.Errorf("%s: response missing %q -> route shadowed? body=%s", tc.path, tc.wantKey, rec.Body.String())
+		}
+	}
+}
+
+// TestProfileTimeTarget_EveryReadPathFollows proves a stored per-profile
+// time window reaches every score-backed read path (#1504), is folded into
+// the score cache fingerprint, and that clearing the store restores the
+// classic scores.
+func TestProfileTimeTarget_EveryReadPathFollows(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+	seedShots(t, repo, 3)
+	svc := NewService(repo)
+
+	classicPage, err := repo.FindPageExcludingTrash(Cursor{}, 60, 0)
+	if err != nil {
+		t.Fatalf("FindPageExcludingTrash: %v", err)
+	}
+	if len(classicPage.Rows) != 3 {
+		t.Fatalf("seeded 3 shots, read %d", len(classicPage.Rows))
+	}
+	classicScores := map[int64]*int{}
+	var shot Shot
+	for _, row := range classicPage.Rows {
+		classicScores[row.Shot["id"].(int64)] = row.Score
+		if shot == nil {
+			shot = row.Shot
+		}
+		if row.TimeTarget != nil {
+			t.Fatalf("shot %v: TimeTarget = %+v with none stored", row.Shot["id"], row.TimeTarget)
+		}
+	}
+
+	timeWindow := &TimeTarget{MinS: 40, MaxS: 48}
+	if err := repo.SaveProfileTimeTargets(map[string][]ProfileTimeTarget{
+		"1": {{ProfileName: " v60 ", MinS: 40, MaxS: 48}},
+	}); err != nil {
+		t.Fatalf("SaveProfileTimeTargets: %v", err)
+	}
+	wantDetail := CalcShotScoreTargets(shot, ScoreTargets{Time: timeWindow})
+	if wantDetail.Score == nil {
+		t.Fatal("windowed score is nil")
+	}
+	want := *wantDetail.Score
+	classic := classicScores[shot["id"].(int64)]
+	if sameScore(&want, classic) {
+		t.Fatalf("window score %d equals the classic score, the fixture proves nothing", want)
+	}
+
+	page, err := repo.FindPageExcludingTrash(Cursor{}, 60, 0)
+	if err != nil {
+		t.Fatalf("FindPageExcludingTrash: %v", err)
+	}
+	for _, row := range page.Rows {
+		if row.Score == nil || *row.Score != want {
+			t.Errorf("page read: shot %v score = %v, want %d", row.Shot["id"], row.Score, want)
+		}
+		if row.TimeTarget == nil || *row.TimeTarget != *timeWindow {
+			t.Errorf("page read: shot %v TimeTarget = %+v, want %+v", row.Shot["id"], row.TimeTarget, timeWindow)
+		}
+	}
+	if fp, ok := cachedScoreRow(t, repo, 3); !ok {
+		t.Fatal("expected a cache row")
+	} else if !strings.Contains(fp, "|w=40-48") {
+		t.Fatalf("fingerprint %q does not carry the time window", fp)
+	}
+
+	scored, err := svc.GetAllScored(0)
+	if err != nil {
+		t.Fatalf("GetAllScored: %v", err)
+	}
+	if len(scored) != 3 {
+		t.Fatalf("GetAllScored returned %d rows", len(scored))
+	}
+	for _, row := range scored {
+		if row.Score == nil || *row.Score != want {
+			t.Errorf("GetAllScored: shot %v score = %v, want %d", row.Shot["id"], row.Score, want)
+		}
+	}
+
+	if err := repo.EachScoredExcludingTrash(nil, func(s Shot, score *int) error {
+		if score == nil || *score != want {
+			t.Errorf("achievements stream: shot %v score = %v, want %d", s["id"], score, want)
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("EachScoredExcludingTrash: %v", err)
+	}
+
+	candidates, err := repo.comparativeCandidates(1, func(Shot) bool { return true }, nil)
+	if err != nil {
+		t.Fatalf("comparativeCandidates: %v", err)
+	}
+	if len(candidates) != 3 {
+		t.Fatalf("comparativeCandidates returned %d", len(candidates))
+	}
+	for _, c := range candidates {
+		if c.score == nil || *c.score != want {
+			t.Errorf("comparative advice: shot %v score = %v, want %d", c.light["id"], c.score, want)
+		}
+	}
+
+	if got := svc.ComputeScoreDetail(shot); got.Score == nil || *got.Score != want {
+		t.Errorf("ComputeScoreDetail = %+v, want score %d", got, want)
+	} else if got.TimeTarget == nil || *got.TimeTarget != *timeWindow {
+		t.Errorf("ComputeScoreDetail TimeTarget = %+v, want %+v", got.TimeTarget, timeWindow)
+	}
+
+	// A window stored only for machine 2 must not touch machine 1's shots.
+	if err := repo.SaveProfileTimeTargets(map[string][]ProfileTimeTarget{
+		"1": {{ProfileName: "another profile", MinS: 40, MaxS: 48}},
+		"2": {{ProfileName: "V60", MinS: 40, MaxS: 48}},
+	}); err != nil {
+		t.Fatalf("SaveProfileTimeTargets: %v", err)
+	}
+	page, err = repo.FindPageExcludingTrash(Cursor{}, 60, 0)
+	if err != nil {
+		t.Fatalf("FindPageExcludingTrash: %v", err)
+	}
+	for _, row := range page.Rows {
+		if c := classicScores[row.Shot["id"].(int64)]; !sameScore(row.Score, c) {
+			t.Fatalf("shot %v: score for another machine's window = %v, want classic %v", row.Shot["id"], row.Score, c)
+		}
+		if row.TimeTarget != nil {
+			t.Fatalf("shot %v: TimeTarget = %+v from another machine's window", row.Shot["id"], row.TimeTarget)
+		}
+	}
+
+	if err := repo.SaveProfileTimeTargets(nil); err != nil {
+		t.Fatalf("SaveProfileTimeTargets(nil): %v", err)
+	}
+	page, err = repo.FindPageExcludingTrash(Cursor{}, 60, 0)
+	if err != nil {
+		t.Fatalf("FindPageExcludingTrash: %v", err)
+	}
+	for _, row := range page.Rows {
+		if c := classicScores[row.Shot["id"].(int64)]; !sameScore(row.Score, c) {
+			t.Fatalf("shot %v: score after clearing = %v, want classic %v", row.Shot["id"], row.Score, c)
 		}
 	}
 }

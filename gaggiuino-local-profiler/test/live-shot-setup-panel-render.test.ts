@@ -155,7 +155,6 @@ describe('renderLiveShotSetupPanel()', () => {
     // Double-wiring would be invisible to a fake that overwrote the previous
     // callback; the counting fake above makes it fail here instead.
     const wired: Array<[string, string]> = [
-      ['lsToggle', 'click'],
       ['lsBean', 'change'],
       ['lsGrinder', 'change'],
       ['lsGrinderOther', 'input'],

@@ -11,7 +11,7 @@
 // copies so an in-progress dial-in survives the update.
 import { S } from '../state/index.js';
 import { textEntryFocused } from '../live-sync.js';
-import { esc, html, joinHtml, scoreColor } from '../utils.js';
+import { esc, html, joinHtml, scoreClass } from '../utils.js';
 import type { Html } from '../utils.js';
 import { safeLocalStorage } from '../storage.js';
 import { grindSelectId } from './shots/grind-field.js';
@@ -121,6 +121,12 @@ export function bestRound<TRound extends WizardScoredRound>(rounds: readonly TRo
   return best ?? null;
 }
 
+// #2094: a round's score as a status badge on the shared score scale; a
+// round without a score stays neutral.
+export function scoreBadgeClass(score: number | null | undefined): string {
+  return score == null ? 'badge' : `badge badge--${scoreClass(score)}`;
+}
+
 // The chip strip differs only in its label expression (grind number vs taste
 // symptom), so the caller supplies that as `label`.
 export function renderChips<TRound extends WizardScoredRound>(
@@ -129,6 +135,6 @@ export function renderChips<TRound extends WizardScoredRound>(
 ): Html {
   if (!rounds?.length) return html``;
   return html`<div class="dw-chip-strip">${joinHtml(rounds.map(r =>
-    html`<div class="dw-chip" style="border-color:${esc(scoreColor(r.score))}">${label(r)} → ${esc(r.score ?? '–')}</div>`
+    html`<div class="${esc(scoreBadgeClass(r.score))}">${label(r)} → ${esc(r.score ?? '–')}</div>`
   ))}</div>`;
 }

@@ -103,6 +103,12 @@ function lastUsedGrindForBean(bean: BeanListRow, shots: BeanShotRow[]): { grinde
     : null;
 }
 
+// #2094: the freshness band as a status badge; degassing stays neutral.
+const FRESH_BADGE: Record<string, string> = { almost: 'badge badge--warn', peak: 'badge badge--ok', fading: 'badge badge--warn', old: 'badge badge--err' };
+function freshBadgeClass(state: string | null): string {
+  return (state != null ? FRESH_BADGE[state] : undefined) ?? 'badge';
+}
+
 // The bag's real calendar age badge, shown in the detail sheet's head.
 export function beanFreshBadge(b: BeanListRow): Html {
   const { current } = classifyBeanBags(b);
@@ -116,7 +122,7 @@ export function beanFreshBadge(b: BeanListRow): Html {
   const sourceKey = freshnessSourceLabelKey(resolved);
   const sourceLabel = sourceKey ? t(sourceKey) : '';
   return (roastAge != null && shouldShowFreshBadge(b.stock_g, remaining))
-    ? html` <span class="lib-fresh-badge fresh-${esc(resolved.state)}" title="${esc(t('freshness_title', roastAge, resolved.windows.peakFrom, resolved.windows.peakUntil, sourceLabel))}">${esc(roastAge)}d</span>`
+    ? html` <span class="${esc(freshBadgeClass(resolved.state))}" title="${esc(t('freshness_title', roastAge, resolved.windows.peakFrom, resolved.windows.peakUntil, sourceLabel))}">${esc(roastAge)}d</span>`
     : esc('');
 }
 
@@ -160,8 +166,8 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
         <span class="lib-inv-consumed">${tHtml('lib_inv_consumed', totalConsumed)}</span>
         ${bags.length > 1 ? html`<span class="lib-inv-sep">·</span><span class="lib-inv-total">${tHtml('lib_inv_bags', bags.length)}</span>` : esc('')}
         ${isLow ? (reorderUrl
-          ? html`<a class="lib-inv-reorder" href="${esc(reorderUrl)}" target="_blank" rel="noopener noreferrer">${tHtml('lib_inv_reorder')}</a>`
-          : html`<span class="lib-inv-reorder">${tHtml('lib_inv_reorder')}</span>`) : esc('')}
+          ? html`<a class="btn btn--danger" href="${esc(reorderUrl)}" target="_blank" rel="noopener noreferrer">${tHtml('lib_inv_reorder')}</a>`
+          : html`<span class="badge badge--err">${tHtml('lib_inv_reorder')}</span>`) : esc('')}
       </div>
     </div>`;
   }
@@ -192,7 +198,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
       ? html`<button type="button" class="lib-bag-history-toggle${esc(pastExpanded ? ' expanded' : '')}" aria-expanded="${esc(pastExpanded ? 'true' : 'false')}" data-action="toggle-past-bags" data-id="${esc(b.id)}">
            <span class="lib-bag-chevron">▸</span>
            <span>${tHtml('lib_bag_state_past')}</span>
-           <span class="lib-bag-past-count">${esc(past.length)}</span>
+           <span class="badge lib-bag-past-count">${esc(past.length)}</span>
          </button>
          <div class="lib-bag-history-past-wrap${esc(pastExpanded ? ' expanded' : '')}">
            <div class="lib-bag-history-past">${pastBagsHtml}</div>
@@ -218,8 +224,8 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
           <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="editFrozenDate${esc(fp.id)}" value="${esc(localIsoDate(fp.frozenAt))}" max="${esc(todayIsoDate())}">
         </div>
         <div class="lib-form-actions">
-          <button class="lib-btn-sm" data-action="close-edit-frozen-form" data-portion-id="${esc(fp.id)}">${tHtml('lib_cancel')}</button>
-          <button class="lib-save-btn" data-action="save-edit-frozen-form" data-id="${esc(b.id)}" data-portion-id="${esc(fp.id)}">${tHtml('bag_freeze_save')}</button>
+          <button type="button" class="btn btn--quiet" data-action="close-edit-frozen-form" data-portion-id="${esc(fp.id)}">${tHtml('lib_cancel')}</button>
+          <button type="button" class="btn btn--tonal" data-action="save-edit-frozen-form" data-id="${esc(b.id)}" data-portion-id="${esc(fp.id)}">${tHtml('bag_freeze_save')}</button>
         </div>
       </div>`;
     // #477: each portion's own effective age (frozen time counts at a
@@ -238,16 +244,16 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
       ? resolveFreshness(fpAge, b.roastLevel, freshnessOverrideFrom(b)).state
       : null;
     const fpAgeBadge: Html = fpBand
-      ? html` <span class="lib-fresh-badge fresh-${esc(fpBand)}" title="${esc(t('bag_frozen_portion_age', fpAge))}">${esc(fpAge)}d</span>`
+      ? html` <span class="${esc(freshBadgeClass(fpBand))}" title="${esc(t('bag_frozen_portion_age', fpAge))}">${esc(fpAge)}d</span>`
       : esc('');
     if (fp.thawedAt) {
       const thawedStr = formatDate(fp.thawedAt, locale);
-      return html`<span class="lib-frozen-badge thawed" title="${esc(fpTitle)}">${tHtml('bag_frozen_thawed_badge', esc(thawedStr))}${fpAgeBadge}
-        <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
+      return html`<span class="badge lib-frozen" title="${esc(fpTitle)}">${tHtml('bag_frozen_thawed_badge', esc(thawedStr))}${fpAgeBadge}</span>
+        <button type="button" class="btn btn--quiet btn--icon" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button>${editForm}`;
     }
-    return html`<span class="lib-frozen-badge" title="${esc(fpTitle)}">${SNOWFLAKE_ICON_SVG} ${esc(remaining)}/${esc(fp.portionCount)} ${tHtml('bag_frozen_badge', esc(frozenStr))}${fpAgeBadge}
-      <button class="lib-frozen-thaw-btn" data-action="thaw-portion" data-bean-id="${esc(b.id)}" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_thaw_btn')}">${tHtml('bag_thaw_btn')}</button>
-      <button class="lib-frozen-edit-btn" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button></span>${editForm}`;
+    return html`<span class="badge badge--info lib-frozen" title="${esc(fpTitle)}">${SNOWFLAKE_ICON_SVG} ${esc(remaining)}/${esc(fp.portionCount)} ${tHtml('bag_frozen_badge', esc(frozenStr))}${fpAgeBadge}</span>
+      <button type="button" class="btn btn--tonal" data-action="thaw-portion" data-bean-id="${esc(b.id)}" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_thaw_btn')}">${tHtml('bag_thaw_btn')}</button>
+      <button type="button" class="btn btn--quiet btn--icon" data-action="open-edit-frozen-form" data-portion-id="${esc(fp.id)}" title="${tHtml('bag_frozen_edit_btn')}">${EDIT_ICON_SVG}</button>${editForm}`;
   }))}</div>` : esc('');
 
   const rating = calcBeanRating(b, _singleBeanShots(_shots()), S.coffeeLibrary?.beans);
@@ -310,7 +316,7 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
     const flavors = b.flavors;
     if (!Array.isArray(flavors) || flavors.length === 0) return esc('');
     return html`<div class="lib-sheet-aromas">
-      <div class="lib-sheet-aromas-title">${tHtml('lib_sheet_aromas')}</div>
+      <div class="section-title">${tHtml('lib_sheet_aromas')}</div>
       <div class="lib-sheet-aromas-body">
         <button type="button" class="lib-aroma-wheel" data-action="open-flavor-wheel" data-id="${esc(b.id)}" aria-label="${tHtml('flavor_wheel_btn')}">${miniWheelSvg(flavors, 168)}</button>
         <div class="lib-aroma-chips">${flavorChipsHtml(flavors)}</div>
@@ -344,8 +350,8 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
         <input type="text" class="lib-new-bag-input" aria-label="${tHtml('lib_bag_batch_number')}" id="newBagBatchNumber${esc(b.id)}" placeholder="${tHtml('lib_bag_batch_number')}" maxlength="50">
       </div>
       <div class="lib-form-actions">
-        <button class="lib-btn-sm" data-action="close-new-bag" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
-        <button class="lib-save-btn" data-action="save-new-bag" data-id="${esc(b.id)}">${tHtml('lib_new_bag_save')}</button>
+        <button type="button" class="btn btn--quiet" data-action="close-new-bag" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
+        <button type="button" class="btn btn--tonal" data-action="save-new-bag" data-id="${esc(b.id)}">${tHtml('lib_new_bag_save')}</button>
       </div>
     </div>
     <div id="freezeForm${esc(b.id)}" class="lib-new-bag-form" style="display:none">
@@ -355,8 +361,8 @@ export function renderBeanCard(b: BeanListRow, beans: BeanListRow[]): Html {
         <input type="date" class="lib-new-bag-input" aria-label="${tHtml('bag_freeze_date')}" id="freezeDate${esc(b.id)}" title="${tHtml('bag_freeze_date')}" value="${esc(todayIsoDate())}" max="${esc(todayIsoDate())}">
       </div>
       <div class="lib-form-actions">
-        <button class="lib-btn-sm" data-action="close-freeze-form" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
-        <button class="lib-save-btn" data-action="save-freeze-form" data-id="${esc(b.id)}">${tHtml('bag_freeze_save')}</button>
+        <button type="button" class="btn btn--quiet" data-action="close-freeze-form" data-id="${esc(b.id)}">${tHtml('lib_cancel')}</button>
+        <button type="button" class="btn btn--tonal" data-action="save-freeze-form" data-id="${esc(b.id)}">${tHtml('bag_freeze_save')}</button>
       </div>
     </div>
     <div class="bean-qr-wrap" id="beanQR${esc(b.id)}" style="display:none">
@@ -391,7 +397,7 @@ export async function deleteBag(beanId: number, bagId: number): Promise<void> {
   if (!bean || bags.length <= 1) return;
   const { current } = classifyBeanBags(bean);
   if (current?.bg.id === bagId) return;
-  if (!await confirmDialog(t('lib_bag_delete_confirm'), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t('lib_bag_delete_confirm'), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const saved = await libraryApi.deleteBeanBag(beanId, bagId);
   if (!saved) { showToast(t('gm_toast_save_error')); return; }
   const idx = _beanList().findIndex(b => b.id === beanId);

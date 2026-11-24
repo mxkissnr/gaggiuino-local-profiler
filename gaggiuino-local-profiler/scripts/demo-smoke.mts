@@ -194,27 +194,48 @@ export function chartFitProblem(step: string, size: { container: number; canvas:
     return `shot chart is ${Math.round(size.canvas)} px wide in a ${Math.round(size.container)} px container ${step}`;
 }
 
+/** One reading of the shot chart for the fit check (#2175). */
+export interface ChartSample { container: number; canvas: number; sidebarAnimating: boolean }
+
 /**
- * Reads both widths in one evaluation and records the mismatch. Waits up to
- * 3 s first so the container's CSS transition and the chart's own resize
- * settle; a timeout is not itself a failure, the measured widths decide.
+ * True once the layout has settled: the list's width transition is over
+ * and the chart fits its container. While the list still slides, the
+ * container changes every frame and the chart's resize follows one frame
+ * later, so a reading taken then proves nothing either way (#2175).
  */
-async function assertShotChartFits(page: Page, problems: string[], profileName: string, step: string): Promise<void> {
-    await page.waitForFunction(() => {
+export function chartSettled(sample: ChartSample): boolean {
+    return !sample.sidebarAnimating && chartFitProblem('', sample) === null;
+}
+
+/** Reads both widths and whether the list's width transition still runs. */
+async function readChartSample(page: Page): Promise<ChartSample> {
+    return page.evaluate(() => {
         const canvas = document.getElementById('espressoShotChart');
         const container = document.getElementById('zeitContainer');
-        if (!canvas || !container) return false;
-        return Math.abs(canvas.getBoundingClientRect().width - container.clientWidth) <= 1;
-    }, undefined, { timeout: 3000 }).catch(() => {});
-    const size = await page.evaluate(() => {
-        const canvas = document.getElementById('espressoShotChart');
-        const container = document.getElementById('zeitContainer');
+        const sidebar = document.getElementById('sidebar');
         return {
             canvas: canvas ? canvas.getBoundingClientRect().width : 0,
             container: container ? container.clientWidth : 0,
+            sidebarAnimating: !!sidebar && sidebar.getAnimations().length > 0,
         };
     });
-    const problem = chartFitProblem(step, size);
+}
+
+/**
+ * Polls the chart for up to 3 s until a reading is settled (see
+ * chartSettled), then records a mismatch from that same LAST reading. The
+ * wait and the verdict never use two different readings, so a frame in
+ * between cannot fake an overflow (#2175). A chart that never fits still
+ * fails: after the timeout the last reading is what gets checked.
+ */
+async function assertShotChartFits(page: Page, problems: string[], profileName: string, step: string): Promise<void> {
+    const deadline = Date.now() + 3000;
+    let sample = await readChartSample(page);
+    while (!chartSettled(sample) && Date.now() < deadline) {
+        await page.waitForTimeout(50);
+        sample = await readChartSample(page);
+    }
+    const problem = chartFitProblem(step, sample);
     if (problem) problems.push(`[${profileName}] ${problem}`);
 }
 

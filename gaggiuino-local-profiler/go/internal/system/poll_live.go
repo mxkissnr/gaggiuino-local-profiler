@@ -41,6 +41,8 @@ func (p *Poller) buildLiveDataResponseFor(defaultID int64) LiveData {
 	// #1409: never nil, so machineWarnings is always a JSON array.
 	warnings := []string{}
 	var updateAvailable bool
+	var systemState string
+	var systemErrorCode int
 	if rt.MachineStatus != nil {
 		t := rt.MachineStatus.Temperature
 		tt := rt.MachineStatus.TargetTemperature
@@ -49,6 +51,8 @@ func (p *Poller) buildLiveDataResponseFor(defaultID int64) LiveData {
 		waterLevel = rt.MachineStatus.WaterLevel // already *int, nil when HasWaterSensor=false (wl field not parsed)
 		warnings = append([]string{}, rt.MachineStatus.Warnings...)
 		updateAvailable = rt.MachineStatus.UpdateAvailable
+		systemState = rt.MachineStatus.SystemState
+		systemErrorCode = rt.MachineStatus.SystemErrorCode
 	}
 
 	p.state.mu.Lock()
@@ -108,6 +112,8 @@ func (p *Poller) buildLiveDataResponseFor(defaultID int64) LiveData {
 
 		MachineWarnings:        warnings,
 		MachineUpdateAvailable: updateAvailable,
+		MachineSystemState:     systemState,
+		MachineSystemErrorCode: systemErrorCode,
 
 		MachineControl: machineControl,
 	}

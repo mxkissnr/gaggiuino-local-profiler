@@ -115,13 +115,14 @@ func (a *GaggiuinoAdapter) GetProfile(ctx context.Context, m *Machine, id string
 
 // CreateProfile uses the same try-REST-first/fall-back-to-WS pattern as
 // GetProfile — newer firmware's POST /api/profile is create-only (an id in
-// the body is ignored, #580).
+// the body is ignored, #580). The REST body carries enum names, see
+// gaggiuinoRESTProfileBody (#2167).
 func (a *GaggiuinoAdapter) CreateProfile(ctx context.Context, m *Machine, profile ProfileInput) (ProfileSummary, error) {
 	baseURL, err := BaseURLFor(ctx, m)
 	if err != nil {
 		return ProfileSummary{}, err
 	}
-	body, err := json.Marshal(profile)
+	body, err := gaggiuinoRESTProfileBody(profile)
 	if err == nil {
 		if raw, err := httpPostBytes(ctx, baseURL+"/api/profile", body, 5*time.Second); err == nil {
 			var created ProfileSummary
@@ -135,6 +136,52 @@ func (a *GaggiuinoAdapter) CreateProfile(ctx context.Context, m *Machine, profil
 		return ProfileSummary{}, err
 	}
 	return ProfileSummary{ID: strconv.Itoa(int(saved.ID)), Name: saved.Name}, nil
+}
+
+// gaggiuinoRESTProfileBody is the body for the firmware's REST
+// POST /api/profile (#2167). The REST API reads and writes phase types and
+// curves as enum names ("FLOW", "INSTANT"), the shape GET /api/profile/{id}
+// returns; ProfileInput's default JSON has the protobuf numbers, which the
+// firmware does not read (it falls back to PRESSURE and EASE_IN_OUT). Only
+// this body uses names; the WebSocket path keeps the numbers. A value with
+// no name is an error, so CreateProfile falls back to the WebSocket create.
+func gaggiuinoRESTProfileBody(p ProfileInput) ([]byte, error) {
+	// The outer field wins over the embedded field with the same JSON name,
+	// so only type and curve change; every other key stays as before.
+	type restTransition struct {
+		*TransitionInput
+		Curve *string `json:"curve"`
+	}
+	type restPhase struct {
+		PhaseInput
+		Type   string          `json:"type"`
+		Target *restTransition `json:"target"`
+	}
+	type restProfile struct {
+		ProfileInput
+		Phases []restPhase `json:"phases"`
+	}
+	phases := make([]restPhase, len(p.Phases))
+	for i, ph := range p.Phases {
+		typeName, ok := ph.Type.Name()
+		if !ok {
+			return nil, fmt.Errorf("phases[%d]: phase type %d has no REST name", i, ph.Type)
+		}
+		phases[i] = restPhase{PhaseInput: ph, Type: typeName}
+		if ph.Target == nil {
+			continue
+		}
+		target := &restTransition{TransitionInput: ph.Target}
+		if ph.Target.Curve != nil {
+			curveName, ok := ph.Target.Curve.Name()
+			if !ok {
+				return nil, fmt.Errorf("phases[%d]: curve %d has no REST name", i, *ph.Target.Curve)
+			}
+			target.Curve = &curveName
+		}
+		phases[i].Target = target
+	}
+	return json.Marshal(restProfile{ProfileInput: p, Phases: phases})
 }
 
 // UpdateProfile is WebSocket-only (#580 live-verified there is no REST

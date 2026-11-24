@@ -38,6 +38,7 @@ export function updateMachineBanner(status: StatusLike | null = null): void {
 
   const banner = document.createElement('div');
   banner.id = 'glpOnboardingBanner';
+  banner.className = 'app-banner';
   Object.assign(banner.style, {
     position: 'fixed', left: '0', right: '0', zIndex: '9997',
     top: `${devBannerHeight() + (document.getElementById('glpUpdateBanner')?.offsetHeight || 0)}px`,
@@ -45,7 +46,7 @@ export function updateMachineBanner(status: StatusLike | null = null): void {
   // stayed dark-on-dark chips on a light page. --raised/--gray-200 are the
   // themed equivalents of exactly those two values.
   background: themeColor('--raised', '#3f3f46'), color: themeColor('--gray-200', '#e4e4e7'),
-    padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '12px',
+    display: 'flex', alignItems: 'center', gap: '12px',
     fontSize: '.875rem', fontWeight: '500', boxShadow: '0 2px 8px rgba(0,0,0,.35)',
   });
 
@@ -63,9 +64,10 @@ export function updateMachineBanner(status: StatusLike | null = null): void {
 
   const closeBtn = document.createElement('button');
   closeBtn.type = 'button';
+  closeBtn.className = 'app-banner-close';
   closeBtn.setAttribute?.('aria-label', t('lib_sheet_close'));
   closeBtn.innerHTML = CLOSE_ICON_SVG;
-  Object.assign(closeBtn.style, { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: themeColor('--gray-200', '#e4e4e7'), padding: '0 2px' });
+  Object.assign(closeBtn.style, { background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: themeColor('--gray-200', '#e4e4e7') });
   closeBtn.addEventListener('click', () => {
     safeSessionStorage.setItem(DISMISS_KEY, '1');
     banner.remove();
@@ -102,7 +104,7 @@ export async function loadDemoData(): Promise<void> {
 }
 
 export async function endDemo(): Promise<void> {
-  if (!await confirmDialog(t('demo_mode_end_confirm'))) return;
+  if (!await confirmDialog(t('demo_mode_end_confirm'), { destructive: true })) return;
   try {
     const r = await endDemoData();
     if (r.ok) {

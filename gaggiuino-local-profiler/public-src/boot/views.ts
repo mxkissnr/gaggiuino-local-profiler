@@ -3,9 +3,9 @@
 // DOMContentLoaded handler; run through runStep() so a missing element only
 // skips this step.
 import { t } from '../i18n.js';
-import { onRefShotChange, clearReferenceShot } from '../views/live.js';
+import { clearReferenceShot } from '../views/live.js';
 import { getAnalyticsFilter, setAnalyticsFilter, initAnalyticsMoreFold } from '../views/analytics.js';
-import { setOrdersEnabled, toggleOrdersMenu, addOrderMenuItem, toggleOrdersStats, toggleOrdersNotify, toggleOrdersKiosk } from '../views/orders.js';
+import { setOrdersEnabled, addOrderMenuItem, openOrdersManage } from '../views/orders.js';
 import { renderDialin, setDialinBean } from '../views/dialin.js';
 import { safeLocalStorage } from '../storage.js';
 import { bindPillSelects } from '../components/pill-select.js';
@@ -13,12 +13,12 @@ import { bindPillSelects } from '../components/pill-select.js';
 export function wireViews(): void {
   bindPillSelects();
   document.getElementById('ordersEnabledToggle')!.addEventListener('change', e => { void setOrdersEnabled((e.target as HTMLInputElement).checked); });
-  document.getElementById('ordersMenuTitle')!.addEventListener('click', toggleOrdersMenu);
-  document.getElementById('ordersStatsTitle')!.addEventListener('click', toggleOrdersStats);
-  document.getElementById('ordersNotifyTitle')!.addEventListener('click', toggleOrdersNotify);
-  document.getElementById('ordersKioskTitle')!.addEventListener('click', toggleOrdersKiosk);
+  // #2148: a Manage row opens its panel in the detail sheet.
+  document.getElementById('ordersManage')!.addEventListener('click', e => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('[data-orders-manage]');
+    if (row) openOrdersManage(row.dataset.ordersManage as string);
+  });
   document.getElementById('addOrderMenuItemBtn')!.addEventListener('click', () => { void addOrderMenuItem(); });
-  document.getElementById('refShotSelect')!.addEventListener('change', e => onRefShotChange((e.target as HTMLInputElement).value));
   document.getElementById('refClearBtn')!.addEventListener('click', clearReferenceShot);
 
   // ── Analytics toolbar (#1467): one period + search filter for the whole
@@ -29,7 +29,6 @@ export function wireViews(): void {
   const syncAnalyticsRangeChips = (days: number): void => {
     analyticsRangeChips.forEach(chip => {
       const on = Number(chip.dataset.days) === days;
-      chip.classList.toggle('active', on);
       chip.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
   };

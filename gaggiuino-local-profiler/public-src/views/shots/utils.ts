@@ -2,7 +2,7 @@ import { S }                    from '../../state/index.js';
 import { mapShotDatapoints, roastAgeDays, frozenPortionAgeDays, resolveBeanForAnnotation as _resolveBeanForAnnotation, freshnessOverrideFrom, normalizeRoastLevel } from '../../utils.js';
 import type { ShotDatapoints, ShotSeries, FreshnessOverride, RoastLevel } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
-import type { PressureNote } from '../../shared/score.js';
+import type { PressureNote, TimeWindow } from '../../shared/score.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
 import type { BeanMixPartInput } from '../../shared/bean-mix.js';
 
@@ -27,6 +27,8 @@ export interface ShotLike {
   datapoints?: ShotDatapoints;
   profile?: { name?: string | null; phases?: unknown[] } | null;
   annotation?: ShotAnnotationLike | null;
+  /** Server-resolved profile duration window in seconds (#1504). */
+  timeTarget?: TimeWindow | null;
 }
 
 interface BeanBag {
@@ -197,7 +199,7 @@ export function getShotData(shot: { datapoints?: ShotDatapoints } | null | undef
 export function calcShotScore(shot: ShotLike | null | undefined, _data?: unknown): number | null {
   if (shot && shot.score !== undefined) return shot.score;
   const bean = resolveBeanForAnnotation(shot?.annotation);
-  return _calcShotScore(shot, bean);
+  return _calcShotScore(shot, bean, shot?.timeTarget ?? null);
 }
 
 // #457: whether the bean's own brewTempC/brewRatio recommendation was
@@ -283,6 +285,32 @@ export function findPreviousShotForBean(shots: ShotLike[], shot: ShotLike): Shot
     if (!prev || (s.timestamp as number) > (prev.timestamp as number)) prev = s;
   }
   return prev;
+}
+
+// #2152: the shot the verdict measures its delta against (and the Process
+// deltas and the ghost curve with it): the most recent earlier shot with the
+// same profile on the same machine and, when this shot names one bean, the
+// same bean (_sameBean above). A shot without a bean, or a mixed one, falls
+// back to the same profile alone; `sameBean` tells the verdict which it was.
+export function findPreviousComparableShot(shots: ShotLike[], shot: ShotLike): { shot: ShotLike; sameBean: boolean } | null {
+  const ann = shot?.annotation;
+  const oneBean = !!ann && (!!ann.coffee || ann.beanId != null) && !isBeanMix(ann);
+  if (!oneBean) {
+    const prev = findPreviousShot(shots, shot);
+    return prev ? { shot: prev, sameBean: false } : null;
+  }
+  if (!shot.profileName) return null;
+  const machineId = shot.machineId ?? 1;
+  let prev: ShotLike | null = null;
+  for (const s of shots) {
+    if (s.id === shot.id) continue;
+    if ((s.machineId ?? 1) !== machineId) continue;
+    if (s.profileName !== shot.profileName) continue;
+    if (!_sameBean(ann, s.annotation)) continue;
+    if ((s.timestamp as number) >= (shot.timestamp as number)) continue;
+    if (!prev || (s.timestamp as number) > (prev.timestamp as number)) prev = s;
+  }
+  return prev ? { shot: prev, sameBean: true } : null;
 }
 
 // True when `shot` is the most recent shot recorded for its own bean — the

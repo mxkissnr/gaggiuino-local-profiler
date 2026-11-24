@@ -16,6 +16,8 @@ import { markMaintDone, saveMaintThreshold, setMaintMode, setMaintScope, deleteM
 import { openFlavorWheel, closeFlavorWheel, zoomFlavorWheelTo, highlightFlavorWheelNode } from '../components/flavor-wheel.js';
 import { highlightSheetFlavor } from '../components/flavor-mini-wheel.js';
 import { closeDetailSheet } from '../components/detail-sheet.js';
+import { chooseShareFormat, pickCompareShot } from '../views/shots/detail-page.js';
+import { wireOverflowMenus } from '../components/overflow-menu.js';
 import { openDialinShot } from '../views/dialin.js';
 import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrinder, deleteGrinder,
          resetGrinderBurrs, deleteGrinderZeroPointEntry, toggleBeanQR, openNewBagForm, closeNewBagForm,
@@ -24,9 +26,11 @@ import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrind
          toggleBagCard, openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, filterShotsByBean,
          openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm, editRecipe, deleteRecipe,
          removeRecipeStep, _submitManualScan, restockMilk, deleteMilk, editBasket, deleteBasket,
-         editPuckScreen, deletePuckScreen } from '../views/library.js';
-import { editProfile, duplicateProfile, deleteMachineProfile, createProfileFromBean, removeProfilePhase } from '../views/library-profile-editor.js';
+         editPuckScreen, deletePuckScreen, startBeanCompare, chooseBeanCompare, pickOtherBeanCompare,
+         swapBeanCompare, backFromBeanCompare } from '../views/library.js';
+import { editProfile, duplicateProfile, deleteMachineProfile, createProfileFromBean, removeProfilePhase, addProfilePhase, selectProfilePhase } from '../views/library-profile-editor.js';
 import { toggleBeanProfilePin } from '../views/library/bean-profiles.js';
+import { openProfileTimeTargetSheet, saveProfileTimeTargetFromSheet, clearProfileTimeTarget } from '../views/library/profile-time-target.js';
 import { openGaggiMateProfileEditor, duplicateGaggiMateProfile, openNewGaggiMateProfile, handleGmEditorAction } from '../views/gaggimate-profile-editor.js';
 import { openDialinWizard, startDialinFromBean, dialinGrinderChange, dialinConfirmShot, dialinAcceptNext,
          dialinOverride, dialinEnd, dialinSaveKnownGrind, dialinClose } from '../views/dialin-wizard.js';
@@ -36,6 +40,7 @@ import { switchActiveMachine, setDefaultMachine } from '../components/machines-s
 import { closeSetupWizard, setupWizardGetStarted, setupWizardSkipToDemo } from '../views/setup-wizard.js';
 import { closeEasterEggPanel } from '../components/topbar-machine-icon.js';
 import { toggleFlush, confirmBrewFromDialog, cancelBrewFromDialog } from '../components/machine-control.js';
+import { openRefPicker, chooseReferenceShot, openLiveSetupSheet } from '../views/live.js';
 import { isActiveMachineGaggiMate } from './library.js';
 
 // #1619: keep role="button" cards operable without turning their block
@@ -51,6 +56,9 @@ export function activateActionFromKeyboard(e: KeyboardEvent): void {
 }
 
 export function wireDelegation(): void {
+  // #2165: Escape, a press outside, close after a pick and the upward flip
+  // for every overflow menu in the shared pattern.
+  wireOverflowMenus();
   // ── Global click delegation for dynamic content ────────────────────────
   document.body.addEventListener('keydown', activateActionFromKeyboard);
   document.body.addEventListener('click', e => {
@@ -92,6 +100,13 @@ export function wireDelegation(): void {
       case 'filter-by-bean':     closeBeanSheet(); filterShotsByBean(numId()); break;
       case 'clear-bean-filter':  clearBeanFilter(); break;
       case 'toggle-bean-qr':     toggleBeanQR(numId()); break;
+      // #2119: compare two beans. The sheet's menu entry opens the bean
+      // picker; a picker row opens or updates the comparison page.
+      case 'compare-bean':       closeBeanSheet(); startBeanCompare(numId()); break;
+      case 'compare-pick-bean':  chooseBeanCompare(numId()); break;
+      case 'compare-pick-other': pickOtherBeanCompare(); break;
+      case 'compare-swap':       swapBeanCompare(); break;
+      case 'compare-back':       backFromBeanCompare(); break;
       // #1500: manual barcode entry in the scan modal submits through this
       // delegation (no inline handler under the CSP); preventDefault keeps
       // the form from navigating the page on click or Enter.
@@ -126,6 +141,9 @@ export function wireDelegation(): void {
         break;
       case 'delete-profile':        void deleteMachineProfile(strId()); break;
       case 'remove-profile-phase':  removeProfilePhase(Number(el.dataset.idx)); break;
+      // #2154: the profile editor's phase timeline.
+      case 'select-profile-phase':  selectProfilePhase(Number(el.dataset.idx)); break;
+      case 'add-profile-phase':     addProfilePhase(); break;
       case 'create-profile-from-bean':
         closeBeanSheet();
         if (isActiveMachineGaggiMate()) openNewGaggiMateProfile();
@@ -175,7 +193,9 @@ export function wireDelegation(): void {
       case 'open-dialin-shot':   openDialinShot(numId(), el); break;
       case 'dialin-goto-shot':   closeDetailSheet(); goToShot(numId()); break;
       case 'goto-shot':          goToShot(numId()); break;
-      case 'toggle-comp-grind':  document.getElementById('grindAdviceComparative')?.classList.toggle('expanded'); break;
+      // #2152: the shot page's compare picker and share sheet rows.
+      case 'pick-compare-shot':  pickCompareShot(numId()); break;
+      case 'share-shot-card':    chooseShareFormat(el.dataset.format ?? 'square'); break;
       case 'start-dialin':           openDialinWizard(); break;
       case 'start-dialin-from-bean': closeBeanSheet(); startDialinFromBean(numId()); break;
       case 'dialin-confirm-shot':    void dialinConfirmShot(numId(), el.dataset.match === '1'); break;
@@ -185,6 +205,9 @@ export function wireDelegation(): void {
       case 'dialin-save-known-grind': void dialinSaveKnownGrind(); break;
       case 'dialin-close':           dialinClose(); break;
       case 'start-profile-dialin':      void startProfileDialinFromList(strId()); break;
+      case 'profile-time-target':       openProfileTimeTargetSheet(el.dataset.name ?? '', el); break;
+      case 'save-profile-time-target':  void saveProfileTimeTargetFromSheet(); break;
+      case 'clear-profile-time-target': void clearProfileTimeTarget(); break;
       case 'profile-dialin-symptom':    profileDialinToggleSymptom(el.dataset.symptom); break;
       case 'profile-dialin-confirm-shot': profileDialinConfirmShot(numId(), el.dataset.match === '1'); break;
       case 'profile-dialin-accept-next':  void profileDialinAcceptNext(); break;
@@ -208,6 +231,11 @@ export function wireDelegation(): void {
       case 'live-set-default-machine':
         if (typeof S.activeMachineId === 'number') void setDefaultMachine(S.activeMachineId);
         break;
+      // #2153: the Live tab's reference chip opens the reference list, a row
+      // picks that shot; a next-shot row opens the fields in the sheet.
+      case 'live-ref-open':     openRefPicker(el); break;
+      case 'live-ref-choose':   chooseReferenceShot(strId()); break;
+      case 'live-setup-open':   openLiveSetupSheet(); break;
     }
   });
 

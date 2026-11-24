@@ -51,10 +51,11 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 
 - **Multi-machine** - run Gaggiuino and GaggiMate machines side by side from one app instance, each with its own shots, live view and maintenance, while shared equipment such as the grinder stays global.
 - **Shot archive & live view** - every shot is stored with pressure, flow, weight and temperature curves, and the Live tab streams the current brew, preheat state and machine status straight from the controller.
-- **Shot score & dial-in help** - an automatic 0-100 score with a plain-language verdict, grind recommendations, and a guided dial-in wizard that tunes grind against a 25-32 s extraction target.
+- **Shot score & dial-in help** - an automatic 0-100 score with a plain-language verdict, grind recommendations, and a guided dial-in wizard that tunes grind against a 25-32 s extraction target, or against a target time you set per profile.
 - **Compare mode & ghost curve** - overlay any two shots by hand, or let the shot detail auto-compare against the previous shot on the same profile with delta chips and a dashed ghost curve.
 - **Coffee library** - beans, grinders, baskets, puck screens, recipes and frozen portions in one catalogue, with roaster URL import, barcode/QR scan and per-entity photos.
 - **Bean shelf** - your beans stand as bag photos with a stock bar, with search, filter and sort, and empty or archived beans tidy themselves away.
+- **Compare two beans** - put two beans side by side from a bean's menu: a verdict on which one works better for you and why, then results, dial-in on the shared grinder, aromas and bag details next to each other.
 - **Multiple beans in one shot** - log a shot with up to four beans and the grams of each; every bag is deducted by its own share, and the largest share is the shot's bean.
 - **Proven profiles per bean** - each bean lists the profiles that earned your best ratings on it, lets you pin one, and a new bean gets suggestions from similar beans (roast level, decaf, process) once your own history backs them up.
 - **Bean freshness and in-app camera** - each bean's roast level picks its own freshness window (with an optional per-bean "best for use" range and per-level overrides in Settings) next to your low-stock threshold; take photos with a camera inside the app, and re-crop a saved photo later from its uncropped original.
@@ -62,7 +63,7 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 - **Analytics** - score trends, a shot calendar heatmap, a month calendar with a photo of each day's bean, a coffee world map, bean/grinder/basket rankings, machine comparison and per-bean dial-in progression.
 - **Machine profile editor** - build and edit Gaggiuino and GaggiMate profiles phase by phase with a live preview chart, then send them straight to the machine.
 - **Machine settings backups** - Gaggiuino machines keep a history of their settings and profiles, backed up daily, before firmware updates and on demand; download, upload, compare in plain words and restore any version, without GLP ever storing the Wi-Fi or MQTT passwords.
-- **Settings like Home Assistant, and an achievements page** - Settings is a grouped, searchable list with sub-pages and a list of the open-source libraries the app is built with; the Achievements page shows your stamp card, and the library saves changes to existing entries by itself.
+- **Settings like Home Assistant, and an achievements page** - Settings is a grouped, searchable list with sub-pages, a help card that links the documentation, the Discord community and the issue forms, and a list of the open-source libraries the app is built with; the Achievements page shows your stamp card, and the library saves changes to existing entries by itself.
 - **Maintenance tracking** - descaling, backflush, group-head and gasket tasks tracked per machine, with grinder cleaning and burr-wear tracking alongside.
 - **Orders & kiosk mode** - take drink orders from a tablet kiosk page with variants and notes, and watch the barista queue update on its own.
 - **Live updates across devices** - an open page picks up a change made on another device within seconds, without a reload.

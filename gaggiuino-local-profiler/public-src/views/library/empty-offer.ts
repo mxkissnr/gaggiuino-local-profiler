@@ -64,7 +64,14 @@ async function _write(bean: BeanListRow, payload: { enabled?: false; emptyOfferB
   if (idx !== -1) _beanList()[idx] = saved;
 }
 
-/** Marks beans as resolved without offering; a failure retries at the next check. */
+/**
+ * Marks beans as resolved without offering; a failure retries at the next check.
+ * Runs from the boot task on any view, so the first start after an update writes
+ * the marker once per already-empty bean (#2127). emptyOfferKey and the server,
+ * which only moves the marker forward, keep later visits from writing again. The
+ * marker lives on the bean row, not in the UI prefs: it is per bean and travels
+ * with backup and restore.
+ */
 async function _record(beans: readonly BeanListRow[], arm: boolean): Promise<void> {
   if (_baselining) return;
   _baselining = true;

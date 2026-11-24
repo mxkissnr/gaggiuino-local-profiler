@@ -60,16 +60,31 @@ func loadBeanLookup() beanLookup {
 	return lookup
 }
 
+// timeTargetLookup loads the profile time windows once (#1504); a service
+// without a repository scores without windows.
+func (s *Service) timeTargetLookup() func(Shot) *TimeTarget {
+	if s == nil || s.repo == nil {
+		return func(Shot) *TimeTarget { return nil }
+	}
+	return s.repo.loadTimeTargetLookup()
+}
+
 // DetailScorer returns a per-shot ScoreDetail function that resolves each
-// shot's bean through one load of the bean source, scoring with the active
-// score model resolved once here (#1922). Callers scoring many shots in one
-// request should call this once and reuse the result, instead of
-// ComputeScoreDetail per shot (which reloads the bean list each time).
+// shot's bean and profile time window through one load each, scoring with
+// the active score model resolved once here (#1922, #1504). Callers scoring
+// many shots in one request should call this once and reuse the result,
+// instead of ComputeScoreDetail per shot (which reloads the bean list and
+// the windows each time). The resolved window is handed back on the detail
+// so the response can report it.
 func (s *Service) DetailScorer() func(Shot) ScoreDetail {
 	lookup := loadBeanLookup()
+	times := s.timeTargetLookup()
 	model := activeScoreModel()
 	return func(shot Shot) ScoreDetail {
-		return model.Score(shot, lookup(shot))
+		targets := ScoreTargets{Bean: lookup(shot), Time: times(shot)}
+		detail := model.Score(shot, targets)
+		detail.TimeTarget = targets.Time
+		return detail
 	}
 }
 

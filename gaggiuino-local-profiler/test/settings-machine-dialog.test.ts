@@ -12,7 +12,7 @@ g.navigator ??= { language: 'en-US' };
 g.window ??= globalThis;
 
 const dialogs = vi.hoisted(() => ({
-  confirmDialog: vi.fn<(message: string, opts?: { confirmLabel?: string }) => Promise<boolean>>(),
+  confirmDialog: vi.fn<(message: string, opts?: { confirmLabel?: string; destructive?: boolean }) => Promise<boolean>>(),
 }));
 
 vi.mock('../public-src/components/confirm-dialog.js', () => ({ confirmDialog: dialogs.confirmDialog }));
@@ -181,7 +181,7 @@ describe('the machine dialog (#2038)', () => {
     const markup = host.innerHTML;
     expect(markup).toContain('Gaggia');
     expect(markup).toContain('machine-dialog-more');
-    const backups = markup.indexOf('class="machine-backups-btn"');
+    const backups = markup.indexOf('class="lib-sheet-menu-item machine-backups-btn"');
     const setDefault = markup.indexOf('machine-set-default-btn');
     const del = markup.indexOf('machine-delete-btn');
     expect(backups).toBeGreaterThanOrEqual(0);
@@ -224,7 +224,7 @@ describe('the machine dialog (#2038)', () => {
     root.querySelector('.machine-delete-btn').handlers.click?.();
 
     expect(menu.open).toBe(false);
-    expect(dialogs.confirmDialog).toHaveBeenCalledWith(t('settings_machine_delete_confirm'), { confirmLabel: t('lib_btn_delete') });
+    expect(dialogs.confirmDialog).toHaveBeenCalledWith(t('settings_machine_delete_confirm'), { confirmLabel: t('lib_btn_delete'), destructive: true });
   });
 
   it('hides Set as default once the machine became the default', () => {
@@ -253,5 +253,8 @@ describe('the machine dialog (#2038)', () => {
     expect(first.innerHTML).not.toContain('Default');
     expect(second.innerHTML).toContain('Default');
     expect(first.innerHTML).not.toContain('machine-row-badge');
+    expect(first.innerHTML).toContain('<span class="badge machine-row-firmware-status">');
+    expect(first.innerHTML).toContain('<button type="button" class="btn btn--tonal machine-row-firmware-update" aria-expanded="false" style="display:none">');
+    expect(second.innerHTML).not.toContain('machine-row-firmware');
   });
 });

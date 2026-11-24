@@ -4,6 +4,7 @@
 // JPEG blob plus the crop rectangle and the uncropped original (#1845).
 import { t } from '../i18n.js';
 import { esc, html } from '../utils.js';
+import { CLOSE_ICON_SVG } from '../icons.js';
 import { attachDialogKeyboard } from './dialog-a11y.js';
 import type { DialogKeyboardHandle } from './dialog-a11y.js';
 import type { ImageCrop } from '../api/types.js';
@@ -236,7 +237,10 @@ function _buildEditor(
   overlay.setAttribute('aria-labelledby', 'cropEditorTitle');
   overlay.innerHTML = html`
     <div class="crop-editor-modal">
-      <h3 class="crop-editor-title" id="cropEditorTitle">${esc(t('crop_editor_title'))}</h3>
+      <div class="lib-sheet-bar">
+        <button type="button" class="lib-sheet-close crop-editor-cancel" aria-label="${esc(t('lib_sheet_close'))}">${CLOSE_ICON_SVG}</button>
+        <h3 class="lib-sheet-bar-title" id="cropEditorTitle">${esc(t('crop_editor_title'))}</h3>
+      </div>
       ${opts.hint ? html`<p class="lib-form-hint crop-editor-hint">${esc(opts.hint)}</p>` : esc('')}
       <canvas class="${esc(canvasClass)}"
               width="${esc(previewW)}" height="${esc(previewH)}"></canvas>
@@ -246,8 +250,7 @@ function _buildEditor(
         <span class="crop-editor-zoom-icon">+</span>
       </div>
       <div class="crop-editor-actions">
-        <button type="button" class="lib-btn-sm crop-editor-cancel">${esc(t('lib_cancel'))}</button>
-        <button type="button" class="lib-save-btn crop-editor-apply">${esc(t('crop_editor_apply'))}</button>
+        <button type="button" class="btn btn--primary crop-editor-apply">${esc(t('crop_editor_apply'))}</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);

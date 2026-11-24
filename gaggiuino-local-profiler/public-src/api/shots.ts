@@ -1,4 +1,5 @@
 import { apiFetch, pathSeg } from './fetch.js';
+import type { components } from './schema.gen.js';
 import type { HydratedShot, ShotAnnotationInput, ShotDefaults } from './types.js';
 
 // Typed client for the `shots` domain (go/internal/shots — every route that
@@ -87,6 +88,31 @@ export async function saveShotDefaults(defaults: ShotDefaults): Promise<ShotDefa
   return r.ok ? ((await r.json()) as ShotDefaults) : null;
 }
 
+/** One per-profile target time window (#1504). */
+export type ProfileTimeTarget = components['schemas']['ProfileTimeTarget'];
+
+/**
+ * GET /api/profile-time-targets?machineId= — that machine's windows; null on a
+ * non-ok response so the caller keeps what it already has cached.
+ */
+export async function getProfileTimeTargets(machineId: number): Promise<ProfileTimeTarget[] | null> {
+  const params = new URLSearchParams({ machineId: String(machineId) });
+  const r = await apiFetch(`api/profile-time-targets?${params}`);
+  return r.ok ? ((await r.json()) as ProfileTimeTarget[]) : null;
+}
+
+/**
+ * PUT /api/profile-time-targets — set (both numbers) or remove (both null) one
+ * window. Raw Response: the caller reads 400 vs other failures.
+ */
+export function putProfileTimeTarget(body: { machineId: number; profileName: string; minS: number | null; maxS: number | null }): Promise<Response> {
+  return apiFetch('api/profile-time-targets', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
 /** POST /api/shots/{id}/trash — soft-delete. */
 export function sendShotToTrash(id: number): Promise<Response> {
   return apiFetch(`api/shots/${pathSeg(id)}/trash`, {
@@ -121,14 +147,26 @@ export interface ShotCardOptions {
   theme: string;
   /** Viewer's UI language (de/en/es/fr/it/nl); the backend falls back to English. */
   lang: string;
+  /** The shot page's verdict sentence (#2166); left out when empty. */
+  verdict?: string;
+  /** The verdict's advice type; 'finer' and 'coarser' draw an arrow. */
+  verdictType?: string;
+  /** Score change against the compared shot; left out when null. */
+  delta?: number | null;
+  /** The line naming the compared shot; left out when empty. */
+  vs?: string;
 }
 
 /**
  * GET /api/shots/{id}/card — the rendered PNG. Returns the raw Response: the
  * caller streams the body as a Blob and reads the JSON error on a non-ok.
  */
-export function getShotCard(id: number, { format, accent, theme, lang }: ShotCardOptions): Promise<Response> {
+export function getShotCard(id: number, { format, accent, theme, lang, verdict, verdictType, delta, vs }: ShotCardOptions): Promise<Response> {
   const params = new URLSearchParams({ format, accent, theme, lang });
+  if (verdict) params.set('verdict', verdict);
+  if (verdictType) params.set('verdictType', verdictType);
+  if (delta != null) params.set('delta', String(delta));
+  if (vs) params.set('vs', vs);
   return apiFetch(`api/shots/${pathSeg(id)}/card?${params}`);
 }
 

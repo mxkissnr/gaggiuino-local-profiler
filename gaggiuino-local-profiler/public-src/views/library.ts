@@ -27,6 +27,7 @@ import {
   sheetBeanId, renderBeanSheet, closeBeanSheet,
 } from './library/bean-sheet.js';
 import { checkEmptyBeanOffer } from './library/empty-offer.js';
+import { refreshBeanCompare } from './library/bean-compare.js';
 
 // ── Library load ──────────────────────────────────────────────────────────
 // #1962: the view says when it is loading or failed instead of showing the
@@ -136,14 +137,14 @@ export function resetShelfPrefs(keepQuery = false): void {
 }
 
 function _shelfHeading(key: string, count?: number): Html {
-  return html`<div class="lib-shelf-heading"><span>${tHtml(key)}</span>${count != null ? html`<span class="lib-shelf-count">${esc(count)}</span>` : esc('')}</div>`;
+  return html`<div class="section-title"><span>${tHtml(key)}</span>${count != null ? html`<span class="section-title__count">${esc(count)}</span>` : esc('')}</div>`;
 }
 
 function renderShelfToolbar(prefs: ShelfPrefs): Html {
   const chip = (filter: ShelfFilter, key: string): Html =>
-    html`<button type="button" class="lib-shelf-chip" data-shelf-filter="${esc(filter)}" aria-pressed="${esc(prefs.filter === filter ? 'true' : 'false')}">${tHtml(key)}</button>`;
+    html`<button type="button" class="chip" data-shelf-filter="${esc(filter)}" aria-pressed="${esc(prefs.filter === filter ? 'true' : 'false')}">${tHtml(key)}</button>`;
   const viewBtn = (view: ShelfView, key: string): Html =>
-    html`<button type="button" class="lib-shelf-view-btn" data-shelf-view="${esc(view)}" aria-pressed="${esc(prefs.view === view ? 'true' : 'false')}" aria-label="${tHtml(key)}" title="${tHtml(key)}">${tHtml(key)}</button>`;
+    html`<button type="button" class="chip" data-shelf-view="${esc(view)}" aria-pressed="${esc(prefs.view === view ? 'true' : 'false')}" aria-label="${tHtml(key)}" title="${tHtml(key)}">${tHtml(key)}</button>`;
   return html`<div class="lib-shelf-toolbar">
     <div class="lib-shelf-search-row">
       <input type="search" id="libShelfSearch" class="lib-shelf-search" placeholder="${tHtml('lib_shelf_search_ph')}" aria-label="${tHtml('lib_shelf_search_ph')}" value="${esc(prefs.query)}">
@@ -251,7 +252,7 @@ function renderShelfSections(): void {
 
   const archiveHtml: Html = archiveRows.length
     ? html`<details class="lib-shelf-archive"${esc(_shelfArchiveOpen ? ' open' : '')}>
-        <summary class="lib-shelf-heading lib-shelf-archive-summary"><span>${tHtml('lib_shelf_archive')}</span><span class="lib-shelf-count">${esc(archiveRows.length)}</span></summary>
+        <summary class="section-title lib-shelf-archive-summary"><span>${tHtml('lib_shelf_archive')}</span><span class="section-title__count">${esc(archiveRows.length)}</span></summary>
         ${items(archiveRows, true)}</details>`
     : esc('');
 
@@ -280,6 +281,9 @@ function renderShelfSections(): void {
 export function renderBeanList(): void {
   // #1958: every stock change on this page or another device ends up here.
   checkEmptyBeanOffer();
+  // #2119: an open bean comparison follows every library change and closes
+  // itself when one of its beans is gone.
+  refreshBeanCompare();
   const el = document.getElementById('beanListUI');
   if (!el) return;
   const beans = _beanList();
@@ -332,6 +336,7 @@ export function filterShotsByBean(id: number): void {
 // Section symbols moved to ./library/* — re-exported so existing importers
 // of views/library.ts (main.ts et al.) keep working.
 export { openBeanSheet, closeBeanSheet, requestCloseBeanSheet, beanSheetRestoredScroll, toggleBeanActive } from './library/bean-sheet.js';
+export { startBeanCompare, chooseBeanCompare, pickOtherBeanCompare, swapBeanCompare, backFromBeanCompare, beanCompareOpen } from './library/bean-compare.js';
 export { openBeanForm, closeBeanForm, requestCloseBeanForm, discardBeanForm, editBean, saveBean, saveBeanNoBag, saveBeanAddBag, deleteBean } from './library/bean-form-sheet.js';
 export { renderBeanCard, safeHttpUrl, openNewBagForm, closeNewBagForm, deleteBag, saveNewBag, openFreezeForm, closeFreezeForm, saveFreezePortions, thawPortion, openEditFrozenForm, closeEditFrozenForm, saveEditFrozenForm, toggleBeanQR } from './library/bean-card.js';
 export { stageNewBeanImage, uploadBeanImage, updateStickerButton, cutOutBeanSticker } from './library/bean-sticker.js';

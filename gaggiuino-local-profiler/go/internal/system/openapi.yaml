@@ -227,6 +227,13 @@ components:
             hasChartData:     { type: boolean, description: "GET /api/shots rows only: whether the shot has a non-empty pressure/time curve series" }
             tempStabilityDev: { type: number, nullable: true, description: "GET /api/shots rows only: mean absolute deviation of the temperature series from target, in °C" }
             previousShotId:   { type: integer, nullable: true, description: "GET /api/shots/{id} only: id of the previous same-profile shot (null if none)" }
+            timeTarget:
+              type: object
+              nullable: true
+              description: "The profile's target time window (#1504) the duration part was scored against, or null. GET /api/shots, /api/shots/{id} and /api/shots/last only; never on /shots.json."
+              properties:
+                minS: { type: integer }
+                maxS: { type: integer }
             previousShot:
               nullable: true
               allOf:
@@ -785,7 +792,7 @@ components:
       description: >
         GET /api/live/data and the SSE live-snapshot payload (one shared Go
         builder, so every key below is always present — null where noted).
-      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel, machineWarnings, machineUpdateAvailable, machineControl]
+      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel, machineWarnings, machineUpdateAvailable, machineSystemState, machineSystemErrorCode, machineControl]
       properties:
         isLive:      { type: boolean }
         profileName: { type: string }
@@ -841,8 +848,10 @@ components:
         targetTemperature: { type: number, nullable: true, description: "#902 idle stats: current target temperature" }
         pressure: { type: number, nullable: true, description: "#902 idle stats: current pressure" }
         waterLevel: { type: integer, nullable: true, description: "#902 idle stats: current water level" }
-        machineWarnings: { type: array, items: { type: string }, description: "#1409: active GaggiMate machine warning keys (water, flush, switch, scaleConnected, scaleBattery, temperature); empty for Gaggiuino" }
+        machineWarnings: { type: array, items: { type: string }, description: "#1409: active GaggiMate machine warning keys (water, flush, switch, scaleConnected, scaleBattery, temperature, backflush, descaling); empty for Gaggiuino" }
         machineUpdateAvailable: { type: boolean, description: "#1409: GaggiMate reports a firmware update; always false for Gaggiuino" }
+        machineSystemState: { type: string, enum: ["", starting, waiting, updating, autotuning, mismatch, error], description: "#2139: the GaggiMate display's system state (sys.s, firmware v1.9.0+) when it is not ready; empty when ready, without a sys object and for Gaggiuino" }
+        machineSystemErrorCode: { type: integer, description: "#2139: the controller error code (sys.c) when machineSystemState is error, else 0" }
         machineControl:
           nullable: true
           allOf:
@@ -1008,6 +1017,33 @@ components:
         puckScreenId: { type: integer, nullable: true }
         grinder:      { type: string }
         dose:         { type: number, nullable: true }
+
+    # ── Shots (per-profile target time, #1504) ─────────────────────────────
+
+    ProfileTimeTarget:
+      type: object
+      required: [profileName, minS, maxS]
+      description: >
+        One stored extraction-time window for a profile, as served by
+        GET/PUT /api/profile-time-targets. Matching is per machine, trimmed and
+        case-insensitive; a shot names its profile by `profileName`, falling
+        back to `profile.name`.
+      properties:
+        profileName: { type: string, minLength: 1, maxLength: 200 }
+        minS:        { type: integer, minimum: 5, maximum: 300 }
+        maxS:        { type: integer, minimum: 5, maximum: 300 }
+
+    ProfileTimeTargetInput:
+      type: object
+      required: [machineId, profileName]
+      description: >
+        PUT /api/profile-time-targets body. Both null removes the window; both
+        set needs 5 <= minS < maxS <= 300.
+      properties:
+        machineId:   { type: integer, minimum: 1 }
+        profileName: { type: string, minLength: 1, maxLength: 200 }
+        minS:        { type: integer, nullable: true, minimum: 5, maximum: 300 }
+        maxS:        { type: integer, nullable: true, minimum: 5, maximum: 300 }
 
     # ── Orders (derived, request/response) ─────────────────────────────────
 
@@ -1482,9 +1518,13 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
         - { name: format, in: query, schema: { type: string, enum: [square, story], default: square } }
-        - { name: accent, in: query, schema: { type: string }, description: "Hex accent color override" }
+        - { name: accent, in: query, schema: { type: string }, description: "Accent colour: a #rrggbb hex (the app sends its active accent) or a legacy accent name (amber, ocean, aurora, ember, forest, crema); anything else is amber" }
         - { name: theme, in: query, schema: { type: string }, description: "UI theme name override" }
         - { name: lang, in: query, schema: { type: string }, description: "UI language for the card text (de/en/es/fr/it/nl, unknown falls back to en)" }
+        - { name: verdict, in: query, schema: { type: string, maxLength: 140 }, description: "The shot page's verdict sentence (#2166); without it the card shows a phrase for the score" }
+        - { name: verdictType, in: query, schema: { type: string }, description: "The verdict's advice type; finer and coarser draw an arrow, other values are ignored" }
+        - { name: delta, in: query, schema: { type: integer, minimum: -100, maximum: 100 }, description: "Score change against the compared shot" }
+        - { name: vs, in: query, schema: { type: string, maxLength: 80 }, description: "The line naming the compared shot" }
       responses:
         "200": { description: PNG image, content: { image/png: { schema: { type: string, format: binary } } } }
         "400": { description: Invalid shot ID }
@@ -3143,6 +3183,8 @@ paths:
                   available: { type: boolean }
                   stale:     { type: boolean }
                   updatedAt: { type: integer, description: "Unix ms the status was last pushed, present only when available" }
+                  systemState:     { type: string, enum: [starting, waiting, updating, autotuning, mismatch, error], description: "#2139: GaggiMate display system state when it is not ready; absent when ready, without a sys object and for Gaggiuino" }
+                  systemErrorCode: { type: integer, description: "#2139: controller error code when systemState is error; absent otherwise" }
                 additionalProperties: true
 
   /api/machine/profiles:
@@ -3192,6 +3234,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/MachineProfile' }
         "502": { description: Machine unreachable or returned an error }
+        "503": { description: "The machine is offline or did not answer, and GLP has no full local copy of this profile yet (#2162)" }
     put:
       tags: [System]
       summary: Update an existing machine profile (name/phases/stop conditions), written over the machine's WebSocket/protobuf channel — the machine has no REST write endpoint
@@ -4096,6 +4139,45 @@ paths:
                 additionalProperties: true
         "400":
           description: Validation error (invalid key, too many keys, oversized value, or deeper nesting)
+
+  /api/profile-time-targets:
+    get:
+      tags: [Shots]
+      summary: Per-profile target time windows for one machine (#1504)
+      description: >
+        The optional extraction-time window (min/max seconds) stored for each
+        profile of a machine, in the kv store under `profile_time_targets`.
+        Matching is per machine, trimmed and case-insensitive; a shot names its
+        profile by `profileName`, falling back to `profile.name`. Always an
+        array, `[]` when nothing is stored.
+      parameters:
+        - { name: machineId, in: query, required: true, schema: { type: integer, minimum: 1 } }
+      responses:
+        "200":
+          description: That machine's target time windows, ordered by normalized profile name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProfileTimeTarget' }
+        "400": { description: machineId is missing or not a positive integer, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    put:
+      tags: [Shots]
+      summary: Upsert or delete one profile's target time window
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfileTimeTargetInput' }
+      responses:
+        "200":
+          description: That machine's target time windows after the write
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ProfileTimeTarget' }
+        "400": { description: Validation error, content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
 
   /api/achievements:
     get:

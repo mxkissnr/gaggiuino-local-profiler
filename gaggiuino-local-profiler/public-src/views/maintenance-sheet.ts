@@ -30,7 +30,7 @@ function _modeButtons(tile: MaintTile, mode: string): Html {
   const shotsVal = d.threshold_shots ?? '';
   const daysVal  = d.threshold_days ?? '';
   const gVal     = d.threshold_g ?? '';
-  const btn = (m: string, label: Html): Html => html`<button type="button" class="analytics-filter-btn${mode === m ? html` active` : esc('')}" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="${esc(m)}" data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}" aria-pressed="${mode === m ? esc('true') : esc('false')}">${label}</button>`;
+  const btn = (m: string, label: Html): Html => html`<button type="button" class="chip" data-action="set-maint-mode" data-task="${esc(task)}" data-mode="${esc(m)}" data-machine-id="${esc(machineId)}" data-current-shots="${esc(shotsVal)}" data-current-days="${esc(daysVal)}" data-current-g="${esc(gVal)}" aria-pressed="${mode === m ? esc('true') : esc('false')}">${label}</button>`;
   return html`<div class="analytics-filter-row maint-mode-seg">
     ${btn('shots', tHtml('maint_unit_shots'))}
     ${btn('days', tHtml('maint_by_days'))}
@@ -81,13 +81,13 @@ function _historyRow(e: MaintLogEntry, locale: string): Html {
   const dateStr = formatDate(e.ts * 1000, locale);
   const isManual = e.shotCountAtTime === null;
   const note = e.notes === AUTO_SYNCED_NOTE
-    ? html`<span class="maint-auto-synced" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
+    ? html`<span class="badge badge--info" title="${tHtml('maint_auto_synced_hint')}">${tHtml('maint_auto_synced')}</span>`
     : e.notes ? esc(e.notes) : html``;
   return html`<div class="maint-hist-row">
     <span class="maint-hist-date">${esc(dateStr)}</span>
     <span class="maint-hist-side">
       <span class="maint-hist-count">${esc(e.shotCountAtTime ?? '–')}</span>
-      ${isManual ? html`<span class="maint-log-manual-badge">${tHtml('maint_log_manual_badge')}</span>` : html``}
+      ${isManual ? html`<span class="badge">${tHtml('maint_log_manual_badge')}</span>` : html``}
     </span>
     ${note ? html`<div class="maint-hist-note">${note}</div>` : html``}
   </div>`;
@@ -97,7 +97,7 @@ function _history(tile: MaintTile, history: MaintLogEntry[]): Html {
   const locale = localeFor(S.currentLang);
   const rows = history.filter(e => _entryBelongsToTile(e, tile));
   return html`<div class="maint-hist">
-    <h3 class="analytics-section-title">${tHtml('maint_log_title')}</h3>
+    <h3 class="section-title">${tHtml('maint_log_title')}</h3>
     ${rows.length ? joinHtml(rows.map(e => _historyRow(e, locale))) : html`<p class="empty-note">${tHtml('maint_log_empty')}</p>`}
   </div>`;
 }
@@ -105,12 +105,12 @@ function _history(tile: MaintTile, history: MaintLogEntry[]): Html {
 // Only the tasks with a step list in GUIDED_MAINT_STEPS get a guide button.
 function _guideButton(tile: MaintTile): Html {
   if (!GUIDED_MAINT_STEPS[tile.task]) return html``;
-  return html`<button type="button" class="analytics-filter-btn maint-guide-btn" data-action="open-guided-maint" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('guided_open')}</button>`;
+  return html`<button type="button" class="btn btn--tonal maint-guide" data-action="open-guided-maint" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}">${tHtml('guided_open')}</button>`;
 }
 
 function _pauseButton(tile: MaintTile): Html {
   const paused = tile.d.status === 'paused';
-  return html`<button type="button" class="maint-pause-btn" data-action="toggle-maint-paused" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-paused="${esc(paused ? 'false' : 'true')}">${tHtml(paused ? 'maint_resume_btn' : 'maint_pause_btn')}</button>`;
+  return html`<button type="button" class="btn btn--quiet" data-action="toggle-maint-paused" data-task="${esc(tile.task)}" data-machine-id="${esc(tile.machineId)}" data-paused="${esc(paused ? 'false' : 'true')}">${tHtml(paused ? 'maint_resume_btn' : 'maint_pause_btn')}</button>`;
 }
 
 function _footer(tile: MaintTile): Html {
@@ -118,8 +118,8 @@ function _footer(tile: MaintTile): Html {
   return html`<div class="maint-sheet-footer">
     ${_pauseButton(tile)}
     ${task.startsWith('custom_')
-      ? html`<button class="maint-delete-btn" data-action="delete-custom-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_log_delete')}</button>`
-      : html`<button class="maint-disable-btn" data-action="toggle-maint-disabled" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" data-disabled="true">${tHtml('maint_disable_btn')}</button>`
+      ? html`<button type="button" class="btn btn--danger" data-action="delete-custom-maint-task" data-task="${esc(task)}" data-machine-id="${esc(machineId)}">${tHtml('maint_log_delete')}</button>`
+      : html`<button type="button" class="btn btn--quiet" data-action="toggle-maint-disabled" data-task="${esc(task)}" data-machine-id="${esc(machineId)}" data-disabled="true">${tHtml('maint_disable_btn')}</button>`
     }
   </div>`;
 }

@@ -21,13 +21,14 @@ import (
 // `version:` is canonical; this const must match it and is bumped alongside
 // it at release time (CLAUDE.md's Versioning section). Enforced by
 // test/version-sync.test.ts and scripts/release-check.mts.
-const glpVersion = "3.8.1"
+const glpVersion = "3.9.0"
 
 // gatherSmallSections collects every bundle section that is small
 // regardless of shot/image count: coffee_library, blocklist, trash (via
 // the lightweight TrashMap, not FindTrashed), maintenance, maintenance_log,
 // orders, machines, machine_backups (the machine settings backups, #1878),
-// kv (including their per-machine machine_backup_settings, #1878), and —
+// kv (including their per-machine machine_backup_settings, #1878, and the
+// per-profile target time windows, #1504), and —
 // when a passphrase is supplied and there is
 // something to protect — the encrypted secrets block. shots/annotations/
 // images are added by writeBundleJSON. The returned map's values are
@@ -98,6 +99,10 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 	if err != nil {
 		return nil, err
 	}
+	profileTimeTargets, err := d.ShotsRepo.GetProfileTimeTargets()
+	if err != nil {
+		return nil, err
+	}
 	uiPrefs, err := uiprefs.NewRepository(d.DB).Get()
 	if err != nil {
 		return nil, err
@@ -122,6 +127,7 @@ func (d Dependencies) gatherSmallSections(passphrase string) (map[string]any, er
 			"import_settings": importSettings, "mqtt_settings": safeMqtt,
 			"shot_defaults": shotDefaults, "ui_prefs": uiPrefs,
 			"machine_backup_settings": machineBackupSettings,
+			"profile_time_targets":    profileTimeTargets,
 		},
 	}
 

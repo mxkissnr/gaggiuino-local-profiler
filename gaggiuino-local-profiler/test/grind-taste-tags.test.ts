@@ -54,12 +54,14 @@ function series(weight: { x: number; y: number }[] = [], pressures: number[] = [
 }
 
 // Duration is in tenths of a second, as the shot rows store it.
-function singleShot(duration: number, tag?: string | null): GrindShot {
-  return {
+function singleShot(duration: number, tag?: string | null, win?: { minS: number; maxS: number }): GrindShot {
+  const shot: GrindShot = {
     id: 1,
     duration,
     annotation: tag === undefined ? {} : { tasteTag: tag },
   };
+  if (win) shot.timeTarget = win;
+  return shot;
 }
 
 type Tag = GrindModule['TASTE_TAGS'][number];
@@ -332,5 +334,34 @@ describe('calcComparativeGrindAdvice applies the tag', () => {
     expect(advice?.type).toBe(without?.type);
     expect(advice?.text).toBe(without?.text);
     expect(advice?.shots).toHaveLength(2);
+  });
+});
+
+describe('the advice edges follow the profile window (#1504)', () => {
+  it('a 25-35 window gives exactly the advice without a window', () => {
+    const win = { minS: 25, maxS: 35 };
+    for (let duration = 80; duration <= 700; duration++) {
+      for (const tag of [undefined, 'sour'] as const) {
+        expect(calcGrindAdvice(singleShot(duration, tag, win), series()))
+          .toEqual(calcGrindAdvice(singleShot(duration, tag), series()));
+      }
+    }
+    for (const tag of TAGS) {
+      expect(calcGrindAdvice(singleShot(300, tag, win), series()))
+        .toEqual(calcGrindAdvice(singleShot(300, tag), series()));
+    }
+  });
+
+  it('window 40-48: 45 s holds, 29 s grinds finer', () => {
+    const win = { minS: 40, maxS: 48 };
+    const hold = calcGrindAdvice(singleShot(450, null, win), series());
+    expect(hold?.type).toBe('ok');
+
+    expectAdvice(calcGrindAdvice(singleShot(290, null, win), series()),
+      { type: 'finer', key: 'grind_short', args: ['29'] });
+    expectAdvice(calcGrindAdvice(singleShot(580, null, win), series()),
+      { type: 'coarser', key: 'grind_long_slight', args: ['58'] });
+    expectAdvice(calcGrindAdvice(singleShot(640, null, win), series()),
+      { type: 'coarser', key: 'grind_long', args: ['64'] });
   });
 });

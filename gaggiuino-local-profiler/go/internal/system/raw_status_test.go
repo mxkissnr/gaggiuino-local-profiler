@@ -2,6 +2,7 @@ package system
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
@@ -149,5 +150,95 @@ func TestDeriveAndLiveData_MachineWarnings(t *testing.T) {
 	got := p.LiveData()
 	if len(got.MachineWarnings) != 1 || got.MachineWarnings[0] != "water" || !got.MachineUpdateAvailable {
 		t.Fatalf("LiveData() = %+v, want Warnings [water] UpdateAvailable true", got)
+	}
+}
+
+// TestRawStatusFrom_SystemState covers #2139: a GaggiMate evt:status carries
+// the display's system state sys.s (firmware v1.9.0+). Only the six
+// non-ready states are kept, and the controller error code sys.c only for
+// "error"; "ready", an unknown state, a malformed sys, no sys and a Gaggiuino
+// status carry none. "fast frame after slow frame" is the body the GaggiMate
+// adapter hands on after merging a fast-only frame onto a slow one.
+func TestRawStatusFrom_SystemState(t *testing.T) {
+	cases := []struct {
+		name      string
+		body      string
+		wantState string
+		wantCode  int
+	}{
+		{"starting", `{"m":1,"sys":{"s":"starting","m":"","c":0}}`, "starting", 0},
+		{"waiting", `{"m":1,"sys":{"s":"waiting","m":"","c":0}}`, "waiting", 0},
+		{"updating", `{"m":1,"sys":{"s":"updating","m":"","c":0}}`, "updating", 0},
+		{"autotuning", `{"m":1,"sys":{"s":"autotuning","m":"","c":0}}`, "autotuning", 0},
+		{"mismatch", `{"m":1,"sys":{"s":"mismatch","m":"","c":0}}`, "mismatch", 0},
+		{"error with code", `{"m":1,"sys":{"s":"error","m":"Controller error","c":3}}`, "error", 3},
+		{"error without code", `{"m":1,"sys":{"s":"error","m":"","c":0}}`, "error", 0},
+		{"negative code dropped", `{"m":1,"sys":{"s":"error","c":-1}}`, "error", 0},
+		{"code outside error dropped", `{"m":1,"sys":{"s":"waiting","c":7}}`, "waiting", 0},
+		{"fast frame after slow frame", `{"tp":"evt:status","m":1,"sys":{"s":"waiting","m":"","c":0},"ct":91.5,"pr":0,"fl":0}`, "waiting", 0},
+		{"ready", `{"m":1,"sys":{"s":"ready","m":"","c":0}}`, "", 0},
+		{"unknown state", `{"m":1,"sys":{"s":"calibrating","c":0}}`, "", 0},
+		{"sys not an object", `{"m":1,"sys":"waiting"}`, "", 0},
+		{"no sys", `{"m":1,"ct":91.5}`, "", 0},
+		{"gaggiuino array", `[{"upTime":"58","temperature":"87.475311","waterLevel":"80"}]`, "", 0},
+		{"gaggiuino object", `{"upTime":58,"waterLevel":80}`, "", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := rawStatusFromBody(t, tc.body, false)
+			if got.SystemState != tc.wantState || got.SystemErrorCode != tc.wantCode {
+				t.Fatalf("SystemState, SystemErrorCode = %q, %d; want %q, %d", got.SystemState, got.SystemErrorCode, tc.wantState, tc.wantCode)
+			}
+		})
+	}
+}
+
+// TestDeriveAndLiveData_SystemState covers #2139 end to end:
+// deriveMachineState forwards the system state onto MachineStatus, whose JSON
+// omits both fields when there is none (Gaggiuino's /api/machine/status stays
+// byte-identical), and LiveData always carries machineSystemState and
+// machineSystemErrorCode.
+func TestDeriveAndLiveData_SystemState(t *testing.T) {
+	derived := deriveMachineState(DeriveInput{
+		Status: RawStatus{SystemState: "error", SystemErrorCode: 3},
+		Now:    1,
+	}).MachineStatus
+	if derived.SystemState != "error" || derived.SystemErrorCode != 3 {
+		t.Fatalf("deriveMachineState MachineStatus = %+v, want SystemState error SystemErrorCode 3", derived)
+	}
+
+	for _, body := range []string{`[{"upTime":"58","temperature":"87.475311"}]`, `{"m":1,"sys":{"s":"ready","m":"","c":0}}`} {
+		plain := deriveMachineState(DeriveInput{Status: rawStatusFromBody(t, body, false), Now: 1}).MachineStatus
+		raw, err := json.Marshal(plain)
+		if err != nil {
+			t.Fatalf("json.Marshal(MachineStatus): %v", err)
+		}
+		if strings.Contains(string(raw), `"systemState"`) || strings.Contains(string(raw), `"systemErrorCode"`) {
+			t.Fatalf("MachineStatus JSON for %s = %s, want no systemState or systemErrorCode key", body, raw)
+		}
+	}
+
+	p, _ := newTestPoller(t, &fakeAdapter{})
+
+	raw, err := json.Marshal(p.LiveData())
+	if err != nil {
+		t.Fatalf("json.Marshal(LiveData): %v", err)
+	}
+	var live map[string]any
+	if err := json.Unmarshal(raw, &live); err != nil {
+		t.Fatalf("json.Unmarshal(LiveData): %v", err)
+	}
+	if live["machineSystemState"] != "" || live["machineSystemErrorCode"] != 0.0 {
+		t.Fatalf("LiveData JSON = %s, want machineSystemState \"\" and machineSystemErrorCode 0 present", raw)
+	}
+
+	p.runtime.SetMachineStatus(&MachineStatus{SystemState: "waiting"})
+	if got := p.LiveData(); got.MachineSystemState != "waiting" || got.MachineSystemErrorCode != 0 {
+		t.Fatalf("LiveData() = %q, %d; want waiting, 0", got.MachineSystemState, got.MachineSystemErrorCode)
+	}
+
+	p.runtime.SetMachineStatus(&MachineStatus{SystemState: "error", SystemErrorCode: 3})
+	if got := p.LiveData(); got.MachineSystemState != "error" || got.MachineSystemErrorCode != 3 {
+		t.Fatalf("LiveData() = %q, %d; want error, 3", got.MachineSystemState, got.MachineSystemErrorCode)
 	}
 }

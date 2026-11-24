@@ -4,14 +4,14 @@
 // element only skips this step.
 import { S } from '../state/index.js';
 import { closeFlavorWheel } from '../components/flavor-wheel.js';
-import { switchLibTab, openBeanForm, discardBeanForm, saveBean, saveBeanNoBag, saveBeanAddBag,
+import { switchLibTab, openBeanForm, saveBean, saveBeanNoBag, saveBeanAddBag,
          uploadBeanImage, stageNewBeanImage, cutOutBeanSticker, openGrinderForm, closeGrinderForm,
          saveGrinder, uploadGrinderImage, openRecipeForm, closeRecipeForm, saveRecipe, addRecipeStep,
          toggleUrlImport, importFromUrl, importFromPaste, toggleImportSettings, addCustomShopifyDomain, openScanModal,
          closeScanModal, _handleScanPhoto, openMilkForm, closeMilkForm, saveMilk, openBasketForm,
          closeBasketForm, saveBasket, uploadBasketImage, openPuckScreenForm, closePuckScreenForm,
          savePuckScreen, uploadPuckScreenImage } from '../views/library.js';
-import { closeProfileForm, openNewProfileForm, applyBeanSuggestion, addProfilePhase, sendProfileToMachine,
+import { closeProfileForm, openNewProfileForm, applyBeanSuggestion, sendProfileToMachine,
          renderProfilePreviewChart } from '../views/library-profile-editor.js';
 import { openNewGaggiMateProfile } from '../views/gaggimate-profile-editor.js';
 import { openPhotoInput, showCameraButtons } from '../photo-capture.js';
@@ -35,8 +35,6 @@ export function wireLibrary(): void {
   document.getElementById('libTabRecipes')!.addEventListener('click', () => switchLibTab('recipes'));
   document.getElementById('libTabMilk')!.addEventListener('click', () => switchLibTab('milk'));
   document.getElementById('libTabProfiles')!.addEventListener('click', () => switchLibTab('profiles'));
-  // Cancel is an explicit discard: close without the unsaved-changes prompt.
-  document.getElementById('closeBeanFormBtn')!.addEventListener('click', discardBeanForm);
   document.getElementById('saveBeanBtn')!.addEventListener('click', () => { void saveBean(); });
   document.getElementById('saveBeanNoBagBtn')!.addEventListener('click', () => { void saveBeanNoBag(); });
   document.getElementById('saveBeanAddBagBtn')!.addEventListener('click', () => { void saveBeanAddBag(); });
@@ -96,8 +94,6 @@ export function wireLibrary(): void {
     else openNewProfileForm();
   });
   document.getElementById('closeProfileFormBtn')!.addEventListener('click', closeProfileForm);
-  document.getElementById('cancelProfileFormBtn')!.addEventListener('click', closeProfileForm);
-  document.getElementById('addProfilePhaseBtn')!.addEventListener('click', addProfilePhase);
   document.getElementById('profileApplySuggestionBtn')!.addEventListener('click', applyBeanSuggestion);
   document.getElementById('sendProfileToMachineBtn')!.addEventListener('click', () => { void sendProfileToMachine(); });
   // Live preview: any field/phase edit re-synthesizes the chart from the

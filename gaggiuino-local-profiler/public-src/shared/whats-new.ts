@@ -21,6 +21,14 @@ export interface WhatsNewEntry {
 }
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
+    { version: '3.9.0', date: '2026-11-24', highlights: [
+        'Profiles can have their own target time, and two beans can be compared side by side.',
+        'Shots, Live, Orders and the profile editors are laid out like Home Assistant pages, with the verdict or the machine state at the top.',
+        'Buttons, chips, badges, menus and dialogs look and work the same on every page, and the shared shot card matches the shot page.',
+        "GaggiMate v1.10.0: marking maintenance done resets the machine's counter, and the Live tab shows the machine's state.",
+        'Fixed: saving a Gaggiuino profile updates it instead of copying it, and the profile editors open while the machine is off.',
+        'Security: updated websocket library for MQTT.',
+    ] },
     { version: '3.8.1', date: '2026-11-18', highlights: [
         'Fixed: GaggiMate shot history keeps syncing when one shot cannot be read, the desktop shot list stays open while you pick shots, and aroma and origin changes on a bean are saved right away.',
     ] },
@@ -64,15 +72,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         'Better GaggiMate support: flush and answer brew confirmations from GLP (firmware 1.9.0+), shots sync the moment they are saved, and standby, heating and flushing show correctly.',
         'Fixed: barcode scanning on iPhone and iPad, view settings that follow you across devices, kiosk orders that keep the chosen milk or bean, and a reliable preheat countdown.',
         'Security: built with Go 1.27.2 and an updated HTTP/2 library, unknown host names are refused, and the MQTT password no longer reaches the browser.',
-    ] },
-    { version: '3.3.0', date: '2026-10-02', highlights: [
-        'Beans can now hold several bags as a queue, with a drag-reorderable upcoming list and per-bag stock.',
-        'Machine profiles can be created, edited and deleted while the machine is offline, and are pushed to it automatically once it is reachable again.',
-        'The live view has a shot setup panel: pick bean, dose, grinder, grind setting, basket, puck screen and recipe before you pull, and they are saved to the shot.',
-        'Try the app in your browser with sample data and a simulated live shot, no machine needed.',
-        'AI assistants such as Claude can read your shots, beans and analytics through an optional built-in MCP server, switched on in Settings.',
-        'Fixed: GaggiMate machines on firmware v1.9.0 show the profile name, steaming, scale weight and live readings again.',
-        'Fixed: changes made at the same moment, such as a milk deduction from an order while you edit a bean, no longer overwrite each other.',
     ] },
 ];
 

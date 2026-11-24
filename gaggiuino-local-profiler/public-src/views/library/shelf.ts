@@ -224,9 +224,9 @@ export function renderShelfTile(b: ShelfBean, opts: ShelfTileOpts): Html {
       ${stack}
       ${shelfBagImage(b)}
       ${frozenG > 0 ? icicleSvg(frozenG, b.id) : esc('')}
-      ${sealedBags > 0 ? html`<span class="lib-shelf-sealed-badge">+${esc(sealedBags)}</span>` : esc('')}
+      ${sealedBags > 0 ? html`<span class="badge badge--scrim lib-shelf-mark-top">+${esc(sealedBags)}</span>` : esc('')}
       ${opened ? html`<span class="lib-shelf-open-label">${tHtml('lib_shelf_open_badge')}</span>` : esc('')}
-      ${archived ? html`<span class="lib-shelf-archived-tag">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}
+      ${archived ? html`<span class="badge badge--scrim lib-shelf-mark-bottom">${tHtml('lib_shelf_archived_tag')}</span>` : esc('')}
     </span>
     <span class="lib-shelf-name serif-display">${esc(b.name)}</span>
     ${b.roaster ? html`<span class="lib-shelf-roaster">${esc(b.roaster)}</span>` : emptySlot()}
@@ -252,7 +252,7 @@ export function renderShelfRow(b: ShelfBean, opts: ShelfTileOpts): Html {
   return html`<button type="button" class="lib-shelf-row${esc(opts.muted ? ' muted' : '')}" data-action="open-bean-sheet" data-id="${esc(b.id)}" aria-haspopup="dialog">
     <span class="lib-shelf-row-imgwrap">${shelfBagImage(b)}</span>
     <span class="lib-shelf-row-info">
-      <span class="lib-shelf-row-titlerow"><span class="lib-shelf-row-name">${esc(b.name)}</span>${opened ? html`<span class="lib-shelf-open-badge">${tHtml('lib_shelf_open_badge')}</span>` : esc('')}</span>
+      <span class="lib-shelf-row-titlerow"><span class="lib-shelf-row-name">${esc(b.name)}</span>${opened ? html`<span class="badge badge--accent">${tHtml('lib_shelf_open_badge')}</span>` : esc('')}</span>
       ${subtitle ? html`<span class="lib-shelf-row-sub">${esc(subtitle)}</span>` : esc('')}
       ${shelfStockBar(pct)}
     </span>

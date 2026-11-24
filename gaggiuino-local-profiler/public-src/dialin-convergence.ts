@@ -4,22 +4,24 @@
 //   { grindSetting: number, seconds: number, ratio?: number|null,
 //     channeling?: boolean, score?: number|null }
 //
-// The extraction-time target band is 25–32s (mid 28.5s, the point step-size
-// scaling is anchored to). A ±1s dead zone around the mid counts as "hold" —
-// close enough that further grind changes would be chasing noise. Step size
-// starts proportional to how far off the first round is, then behaves like a
-// binary search: overshoot the band (direction flips) → halve the step;
-// keep going the same direction → keep the step. Below the 0.3 floor (finer
-// than most grinders can reliably resolve) further halving is pointless, so
-// that's treated as converged too. With a grinder scale (#1961) the steps are
-// multiplied by the dial's span over 50, moved at least one valid step and
-// snapped into range.
+// The extraction-time band is 25–32s (mid 28.5s, the point step-size scaling
+// is anchored to) unless the session carries the profile's own window (#1504),
+// in which case that window is used and its midpoint anchors the scaling. A ±1s
+// dead zone around the mid counts as "hold" — close enough that further grind
+// changes would be chasing noise. Step size starts proportional to how far off
+// the first round is, then behaves like a binary search: overshoot the band
+// (direction flips) → halve the step; keep going the same direction → keep the
+// step. Below the 0.3 floor (finer than most grinders can reliably resolve)
+// further halving is pointless, so that's treated as converged too. With a
+// grinder scale (#1961) the steps are multiplied by the dial's span over 50,
+// moved at least one valid step and snapped into range.
 
 import { GRIND_REFERENCE_SPAN, snapGrind } from './grind-scale.js';
 import type { GrindScale } from './grind-scale.js';
 
-const BAND       = { low: 25, high: 32 };
-const BAND_MID   = 28.5;
+export interface DialinBand { low: number; high: number }
+
+const BAND: DialinBand = { low: 25, high: 32 };
 const DEAD_ZONE  = 1;
 const STEP_FLOOR = 0.3;
 const MAX_ROUNDS = 6;
@@ -44,21 +46,22 @@ export interface DialinSuggestion {
   nextGrind: number | null;
   delta: number;
   reason: string;
-  band: { low: number; high: number };
+  band: DialinBand;
 }
 
 /**
- * A round's direction plus how far off the 25-32s band it was. Channeling
- * rounds carry no error (they contribute no direction and no step update).
+ * A round's direction plus how far off the mid of the band in use it was.
+ * Channeling rounds carry no error (they contribute no direction and no step
+ * update).
  */
 type ClassifiedRound =
   | { direction: 'channeling'; error: null }
   | { direction: 'hold' | 'finer' | 'coarser'; error: number };
 
-function _classify(round: DialinRound | null | undefined): ClassifiedRound {
+function _classify(round: DialinRound | null | undefined, mid: number): ClassifiedRound {
   if (round?.channeling) return { direction: 'channeling', error: null };
   const secs  = round?.seconds ?? 0;
-  const error = secs - BAND_MID;
+  const error = secs - mid;
   const direction = Math.abs(error) <= DEAD_ZONE ? 'hold' : (error < 0 ? 'finer' : 'coarser');
   return { direction, error };
 }
@@ -101,9 +104,11 @@ function _computeStepSize(rounds: DialinRound[], classified: ClassifiedRound[]):
   return step ?? 0.5;
 }
 
-export function isConverged(rounds: DialinRound[] | null | undefined, scale?: GrindScale | null): boolean {
+export function isConverged(rounds: DialinRound[] | null | undefined, scale?: GrindScale | null, band?: DialinBand | null): boolean {
+  const b = band ?? BAND;
+  const mid = (b.low + b.high) / 2;
   if (!Array.isArray(rounds) || rounds.length === 0) return false;
-  const classified = rounds.map(_classify);
+  const classified = rounds.map(r => _classify(r, mid));
   if (_hasConsecutiveHolds(classified) || _hasConsecutiveHighScores(rounds, scale)) return true;
   const last = classified.at(-1);
   if (!last) return false;
@@ -114,15 +119,17 @@ export function isConverged(rounds: DialinRound[] | null | undefined, scale?: Gr
   return rounds.length >= MAX_ROUNDS;
 }
 
-export function calcNextGrindSuggestion(rounds: DialinRound[] | null | undefined, scale?: GrindScale | null): DialinSuggestion {
+export function calcNextGrindSuggestion(rounds: DialinRound[] | null | undefined, scale?: GrindScale | null, band?: DialinBand | null): DialinSuggestion {
+  const b = band ?? BAND;
+  const mid = (b.low + b.high) / 2;
   if (!Array.isArray(rounds) || rounds.length === 0) {
-    return { type: 'insufficient-data', nextGrind: null, delta: 0, reason: 'dialin_no_rounds', band: BAND };
+    return { type: 'insufficient-data', nextGrind: null, delta: 0, reason: 'dialin_no_rounds', band: b };
   }
 
-  const classified = rounds.map(_classify);
+  const classified = rounds.map(r => _classify(r, mid));
   const lastRound  = rounds.at(-1);
   const last       = classified.at(-1);
-  if (!lastRound || !last) return { type: 'insufficient-data', nextGrind: null, delta: 0, reason: 'dialin_no_rounds', band: BAND };
+  if (!lastRound || !last) return { type: 'insufficient-data', nextGrind: null, delta: 0, reason: 'dialin_no_rounds', band: b };
   // Rounds the wizard writes always carry a numeric grindSetting; DialinRound
   // marks it optional only because it also types the persisted session shape.
   const recorded   = lastRound.grindSetting as number;
@@ -131,27 +138,27 @@ export function calcNextGrindSuggestion(rounds: DialinRound[] | null | undefined
   const lastGrind  = scale ? snapGrind(scale, recorded) : recorded;
 
   if (_hasConsecutiveHolds(classified)) {
-    return { type: 'converged', nextGrind: lastGrind, delta: 0, reason: 'dialin_converged_hold', band: BAND };
+    return { type: 'converged', nextGrind: lastGrind, delta: 0, reason: 'dialin_converged_hold', band: b };
   }
   if (_hasConsecutiveHighScores(rounds, scale)) {
-    return { type: 'converged', nextGrind: lastGrind, delta: 0, reason: 'dialin_converged_score', band: BAND };
+    return { type: 'converged', nextGrind: lastGrind, delta: 0, reason: 'dialin_converged_score', band: b };
   }
 
   if (last.direction === 'channeling') {
-    return { type: 'hold', nextGrind: lastGrind, delta: 0, reason: 'dialin_channeling', band: BAND };
+    return { type: 'hold', nextGrind: lastGrind, delta: 0, reason: 'dialin_channeling', band: b };
   }
 
   const step = _computeStepSize(rounds, classified);
   if (step < STEP_FLOOR) {
-    return { type: 'converged', nextGrind: lastGrind, delta: 0, reason: 'dialin_step_floor', band: BAND };
+    return { type: 'converged', nextGrind: lastGrind, delta: 0, reason: 'dialin_step_floor', band: b };
   }
 
   if (rounds.length >= MAX_ROUNDS) {
-    return { type: 'insufficient-data', nextGrind: null, delta: 0, reason: 'dialin_safety_valve', band: BAND };
+    return { type: 'insufficient-data', nextGrind: null, delta: 0, reason: 'dialin_safety_valve', band: b };
   }
 
   if (last.direction === 'hold') {
-    return { type: 'hold', nextGrind: lastGrind, delta: 0, reason: 'dialin_hold_repeat', band: BAND };
+    return { type: 'hold', nextGrind: lastGrind, delta: 0, reason: 'dialin_hold_repeat', band: b };
   }
 
   if (scale) {
@@ -159,14 +166,14 @@ export function calcNextGrindSuggestion(rounds: DialinRound[] | null | undefined
     const nextGrind = snapGrind(scale, last.direction === 'finer' ? lastGrind - move : lastGrind + move);
     // At the end of the range there is no further step in this direction.
     if (nextGrind === lastGrind) {
-      return { type: 'hold', nextGrind: lastGrind, delta: 0, reason: 'dialin_hold_repeat', band: BAND };
+      return { type: 'hold', nextGrind: lastGrind, delta: 0, reason: 'dialin_hold_repeat', band: b };
     }
     return {
       type: last.direction,
       nextGrind,
       delta: Math.round((nextGrind - lastGrind) * 1000) / 1000,
       reason: last.direction === 'finer' ? 'dialin_suggest_finer' : 'dialin_suggest_coarser',
-      band: BAND,
+      band: b,
     };
   }
 
@@ -177,6 +184,6 @@ export function calcNextGrindSuggestion(rounds: DialinRound[] | null | undefined
     nextGrind,
     delta: Math.round(delta * 10) / 10,
     reason: last.direction === 'finer' ? 'dialin_suggest_finer' : 'dialin_suggest_coarser',
-    band: BAND,
+    band: b,
   };
 }

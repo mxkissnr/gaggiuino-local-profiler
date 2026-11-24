@@ -262,12 +262,20 @@ export interface paths {
             parameters: {
                 query?: {
                     format?: "square" | "story";
-                    /** @description Hex accent color override */
+                    /** @description Accent colour: a #rrggbb hex (the app sends its active accent) or a legacy accent name (amber, ocean, aurora, ember, forest, crema); anything else is amber */
                     accent?: string;
                     /** @description UI theme name override */
                     theme?: string;
                     /** @description UI language for the card text (de/en/es/fr/it/nl, unknown falls back to en) */
                     lang?: string;
+                    /** @description The shot page's verdict sentence (#2166); without it the card shows a phrase for the score */
+                    verdict?: string;
+                    /** @description The verdict's advice type; finer and coarser draw an arrow, other values are ignored */
+                    verdictType?: string;
+                    /** @description Score change against the compared shot */
+                    delta?: number;
+                    /** @description The line naming the compared shot */
+                    vs?: string;
                 };
                 header?: never;
                 path: {
@@ -4903,6 +4911,13 @@ export interface paths {
                             stale?: boolean;
                             /** @description Unix ms the status was last pushed, present only when available */
                             updatedAt?: number;
+                            /**
+                             * @description #2139: GaggiMate display system state when it is not ready; absent when ready, without a sys object and for Gaggiuino
+                             * @enum {string}
+                             */
+                            systemState?: "starting" | "waiting" | "updating" | "autotuning" | "mismatch" | "error";
+                            /** @description #2139: controller error code when systemState is error; absent otherwise */
+                            systemErrorCode?: number;
                         } & {
                             [key: string]: unknown;
                         };
@@ -5054,6 +5069,13 @@ export interface paths {
                 };
                 /** @description Machine unreachable or returned an error */
                 502: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The machine is offline or did not answer, and GLP has no full local copy of this profile yet (#2162) */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -7672,6 +7694,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/profile-time-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Per-profile target time windows for one machine (#1504)
+         * @description The optional extraction-time window (min/max seconds) stored for each profile of a machine, in the kv store under `profile_time_targets`. Matching is per machine, trimmed and case-insensitive; a shot names its profile by `profileName`, falling back to `profile.name`. Always an array, `[]` when nothing is stored.
+         */
+        get: {
+            parameters: {
+                query: {
+                    machineId: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description That machine's target time windows, ordered by normalized profile name */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileTimeTarget"][];
+                    };
+                };
+                /** @description machineId is missing or not a positive integer */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        /** Upsert or delete one profile's target time window */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ProfileTimeTargetInput"];
+                };
+            };
+            responses: {
+                /** @description That machine's target time windows after the write */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileTimeTarget"][];
+                    };
+                };
+                /** @description Validation error */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Error"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/achievements": {
         parameters: {
             query?: never;
@@ -8536,6 +8641,11 @@ export interface components {
             tempStabilityDev?: number | null;
             /** @description GET /api/shots/{id} only: id of the previous same-profile shot (null if none) */
             previousShotId?: number | null;
+            /** @description The profile's target time window (#1504) the duration part was scored against, or null. GET /api/shots, /api/shots/{id} and /api/shots/last only; never on /shots.json. */
+            timeTarget?: {
+                minS?: number;
+                maxS?: number;
+            } | null;
             previousShot?: components["schemas"]["HydratedShot"] | null;
         };
         /** @description The rectangle a library photo was cropped to, as fractions of the uncropped original's width and height — so it survives any later downscale. (#1845) An entity carries `imageCrop` exactly when its uncropped original is stored, i.e. when `GET .../image?original=1` and a re-crop are available. */
@@ -9130,10 +9240,17 @@ export interface components {
             pressure: number | null;
             /** @description #902 idle stats: current water level */
             waterLevel: number | null;
-            /** @description #1409: active GaggiMate machine warning keys (water, flush, switch, scaleConnected, scaleBattery, temperature); empty for Gaggiuino */
+            /** @description #1409: active GaggiMate machine warning keys (water, flush, switch, scaleConnected, scaleBattery, temperature, backflush, descaling); empty for Gaggiuino */
             machineWarnings: string[];
             /** @description #1409: GaggiMate reports a firmware update; always false for Gaggiuino */
             machineUpdateAvailable: boolean;
+            /**
+             * @description #2139: the GaggiMate display's system state (sys.s, firmware v1.9.0+) when it is not ready; empty when ready, without a sys object and for Gaggiuino
+             * @enum {string}
+             */
+            machineSystemState: "" | "starting" | "waiting" | "updating" | "autotuning" | "mismatch" | "error";
+            /** @description #2139: the controller error code (sys.c) when machineSystemState is error, else 0 */
+            machineSystemErrorCode: number;
             machineControl: components["schemas"]["MachineControlState"] | null;
         };
         BackupBundle: {
@@ -9249,6 +9366,19 @@ export interface components {
             puckScreenId?: number | null;
             grinder?: string;
             dose?: number | null;
+        };
+        /** @description One stored extraction-time window for a profile, as served by GET/PUT /api/profile-time-targets. Matching is per machine, trimmed and case-insensitive; a shot names its profile by `profileName`, falling back to `profile.name`. */
+        ProfileTimeTarget: {
+            profileName: string;
+            minS: number;
+            maxS: number;
+        };
+        /** @description PUT /api/profile-time-targets body. Both null removes the window; both set needs 5 <= minS < maxS <= 300. */
+        ProfileTimeTargetInput: {
+            machineId: number;
+            profileName: string;
+            minS?: number | null;
+            maxS?: number | null;
         };
         /** @description One entry of GET /api/orders/queue-eta's `positions` map. */
         QueuePosition: {

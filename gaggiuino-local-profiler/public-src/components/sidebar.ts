@@ -92,10 +92,17 @@ export function renderSidebar(): void {
         }
         el.appendChild(body);
       } else {
+        // #2152: a day group is headed by the shared section title with a
+        // counter of its shots; filterShots() keeps the counter on the
+        // shots a search leaves visible.
         const sep = document.createElement('div');
-        sep.className = 'day-sep';
+        sep.className = 'section-title day-sep';
         sep.dataset.dayKey = group.key;
         sep.textContent = group.label;
+        const count = document.createElement('span');
+        count.className = 'section-title__count';
+        count.textContent = String(group.shots.length);
+        sep.appendChild(count);
         el.appendChild(sep);
         group.shots.forEach(shot => el.appendChild(_buildShotWrapper(shot)));
       }
@@ -138,7 +145,7 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     const line2 = [beanLabel(ann) || null, dose ? `${dose.toFixed(1)} g` : null].filter(Boolean).join(' · ') || durLabel || '';
     // #502: which frozen-portion batch (if any) this shot's dose came from —
     // an explicit annotation-panel choice, shown at a glance in the list too.
-    const frozenBadge = ann.frozenPortionId ? html`<span class="shot-frozen-badge" title="${esc(t('ann_frozen_portion'))}">${SNOWFLAKE_ICON_SVG}</span>` : html``;
+    const frozenBadge = ann.frozenPortionId ? html`<span class="shot-frozen-icon" title="${esc(t('ann_frozen_portion'))}">${SNOWFLAKE_ICON_SVG}</span>` : html``;
 
       const rating = parseInt(String(ann.rating ?? '')) || 0;
     const starsHtml = rating > 0
@@ -150,7 +157,7 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     // grinder name itself is relegated to the badge's title tooltip, since
     // it changes far less often than the grind setting does.
     const grindBadgeHtml = ann.grindSetting
-      ? html`<span class="sidebar-grind-badge"${ann.grinder ? html` title="${esc(ann.grinder)}"` : html``}>${esc(ann.grindSetting)}</span>`
+      ? html`<span class="badge"${ann.grinder ? html` title="${esc(ann.grinder)}"` : html``}>${esc(ann.grindSetting)}</span>`
       : html``;
 
     // Multi-machine badge (#325): only shown in "all machines" mode with
@@ -159,7 +166,7 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     // be redundant noise there.
     const machineRec = S.machines.find(m => m.id === shot.machineId) as { name?: string } | undefined;
     const machineBadge = ((S.machines?.length ?? 0) > 1 && S.activeMachineId === 'all' && shot.machineId != null)
-      ? html`<span class="shot-machine-badge">${esc(machineRec?.name || '?')}</span>` : html``;
+      ? html`<span class="badge">${esc(machineRec?.name || '?')}</span>` : html``;
     // #816: the bean-photo/avatar circle (.shot-thumb) is gone — the
     // prototype's rail-item mockup is text-only, no image or colored circle
     // (Border-Diät extends to photos, not just boxes). The photo itself is
@@ -208,13 +215,18 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     };
 
     const btnCmp = document.createElement('button');
-    btnCmp.className = 'compare-btn';
+    btnCmp.type = 'button';
+    // #2095: compare stays on until it is switched off, so it is a chip;
+    // updateSidebarHighlighting() sets its aria-pressed.
+    btnCmp.className = 'chip shot-compare';
+    btnCmp.dataset.shotId = String(shot.id);
     btnCmp.innerHTML = html`⇄`;
     btnCmp.title = t('btn_compare_tooltip');
     btnCmp.onclick = e => { e.stopPropagation(); toggleCompare(shot.id); };
 
     const btnDel = document.createElement('button');
-    btnDel.className = 'delete-btn';
+    btnDel.type = 'button';
+    btnDel.className = 'btn btn--quiet btn--icon';
     btnDel.innerHTML = html`<svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16" aria-hidden="true"><path d="M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19M8,9H10V19H8V9M14,9H16V19H14V9M15.5,4L14.5,3H9.5L8.5,4H5V6H19V4H15.5Z"/></svg>`;
     btnDel.title = t('btn_delete_tooltip');
     btnDel.onclick = e => { e.stopPropagation(); if (window.trashShot) window.trashShot(shot.id); };
@@ -262,6 +274,9 @@ export function updateSidebarHighlighting(): void {
     const id = parseInt(x.id.replace('wrapper-', ''));
     if (id === S.primaryShotId) x.classList.add('active');
     if (id === S.compareShotId) x.classList.add('compare-active');
+  });
+  document.querySelectorAll<HTMLElement>('.shot-compare').forEach(btn => {
+    btn.setAttribute('aria-pressed', String(Number(btn.dataset.shotId) === S.compareShotId));
   });
 }
 
@@ -358,12 +373,15 @@ export function filterShots(query: string): void {
   // signal about this day-sep's shots.
   document.querySelectorAll<HTMLElement>('#shots .day-sep').forEach(sep => {
     let sib = sep.nextElementSibling as HTMLElement | null;
-    let hasVisible = false;
+    let visible = 0;
     while (sib && !sib.classList.contains('day-sep') && !sib.classList.contains('sidebar-month-header')) {
-      if (sib.classList.contains('shot-wrapper') && sib.style.display !== 'none') { hasVisible = true; break; }
+      if (sib.classList.contains('shot-wrapper') && sib.style.display !== 'none') visible++;
       sib = sib.nextElementSibling as HTMLElement | null;
     }
-    sep.style.display = hasVisible ? '' : 'none';
+    sep.style.display = visible > 0 ? '' : 'none';
+    // #2152: the counter names the day's shots the search leaves visible.
+    const count = sep.children[0] as HTMLElement | undefined;
+    if (count) count.textContent = String(visible);
   });
   // #439: while actively searching, force every month group open so matches
   // nested inside a collapsed month are actually visible; hide the
@@ -393,14 +411,14 @@ export function setSortMode(mode: string): void {
   }
   const arrow = S.sortAsc ? ' ↑' : ' ↓';
   const labels: Record<string, Html> = { newest: tHtml('sort_newest'), score: tHtml('sort_score'), rating: html`${STAR_ICON_SVG} ${tHtml('sort_rating')}`, duration: tHtml('sort_duration') };
-  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('active'));
   const map: Record<string, string> = { newest: 'sortNewest', score: 'sortScore', rating: 'sortRating', duration: 'sortDur' };
+  // #2093: the chosen sort is pressed through aria-pressed only.
+  for (const [key, id] of Object.entries(map)) {
+    document.getElementById(id)?.setAttribute('aria-pressed', String(key === mode));
+  }
   const domId = map[mode];
   const activeBtn = domId ? document.getElementById(domId) : null;
-  if (activeBtn) {
-    activeBtn.classList.add('active');
-    activeBtn.innerHTML = html`${labels[mode] || esc(mode)}${esc(arrow)}`;
-  }
+  if (activeBtn) activeBtn.innerHTML = html`${labels[mode] || esc(mode)}${esc(arrow)}`;
   renderSidebar();
 }
 

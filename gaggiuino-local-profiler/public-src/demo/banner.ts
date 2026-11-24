@@ -26,10 +26,11 @@ const SIMULATE_MESSAGE = { type: 'glp-demo-simulate' };
 function buildBanner(): HTMLElement {
     const bar = document.createElement('div');
     bar.id = BANNER_ID;
+    bar.className = 'demo-banner';
     Object.assign(bar.style, {
         position: 'fixed', top: '0', left: '0', right: '0', zIndex: '9999',
         display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center',
-        gap: 'var(--sp-1) var(--sp-3)', padding: 'var(--sp-1) var(--sp-3)',
+        gap: 'var(--sp-1) var(--sp-3)',
         background: 'var(--raised)', color: 'var(--gray-200)',
         borderBottom: '1px solid var(--gray-700)',
         fontSize: 'var(--fs-1)', textAlign: 'center',
@@ -54,10 +55,11 @@ function buildBanner(): HTMLElement {
     // its own line at 360 px.
     const simulate = document.createElement('button');
     simulate.type = 'button';
+    simulate.className = 'demo-banner-link';
     simulate.dataset.i18n = 'demo.simulate';
     simulate.textContent = t('demo.simulate');
     Object.assign(simulate.style, {
-        background: 'none', border: 'none', padding: '0', margin: '0',
+        background: 'none', border: 'none', margin: '0',
         color: 'var(--accent-ink)', font: 'inherit', fontWeight: '600',
         whiteSpace: 'nowrap', cursor: 'pointer',
     });

@@ -122,14 +122,14 @@ describe('the topbar power toggle and sync controls (#914, #2056)', () => {
     await updateStatus();
     const btn = doc.getElementById('powerBtn')!;
     expect(btn.style.display).toBe('');
-    expect(btn.className).toBe('machine-on');
+    expect(btn.className).toBe('btn btn--quiet btn--icon machine-on');
     expect(btn.title).not.toBe('');
   });
 
   it('shows the off state', async () => {
     mockResponses({ switchBody: { configured: true, state: false } });
     await updateStatus();
-    expect(doc.getElementById('powerBtn')!.className).toBe('machine-off');
+    expect(doc.getElementById('powerBtn')!.className).toBe('btn btn--quiet btn--icon machine-off');
   });
 
   it('keeps the toggle disabled while the switch request is in flight', async () => {

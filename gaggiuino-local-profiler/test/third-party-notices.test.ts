@@ -9,6 +9,7 @@
 // settings UI, and it grew a Server section. That section is guarded on the Go
 // side (go/cmd/server/third_party_notices_test.go), which compares it against
 // `go list -deps`; this test only covers the npm packages and the fonts.
+// #2183: "npm run notices:sync" rewrites the version headings after a dependency bump.
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -56,7 +57,9 @@ describe('THIRD_PARTY_NOTICES.md', () => {
         }
         expect(
             missing,
-            'bundled package(s) with no matching "### <name> <version>" section:\n' + missing.join('\n'),
+            'bundled package(s) with no matching "### <name> <version>" section:\n' +
+                missing.join('\n') +
+                '\nRun "npm run notices:sync" in the package folder: it rewrites version bumps and names every heading to add or remove.',
         ).toEqual([]);
     });
 

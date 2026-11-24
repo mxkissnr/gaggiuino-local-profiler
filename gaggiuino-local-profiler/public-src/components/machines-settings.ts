@@ -10,7 +10,7 @@ import * as machinesApi from '../api/machines.js';
 import { getUiPref, setUiPref } from '../ui-prefs.js';
 import { t, tHtml } from '../i18n.js';
 import { loadMachineProfileList } from '../views/library-profile-editor.js';
-import { CHECK_ICON_SVG, CLOSE_ICON_SVG } from '../icons.js';
+import { CHECK_ICON_SVG, CLOSE_ICON_SVG, ICON_TRASH, STAR_ICON_SVG } from '../icons.js';
 import { updateStatus } from './status.js';
 import { THEME_PRESETS, getThemePreset, resolveTheme } from '../shared/theme-presets.js';
 import { migrateLegacyAccent } from '../theme.js';
@@ -415,10 +415,10 @@ export function renderMachinesList(): void {
           <span class="machine-row-sub">${m.type === 'gaggimate' ? html`GaggiMate` : html`Gaggiuino`}${m.isDefault ? html` · ${tHtml('settings_machine_default')}` : html``} · ${tHtml('settings_machine_shot_count', shotCount)}</span>
         </span>
       </button>
-      ${isGaggiuino ? html`<span class="machine-row-firmware-badge machine-row-firmware-badge-muted">${escapeHtml(t('settings_machine_firmware_checking'))}</span>` : html``}`;
+      ${isGaggiuino ? html`<span class="badge machine-row-firmware-status">${escapeHtml(t('settings_machine_firmware_checking'))}</span><button type="button" class="btn btn--tonal machine-row-firmware-update" aria-expanded="false" style="display:none"></button>` : html``}`;
     row.querySelector('.machine-row-main')?.addEventListener('click', () => openMachineForm(m));
     if (isGaggiuino) {
-      (row.querySelector('.machine-row-firmware-badge') as HTMLElement).addEventListener('click', () => toggleMachineFirmwarePanel(row));
+      row.querySelector<HTMLElement>('.machine-row-firmware-update')?.addEventListener('click', () => toggleMachineFirmwarePanel(row));
       void loadFirmwareStatus(m.id, row);
     }
     list.appendChild(row);
@@ -726,27 +726,29 @@ async function loadFirmwareStatus(machineId: number, row: HTMLElement): Promise<
   }
 }
 
-// Updates the row's compact firmware badge in place and, only once an
-// update is actually available, lazily inserts the expand panel (update
-// banner + trigger button + progress bar) right after it -- most rows never
-// need that markup at all, since most machines are already up to date.
+// Updates the row's firmware status in place: a neutral badge while checking,
+// when the version is unknown or up to date, and the update button (with the
+// expand panel lazily inserted right after it) only once an update is actually
+// available -- most rows never need that markup at all.
 export function renderFirmwareRow(machineId: number, row: HTMLElement, data: FirmwareVersion | null): void {
-  const badge = row.querySelector<HTMLElement>('.machine-row-firmware-badge');
-  if (!badge) return; // row was already replaced by a later renderMachinesList() call
+  const status = row.querySelector<HTMLElement>('.machine-row-firmware-status');
+  const update = row.querySelector<HTMLElement>('.machine-row-firmware-update');
+  if (!status || !update) return; // row was already replaced by a later renderMachinesList() call
   let panel = row.querySelector<HTMLElement>('.machine-row-firmware-panel');
   if (!data || !data.installed) {
-    badge.textContent = data ? t('settings_machine_firmware_unknown') : t('settings_machine_firmware_check_failed');
-    badge.className = 'machine-row-firmware-badge machine-row-firmware-badge-muted';
-    badge.removeAttribute('title');
+    showFirmwareStatus(status, update, data ? t('settings_machine_firmware_unknown') : t('settings_machine_firmware_check_failed'));
+    status.removeAttribute('title');
     panel?.remove();
     return;
   }
   if (data.updateAvailable && data.latest) {
-    badge.textContent = t('settings_machine_firmware_badge_update', data.latest);
-    badge.title = t('settings_machine_firmware_update_available', data.latest);
-    badge.className = 'machine-row-firmware-badge machine-row-firmware-badge-update';
+    update.textContent = t('settings_machine_firmware_badge_update', data.latest);
+    update.title = t('settings_machine_firmware_update_available', data.latest);
+    status.style.display = 'none';
+    update.style.display = '';
     if (!panel) {
-      badge.insertAdjacentHTML('afterend', renderFirmwarePanelHtml());
+      update.insertAdjacentHTML('afterend', renderFirmwarePanelHtml());
+      update.setAttribute('aria-expanded', 'false');
       panel = row.querySelector<HTMLElement>('.machine-row-firmware-panel');
       if (!panel) return;
       (panel.querySelector('.machine-firmware-update-btn') as HTMLElement).addEventListener('click', () => void triggerMachineFirmwareUpdate(machineId, row));
@@ -756,11 +758,19 @@ export function renderFirmwareRow(machineId: number, row: HTMLElement, data: Fir
     if (msgEl) msgEl.textContent = t('settings_machine_firmware_update_available', data.latest);
     if (linkEl) linkEl.href = safeHttpUrl(data.releaseUrl) ?? '#';
   } else {
-    badge.textContent = t('settings_machine_firmware_badge_current', data.installed);
-    badge.title = t('settings_machine_firmware_installed', data.installed);
-    badge.className = 'machine-row-firmware-badge';
+    showFirmwareStatus(status, update, t('settings_machine_firmware_badge_current', data.installed), true);
+    status.title = t('settings_machine_firmware_installed', data.installed);
     panel?.remove();
   }
+}
+
+// #2094: checking, unknown or up to date is a status badge (green only
+// when up to date); only an available update shows the button.
+function showFirmwareStatus(status: HTMLElement, update: HTMLElement, text: string, upToDate = false): void {
+  status.textContent = text;
+  status.className = upToDate ? 'badge badge--ok machine-row-firmware-status' : 'badge machine-row-firmware-status';
+  status.style.display = '';
+  update.style.display = 'none';
 }
 
 function renderFirmwarePanelHtml(): Html {
@@ -768,7 +778,7 @@ function renderFirmwarePanelHtml(): Html {
     <span class="machine-firmware-update-banner">
       <span class="machine-firmware-update-msg"></span>
       <a class="machine-firmware-changelog-link" href="#" target="_blank" rel="noopener">${escapeHtml(t('update_changelog'))}</a>
-      <button type="button" class="machine-firmware-update-btn backup-btn">${escapeHtml(t('settings_machine_firmware_update_btn'))}</button>
+      <button type="button" class="btn btn--primary machine-firmware-update-btn">${escapeHtml(t('settings_machine_firmware_update_btn'))}</button>
     </span>
     <span class="machine-firmware-progress-bar" style="display:none">
       <span class="machine-firmware-progress-label"></span>
@@ -778,15 +788,15 @@ function renderFirmwarePanelHtml(): Html {
   </span>`;
 }
 
-// Wired to every Gaggiuino row's firmware badge -- a no-op unless an update
-// is actually available (the only state that ever grows a panel to expand).
+// Wired to the row's update button, which only shows once an update is
+// available (the only state that ever grows a panel to expand).
 function toggleMachineFirmwarePanel(row: HTMLElement): void {
   const panel = row.querySelector<HTMLElement>('.machine-row-firmware-panel');
   if (!panel) return;
-  const badge = row.querySelector<HTMLElement>('.machine-row-firmware-badge');
+  const update = row.querySelector<HTMLElement>('.machine-row-firmware-update');
   const show = panel.style.display === 'none';
   panel.style.display = show ? '' : 'none';
-  badge?.setAttribute('aria-expanded', String(show));
+  update?.setAttribute('aria-expanded', String(show));
 }
 
 // skipBackup is only ever true on the resend after the user confirmed updating
@@ -875,11 +885,11 @@ function finishFirmwarePolling(
   if (result === 'success') {
     if (window.showToast) window.showToast(t('settings_machine_firmware_update_success_toast'));
     row.querySelector<HTMLElement>('.machine-row-firmware-panel')?.remove();
-    const badge = row.querySelector<HTMLElement>('.machine-row-firmware-badge');
-    if (badge) {
-      badge.textContent = t('settings_machine_firmware_checking');
-      badge.className = 'machine-row-firmware-badge machine-row-firmware-badge-muted';
-      badge.removeAttribute('title');
+    const status = row.querySelector<HTMLElement>('.machine-row-firmware-status');
+    const update = row.querySelector<HTMLElement>('.machine-row-firmware-update');
+    if (status && update) {
+      showFirmwareStatus(status, update, t('settings_machine_firmware_checking'));
+      status.removeAttribute('title');
     }
     // The banner stays gone until the status reload says an update is
     // available again, so it can never offer a second start in between.
@@ -963,12 +973,15 @@ function renderFirmwareRestarting(row: HTMLElement): void {
 // actions that are not part of editing live here, in their old row order;
 // "Edit" is the row tap that opened the dialog, so it has no entry.
 export function machineDialogActionsHtml(m: MachineView): Html {
+  // #2172: every entry has an icon; Delete sits after a separator when an entry is above it.
+  const entriesAbove = m.type === 'gaggiuino' || !m.isDefault;
   return html`<details class="lib-sheet-more machine-dialog-more">
   <summary aria-label="${tHtml('lib_sheet_more')}">⋯</summary>
   <div class="lib-sheet-menu-list">
     ${m.type === 'gaggiuino' ? machineBackupsButtonHtml() : html``}
-    ${!m.isDefault ? html`<button type="button" class="lib-sheet-menu-btn machine-set-default-btn">${tHtml('settings_machine_set_default')}</button>` : html``}
-    <button type="button" class="lib-sheet-menu-btn del machine-delete-btn">${tHtml('settings_machine_delete')}</button>
+    ${!m.isDefault ? html`<button type="button" class="lib-sheet-menu-item machine-set-default-btn">${STAR_ICON_SVG} ${tHtml('settings_machine_set_default')}</button>` : html``}
+    ${entriesAbove ? html`<span class="lib-sheet-menu-sep"></span>` : html``}
+    <button type="button" class="lib-sheet-menu-item del machine-delete-btn">${ICON_TRASH} ${tHtml('settings_machine_delete')}</button>
   </div>
 </details>`;
 }
@@ -1178,7 +1191,7 @@ export async function setDefaultMachine(id: number): Promise<void> {
 // toast pattern in components/status.ts.
 export async function deleteMachine(id: number, isDefault?: boolean): Promise<void> {
   const confirmKey = isDefault ? 'settings_machine_delete_default_confirm' : 'settings_machine_delete_confirm';
-  if (!await confirmDialog(t(confirmKey), { confirmLabel: t('lib_btn_delete') })) return;
+  if (!await confirmDialog(t(confirmKey), { confirmLabel: t('lib_btn_delete'), destructive: true })) return;
   const r = await machinesApi.deleteMachine(id);
   if (r.ok) { closeMachineForm(); void loadMachines(); return; }
   const body = await r.json().catch(() => ({})) as { error?: string };

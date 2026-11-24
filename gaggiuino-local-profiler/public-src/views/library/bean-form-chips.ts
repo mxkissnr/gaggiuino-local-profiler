@@ -22,11 +22,11 @@ let _flavorInputBound = false;
 function renderFlavorChips(): void {
   const wrap = _el('beanFormFlavorChips');
   if (!wrap) return;
-  wrap.querySelectorAll('.flavor-chip').forEach(el => el.remove());
+  wrap.querySelectorAll('.chip--input').forEach(el => el.remove());
   const input = _field('beanFormFlavorInput');
   for (const [i, f] of _formFlavors.entries()) {
     const chip = document.createElement('span');
-    chip.className = 'flavor-chip';
+    chip.className = 'chip--input';
     chip.innerHTML = html`${esc(f)} <button type="button" class="flavor-chip-x" data-flavor-idx="${esc(i)}">${CLOSE_ICON_SVG}</button>`;
     wrap.insertBefore(chip, input);
   }
@@ -94,7 +94,7 @@ function renderOriginChips(): void {
   if (!wrap) return;
   // codeql[js/xss-through-dom] false positive: esc()/escapeHtml() already applied, see #760
   wrap.innerHTML = joinHtml(_formOrigins.map((o, i) => html`
-    <span class="flavor-chip origin-chip">${esc(countryName(o.code, S.currentLang))}
+    <span class="chip--input origin-chip">${esc(countryName(o.code, S.currentLang))}
       <input type="number" class="origin-chip-percent" aria-label="${tHtml('bean_origin_hint')}" data-origin-idx="${esc(i)}" min="0" max="100" step="1" placeholder="%" value="${esc(o.percent ?? '')}">
       <button type="button" class="flavor-chip-x" data-origin-idx-remove="${esc(i)}">${CLOSE_ICON_SVG}</button>
     </span>`));

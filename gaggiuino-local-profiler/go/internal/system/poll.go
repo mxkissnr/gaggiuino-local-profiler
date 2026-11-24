@@ -110,6 +110,12 @@ type LiveData struct {
 	// always a JSON array (empty for Gaggiuino, which reports neither).
 	MachineWarnings        []string `json:"machineWarnings"`
 	MachineUpdateAvailable bool     `json:"machineUpdateAvailable"`
+	// #2139: the default machine's GaggiMate display system state when it is
+	// not ready (starting, waiting, updating, autotuning, mismatch, error), ""
+	// otherwise and for Gaggiuino; machineSystemErrorCode is the controller
+	// error code for "error", else 0. Always present, like every LiveData key.
+	MachineSystemState     string `json:"machineSystemState"`
+	MachineSystemErrorCode int    `json:"machineSystemErrorCode"`
 	// #1324: opt-in machine-control snapshot for the default machine, null
 	// when machine control is unsupported, its setting is off, or the machine
 	// is unreachable.

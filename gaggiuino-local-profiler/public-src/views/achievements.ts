@@ -194,7 +194,7 @@ export function achVerdictHtml(badges: Achievement[]): Html {
         ${progress ? html`<p class="analytics-verdict-sub">${esc(t('ach_progress', progress.current, progress.target))}</p>` : html``}
       </div>
       <div class="analytics-verdict-score">
-        <span class="analytics-verdict-score-num serif-display">${esc(got)}</span>
+        <span class="analytics-verdict-score-num">${esc(got)}</span>
         <span class="analytics-verdict-score-lbl">${esc(t('ach_verdict_of', total))}</span>
       </div>
     </div>`;
@@ -307,11 +307,11 @@ export function achPageHtml(
   }
 
   const cardChips = joinHtml(CARD_KEYS.map(key =>
-    html`<button type="button" class="lib-shelf-chip" data-ach-card="${esc(key)}" aria-pressed="${esc(key === card ? 'true' : 'false')}">${tHtml(CARD_NAME_KEYS[key] ?? '')}</button>`
+    html`<button type="button" class="chip" data-ach-card="${esc(key)}" aria-pressed="${esc(key === card ? 'true' : 'false')}">${tHtml(CARD_NAME_KEYS[key] ?? '')}</button>`
   ));
   const filters: [AchFilter, string][] = [['all', 'lib_shelf_all'], ['got', 'ach_filter_got'], ['open', 'ach_filter_open']];
   const showChips = joinHtml(filters.map(([value, key]) =>
-    html`<button type="button" class="lib-shelf-chip" data-ach-show="${esc(value)}" aria-pressed="${esc(value === filter ? 'true' : 'false')}">${tHtml(key)}</button>`
+    html`<button type="button" class="chip" data-ach-show="${esc(value)}" aria-pressed="${esc(value === filter ? 'true' : 'false')}">${tHtml(key)}</button>`
   ));
 
   // The verdict already names the closest stamp, so "Coming up" starts after
@@ -359,11 +359,11 @@ export function achPageHtml(
       </div>
       <div class="ach-side"${sideHidden ? html` hidden` : html``}>
         <section class="ach-soon-sec"${soonHidden ? html` hidden` : html``}>
-          <h2 class="analytics-section-title">${tHtml('ach_soon')}</h2>
+          <h2 class="section-title">${tHtml('ach_soon')}</h2>
           <div class="settings-group">${soonRows}</div>
         </section>
         <section class="ach-recent-sec"${recentHidden ? html` hidden` : html``}>
-          <h2 class="analytics-section-title">${tHtml('ach_recent')}</h2>
+          <h2 class="section-title">${tHtml('ach_recent')}</h2>
           <div class="settings-group">${recentRows}</div>
         </section>
       </div>

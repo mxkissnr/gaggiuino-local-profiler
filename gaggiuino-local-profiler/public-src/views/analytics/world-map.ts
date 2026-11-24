@@ -494,7 +494,7 @@ function _renderMapChips(wrap: HTMLElement, countries: string[], byCode: Record<
   const host = _mapChipsHost(wrap);
   if (!host) return;
   host.innerHTML = joinHtml(countries.map(code =>
-    html`<button type="button" class="chip analytics-filter-btn" data-code="${esc(code)}">${esc(countryName(code, S.currentLang))} ${esc(Math.round(byCode[code]?.shots ?? 0))}</button>`));
+    html`<button type="button" class="chip" data-code="${esc(code)}">${esc(countryName(code, S.currentLang))} ${esc(Math.round(byCode[code]?.shots ?? 0))}</button>`));
   if (typeof host.querySelectorAll !== 'function') return;
   host.querySelectorAll<HTMLElement>('.chip').forEach(chip => {
     const code = chip.dataset.code;
@@ -507,7 +507,7 @@ function _renderMapHeadingCount(wrap: HTMLElement, n: number): void {
   if (typeof document === 'undefined' || typeof document.createElement !== 'function') return;
   const card = wrap.parentElement;
   if (!card || typeof card.querySelector !== 'function') return;
-  const title = card.querySelector<HTMLElement>('.analytics-section-title');
+  const title = card.querySelector<HTMLElement>('.section-title');
   if (!title) return;
   const old = title.querySelector<HTMLElement>('.analytics-map-count');
   if (old) old.remove();
