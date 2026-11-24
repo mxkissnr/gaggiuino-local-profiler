@@ -20,26 +20,33 @@ import type { UiPrefs } from './types.js';
 
 // ── Status / power / sync ────────────────────────────────────────────────
 
+// 'all'/null/undefined mean "no machine given": the server then uses the
+// default machine. Shared by the status and switch helpers below.
+function machineQuery(machineId?: string | number | null): string {
+  return (machineId != null && machineId !== 'all')
+    ? `?machineId=${encodeURIComponent(String(machineId))}`
+    : '';
+}
+
 /**
  * GET /api/status[/?machineId=...] — the app-wide status poll. An explicit
  * `machineId` scopes the status dot/hostname fields to that machine;
  * 'all'/null/undefined fall back to the unscoped (default-machine) call.
  */
 export function getStatus(machineId?: string | number | null): Promise<Response> {
-  const qs = (machineId != null && machineId !== 'all')
-    ? `?machineId=${encodeURIComponent(String(machineId))}`
-    : '';
-  return apiFetch(`api/status${qs}`);
+  return apiFetch(`api/status${machineQuery(machineId)}`);
 }
 
-/** GET /api/switch — the machine's power-switch state (`{ configured, state }`). */
-export function getSwitch(): Promise<Response> {
-  return apiFetch('api/switch');
+/** GET /api/switch[?machineId=...] — a machine's power-switch state
+ *  (`{ configured, state }`); 'all'/null/undefined read the default machine's (#2202). */
+export function getSwitch(machineId?: string | number | null): Promise<Response> {
+  return apiFetch(`api/switch${machineQuery(machineId)}`);
 }
 
-/** POST /api/switch/toggle — flip the machine power switch. */
-export function toggleSwitch(): Promise<Response> {
-  return apiFetch('api/switch/toggle', { method: 'POST' });
+/** POST /api/switch/toggle[?machineId=...] — flip a machine's power switch;
+ *  'all'/null/undefined flip the default machine's (#2202). */
+export function toggleSwitch(machineId?: string | number | null): Promise<Response> {
+  return apiFetch(`api/switch/toggle${machineQuery(machineId)}`, { method: 'POST' });
 }
 
 /** POST /api/sync — force a shot sync; a 429 carries the throttle error body. */
