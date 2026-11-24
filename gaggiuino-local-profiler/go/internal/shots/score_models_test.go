@@ -363,6 +363,7 @@ func sameScore(a, b *int) bool {
 	default:
 		return *a == *b
 	}
+}
 
 // #2186: the experimental dev-channel model "adherence". Its part ports the
 // #1505 harness's adherencePressureMae literally, so these tests pin the
