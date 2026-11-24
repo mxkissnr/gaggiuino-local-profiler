@@ -2683,6 +2683,9 @@
         .pe-stops[open] > .pe-stops-summary::before { transform: rotate(90deg); }
         .pe-remove-phase, .pe-recipe > .btn { align-self:flex-start; }
         .pe-recipe .settings-row-title { flex:1 1 auto; min-width:0; }
+        /* #2204: label takes the free space so both inputs share one edge. */
+        .ptt-rows .settings-row-title { flex:1 1 auto; min-width:0; }
+        .ptt-rows .lib-input { flex:0 0 6rem; width:6rem; }
         .pe-row-input { flex:0 0 auto; width:96px; text-align:right; }
         .pe-row-name { flex:1 1 160px; width:auto; text-align:left; }
         .pe-row-stack { flex-direction:column; align-items:stretch; }
