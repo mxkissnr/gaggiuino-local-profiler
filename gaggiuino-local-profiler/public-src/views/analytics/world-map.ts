@@ -1,6 +1,7 @@
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, HOME_COUNTRY_NUM } from '../../constants.js';
+import { getUiPref } from '../../ui-prefs.js';
 import { esc, html, joinHtml, scoreClass, themeColor, onThemeChange } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { openDetailSheet } from '../../components/detail-sheet.js';
@@ -84,10 +85,13 @@ let _mapLibsPromise: Promise<[typeof import('echarts'), TopojsonModule]> | null 
 // still-latest call writes _worldTopo / touches the DOM after the await.
 let _worldMapReqToken = 0;
 
-// #1467: the home point ([lon, lat]) resolved once from the registered world
-// geometry for the locale's country — null when the locale has no region or
-// it isn't a HOME_COUNTRY_NUM entry, which just means no routes are drawn.
-let _worldMapHome: [number, number] | null = null;
+// #1467/#2210: the home point ([lon, lat]) on the registered world geometry,
+// cached together with the country code it was resolved for. A different code
+// (the setting changed, here or on another device) resolves it again.
+let _worldMapHome: { code: string | null; point: [number, number] | null } | null = null;
+// #2210: the registered geometry's features, kept so the home point can be
+// resolved again after the setting changes.
+let _worldFeatures: GeoJsonFeature[] | null = null;
 // #1467: the map click handler is bound once per echarts instance, so it
 // reads the latest aggregation/home from here instead of closing over one
 // build's locals.
@@ -369,10 +373,9 @@ export function worldMapTooltipFormatter(params: MapTooltipParams) {
 }
 
 // ── Origin map: home country, routes, chips and click-through (#1467) ─────
-// The country the user brews in, from the browser's UI language. Intl.Locale
-// maximize() fills in the likely region ("de" -> DE, "nl" -> NL); null when
-// the tag can't be resolved, which simply means the map draws no routes.
-// Nothing is stored or sent — a local convenience, not a setting.
+// The country guessed from the browser's UI language. Intl.Locale maximize()
+// fills in the likely region ("de" -> DE, "nl" -> NL); null when the tag can't
+// be resolved. This is the Automatic choice of the Home country setting (#2210).
 export function homeCountryFromLocale(lang: string | undefined): string | null {
   if (typeof lang !== 'string' || !lang.trim()) return null;
   try {
@@ -381,6 +384,42 @@ export function homeCountryFromLocale(lang: string | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+// #2210: Settings > Appearance > Home country, kept in the shared UI prefs.
+// Absent or '' = Automatic (the browser-language guess), 'none' = no home,
+// otherwise an ISO alpha-2 code from HOME_COUNTRY_NUM.
+export const HOME_COUNTRY_PREF = 'analytics.home_country';
+
+/** Whether `value` is a country the map can place a home point in. */
+export function isHomeCountryCode(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Z]{2}$/.test(value) && HOME_COUNTRY_NUM[value] !== undefined;
+}
+
+/**
+ * The home country for a stored setting and the browser language: 'none'
+ * gives null, a table code wins over the language, anything else is Automatic.
+ */
+export function resolveHomeCountry(pref: unknown, lang: string | undefined): string | null {
+  if (pref === 'none') return null;
+  if (isHomeCountryCode(pref)) return pref;
+  const guess = homeCountryFromLocale(lang);
+  return isHomeCountryCode(guess) ? guess : null;
+}
+
+function _currentHomeCountry(): string | null {
+  return resolveHomeCountry(
+    getUiPref<unknown>(HOME_COUNTRY_PREF),
+    typeof navigator !== 'undefined' ? navigator.language : undefined,
+  );
+}
+
+/** [lon, lat] of the home point: the centre of the country's largest landmass. */
+export function homePointFor(code: string | null, features: readonly GeoJsonFeature[]): [number, number] | null {
+  const num = code ? HOME_COUNTRY_NUM[code] : undefined;
+  if (!num) return null;
+  const feature = features.find(f => String(f.id) === num);
+  return feature ? featureLabelPoint(feature.geometry) : null;
 }
 
 // [lon, lat] centre of the largest polygon's bounding box in a Polygon or
@@ -751,14 +790,8 @@ export async function buildWorldMap() {
         if (bounds) _mapCodeBounds.set(props.code, bounds);
       }
     }
-    // #1467: place the home point on the registered geometry once — the
-    // bounding-box centre of the home country's largest landmass.
-    if (!_worldMapHome) {
-      const homeCode = homeCountryFromLocale(typeof navigator !== 'undefined' ? navigator.language : undefined);
-      const homeNum = homeCode ? HOME_COUNTRY_NUM[homeCode] : undefined;
-      const homeFeature = homeNum ? geo.features.find(f => String(f.id) === homeNum) : undefined;
-      _worldMapHome = homeFeature ? featureLabelPoint(homeFeature.geometry) : null;
-    }
+    // #2210: kept for the home point, which follows the Home country setting.
+    _worldFeatures = geo.features;
     // topojson-client ships no types, so its GeoJSON output can't be matched to ECharts' map input.
     echarts.registerMap('world', geo as unknown as Parameters<typeof echarts.registerMap>[1]);
     _worldMapRegistered = true;
@@ -809,7 +842,13 @@ export async function buildWorldMap() {
     _echartsInstance.on('click', _onMapClick);
   }
 
-  const home = _worldMapHome;
+  // #1467/#2210: the home point follows the Home country setting; it is
+  // resolved again only when the resolved country changes.
+  const homeCode = _currentHomeCountry();
+  if (!_worldMapHome || _worldMapHome.code !== homeCode) {
+    _worldMapHome = { code: homeCode, point: homePointFor(homeCode, _worldFeatures ?? []) };
+  }
+  const home = _worldMapHome.point;
   const mapPoints = [
     // #1543: frame each origin by its full country extent — a country wider
     // than the padding (India) would otherwise be cut off at the edge — plus
@@ -890,4 +929,16 @@ export async function buildWorldMap() {
     _resizeBound = true;
   }
   _echartsInstance.resize();
+}
+
+/**
+ * #2210: redraws the map when the Home country setting now resolves to a
+ * different country than the drawn one. Only while Statistics is on screen;
+ * the next visit builds the map anyway. Returns whether a redraw started.
+ */
+export function refreshWorldMapHome(): boolean {
+  if (S.currentMode !== 'analytics' || !_worldMapHome) return false;
+  if (_worldMapHome.code === _currentHomeCountry()) return false;
+  void buildWorldMap();
+  return true;
 }
