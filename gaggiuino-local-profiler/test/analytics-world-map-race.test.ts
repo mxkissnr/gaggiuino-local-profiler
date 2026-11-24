@@ -40,7 +40,9 @@ describe('buildWorldMap (#648 fetch race guard)', () => {
     g.document = { getElementById: (id: string) => (id === 'worldMapWrap' ? wrap : null) };
 
     S.coffeeLibrary = { beans: [{ id: 1, name: 'Test Bean', origin: 'ET' }], grinders: [] };
-    S.shots = [];
+    // #2200: the map only draws beans brewed in the filter, so the bean needs a
+    // shot (inside the default 30-day period) to reach the topology fetch.
+    S.shots = [{ id: 1, timestamp: Math.floor(Date.now() / 1000) - 60, annotation: { beanId: 1, coffee: 'Test Bean' } }];
 
     // Assigned by the promise executors below, so TS cannot prove they are
     // set before the explicit reject calls further down.
@@ -71,6 +73,7 @@ describe('buildWorldMap (#648 fetch race guard)', () => {
     // the newer generation (B, or anything after it) had rendered. The
     // token guard makes A's stale completion a no-op instead.
     expect(wrap.innerHTML).toBe('__sentinel__');
+    expect(callCount).toBe(2); // both calls reached the fetch
   });
 
   // #1467: the empty-library branch now also clears the chips row / heading
