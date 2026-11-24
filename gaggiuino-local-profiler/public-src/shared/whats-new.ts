@@ -21,6 +21,14 @@ export interface WhatsNewEntry {
 }
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
+    { version: '3.9.0', date: '2026-11-24', highlights: [
+        'Profiles can have their own target time, and two beans can be compared side by side.',
+        'Shots, Live, Orders and the profile editors are laid out like Home Assistant pages, with the verdict or the machine state at the top.',
+        'Buttons, chips, badges, menus and dialogs look and work the same on every page, and the shared shot card matches the shot page.',
+        "GaggiMate v1.10.0: marking maintenance done resets the machine's counter, and the Live tab shows the machine's state.",
+        'Fixed: saving a Gaggiuino profile updates it instead of copying it, and the profile editors open while the machine is off.',
+        'Security: updated websocket library for MQTT.',
+    ] },
     { version: '3.8.1', date: '2026-11-18', highlights: [
         'Fixed: GaggiMate shot history keeps syncing when one shot cannot be read, the desktop shot list stays open while you pick shots, and aroma and origin changes on a bean are saved right away.',
     ] },
