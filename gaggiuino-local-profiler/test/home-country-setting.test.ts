@@ -86,7 +86,7 @@ beforeEach(() => {
 });
 
 describe('homeCountryOptions (#2210)', () => {
-  it('lists every map home country sorted by name in the UI language', () => {
+  it('homeCountryOptions lists every map home country sorted by name in the UI language', () => {
     const en = mod.homeCountryOptions('en');
     expect(en).toHaveLength(20);
     expect(new Set(en.map(([code]) => code))).toEqual(new Set(Object.keys(HOME_COUNTRY_NUM)));
@@ -98,7 +98,7 @@ describe('homeCountryOptions (#2210)', () => {
 });
 
 describe('homeCountrySelectValue (#2210)', () => {
-  it('maps the stored setting to the select value', () => {
+  it('homeCountrySelectValue maps the stored setting to the select value', () => {
     expect(mod.homeCountrySelectValue(undefined)).toBe('');
     expect(mod.homeCountrySelectValue('')).toBe('');
     expect(mod.homeCountrySelectValue('none')).toBe('none');
@@ -109,7 +109,7 @@ describe('homeCountrySelectValue (#2210)', () => {
 });
 
 describe('renderHomeCountrySelect (#2210)', () => {
-  it('keeps the two fixed options and adds the countries once', () => {
+  it('renderHomeCountrySelect keeps the two fixed options and adds the countries once', () => {
     S.currentLang = 'en';
     mod.renderHomeCountrySelect();
     mod.renderHomeCountrySelect();
@@ -147,7 +147,7 @@ describe('wireHomeCountrySetting (#2210)', () => {
 });
 
 describe('syncHomeCountrySetting (#2210)', () => {
-  it('shows the stored choice and asks the map to refresh', () => {
+  it('syncHomeCountrySetting shows the stored choice and asks the map to refresh', () => {
     S.currentLang = 'en';
     prefs.set('analytics.home_country', 'none');
     mod.syncHomeCountrySetting();

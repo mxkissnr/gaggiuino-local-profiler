@@ -164,24 +164,24 @@ describe('originFrameCoords / featureBounds (#1543)', () => {
 // #2210: the home country setting resolves to the code the map places its home
 // point in — Automatic keeps the browser-language guess.
 describe('resolveHomeCountry (#2210)', () => {
-  it('Automatic keeps the browser-language guess', () => {
+  it('resolveHomeCountry: Automatic keeps the browser-language guess', () => {
     expect(resolveHomeCountry(undefined, 'de-DE')).toBe('DE');
     expect(resolveHomeCountry('', 'en-US')).toBe('US');
   });
 
-  it('Automatic gives null for a country without a map entry', () => {
+  it('resolveHomeCountry: Automatic gives null for a country without a map entry', () => {
     expect(resolveHomeCountry(undefined, 'ja-JP')).toBeNull();
   });
 
-  it('a chosen country wins over the browser language', () => {
+  it('resolveHomeCountry: a chosen country wins over the browser language', () => {
     expect(resolveHomeCountry('FR', 'en-US')).toBe('FR');
   });
 
-  it('None gives no home', () => {
+  it('resolveHomeCountry: None gives no home', () => {
     expect(resolveHomeCountry('none', 'de-DE')).toBeNull();
   });
 
-  it('an unknown value behaves as Automatic', () => {
+  it('resolveHomeCountry: an unknown value behaves as Automatic', () => {
     expect(resolveHomeCountry('XX', 'de-DE')).toBe('DE');
     expect(resolveHomeCountry('de', 'nl-NL')).toBe('NL');
     expect(resolveHomeCountry(42, 'de-DE')).toBe('DE');
@@ -197,18 +197,18 @@ describe('homePointFor (#2210)', () => {
     geometry: { type: 'Polygon', coordinates: square },
   }] as unknown as Parameters<typeof homePointFor>[1];
 
-  it("places the home point on the country's feature", () => {
+  it("homePointFor places the home point on the country's feature", () => {
     expect(homePointFor('DE', features)).toEqual([1, 1]);
   });
 
-  it('gives null without a code or a matching feature', () => {
+  it('homePointFor gives null without a code or a matching feature', () => {
     expect(homePointFor(null, features)).toBeNull();
     expect(homePointFor('FR', features)).toBeNull();
   });
 });
 
 describe('refreshWorldMapHome (#2210)', () => {
-  it('does nothing before the map was drawn', () => {
+  it('refreshWorldMapHome does nothing before the map was drawn', () => {
     expect(refreshWorldMapHome()).toBe(false);
   });
 });
