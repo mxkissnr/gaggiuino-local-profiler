@@ -99,7 +99,7 @@ export async function updateStatus(machineId?: string | number | null): Promise<
   try {
     const [statusRes, switchRes] = await Promise.all([
       getStatus(machineId),
-      getSwitch().catch(() => null)
+      getSwitch(machineId).catch(() => null)
     ]);
     if (!statusRes.ok) return;
     const s = await statusRes.json() as StatusPayload;
@@ -373,15 +373,19 @@ export function updatePowerButton(sw: SwitchPayload): void {
 
 export async function toggleMachinePower(): Promise<void> {
   const btn = document.getElementById('powerBtn') as HTMLButtonElement;
+  // #2202: the button acts on the machine the app is showing. Captured once,
+  // so a reply or the delayed re-read never paints another machine's state
+  // after the user switched machines meanwhile.
+  const machineId = S.activeMachineId;
   btn.disabled = true;
   try {
-    const r = await toggleSwitch();
+    const r = await toggleSwitch(machineId);
     if (r.ok) {
       const result = await r.json() as SwitchPayload;
-      updatePowerButton({ configured: true, state: result.state });
+      if (S.activeMachineId === machineId) updatePowerButton({ configured: true, state: result.state });
       setTimeout(() => { void (async () => {
-        const sr = await getSwitch().catch(() => null);
-        if (sr?.ok) updatePowerButton(await sr.json() as SwitchPayload);
+        const sr = await getSwitch(machineId).catch(() => null);
+        if (sr?.ok && S.activeMachineId === machineId) updatePowerButton(await sr.json() as SwitchPayload);
       })(); }, 2000);
     }
   } catch (e) { console.error('Power toggle Fehler:', e); }
