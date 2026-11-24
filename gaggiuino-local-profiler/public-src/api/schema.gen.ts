@@ -4795,7 +4795,9 @@ export interface paths {
         /** Machine power switch state */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    machineId?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -4815,6 +4817,20 @@ export interface paths {
                             state?: boolean | null;
                         };
                     };
+                };
+                /** @description machineId is not a number */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unknown machineId */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -4838,7 +4854,9 @@ export interface paths {
         /** Toggle machine power switch (requires switch_entity + SUPERVISOR_TOKEN) */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    machineId?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -4858,8 +4876,15 @@ export interface paths {
                         };
                     };
                 };
-                /** @description switch_entity not configured */
+                /** @description switch_entity not configured, or machineId is not a number */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unknown machineId */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };

@@ -3133,6 +3133,8 @@ paths:
     get:
       tags: [System]
       summary: Machine power switch state
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer }, description: "#2202: the machine whose switch to read; omitted = the default machine" }
       responses:
         "200":
           description: Switch state
@@ -3144,11 +3146,15 @@ paths:
                   configured: { type: boolean }
                   entity:     { type: string, nullable: true }
                   state:      { type: boolean, nullable: true, description: true = on }
+        "400": { description: machineId is not a number }
+        "404": { description: Unknown machineId }
 
   /api/switch/toggle:
     post:
       tags: [System]
       summary: Toggle machine power switch (requires switch_entity + SUPERVISOR_TOKEN)
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer }, description: "#2202: the machine whose switch to toggle; omitted = the default machine" }
       responses:
         "200":
           description: New switch state
@@ -3159,7 +3165,8 @@ paths:
                 properties:
                   ok:    { type: boolean }
                   state: { type: boolean, description: New state after toggle }
-        "400": { description: switch_entity not configured }
+        "400": { description: switch_entity not configured, or machineId is not a number }
+        "404": { description: Unknown machineId }
         "500": { description: HA call failed }
 
   /api/machine/status:

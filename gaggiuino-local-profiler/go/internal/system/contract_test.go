@@ -2,12 +2,16 @@ package system
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 )
 
 // This file pins the wire contract of the machine-switch and
@@ -84,6 +88,127 @@ func TestContract_SwitchToggle_HappyPath(t *testing.T) {
 	}
 	if called.Load() != "turn_on" {
 		t.Errorf("HA service called = %v, want turn_on (off -> on)", called.Load())
+	}
+}
+
+// TestContract_Switch_UsesRequestedMachine: both switch endpoints honour
+// ?machineId (#2202) — a toggle and a read for machine B hit only B's switch
+// entity, while the unparameterized GET still reports the default machine's.
+func TestContract_Switch_UsesRequestedMachine(t *testing.T) {
+	var mu sync.Mutex
+	var stateReads, turnOnEntities []string
+	haClient := fakeHA(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/api/states/"):
+			entity := strings.TrimPrefix(r.URL.Path, "/api/states/")
+			mu.Lock()
+			stateReads = append(stateReads, entity)
+			mu.Unlock()
+			_ = json.NewEncoder(w).Encode(map[string]string{"state": "off"})
+		case r.Method == http.MethodPost && r.URL.Path == "/api/services/switch/turn_on":
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			entity, _ := body["entity_id"].(string)
+			mu.Lock()
+			turnOnEntities = append(turnOnEntities, entity)
+			mu.Unlock()
+			_, _ = w.Write([]byte("[]"))
+		default:
+			t.Errorf("unexpected HA call: %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+	})
+	sqlDB := newTestDB(t)
+	p := newTestPollerWithHA(t, &fakeAdapter{}, sqlDB, haClient, "switch.machine_a")
+
+	name, typ, host, se := "Machine B", "gaggimate", "machine-b.invalid", "switch.machine_b"
+	machineB, err := p.registry.CreateMachine(machines.MachineInput{Name: &name, Type: &typ, Host: &host, SwitchEntity: &se})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	mux := newSystemMux(NewHandlers(p, NewDemoService(sqlDB, nil, nil), testAPIToken))
+
+	rec := doPost(mux, fmt.Sprintf("/api/switch/toggle?machineId=%d", machineB.ID), "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("toggle status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	body := decodeMap(t, rec.Body.Bytes())
+	if body["ok"] != true || body["state"] != true {
+		t.Errorf("toggle body = %v, want {ok:true, state:true}", body)
+	}
+
+	mu.Lock()
+	gotTurnOn := append([]string(nil), turnOnEntities...)
+	gotReads := append([]string(nil), stateReads...)
+	mu.Unlock()
+	if len(gotTurnOn) != 1 || gotTurnOn[0] != "switch.machine_b" {
+		t.Errorf("turn_on entities = %v, want exactly [switch.machine_b]", gotTurnOn)
+	}
+	for _, entity := range gotReads {
+		if entity == "switch.machine_a" {
+			t.Errorf("state reads = %v, want none for the default machine's switch.machine_a", gotReads)
+		}
+	}
+
+	rec = doGet(mux, fmt.Sprintf("/api/switch?machineId=%d", machineB.ID))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("switch B status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := decodeMap(t, rec.Body.Bytes())["entity"]; got != "switch.machine_b" {
+		t.Errorf("switch?machineId=B entity = %v, want switch.machine_b", got)
+	}
+
+	rec = doGet(mux, "/api/switch")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("switch status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := decodeMap(t, rec.Body.Bytes())["entity"]; got != "switch.machine_a" {
+		t.Errorf("switch entity without machineId = %v, want the default machine's switch.machine_a", got)
+	}
+}
+
+// TestContract_Switch_RejectsBadMachineId: a non-numeric ?machineId is a 400
+// and one that names no machine a 404 on both endpoints — never a silent
+// fallback to the default machine's switch. A machine without a switch entity
+// keeps the existing {configured:false} GET and 400 toggle (#2202).
+func TestContract_Switch_RejectsBadMachineId(t *testing.T) {
+	sqlDB := newTestDB(t)
+	p := newTestPollerWithHA(t, &fakeAdapter{}, sqlDB, newDisabledHAClient(), "switch.machine_a")
+
+	nameC, typC, hostC := "Machine C", "gaggimate", "machine-c.invalid"
+	machineC, err := p.registry.CreateMachine(machines.MachineInput{Name: &nameC, Type: &typC, Host: &hostC})
+	if err != nil {
+		t.Fatalf("CreateMachine C: %v", err)
+	}
+	mux := newSystemMux(NewHandlers(p, NewDemoService(sqlDB, nil, nil), testAPIToken))
+
+	if rec := doGet(mux, "/api/switch?machineId=999999"); rec.Code != http.StatusNotFound {
+		t.Errorf("GET unknown machineId status = %d, want 404 (body=%s)", rec.Code, rec.Body.String())
+	}
+	if rec := doPost(mux, "/api/switch/toggle?machineId=999999", ""); rec.Code != http.StatusNotFound {
+		t.Errorf("POST unknown machineId status = %d, want 404 (body=%s)", rec.Code, rec.Body.String())
+	}
+	if rec := doGet(mux, "/api/switch?machineId=abc"); rec.Code != http.StatusBadRequest {
+		t.Errorf("GET non-numeric machineId status = %d, want 400 (body=%s)", rec.Code, rec.Body.String())
+	}
+	if rec := doPost(mux, "/api/switch/toggle?machineId=abc", ""); rec.Code != http.StatusBadRequest {
+		t.Errorf("POST non-numeric machineId status = %d, want 400 (body=%s)", rec.Code, rec.Body.String())
+	}
+
+	rec := doGet(mux, fmt.Sprintf("/api/switch?machineId=%d", machineC.ID))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET machine without switch entity status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if got := decodeMap(t, rec.Body.Bytes())["configured"]; got != false {
+		t.Errorf("configured = %v, want false for a machine without a switch entity", got)
+	}
+
+	rec = doPost(mux, fmt.Sprintf("/api/switch/toggle?machineId=%d", machineC.ID), "")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST machine without switch entity status = %d, want 400 (body=%s)", rec.Code, rec.Body.String())
+	}
+	if got := decodeMap(t, rec.Body.Bytes())["error"]; got != "switch_entity nicht konfiguriert" {
+		t.Errorf("error = %v, want switch_entity nicht konfiguriert", got)
 	}
 }
 
