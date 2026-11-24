@@ -9,6 +9,9 @@ let greatCircleKm: (typeof import('../public-src/views/analytics.js'))['greatCir
 let computeMapBoundingCoords: (typeof import('../public-src/views/analytics.js'))['computeMapBoundingCoords'];
 let originFrameCoords: (typeof import('../public-src/views/analytics.js'))['originFrameCoords'];
 let featureBounds: (typeof import('../public-src/views/analytics.js'))['featureBounds'];
+let resolveHomeCountry: (typeof import('../public-src/views/analytics/world-map.js'))['resolveHomeCountry'];
+let homePointFor: (typeof import('../public-src/views/analytics/world-map.js'))['homePointFor'];
+let refreshWorldMapHome: (typeof import('../public-src/views/analytics/world-map.js'))['refreshWorldMapHome'];
 
 beforeAll(async () => {
   Object.defineProperty(globalThis, 'localStorage', {
@@ -26,6 +29,10 @@ beforeAll(async () => {
   computeMapBoundingCoords = mod.computeMapBoundingCoords;
   originFrameCoords = mod.originFrameCoords;
   featureBounds = mod.featureBounds;
+  const wm = await import('../public-src/views/analytics/world-map.js');
+  resolveHomeCountry = wm.resolveHomeCountry;
+  homePointFor = wm.homePointFor;
+  refreshWorldMapHome = wm.refreshWorldMapHome;
 });
 
 describe('homeCountryFromLocale (#1467)', () => {
@@ -151,5 +158,57 @@ describe('originFrameCoords / featureBounds (#1543)', () => {
     expect(featureBounds(null)).toBeNull();
     expect(featureBounds(emptyPolygon)).toBeNull();
     expect(featureBounds(multi)).toEqual([0, 0, 14, 12]);
+  });
+});
+
+// #2210: the home country setting resolves to the code the map places its home
+// point in — Automatic keeps the browser-language guess.
+describe('resolveHomeCountry (#2210)', () => {
+  it('resolveHomeCountry: Automatic keeps the browser-language guess', () => {
+    expect(resolveHomeCountry(undefined, 'de-DE')).toBe('DE');
+    expect(resolveHomeCountry('', 'en-US')).toBe('US');
+  });
+
+  it('resolveHomeCountry: Automatic gives null for a country without a map entry', () => {
+    expect(resolveHomeCountry(undefined, 'ja-JP')).toBeNull();
+  });
+
+  it('resolveHomeCountry: a chosen country wins over the browser language', () => {
+    expect(resolveHomeCountry('FR', 'en-US')).toBe('FR');
+  });
+
+  it('resolveHomeCountry: None gives no home', () => {
+    expect(resolveHomeCountry('none', 'de-DE')).toBeNull();
+  });
+
+  it('resolveHomeCountry: an unknown value behaves as Automatic', () => {
+    expect(resolveHomeCountry('XX', 'de-DE')).toBe('DE');
+    expect(resolveHomeCountry('de', 'nl-NL')).toBe('NL');
+    expect(resolveHomeCountry(42, 'de-DE')).toBe('DE');
+    expect(resolveHomeCountry('constructor', 'de-DE')).toBe('DE');
+  });
+});
+
+describe('homePointFor (#2210)', () => {
+  const square = [[[0, 0], [0, 2], [2, 2], [2, 0], [0, 0]]];
+  const features = [{
+    id: '276',
+    properties: {},
+    geometry: { type: 'Polygon', coordinates: square },
+  }] as unknown as Parameters<typeof homePointFor>[1];
+
+  it("homePointFor places the home point on the country's feature", () => {
+    expect(homePointFor('DE', features)).toEqual([1, 1]);
+  });
+
+  it('homePointFor gives null without a code or a matching feature', () => {
+    expect(homePointFor(null, features)).toBeNull();
+    expect(homePointFor('FR', features)).toBeNull();
+  });
+});
+
+describe('refreshWorldMapHome (#2210)', () => {
+  it('refreshWorldMapHome does nothing before the map was drawn', () => {
+    expect(refreshWorldMapHome()).toBe(false);
   });
 });

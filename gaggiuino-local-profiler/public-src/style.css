@@ -592,6 +592,8 @@
         .world-map-hint { position: absolute; bottom: 4px; right: 8px; font-size: var(--fs-1); color: var(--gray-500); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 16px); }
         @media (hover: none) { .world-map-hint { display: none; } }
         .map-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
+        /* #2210: the "Set home country" link under the map and its chips, at the right. */
+        .map-home-row { display: flex; justify-content: flex-end; margin-top: var(--sp-2); }
         /* #1467: headings use the library shelf heading look — small, semibold,
            accent — with the grey counters sitting next to them. */
         .analytics-card-head .section-title { margin-bottom: 0; }

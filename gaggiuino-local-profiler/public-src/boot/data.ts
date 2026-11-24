@@ -26,6 +26,7 @@ import { loadMachineControlSetting } from '../components/machine-control.js';
 import { loadShotDefaultsSettingsCard } from '../components/shot-defaults-settings.js';
 import { renderBeanFreshnessSettings } from '../components/bean-freshness-settings.js';
 import { applyBlindRating } from '../components/dev-score-settings.js';
+import { syncHomeCountrySetting } from './home-country.js';
 import { renderApiTokenCard } from './settings.js';
 import { runBootTasks } from './run-step.js';
 import { checkAchievementPopups, renderPopupSettings, startPopups } from './popups.js';
@@ -42,6 +43,8 @@ function applyServerUiPrefs(includeMachine = true, keepShelfQuery = false): void
   applyBlindRating();
   resetShelfPrefs(keepShelfQuery);
   renderPopupSettings();
+  // #2210: the Home country select and, on Statistics, the map's home point.
+  syncHomeCountrySetting();
   if (!includeMachine) return;
   const activeId = getUiPref<number | 'all'>('machine.active');
   if (activeId === undefined) return;
