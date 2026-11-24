@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 // #2210: the Home country select boot module. Its imports read globals at load
 // (state/i18n, ui-prefs), so stub localStorage/navigator before importing, the
@@ -20,6 +23,9 @@ vi.mock('../public-src/views/analytics/world-map.js', async (importOriginal) => 
   ...(await importOriginal<typeof import('../public-src/views/analytics/world-map.js')>()),
   refreshWorldMapHome: vi.fn(() => false),
 }));
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const indexHtml = readFileSync(join(__dirname, '../public-src/index.html'), 'utf8');
 
 type HomeCountryModule = typeof import('../public-src/boot/home-country.js');
 let mod: HomeCountryModule;
@@ -153,5 +159,29 @@ describe('syncHomeCountrySetting (#2210)', () => {
     mod.syncHomeCountrySetting();
     expect(select.value).toBe('none');
     expect(refreshWorldMapHome).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Home country markup (#2210)', () => {
+  it('the Appearance page holds the Home country select after the language select', () => {
+    expect(indexHtml).toContain('<label for="settingsHomeCountry" class="card-title" data-i18n="settings_home_country">');
+    expect(indexHtml).toContain('<select id="settingsHomeCountry" class="machine-form-input">');
+    expect(indexHtml).toContain('<option value="" data-i18n="settings_home_country_auto">');
+    expect(indexHtml).toContain('<option value="none" data-i18n="settings_home_country_none">');
+
+    const homeSelect = indexHtml.indexOf('id="settingsHomeCountry"');
+    expect(homeSelect).toBeGreaterThan(indexHtml.indexOf('id="settingsLang"'));
+    expect(homeSelect).toBeLessThan(indexHtml.indexOf('data-settings-page="notifications"'));
+    expect(indexHtml.split('id="settingsHomeCountry"').length - 1).toBe(1);
+  });
+
+  it('the world map card links to the Home country setting under the map', () => {
+    expect(indexHtml).toMatch(
+      /<div class="map-home-row">\s*<button type="button" id="worldMapSetHome" class="btn btn--quiet" data-i18n="analytics_map_set_home">/,
+    );
+    expect(indexHtml.split('id="worldMapSetHome"').length - 1).toBe(1);
+    const mapButton = indexHtml.indexOf('id="worldMapSetHome"');
+    expect(mapButton).toBeGreaterThan(indexHtml.indexOf('id="worldMapWrap"'));
+    expect(mapButton).toBeLessThan(indexHtml.indexOf('id="analyticsMore"'));
   });
 });
