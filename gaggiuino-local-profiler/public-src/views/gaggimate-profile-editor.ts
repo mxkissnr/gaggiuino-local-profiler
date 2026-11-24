@@ -15,6 +15,8 @@ import { phasePlugin, buildGmPhaseRanges } from '../constants.js';
 import type { GmPhaseRange } from '../constants.js';
 import { bindPillSelects } from '../components/pill-select.js';
 import { markFieldInvalid } from '../components/field-error.js';
+import { attachDialogKeyboard } from '../components/dialog-a11y.js';
+import type { DialogKeyboardHandle } from '../components/dialog-a11y.js';
 import { loadMachineProfileList, loadProfileForEditing } from './library-profile-editor.js';
 import { invalidateGmPhaseCache } from './shots/index.js';
 import { phaseTimelineHtml, phaseHeadHtml, stopsFoldHtml, removePhaseButtonHtml, recipeTitleHtml } from '../components/phase-timeline.js';
@@ -74,6 +76,8 @@ let _inputsBound = false; // guards against accumulating body change-listeners a
 // the default machine.
 let _editorMachineId: number | null = null;
 
+let _editorKeyboard: DialogKeyboardHandle | null = null;
+
 // ── Entry points ──────────────────────────────────────────────────────────
 
 export async function openGaggiMateProfileEditor(id: string): Promise<void> {
@@ -108,6 +112,8 @@ export function openNewGaggiMateProfile(): void {
 }
 
 export function closeGaggiMateEditor(): void {
+  _editorKeyboard?.release();
+  _editorKeyboard = null;
   (document.getElementById('gmProfileEditorModal') as HTMLElement).style.display = 'none';
   _profile = null;
   _saving = false;
@@ -168,6 +174,12 @@ function _openEditor(profile: GmProfile): void {
   (document.getElementById('gmEditorTitle') as HTMLElement).textContent =
     profile.id != null ? t('gm_editor_title_edit') : t('gm_editor_title_new');
   _render();
+  _editorKeyboard?.release();
+  _editorKeyboard = attachDialogKeyboard(modal, closeGaggiMateEditor, {
+    initialFocus: typeof modal.querySelector === 'function'
+      ? modal.querySelector<HTMLElement>('.lib-sheet-close')
+      : null,
+  });
 }
 
 function _set(updates: Partial<GmProfile>): void {
