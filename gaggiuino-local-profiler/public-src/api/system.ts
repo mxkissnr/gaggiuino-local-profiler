@@ -34,19 +34,22 @@ function machineQuery(machineId?: string | number | null): string {
  * 'all'/null/undefined fall back to the unscoped (default-machine) call.
  */
 export function getStatus(machineId?: string | number | null): Promise<Response> {
-  return apiFetch(`api/status${machineQuery(machineId)}`);
+  const qs = machineQuery(machineId);
+  return apiFetch(`api/status${qs}`);
 }
 
 /** GET /api/switch[?machineId=...] — a machine's power-switch state
  *  (`{ configured, state }`); 'all'/null/undefined read the default machine's (#2202). */
 export function getSwitch(machineId?: string | number | null): Promise<Response> {
-  return apiFetch(`api/switch${machineQuery(machineId)}`);
+  const qs = machineQuery(machineId);
+  return apiFetch(`api/switch${qs}`);
 }
 
 /** POST /api/switch/toggle[?machineId=...] — flip a machine's power switch;
  *  'all'/null/undefined flip the default machine's (#2202). */
 export function toggleSwitch(machineId?: string | number | null): Promise<Response> {
-  return apiFetch(`api/switch/toggle${machineQuery(machineId)}`, { method: 'POST' });
+  const qs = machineQuery(machineId);
+  return apiFetch(`api/switch/toggle${qs}`, { method: 'POST' });
 }
 
 /** POST /api/sync — force a shot sync; a 429 carries the throttle error body. */
