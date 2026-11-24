@@ -686,6 +686,7 @@ export async function buildWorldMap() {
     _clearMapExtras(wrap);
     return;
   }
+
   if (!wrap.querySelector('.world-map-canvas')) {
     wrap.innerHTML = html`<div class="world-map-canvas" style="width:100%;height:100%"></div>
       <div class="world-map-hint">${tHtml('analytics_map_zoom_hint')}</div>`;
