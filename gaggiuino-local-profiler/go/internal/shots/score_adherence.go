@@ -33,6 +33,9 @@ const (
 	// adherenceSettleS is the transition window skipped at the start of every
 	// phase after phase 0, in seconds.
 	adherenceSettleS = 1.5
+	// maxPhaseIndex bounds a phase index before the float-to-int conversion in
+	// wholePhaseIndex; no profile has this many phases.
+	maxPhaseIndex = 1<<31 - 1
 )
 
 // adherencePressureMAE is the harness's adherencePressureMae: the mean absolute
@@ -88,10 +91,9 @@ func adherencePressureMAE(shot Shot) (mae float64, samples int, ok bool) {
 }
 
 // wholePhaseIndex reads a phase index: a non-negative whole number, NaN and
-// negative values rejected. The upper bound keeps the float-to-int conversion
-// defined for absurd input.
+// negative values rejected.
 func wholePhaseIndex(pi float64) (int, bool) {
-	if pi < 0 || pi != math.Trunc(pi) || pi > math.MaxInt32 {
+	if pi < 0 || pi != math.Trunc(pi) || pi > float64(maxPhaseIndex) {
 		return 0, false
 	}
 	return int(pi), true
