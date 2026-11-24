@@ -51,7 +51,7 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 
 - **Multi-machine** - run Gaggiuino and GaggiMate machines side by side from one app instance, each with its own shots, live view and maintenance, while shared equipment such as the grinder stays global.
 - **Shot archive & live view** - every shot is stored with pressure, flow, weight and temperature curves, and the Live tab streams the current brew, preheat state and machine status straight from the controller.
-- **Shot score & dial-in help** - an automatic 0-100 score with a plain-language verdict, grind recommendations, and a guided dial-in wizard that tunes grind against a 25-32 s extraction target.
+- **Shot score & dial-in help** - an automatic 0-100 score with a plain-language verdict, grind recommendations, and a guided dial-in wizard that tunes grind against a 25-32 s extraction target, or against a target time you set per profile.
 - **Compare mode & ghost curve** - overlay any two shots by hand, or let the shot detail auto-compare against the previous shot on the same profile with delta chips and a dashed ghost curve.
 - **Coffee library** - beans, grinders, baskets, puck screens, recipes and frozen portions in one catalogue, with roaster URL import, barcode/QR scan and per-entity photos.
 - **Bean shelf** - your beans stand as bag photos with a stock bar, with search, filter and sort, and empty or archived beans tidy themselves away.

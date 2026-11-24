@@ -1,5 +1,40 @@
 ## [Unreleased]
 
+## [3.9.0] - 2026-11-24
+
+### New
+- Profiles can have their own target shot time, so longer or shorter profiles get a fair time score, grind advice and dial-in range.
+- Compare two beans side by side: "Compare" in a bean's menu shows results, dial-in, aromas and bag details next to each other.
+- With Machine control on, marking backflush or descaling done also resets the counter on a GaggiMate with firmware v1.10.0 or newer, so the machine stops warning about it.
+- Settings → About has a Help card with links to the documentation, the Discord community and the form for bug reports and ideas.
+
+### Changed
+- The shot page opens with a verdict against your last shot with the same profile and bean. Stars and taste tag are set right on the page, downloads sit in a menu, and the shot list counts the shots of each day.
+- The Live tab opens with the machine's state and temperature and shows a running shot's time, readings and phase above a larger chart.
+- The Orders page opens with how many orders are waiting and how long the queue will take, and accepts an order with one button that carries the suggested time.
+- Both profile editors open with the preview chart and a phase timeline, show only the selected phase's fields and have one save action.
+- The shared shot card looks like the shot page: verdict, score and change against the last comparable shot, in your own accent color.
+- Buttons, filter chips, status badges, headings and menus look and work the same on every page. Every menu entry has an icon, and Escape closes any open menu.
+- Dialogs show their title in one header bar with the close button on the left, and confirmations that delete or overwrite data use a red button.
+- Recipes, baskets, puck screens, grinders and library profiles open with a tap, with Delete in their own ⋯ menu.
+- Adding a bean ends with one clear choice, save without a bag or save and add a bag. The buttons stay visible while you scroll, and closing with unsaved changes asks first.
+- Tapping Bean or Grinder on a shot opens the notes right at that field.
+
+### Fixed
+- Saving an existing Gaggiuino profile in the editor updates it again instead of creating a copy, and new profiles keep their phase types and curves.
+- Machine profiles are stored locally after one sync, so the editor opens them while the machine is off.
+- The GaggiMate profile editor shows whole seconds, and standard profiles with a pressure or flow target show that target and its curve.
+- The Live tab shows when a GaggiMate is starting, updating, autotuning or reports an error, instead of "Machine ready".
+- GaggiMate's backflush and descaling warnings appear in your language.
+- Escape closes the profile editors, and the keyboard stays inside the open editor.
+- Shots annotated before this release store the same bean age the shot badge shows, also for frozen portions.
+- Screen readers announce which filter is selected and name every phase in the profile editor timeline.
+- Confirmation dialogs dim the page behind them fully, so the buttons of an open form no longer shine through.
+- The From and To fields in the target time dialog line up.
+
+### Security
+- A websocket library used for MQTT is updated to fix the published advisory GO-2026-6278.
+
 ## [3.8.1] - 2026-11-18
 
 ### Fixed
