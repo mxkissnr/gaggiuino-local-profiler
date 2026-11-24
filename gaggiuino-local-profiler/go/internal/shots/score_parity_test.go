@@ -18,11 +18,18 @@ type parityBean struct {
 	BrewRatio string   `json:"brewRatio"`
 }
 
+// parityTimeTarget is the fixture's case-level duration window (#1504).
+type parityTimeTarget struct {
+	MinS int `json:"minS"`
+	MaxS int `json:"maxS"`
+}
+
 type parityCase struct {
-	Name     string         `json:"name"`
-	Shot     map[string]any `json:"shot"`
-	Bean     *parityBean    `json:"bean"`
-	Expected *int           `json:"expected"`
+	Name       string            `json:"name"`
+	Shot       map[string]any    `json:"shot"`
+	Bean       *parityBean       `json:"bean"`
+	TimeTarget *parityTimeTarget `json:"timeTarget"`
+	Expected   *int              `json:"expected"`
 	// KnownDivergence is set only when the Go and TypeScript scorers genuinely
 	// disagree on a case: "expected" is then the Go value and both tests skip
 	// the case with the reason, keeping the divergence visible without failing
@@ -46,8 +53,31 @@ func loadScoreParityCases(t *testing.T) []parityCase {
 	return cases
 }
 
+// profileWindowParityCases are the #1504 cases that must exist in the shared
+// fixture: a profile window (40-48 s) on target, fast and long, plus a control
+// with no window that keeps the generic 25-35 band.
+var profileWindowParityCases = []string{
+	"profile window 40-48: 45 s is on target",
+	"profile window 40-48: 29 s runs fast",
+	"profile window 40-48: 70 s runs long",
+	"no window: 29 s keeps the generic band",
+}
+
+// TestScoreParityFixture scores every fixture case with the same expectations
+// its TypeScript twin uses, including the per-profile time window (#1504).
 func TestScoreParityFixture(t *testing.T) {
-	for _, c := range loadScoreParityCases(t) {
+	cases := loadScoreParityCases(t)
+	seen := make(map[string]bool, len(cases))
+	for _, c := range cases {
+		seen[c.Name] = true
+	}
+	for _, name := range profileWindowParityCases {
+		if !seen[name] {
+			t.Fatalf("score parity fixture is missing the #1504 case %q", name)
+		}
+	}
+
+	for _, c := range cases {
 		t.Run(c.Name, func(t *testing.T) {
 			if c.KnownDivergence != "" {
 				t.Skipf("known Go/TS score divergence: %s", c.KnownDivergence)
@@ -56,7 +86,11 @@ func TestScoreParityFixture(t *testing.T) {
 			if c.Bean != nil {
 				bean = &Bean{BrewTempC: c.Bean.BrewTempC, BrewRatio: c.Bean.BrewRatio}
 			}
-			detail := CalcShotScoreDetail(Shot(c.Shot), bean)
+			var tt *TimeTarget
+			if c.TimeTarget != nil {
+				tt = &TimeTarget{MinS: c.TimeTarget.MinS, MaxS: c.TimeTarget.MaxS}
+			}
+			detail := CalcShotScoreTargets(Shot(c.Shot), ScoreTargets{Bean: bean, Time: tt})
 			switch {
 			case c.Expected == nil:
 				if detail.Score != nil {

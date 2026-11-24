@@ -30,6 +30,7 @@ import { requestCloseBeanForm, editBean, deleteBean, toggleBeanActive, editGrind
          swapBeanCompare, backFromBeanCompare } from '../views/library.js';
 import { editProfile, duplicateProfile, deleteMachineProfile, createProfileFromBean, removeProfilePhase, addProfilePhase, selectProfilePhase } from '../views/library-profile-editor.js';
 import { toggleBeanProfilePin } from '../views/library/bean-profiles.js';
+import { openProfileTimeTargetSheet, saveProfileTimeTargetFromSheet, clearProfileTimeTarget } from '../views/library/profile-time-target.js';
 import { openGaggiMateProfileEditor, duplicateGaggiMateProfile, openNewGaggiMateProfile, handleGmEditorAction } from '../views/gaggimate-profile-editor.js';
 import { openDialinWizard, startDialinFromBean, dialinGrinderChange, dialinConfirmShot, dialinAcceptNext,
          dialinOverride, dialinEnd, dialinSaveKnownGrind, dialinClose } from '../views/dialin-wizard.js';
@@ -204,6 +205,9 @@ export function wireDelegation(): void {
       case 'dialin-save-known-grind': void dialinSaveKnownGrind(); break;
       case 'dialin-close':           dialinClose(); break;
       case 'start-profile-dialin':      void startProfileDialinFromList(strId()); break;
+      case 'profile-time-target':       openProfileTimeTargetSheet(el.dataset.name ?? '', el); break;
+      case 'save-profile-time-target':  void saveProfileTimeTargetFromSheet(); break;
+      case 'clear-profile-time-target': void clearProfileTimeTarget(); break;
       case 'profile-dialin-symptom':    profileDialinToggleSymptom(el.dataset.symptom); break;
       case 'profile-dialin-confirm-shot': profileDialinConfirmShot(numId(), el.dataset.match === '1'); break;
       case 'profile-dialin-accept-next':  void profileDialinAcceptNext(); break;

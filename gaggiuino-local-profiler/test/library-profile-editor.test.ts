@@ -25,6 +25,12 @@ const { renderRecipeList } = await import('../public-src/views/library/recipes.j
 const { renderBasketList } = await import('../public-src/views/library/baskets.js');
 const { renderPuckScreenList } = await import('../public-src/views/library/puck-screens.js');
 const { renderGrinderList } = await import('../public-src/views/library/grinders.js');
+const {
+  normalizeProfileName, formatTimeWindow, loadProfileTimeTargets, profileTimeTargetFor,
+  profileTimeTargetMenuItem, profileTimeTargetBadge, parseTimeWindowInputs,
+  openProfileTimeTargetSheet, saveProfileTimeTargetFromSheet, clearProfileTimeTarget,
+  setProfileTimeTargetsChanged,
+} = await import('../public-src/views/library/profile-time-target.js');
 
 // _collectPhases reads phase rows straight off `document` (DOM-as-state, no
 // separate JS array) — this vitest project runs in the 'node' environment
@@ -330,8 +336,14 @@ describe('loadMachineProfileList (#521 race)', () => {
     let resolveB!: (value: Response) => void;
     const pA = new Promise<Response>(res => { resolveA = res; });
     const pB = new Promise<Response>(res => { resolveB = res; });
-    fetchSpy.mockImplementationOnce(() => pA); // call A — fired first
-    fetchSpy.mockImplementationOnce(() => pB); // call B — fired second, while A is still pending
+    // Each list load also reads the machine's target times; only the profile
+    // list request itself is raced here.
+    const lists = [pA, pB];
+    fetchSpy.mockImplementation((url: string) => (
+      url.startsWith('api/machine/profiles')
+        ? (lists.shift() ?? Promise.resolve({ ok: true, json: () => Promise.resolve({ optionsRaw: [] }) } as unknown as Response))
+        : Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as unknown as Response)
+    )); // call A fired first, call B fired second, while A is still pending
 
     const callA = loadMachineProfileList();
     const callB = loadMachineProfileList();
@@ -567,5 +579,284 @@ describe('library list rows (#2172)', () => {
       expect(source).not.toContain('lib-item-actions');
       expect(source).not.toContain('ICON_PENCIL');
     }
+  });
+});
+
+describe('profile target time (#1504)', () => {
+  const showToast = vi.fn();
+
+  // The sheet reads its two inputs and the host element off `document`; a fake
+  // host and the two input fields are all the open/save/clear paths touch.
+  interface StubField extends FakeFormField {
+    attrs: Record<string, string>;
+    setAttribute(name: string, value: string): void;
+    removeAttribute(name: string): void;
+    addEventListener(): void;
+  }
+
+  function stubSheet(values: Record<string, string>): Record<string, StubField> {
+    const fields: Record<string, StubField> = {};
+    const field = (id: string): StubField => {
+      const existing = fields[id];
+      if (existing) return existing;
+      const attrs: Record<string, string> = {};
+      const created: StubField = {
+        value: values[id] ?? '', style: {}, classList: { add() {}, remove() {} },
+        focus() {}, attrs,
+        setAttribute(name: string, value: string) { attrs[name] = value; },
+        removeAttribute(name: string) { Reflect.deleteProperty(attrs, name); },
+        addEventListener() {},
+      };
+      fields[id] = created;
+      return created;
+    };
+    const host = {
+      innerHTML: '',
+      classList: { add() {}, remove() {} },
+      querySelector: () => null,
+      querySelectorAll: () => [],
+      focus() {},
+    };
+    g.document = {
+      getElementById: (id: string) => (id === 'detailSheet' ? host : field(id)),
+      querySelectorAll: () => [],
+    };
+    return fields;
+  }
+
+  const changed = vi.fn();
+
+  beforeEach(() => {
+    fetchSpy.mockReset();
+    showToast.mockReset();
+    changed.mockReset();
+    setProfileTimeTargetsChanged(changed);
+    g.window = { showToast };
+    S.activeMachineId = 1;
+  });
+
+  it('normalizeProfileName trims and lowercases', () => {
+    expect(normalizeProfileName('  Adaptive V2 ')).toBe('adaptive v2');
+  });
+
+  it('formatTimeWindow renders the en dash window', () => {
+    expect(formatTimeWindow(40, 48)).toBe('40–48 s');
+  });
+
+  it('profileTimeTargetFor matches per machine, ignoring case and spaces', async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([{ profileName: 'Adaptive v2', minS: 40, maxS: 48 }]),
+    } as unknown as Response);
+
+    await loadProfileTimeTargets(1);
+
+    const [url] = fetchSpy.mock.calls[0] as unknown as [string];
+    expect(url).toBe('api/profile-time-targets?machineId=1');
+    expect(profileTimeTargetFor(1, ' ADAPTIVE V2 ')).toEqual({ profileName: 'Adaptive v2', minS: 40, maxS: 48 });
+    expect(profileTimeTargetFor(2, 'Adaptive v2')).toBeNull();
+  });
+
+  it('profileTimeTargetBadge shows the stored window of the active machine', async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve([{ profileName: 'Adaptive v2', minS: 40, maxS: 48 }]),
+    } as unknown as Response);
+    await loadProfileTimeTargets(1);
+
+    expect(profileTimeTargetBadge({ name: 'Adaptive v2' })).toBe('<span class="badge">40–48 s</span>');
+    expect(profileTimeTargetBadge({ name: 'Flush', utility: true })).toBe('');
+    expect(profileTimeTargetBadge({ name: 'Other' })).toBe('');
+  });
+
+  it('the target time menu item is hidden on utility profiles', () => {
+    expect(profileTimeTargetMenuItem({ name: 'Flush', utility: true })).toBe('');
+
+    S.activeMachineId = 1;
+    const item = profileTimeTargetMenuItem({ name: 'Adaptive v2' });
+    expect(item).toContain('data-action="profile-time-target"');
+    expect(item).toContain('data-name="Adaptive v2"');
+
+    S.activeMachineId = 'all';
+    expect(profileTimeTargetMenuItem({ name: 'Adaptive v2' })).toBe('');
+    expect(profileTimeTargetMenuItem({ name: '  ' })).toBe('');
+  });
+
+  it('parseTimeWindowInputs enforces whole seconds 5..300 with min below max', () => {
+    expect(parseTimeWindowInputs('40', '48')).toEqual({ minS: 40, maxS: 48 });
+    expect(parseTimeWindowInputs('4', '48')).toBeNull();
+    expect(parseTimeWindowInputs('40', '301')).toBeNull();
+    expect(parseTimeWindowInputs('40', '40')).toBeNull();
+    expect(parseTimeWindowInputs('40.5', '48')).toBeNull();
+    expect(parseTimeWindowInputs('', '48')).toBeNull();
+  });
+
+  it('saving sends the window for the machine the sheet was opened on', async () => {
+    const fields = stubSheet({ pttMin: '40', pttMax: '48' });
+    openProfileTimeTargetSheet('Adaptive v2', null);
+
+    // The active machine moves while the sheet is open; the write must stay
+    // on the machine it was opened against.
+    S.activeMachineId = 2;
+
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([{ profileName: 'Adaptive v2', minS: 40, maxS: 48 }]),
+    } as unknown as Response);
+
+    await saveProfileTimeTargetFromSheet();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('api/profile-time-targets');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body as string) as Record<string, unknown>).toEqual({ machineId: 1, profileName: 'Adaptive v2', minS: 40, maxS: 48 });
+    expect(showToast).toHaveBeenCalledWith(t('profile_time_target_saved'));
+    // The response repopulates the cache of the machine the sheet was opened
+    // on, not the one that became active meanwhile.
+    expect(profileTimeTargetFor(1, 'Adaptive v2')).toEqual({ profileName: 'Adaptive v2', minS: 40, maxS: 48 });
+    expect(profileTimeTargetFor(2, 'Adaptive v2')).toBeNull();
+    expect(entry(fields, 'pttMin').attrs['aria-invalid']).toBeUndefined();
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it('an invalid window sends no request', async () => {
+    const fields = stubSheet({ pttMin: '48', pttMax: '40' });
+    openProfileTimeTargetSheet('Adaptive v2', null);
+
+    await saveProfileTimeTargetFromSheet();
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(showToast).toHaveBeenCalledWith(t('profile_time_target_invalid'));
+    // Min is a whole number in range but not below max: the min field is the
+    // one marked, and max stays clean.
+    expect(entry(fields, 'pttMin').attrs['aria-invalid']).toBe('true');
+    expect(entry(fields, 'pttMax').attrs['aria-invalid']).toBeUndefined();
+    expect(changed).not.toHaveBeenCalled();
+  });
+
+  it('removing sends null bounds', async () => {
+    stubSheet({ pttMin: '40', pttMax: '48' });
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([{ profileName: 'Adaptive v2', minS: 40, maxS: 48 }]),
+    } as unknown as Response);
+    await loadProfileTimeTargets(1);
+    expect(profileTimeTargetFor(1, 'Adaptive v2')).toEqual({ profileName: 'Adaptive v2', minS: 40, maxS: 48 });
+
+    openProfileTimeTargetSheet('Adaptive v2', null);
+
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve([]),
+    } as unknown as Response);
+
+    await clearProfileTimeTarget();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    const [url, init] = fetchSpy.mock.calls[1] as unknown as [string, RequestInit];
+    expect(url).toBe('api/profile-time-targets');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body as string) as Record<string, unknown>).toEqual({ machineId: 1, profileName: 'Adaptive v2', minS: null, maxS: null });
+    expect(profileTimeTargetFor(1, 'Adaptive v2')).toBeNull();
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it("a profile row offers Target time and shows its window", async () => {
+    fetchSpy.mockImplementation((url: string) => Promise.resolve(
+      url.startsWith('api/machine/profiles')
+        ? ({ ok: true, json: () => Promise.resolve({
+            optionsRaw: [{ id: 1, name: 'Adaptive v2' }, { id: 2, name: 'Flush', utility: true }],
+          }) } as unknown as Response)
+        : ({ ok: true, json: () => Promise.resolve([
+            { profileName: 'adaptive v2', minS: 40, maxS: 48 },
+          ]) } as unknown as Response),
+    ));
+    const el = { innerHTML: '' };
+    g.document = {
+      getElementById: (id: string) => (id === 'profileListUI' ? el : undefined),
+      querySelectorAll: () => [],
+    };
+    S.activeMachineId = 1;
+
+    await loadMachineProfileList();
+
+    // One markup block per profile row: the ⋯ menu entry and the badge must be
+    // in the row of the profile the window belongs to (case-insensitively),
+    // and nowhere near the utility row.
+    const rows = el.innerHTML.split('<div class="lib-item').slice(1);
+    expect(rows).toHaveLength(2);
+    const adaptive = rows.find(r => r.includes('Adaptive v2')) ?? '';
+    const utility = rows.find(r => r.includes('Flush')) ?? '';
+
+    expect(adaptive).toContain('data-action="profile-time-target"');
+    expect(adaptive).toContain('40–48 s');
+    expect(adaptive).toContain('<span class="lib-item-name">Adaptive v2</span>');
+    expect(utility).toContain('lib-item-utility');
+    expect(utility).not.toContain('data-action="profile-time-target"');
+    expect(utility).not.toContain('40–48 s');
+
+    // Exactly once overall: one entry, one badge, for the one real profile.
+    expect(el.innerHTML.split('data-action="profile-time-target"').length - 1).toBe(1);
+    expect(el.innerHTML.split('40–48 s').length - 1).toBe(1);
+  });
+
+  it("loading the profile list also loads that machine's target times", async () => {
+    const urls: string[] = [];
+    fetchSpy.mockImplementation((url: string) => {
+      urls.push(url);
+      return Promise.resolve(
+        url.startsWith('api/machine/profiles')
+          ? ({ ok: true, json: () => Promise.resolve({ optionsRaw: [] }) } as unknown as Response)
+          : ({ ok: true, json: () => Promise.resolve([
+              { profileName: 'Window probe', minS: 40, maxS: 48 },
+            ]) } as unknown as Response),
+      );
+    });
+    g.document = { getElementById: () => undefined, querySelectorAll: () => [] };
+    S.activeMachineId = 1;
+
+    await loadMachineProfileList();
+
+    expect(urls).toContain('api/profile-time-targets?machineId=1');
+    // The response is cached for the row entry and badge of that machine.
+    expect(profileTimeTargetFor(1, 'window probe')).toEqual({ profileName: 'Window probe', minS: 40, maxS: 48 });
+  });
+
+  // The window read is an enhancement next to the profile list, not part of
+  // it: an older backend, an offline GLP or a relative-URL test stub that
+  // fails here must not empty the Profiles tab.
+  it('a failing target-time read still loads the profile list', async () => {
+    fetchSpy.mockImplementation((url: string) => Promise.resolve(
+      url.startsWith('api/machine/profiles')
+        ? ({ ok: true, json: () => Promise.resolve({ optionsRaw: [{ id: 1, name: 'Adaptive v2' }] }) } as unknown as Response)
+        : Promise.reject(new TypeError('Failed to parse URL from api/profile-time-targets')),
+    ));
+    const el = { innerHTML: '' };
+    g.document = {
+      getElementById: (id: string) => (id === 'profileListUI' ? el : undefined),
+      querySelectorAll: () => [],
+    };
+    S.activeMachineId = 1;
+
+    await expect(loadMachineProfileList()).resolves.toBeUndefined();
+
+    expect(S.machineProfiles).toEqual([{ id: 1, name: 'Adaptive v2' }]);
+    expect(el.innerHTML).toContain('Adaptive v2');
+  });
+
+  it('a rejected save keeps the sheet data and reports the status', async () => {
+    const fields = stubSheet({ pttMin: '40', pttMax: '48' });
+    openProfileTimeTargetSheet('Adaptive v2', null);
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 500 } as unknown as Response);
+
+    await saveProfileTimeTargetFromSheet();
+
+    expect(showToast).toHaveBeenCalledWith(t('error_generic', 500));
+    expect(entry(fields, 'pttMin').value).toBe('40');
+    expect(changed).not.toHaveBeenCalled();
   });
 });

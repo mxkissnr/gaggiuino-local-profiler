@@ -234,5 +234,81 @@
       }
     },
     "expected": 100
+  },
+  {
+    "name": "profile window 40-48: 45 s is on target",
+    "shot": {
+      "datapoints": {
+        "pressure": [80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+        "temperature": [900, 900, 900, 900, 900, 900, 900, 900, 900, 900],
+        "timeInShot": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190],
+        "shotWeight": [0, 450]
+      },
+      "duration": 450,
+      "annotation": {
+        "dose": 18
+      }
+    },
+    "timeTarget": {
+      "minS": 40,
+      "maxS": 48
+    },
+    "expected": 100
+  },
+  {
+    "name": "profile window 40-48: 29 s runs fast",
+    "shot": {
+      "datapoints": {
+        "pressure": [80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+        "temperature": [900, 900, 900, 900, 900, 900, 900, 900, 900, 900],
+        "timeInShot": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190],
+        "shotWeight": [0, 450]
+      },
+      "duration": 290,
+      "annotation": {
+        "dose": 18
+      }
+    },
+    "timeTarget": {
+      "minS": 40,
+      "maxS": 48
+    },
+    "expected": 88
+  },
+  {
+    "name": "profile window 40-48: 70 s runs long",
+    "shot": {
+      "datapoints": {
+        "pressure": [80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+        "temperature": [900, 900, 900, 900, 900, 900, 900, 900, 900, 900],
+        "timeInShot": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190],
+        "shotWeight": [0, 450]
+      },
+      "duration": 700,
+      "annotation": {
+        "dose": 18
+      }
+    },
+    "timeTarget": {
+      "minS": 40,
+      "maxS": 48
+    },
+    "expected": 91
+  },
+  {
+    "name": "no window: 29 s keeps the generic band",
+    "shot": {
+      "datapoints": {
+        "pressure": [80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+        "temperature": [900, 900, 900, 900, 900, 900, 900, 900, 900, 900],
+        "timeInShot": [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190],
+        "shotWeight": [0, 450]
+      },
+      "duration": 290,
+      "annotation": {
+        "dose": 18
+      }
+    },
+    "expected": 100
   }
 ]

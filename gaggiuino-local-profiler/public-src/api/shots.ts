@@ -1,4 +1,5 @@
 import { apiFetch, pathSeg } from './fetch.js';
+import type { components } from './schema.gen.js';
 import type { HydratedShot, ShotAnnotationInput, ShotDefaults } from './types.js';
 
 // Typed client for the `shots` domain (go/internal/shots — every route that
@@ -85,6 +86,31 @@ export async function saveShotDefaults(defaults: ShotDefaults): Promise<ShotDefa
     body: JSON.stringify(defaults),
   });
   return r.ok ? ((await r.json()) as ShotDefaults) : null;
+}
+
+/** One per-profile target time window (#1504). */
+export type ProfileTimeTarget = components['schemas']['ProfileTimeTarget'];
+
+/**
+ * GET /api/profile-time-targets?machineId= — that machine's windows; null on a
+ * non-ok response so the caller keeps what it already has cached.
+ */
+export async function getProfileTimeTargets(machineId: number): Promise<ProfileTimeTarget[] | null> {
+  const params = new URLSearchParams({ machineId: String(machineId) });
+  const r = await apiFetch(`api/profile-time-targets?${params}`);
+  return r.ok ? ((await r.json()) as ProfileTimeTarget[]) : null;
+}
+
+/**
+ * PUT /api/profile-time-targets — set (both numbers) or remove (both null) one
+ * window. Raw Response: the caller reads 400 vs other failures.
+ */
+export function putProfileTimeTarget(body: { machineId: number; profileName: string; minS: number | null; maxS: number | null }): Promise<Response> {
+  return apiFetch('api/profile-time-targets', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
 /** POST /api/shots/{id}/trash — soft-delete. */

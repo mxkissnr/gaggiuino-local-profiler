@@ -26,7 +26,7 @@ import { calcBestGrindCombosForBean, defaultGrinderName, suggestGrindDoseForBean
          _miniShotChart, _parseGrindNum } from './shots/grind.js';
 import { normalizeGrindToNow } from '../grind-zero.js';
 import { calcNextGrindSuggestion, isConverged } from '../dialin-convergence.js';
-import type { DialinSuggestion } from '../dialin-convergence.js';
+import type { DialinBand, DialinSuggestion } from '../dialin-convergence.js';
 import { prefillGrind, scaleForGrinder } from '../grind-scale.js';
 import type { GrindScale } from '../grind-scale.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
@@ -78,6 +78,9 @@ interface DialinSession extends Record<string, unknown> {
   awaitingShotSince: number | null;
   status: string;
   dismissedShotIds?: number[];
+  // The profile window snapshotted from the first confirmed round's shot
+  // (#1504); undefined until then, null when that shot had none.
+  timeBand?: DialinBand | null;
 }
 
 interface DialinPrefill {
@@ -207,6 +210,13 @@ function _sessionScale(s: DialinSession): GrindScale | null {
   return scaleForGrinder(S.coffeeLibrary?.grinders, s.grinder);
 }
 
+export function dialinBandFromShot(shot: { timeTarget?: { minS: number; maxS: number } | null } | null | undefined): DialinBand | null {
+  const tt = shot?.timeTarget;
+  return tt && Number.isFinite(tt.minS) && Number.isFinite(tt.maxS) && tt.minS < tt.maxS ? { low: tt.minS, high: tt.maxS } : null;
+}
+
+function _sessionBand(s: DialinSession): DialinBand | null { return s.timeBand ?? null; }
+
 // ── Round evaluation ────────────────────────────────────────────────────
 
 async function _evalShot(shot: DialinShotRow): Promise<{ secs: number; channeling: boolean; ratio: number | null; score: number | null }> {
@@ -253,10 +263,10 @@ export function dialinAcceptNext(): void {
 
   if (!s.reviewRound) return;
   s.rounds.push(s.reviewRound);
-  const suggestion = calcNextGrindSuggestion(s.rounds, _sessionScale(s));
+  const suggestion = calcNextGrindSuggestion(s.rounds, _sessionScale(s), _sessionBand(s));
   s.reviewRound = null;
   s.candidateShotId = null;
-  if (isConverged(s.rounds, _sessionScale(s))) {
+  if (isConverged(s.rounds, _sessionScale(s), _sessionBand(s))) {
     s.status = 'converged';
     wizard.persist();
     renderDialinWizard();
@@ -342,7 +352,11 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
     window.showToast?.(t('error_generic', ''));
   }
 
-  const evald = await _evalShot(wizard.shots().find(sh => sh.id === shotId) || shot);
+  // #1504: the first confirmed round snapshots the profile window into the
+  // session, so later window edits do not move the band mid-session.
+  const shotRow = wizard.shots().find(sh => sh.id === shotId) || shot;
+  if (s.timeBand === undefined) s.timeBand = dialinBandFromShot(shotRow);
+  const evald = await _evalShot(shotRow);
   // _parseGrindNum already returns a finite number or null, so fall back to
   // 0 only when there is no usable setting (never send NaN).
   const grindNum = _parseGrindNum(s.pendingGrind);
@@ -350,7 +364,7 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
     grindSetting: grindNum !== null && Number.isFinite(grindNum) ? grindNum : 0,
     shotId, score: evald.score, seconds: evald.secs, ratio: evald.ratio, channeling: evald.channeling,
   };
-  s.reviewRound.suggestion = calcNextGrindSuggestion([...s.rounds, s.reviewRound], _sessionScale(s));
+  s.reviewRound.suggestion = calcNextGrindSuggestion([...s.rounds, s.reviewRound], _sessionScale(s), _sessionBand(s));
   s.candidateShotId = null;
   wizard.persist();
   renderDialinWizard();
@@ -515,7 +529,7 @@ function _renderSummary(s: DialinSession): Html {
   const best = bestRound(s.rounds);
   const title = s.status === 'converged' ? tHtml('dialin_wizard_converged_title') : tHtml('dialin_wizard_summary_title');
   const reasonText = s.status === 'converged' && s.rounds.length
-    ? t(calcNextGrindSuggestion(s.rounds, _sessionScale(s)).reason) : '';
+    ? t(calcNextGrindSuggestion(s.rounds, _sessionScale(s), _sessionBand(s)).reason) : '';
   return html`<div class="dw-summary">
     <div class="card-title">${title}</div>
     ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}

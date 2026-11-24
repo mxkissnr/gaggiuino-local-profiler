@@ -7,21 +7,21 @@ import "sync/atomic"
 // touching a call site. Groundwork for #1505, which wants to compare candidate
 // scorers on real history.
 //
-// "classic" is today's scorer, CalcShotScoreDetail, unchanged — it is always
+// "classic" is today's scorer, CalcShotScoreTargets, unchanged — it is always
 // registered, always first, and the only model a stable build ever scores
 // with. Any other model is dev-channel only: production registers nothing
 // else, and cmd/server only honours the ui-pref that selects one when
 // GLP_DEV_BUILD is set (see scoreModelPref).
 
-// ClassicScoreModel is the id of the production scorer, CalcShotScoreDetail.
+// ClassicScoreModel is the id of the production scorer, CalcShotScoreTargets.
 const ClassicScoreModel = "classic"
 
 // ScoreModel is one registered scorer: an id (stable, part of the score-cache
-// fingerprint) and the function that scores a shot against its resolved bean
-// target (nil = generic bands, exactly like CalcShotScoreDetail).
+// fingerprint) and the function that scores a shot against its resolved
+// targets (zero value = generic bands, exactly like CalcShotScoreTargets).
 type ScoreModel struct {
 	ID    string
-	Score func(Shot, *Bean) ScoreDetail
+	Score func(Shot, ScoreTargets) ScoreDetail
 }
 
 // scoreModels holds the registry. It is an atomic pointer so a test can swap
@@ -36,9 +36,9 @@ func init() {
 	scoreModels.Store(&models)
 }
 
-// classicModel is the production scorer: today's CalcShotScoreDetail.
+// classicModel is the production scorer: today's CalcShotScoreTargets.
 func classicModel() ScoreModel {
-	return ScoreModel{ID: ClassicScoreModel, Score: CalcShotScoreDetail}
+	return ScoreModel{ID: ClassicScoreModel, Score: CalcShotScoreTargets}
 }
 
 // loadScoreModels returns the registered models. The slice is shared and must
@@ -129,16 +129,17 @@ type ModelScore struct {
 
 // AllModelsScorer returns a per-shot function that scores the shot with every
 // registered model, in registry order. Like DetailScorer it resolves the bean
-// lookup and the model list once, so scoring a batch loads the beans and reads
-// the registry once instead of per shot (#1922).
+// lookup, the time-target lookup and the model list once, so scoring a batch
+// loads the beans and reads the registry once instead of per shot (#1922).
 func (s *Service) AllModelsScorer() func(Shot) []ModelScore {
 	lookup := loadBeanLookup()
+	times := s.timeTargetLookup()
 	models := loadScoreModels()
 	return func(shot Shot) []ModelScore {
-		bean := lookup(shot)
+		targets := ScoreTargets{Bean: lookup(shot), Time: times(shot)}
 		out := make([]ModelScore, 0, len(models))
 		for _, m := range models {
-			out = append(out, ModelScore{Model: m.ID, Score: m.Score(shot, bean).Score})
+			out = append(out, ModelScore{Model: m.ID, Score: m.Score(shot, targets).Score})
 		}
 		return out
 	}

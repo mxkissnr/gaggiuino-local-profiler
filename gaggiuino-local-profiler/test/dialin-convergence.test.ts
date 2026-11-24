@@ -100,3 +100,38 @@ describe('calcNextGrindSuggestion / isConverged', () => {
     expect(r3.delta).toBeCloseTo(-1.4, 1);
   });
 });
+
+describe('a profile time window replaces the 25-32 band (#1504)', () => {
+  const BAND = { low: 40, high: 48 };
+
+  it('a window band replaces 25-32 and its midpoint', () => {
+    const hold = calcNextGrindSuggestion([{ grindSetting: 10, seconds: 44 }], null, BAND);
+    expect(hold.type).toBe('hold');
+    expect(hold.nextGrind).toBe(10);
+    expect(hold.band).toEqual(BAND);
+
+    const noBand = calcNextGrindSuggestion([{ grindSetting: 10, seconds: 44 }]);
+    expect(noBand.type).toBe('coarser');
+
+    const finer = calcNextGrindSuggestion([{ grindSetting: 10, seconds: 29 }], null, BAND);
+    expect(finer.type).toBe('finer');
+    expect(finer.nextGrind).toBeLessThan(10);
+    expect(finer.band).toEqual(BAND);
+  });
+
+  it('no band keeps 25-32', () => {
+    const cases = [
+      [{ grindSetting: 10, seconds: 20 }],
+      [{ grindSetting: 10, seconds: 20 }, { grindSetting: 12, seconds: 26 }],
+      [{ grindSetting: 12, seconds: 26 }, { grindSetting: 12.5, seconds: 40 }],
+      [{ grindSetting: 10, seconds: 28 }],
+    ];
+    for (const rounds of cases) {
+      expect(calcNextGrindSuggestion(rounds, null, null)).toEqual(calcNextGrindSuggestion(rounds));
+      expect(calcNextGrindSuggestion(rounds, null, null).band).toEqual({ low: 25, high: 32 });
+    }
+    const holds = [{ grindSetting: 10, seconds: 28 }, { grindSetting: 10, seconds: 29 }];
+    expect(isConverged(holds, null, null)).toBe(isConverged(holds));
+    expect(isConverged(holds, null, null)).toBe(true);
+  });
+});

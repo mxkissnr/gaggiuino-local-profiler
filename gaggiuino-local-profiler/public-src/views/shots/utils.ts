@@ -2,7 +2,7 @@ import { S }                    from '../../state/index.js';
 import { mapShotDatapoints, roastAgeDays, frozenPortionAgeDays, resolveBeanForAnnotation as _resolveBeanForAnnotation, freshnessOverrideFrom, normalizeRoastLevel } from '../../utils.js';
 import type { ShotDatapoints, ShotSeries, FreshnessOverride, RoastLevel } from '../../utils.js';
 import { calcShotScore as _calcShotScore, calcShotScoreDetail as _calcShotScoreDetail } from '../../shared/score.js';
-import type { PressureNote } from '../../shared/score.js';
+import type { PressureNote, TimeWindow } from '../../shared/score.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
 import type { BeanMixPartInput } from '../../shared/bean-mix.js';
 
@@ -27,6 +27,8 @@ export interface ShotLike {
   datapoints?: ShotDatapoints;
   profile?: { name?: string | null; phases?: unknown[] } | null;
   annotation?: ShotAnnotationLike | null;
+  /** Server-resolved profile duration window in seconds (#1504). */
+  timeTarget?: TimeWindow | null;
 }
 
 interface BeanBag {
@@ -197,7 +199,7 @@ export function getShotData(shot: { datapoints?: ShotDatapoints } | null | undef
 export function calcShotScore(shot: ShotLike | null | undefined, _data?: unknown): number | null {
   if (shot && shot.score !== undefined) return shot.score;
   const bean = resolveBeanForAnnotation(shot?.annotation);
-  return _calcShotScore(shot, bean);
+  return _calcShotScore(shot, bean, shot?.timeTarget ?? null);
 }
 
 // #457: whether the bean's own brewTempC/brewRatio recommendation was

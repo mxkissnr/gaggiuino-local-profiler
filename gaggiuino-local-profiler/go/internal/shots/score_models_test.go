@@ -16,7 +16,7 @@ import (
 // testConstantModel scores every shot 7 — distinct from any real score, so a
 // path that did not follow the active model is obvious.
 func testConstantModel() ScoreModel {
-	return ScoreModel{ID: "test_const", Score: func(Shot, *Bean) ScoreDetail {
+	return ScoreModel{ID: "test_const", Score: func(Shot, ScoreTargets) ScoreDetail {
 		v := 7
 		return ScoreDetail{Score: &v}
 	}}
@@ -135,12 +135,12 @@ func TestDefaultModel_IdenticalToCalcShotScoreDetail(t *testing.T) {
 			shot := Shot(c.Shot)
 			want := CalcShotScoreDetail(shot, bean)
 
-			if got := activeScoreModel().Score(shot, bean); !reflect.DeepEqual(got, want) {
+			if got := activeScoreModel().Score(shot, ScoreTargets{Bean: bean}); !reflect.DeepEqual(got, want) {
 				t.Errorf("no source: score detail = %+v, want %+v", got, want)
 			}
 
 			SetScoreModelSource(func() string { return ClassicScoreModel })
-			if got := activeScoreModel().Score(shot, bean); !reflect.DeepEqual(got, want) {
+			if got := activeScoreModel().Score(shot, ScoreTargets{Bean: bean}); !reflect.DeepEqual(got, want) {
 				t.Errorf("source classic: score detail = %+v, want %+v", got, want)
 			}
 			if got := svc.DetailScorer()(shot); !reflect.DeepEqual(got, CalcShotScoreDetail(shot, nil)) {
@@ -189,6 +189,25 @@ func TestScoreCache_ClassicFingerprintUnchanged(t *testing.T) {
 		if row.Score == nil || *row.Score != sentinel {
 			t.Fatalf("cached sentinel score = %v, want %d (the row should still be a cache hit)", row.Score, sentinel)
 		}
+	}
+}
+
+// TestScoreCache_NoWindowFingerprintUnchanged pins that the time-window part
+// of the fingerprint adds no bytes when no window is stored (#1504), so an
+// upgrade rescores nothing.
+func TestScoreCache_NoWindowFingerprintUnchanged(t *testing.T) {
+	_, repo, _ := newTestHandlers(t)
+	seedShots(t, repo, 3)
+
+	if _, err := repo.FindPageExcludingTrash(Cursor{}, 60, 0); err != nil {
+		t.Fatalf("FindPageExcludingTrash: %v", err)
+	}
+	fp, ok := cachedScoreRow(t, repo, 3)
+	if !ok {
+		t.Fatal("expected a cache row after the first read")
+	}
+	if strings.Contains(fp, "|w=") {
+		t.Fatalf("fingerprint %q carries a time window with none stored", fp)
 	}
 }
 

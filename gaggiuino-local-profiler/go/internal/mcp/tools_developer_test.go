@@ -308,6 +308,61 @@ func TestExplainScoreComponents(t *testing.T) {
 	}
 }
 
+// TestExplainScoreProfileTimeTarget (#1504): with a window saved for the
+// shot's profile and machine, the duration component scores against it and
+// reports target "profile" with the window inputs; without one it stays
+// "generic".
+func TestExplainScoreProfileTimeTarget(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 43, 1000, map[string]any{"datapoints": map[string]any{
+		"pressure":    []any{80.0, 81.0, 82.0, 80.0, 81.0},
+		"temperature": []any{900.0, 901.0, 899.0, 900.0, 901.0, 900.0},
+		"timeInShot":  []any{0.0, 10.0, 20.0, 30.0, 40.0, 50.0},
+		"weight":      []any{0.0, 100.0, 200.0, 300.0, 400.0, 450.0},
+	}}, map[string]any{"dose": 18.0})
+	if _, err := sqlDB.Exec(`UPDATE shots SET duration = 300 WHERE id = 43`); err != nil {
+		t.Fatalf("setting duration: %v", err)
+	}
+
+	session := connect(t, ts.URL+Path)
+	durationComponent := func() (string, map[string]any) {
+		t.Helper()
+		out := structured(t, call(t, session, "explain_score", map[string]any{"id": 43}))
+		for _, raw := range objects(out, "components") {
+			c, _ := raw.(map[string]any)
+			if name, _ := c["name"].(string); name == "duration" {
+				inputs, _ := c["inputs"].(map[string]any)
+				target, _ := c["target"].(string)
+				return target, inputs
+			}
+		}
+		t.Fatalf("no duration component: %+v", out)
+		return "", nil
+	}
+
+	if target, _ := durationComponent(); target != "generic" {
+		t.Fatalf("duration target = %q, want generic without a window", target)
+	}
+
+	repo := shots.NewRepository(sqlDB)
+	if err := repo.SaveProfileTimeTargets(map[string][]shots.ProfileTimeTarget{
+		"1": {{ProfileName: "Test Profile", MinS: 40, MaxS: 48}},
+	}); err != nil {
+		t.Fatalf("SaveProfileTimeTargets: %v", err)
+	}
+
+	target, inputs := durationComponent()
+	if target != "profile" {
+		t.Fatalf("duration target = %q, want profile with a window", target)
+	}
+	if got, _ := inputs["min_s"].(float64); got != 40 {
+		t.Fatalf("duration min_s = %v, want 40", inputs["min_s"])
+	}
+	if got, _ := inputs["max_s"].(float64); got != 48 {
+		t.Fatalf("duration max_s = %v, want 48", inputs["max_s"])
+	}
+}
+
 func TestExplainScoreSkipsRatioAndExtractionYieldWithoutDose(t *testing.T) {
 	ts, sqlDB := newDeveloperServer(t, true, false)
 	insertShot(t, sqlDB, 42, 1000, map[string]any{"datapoints": map[string]any{
