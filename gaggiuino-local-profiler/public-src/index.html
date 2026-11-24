@@ -1332,6 +1332,9 @@
                     <span id="worldMapCount" class="analytics-shelf-count"></span>
                 </div>
                 <div id="worldMapWrap" class="world-map-wrap"></div>
+                <div class="map-home-row">
+                    <button type="button" id="worldMapSetHome" class="btn btn--quiet" data-i18n="analytics_map_set_home">Standort ändern</button>
+                </div>
             </section>
 
             <!-- Rarely used charts, folded away (#1467). Closed by default and
@@ -1550,6 +1553,16 @@
                 <option value="fr">Français</option>
                 <option value="it">Italiano</option>
                 <option value="nl">Nederlands</option>
+            </select>
+        </div>
+        <!-- #2210: where the coffee world map puts the home point. Countries
+             after the two fixed options come from boot/home-country.ts. -->
+        <div class="settings-card">
+            <label for="settingsHomeCountry" class="card-title" data-i18n="settings_home_country">Standort deiner Tasse</label>
+            <p class="settings-card-desc" data-i18n="settings_home_country_desc">Von hier aus zeichnet die Kaffee-Weltkarte die Wege deiner Bohnen und die Entfernungen.</p>
+            <select id="settingsHomeCountry" class="machine-form-input">
+                <option value="" data-i18n="settings_home_country_auto">Automatisch (nach Browsersprache)</option>
+                <option value="none" data-i18n="settings_home_country_none">Nicht auf der Karte zeigen</option>
             </select>
         </div>
         </section>
