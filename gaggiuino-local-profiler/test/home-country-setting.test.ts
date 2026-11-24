@@ -165,6 +165,7 @@ describe('syncHomeCountrySetting (#2210)', () => {
 describe('Home country markup (#2210)', () => {
   it('the Appearance page holds the Home country select after the language select', () => {
     expect(indexHtml).toContain('<label for="settingsHomeCountry" class="card-title" data-i18n="settings_home_country">');
+    expect(indexHtml).toContain('<p class="settings-card-desc" data-i18n="settings_home_country_desc">');
     expect(indexHtml).toContain('<select id="settingsHomeCountry" class="machine-form-input">');
     expect(indexHtml).toContain('<option value="" data-i18n="settings_home_country_auto">');
     expect(indexHtml).toContain('<option value="none" data-i18n="settings_home_country_none">');
