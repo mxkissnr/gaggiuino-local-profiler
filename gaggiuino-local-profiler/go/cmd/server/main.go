@@ -417,6 +417,9 @@ func buildApp(ctx context.Context, cfg appConfig) (http.Handler, *sql.DB, error)
 	ordersRepo := orders.NewRepository(sqlDB)
 	// #1835: shared by the ui-prefs routes and the low-stock threshold read.
 	uiprefsRepo := uiprefs.NewRepository(sqlDB)
+	// #2186: the experimental score models exist on a dev build only; a stable
+	// build keeps classic as its only registered model.
+	registerDevScoreModels()
 	// #1922: which score model this process scores with. internal/shots cannot
 	// read ui-prefs (or the dev-build flag) itself, so the source is injected
 	// here for the same import-cycle reason as SetBeanSource; scoreModelPref
@@ -940,6 +943,16 @@ func scoreModelPref(repo *uiprefs.Repository) string {
 		return shots.ClassicScoreModel
 	}
 	return id
+}
+
+// registerDevScoreModels registers the dev-channel score models (#2186) when
+// this is a dev build (GLP_DEV_BUILD) and does nothing on a stable build. The
+// returned func undoes the registration; buildApp ignores it, tests use it.
+func registerDevScoreModels() (restore func()) {
+	if !mcp.DevBuild() {
+		return func() {}
+	}
+	return shots.RegisterDevScoreModels()
 }
 
 // lowStockThresholdG reads the remaining-grams threshold for the "bean

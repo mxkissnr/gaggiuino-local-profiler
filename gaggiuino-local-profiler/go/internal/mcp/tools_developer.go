@@ -236,7 +236,7 @@ type explainScoreInput struct {
 }
 
 type scoreComponentOutput struct {
-	Name        string             `json:"name" jsonschema:"the weighted part: pressure, temperature, duration, ratio, extraction_yield or channeling"`
+	Name        string             `json:"name" jsonschema:"the weighted part: pressure, temperature, duration, ratio, extraction_yield, channeling, or pressure_adherence (adherence model only)"`
 	Score       int                `json:"score" jsonschema:"this part's 0-100 score"`
 	Weight      int                `json:"weight" jsonschema:"the part's weight in the total"`
 	WeightShare float64            `json:"weight_share" jsonschema:"the part's weight divided by the total weight, 0..1"`
@@ -292,6 +292,10 @@ var skippedScoreParts = []skippedScoreComponent{
 	{Name: "ratio", Reason: "no dose annotated or no weight recorded"},
 	{Name: "extraction_yield", Reason: "no TDS annotated (needs dose and weight too)"},
 }
+
+// adherenceSkipReason is the skipped reason for the adherence model's part
+// (#2186) when the shot has no usable target pressure data.
+const adherenceSkipReason = "no samples in a PRESSURE phase with a target pressure (needs the profile's phases and phase-indexed target curves); the adherence model scored this shot exactly like classic"
 
 // pressureNoteReason renders a ScoreDetail.PressureNote as the sentence
 // explain_score reports — both surfaces read the same field, so the reason the
@@ -381,6 +385,14 @@ func explainScore(svc *shots.Service, in explainScoreInput) (explainScoreOutput,
 			reason = pressureNoteReason(detail.PressureNote)
 		}
 		out.Skipped = append(out.Skipped, skippedScoreComponent{Name: part.Name, Reason: reason})
+	}
+	// #2186: only the adherence model has the pressure adherence part, so only
+	// it reports the part as not applicable — its score is then classic's.
+	if out.ScoreModel == shots.AdherenceScoreModel && !present[shots.PressureAdherenceComponent] {
+		out.Skipped = append(out.Skipped, skippedScoreComponent{
+			Name:   shots.PressureAdherenceComponent,
+			Reason: adherenceSkipReason,
+		})
 	}
 	return out, nil
 }
