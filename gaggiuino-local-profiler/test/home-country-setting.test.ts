@@ -70,7 +70,7 @@ beforeEach(() => {
   select = Object.assign(fake, {
     remove: (i: number) => { fake.options.splice(i, 1); },
     appendChild: (o: { value: string; textContent?: string }) => { fake.options.push(o); },
-  }) as FakeSelect;
+  });
   link = new EventTarget();
   Object.defineProperty(globalThis, 'document', {
     value: {
