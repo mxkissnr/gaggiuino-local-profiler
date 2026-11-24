@@ -86,7 +86,7 @@ function _numberRow(id: string, label: Html, value: number | null): Html {
 
 function _sheetBody(existing: ProfileTimeTarget | null): Html {
   return html`<p class="settings-card-desc">${tHtml('profile_time_target_hint')}</p>
-    <div class="settings-group">
+    <div class="settings-group ptt-rows">
       ${_numberRow('pttMin', tHtml('profile_time_target_min'), existing?.minS ?? null)}
       ${_numberRow('pttMax', tHtml('profile_time_target_max'), existing?.maxS ?? null)}
     </div>
