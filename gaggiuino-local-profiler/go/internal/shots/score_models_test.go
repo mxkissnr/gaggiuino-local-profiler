@@ -8,6 +8,8 @@ package shots
 // setting changes behaviour).
 
 import (
+	stdjson "encoding/json"
+	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -361,4 +363,320 @@ func sameScore(a, b *int) bool {
 	default:
 		return *a == *b
 	}
+
+// #2186: the experimental dev-channel model "adherence". Its part ports the
+// #1505 harness's adherencePressureMae literally, so these tests pin the
+// harness's rules: the 1.5 s settle window after phase 0, FLOW phases never
+// count, and the series stay index-aligned (a null sample is not dropped).
+
+// adherenceShot builds a one-phase PRESSURE shot from pressure/target samples
+// taken at 0, 1, 2, 3 and 4 s.
+func adherenceShot(pressure, target []any) Shot {
+	return Shot{
+		"profile": map[string]any{"phases": []any{map[string]any{"type": "PRESSURE"}}},
+		"datapoints": map[string]any{
+			"pressure":       pressure,
+			"targetPressure": target,
+			"timeInShot":     []any{0.0, 10.0, 20.0, 30.0, 40.0},
+			"phaseIndex":     []any{0.0, 0.0, 0.0, 0.0, 0.0},
+		},
+	}
 }
+
+// weightedAverage recomputes a ScoreDetail's total from its own components, so
+// the expectation follows classic's weights instead of duplicating them.
+func weightedAverage(components []ScoreComponent) int {
+	total, weighted := 0, 0.0
+	for _, c := range components {
+		total += c.Weight
+		weighted += float64(c.Score * c.Weight)
+	}
+	return jsRound(weighted / float64(total))
+}
+
+func TestAdherence_PerfectAdherenceScores100(t *testing.T) {
+	shot := adherenceShot(
+		[]any{90.0, 90.0, 90.0, 90.0, 90.0},
+		[]any{90.0, 90.0, 90.0, 90.0, 90.0},
+	)
+	detail := adherenceModel().Score(shot, ScoreTargets{})
+	if detail.Score == nil {
+		t.Fatal("adherence model did not score a fully scoreable shot")
+	}
+	part := componentByName(t, detail.Components, PressureAdherenceComponent)
+	if part.Score != 100 {
+		t.Errorf("%s score = %d, want 100 (perfect adherence)", PressureAdherenceComponent, part.Score)
+	}
+	if part.Weight != adherenceWeight {
+		t.Errorf("%s weight = %d, want %d", PressureAdherenceComponent, part.Weight, adherenceWeight)
+	}
+	if part.Target != "profile" {
+		t.Errorf("%s target = %q, want profile", PressureAdherenceComponent, part.Target)
+	}
+	if got := part.Inputs["pressure_mae_bar"]; got != 0 {
+		t.Errorf("pressure_mae_bar = %v, want 0", got)
+	}
+	if got := part.Inputs["samples"]; got != 5 {
+		t.Errorf("samples = %v, want 5", got)
+	}
+	if want := weightedAverage(detail.Components); *detail.Score != want {
+		t.Errorf("total score = %d, want the weighted component average %d", *detail.Score, want)
+	}
+}
+
+func TestAdherence_KnownMAEScoresHalf(t *testing.T) {
+	shot := adherenceShot(
+		[]any{90.0, 90.0, 90.0, 90.0, 90.0},
+		[]any{75.0, 75.0, 75.0, 75.0, 75.0},
+	)
+	detail := adherenceModel().Score(shot, ScoreTargets{})
+	if detail.Score == nil {
+		t.Fatal("adherence model did not score a fully scoreable shot")
+	}
+	part := componentByName(t, detail.Components, PressureAdherenceComponent)
+	if got := part.Inputs["pressure_mae_bar"]; math.Abs(got-1.5) > 1e-9 {
+		t.Errorf("pressure_mae_bar = %v, want 1.5", got)
+	}
+	if got := part.Inputs["samples"]; got != 5 {
+		t.Errorf("samples = %v, want 5", got)
+	}
+	if part.Score != 50 {
+		t.Errorf("%s score = %d, want 50 for a 1.5 bar mean deviation", PressureAdherenceComponent, part.Score)
+	}
+
+	classic := classicModel().Score(shot, ScoreTargets{})
+	if classic.Score == nil {
+		t.Fatal("classic did not score the shot, so the adherence total has no baseline")
+	}
+	total, weighted := adherenceWeight, float64(part.Score*adherenceWeight)
+	for _, c := range classic.Components {
+		total += c.Weight
+		weighted += float64(c.Score * c.Weight)
+	}
+	if want := jsRound(weighted / float64(total)); *detail.Score != want {
+		t.Errorf("total score = %d, want %d", *detail.Score, want)
+	}
+
+	for _, tc := range []struct {
+		mae  float64
+		want int
+	}{
+		{0, 100},
+		{3, 0},
+		{4.2, 0},
+	} {
+		if got := adherencePartScore(tc.mae); got != tc.want {
+			t.Errorf("adherencePartScore(%v) = %d, want %d", tc.mae, got, tc.want)
+		}
+	}
+}
+
+func TestAdherence_SettleWindowAndFlowPhasesExcluded(t *testing.T) {
+	shot := Shot{
+		"profile": map[string]any{"phases": []any{
+			map[string]any{"type": "PRESSURE"},
+			map[string]any{"type": "PRESSURE"},
+			map[string]any{"type": "FLOW"},
+		}},
+		"datapoints": map[string]any{
+			"timeInShot":     []any{0.0, 10.0, 20.0, 25.0, 30.0, 35.0, 40.0, 50.0, 60.0},
+			"phaseIndex":     []any{0.0, 0.0, 1.0, 1.0, 1.0, 1.0, 1.0, 2.0, 2.0},
+			"pressure":       []any{90.0, 90.0, 90.0, 90.0, 90.0, 90.0, 90.0, 90.0, 90.0},
+			"targetPressure": []any{90.0, 90.0, 60.0, 60.0, 60.0, 90.0, 90.0, 0.0, 0.0},
+		},
+	}
+	mae, samples, ok := adherencePressureMAE(shot)
+	if !ok {
+		t.Fatal("adherencePressureMAE reported no data for a shot with target pressure")
+	}
+	if samples != 4 {
+		t.Errorf("samples = %d, want 4 (phase 1's first 1.5 s and the FLOW phase are skipped)", samples)
+	}
+	if mae != 0 {
+		t.Errorf("mae = %v, want 0", mae)
+	}
+}
+
+func TestAdherence_RawDatapointsKeepNullsAligned(t *testing.T) {
+	raw := stdjson.RawMessage(`{"pressure":[90,null,90,90,90],"targetPressure":[90,60,60,90,90],"timeInShot":[0,10,20,30,40],"phaseIndex":[0,0,0,0,0]}`)
+	profile := map[string]any{"phases": []any{map[string]any{"type": "PRESSURE"}}}
+	rawShot := Shot{"profile": profile, "datapoints": raw}
+
+	mae, samples, ok := adherencePressureMAE(rawShot)
+	if !ok {
+		t.Fatal("adherencePressureMAE reported no data for an aligned raw shot")
+	}
+	if samples != 4 {
+		t.Errorf("raw samples = %d, want 4 (the null pressure sample is kept, not dropped)", samples)
+	}
+	if math.Abs(mae-0.75) > 1e-9 {
+		t.Errorf("raw mae = %v, want 0.75 (a shifted series would give 1.5)", mae)
+	}
+
+	mapShot := Shot{"profile": profile, "datapoints": map[string]any{
+		"pressure":       []any{90.0, nil, 90.0, 90.0, 90.0},
+		"targetPressure": []any{90.0, 60.0, 60.0, 90.0, 90.0},
+		"timeInShot":     []any{0.0, 10.0, 20.0, 30.0, 40.0},
+		"phaseIndex":     []any{0.0, 0.0, 0.0, 0.0, 0.0},
+	}}
+	if got, want := adherenceModel().Score(mapShot, ScoreTargets{}), adherenceModel().Score(rawShot, ScoreTargets{}); !reflect.DeepEqual(got, want) {
+		t.Fatalf("map detail = %+v, want the raw detail %+v", got, want)
+	}
+}
+
+func TestAdherence_NoTargetDataEqualsClassic(t *testing.T) {
+	flowProfile := map[string]any{"phases": []any{map[string]any{"type": "FLOW"}}}
+	pressureProfile := map[string]any{"phases": []any{map[string]any{"type": "PRESSURE"}}}
+	fullSeries := func() map[string]any {
+		return map[string]any{
+			"pressure":       []any{90.0, 90.0, 90.0, 90.0, 90.0},
+			"targetPressure": []any{75.0, 75.0, 75.0, 75.0, 75.0},
+			"timeInShot":     []any{0.0, 10.0, 20.0, 30.0, 40.0},
+			"phaseIndex":     []any{0.0, 0.0, 0.0, 0.0, 0.0},
+		}
+	}
+
+	noPhaseIndex := fullSeries()
+	delete(noPhaseIndex, "phaseIndex")
+
+	for _, tc := range []struct {
+		name string
+		shot Shot
+	}{
+		{"no profile", Shot{"datapoints": fullSeries()}},
+		{"no phaseIndex series", Shot{"profile": pressureProfile, "datapoints": noPhaseIndex}},
+		{"flow-only profile", Shot{"profile": flowProfile, "datapoints": fullSeries()}},
+	} {
+		got := adherenceModel().Score(tc.shot, ScoreTargets{})
+		want := classicModel().Score(tc.shot, ScoreTargets{})
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: adherence detail = %+v, want classic's %+v", tc.name, got, want)
+		}
+	}
+
+	for _, c := range loadScoreParityCases(t) {
+		shot := Shot(c.Shot)
+		if _, _, ok := adherencePressureMAE(shot); ok {
+			continue
+		}
+		targets := ScoreTargets{}
+		if c.Bean != nil {
+			targets.Bean = &Bean{BrewTempC: c.Bean.BrewTempC, BrewRatio: c.Bean.BrewRatio}
+		}
+		if c.TimeTarget != nil {
+			targets.Time = &TimeTarget{MinS: c.TimeTarget.MinS, MaxS: c.TimeTarget.MaxS}
+		}
+		got := adherenceModel().Score(shot, targets)
+		want := classicModel().Score(shot, targets)
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("parity case %q: adherence detail = %+v, want classic's %+v", c.Name, got, want)
+		}
+	}
+
+	thin := Shot{
+		"profile": pressureProfile,
+		"datapoints": map[string]any{
+			"pressure":   []any{90.0, 90.0, 90.0},
+			"timeInShot": []any{0.0, 10.0, 20.0},
+			"phaseIndex": []any{0.0, 0.0, 0.0},
+		},
+	}
+	if got := adherenceModel().Score(thin, ScoreTargets{}).Score; got != nil {
+		t.Errorf("thin shot adherence score = %v, want nil like classic", *got)
+	}
+	if got := classicModel().Score(thin, ScoreTargets{}).Score; got != nil {
+		t.Errorf("thin shot classic score = %v, want nil", *got)
+	}
+}
+
+func TestAdherence_WeightSum(t *testing.T) {
+	shot := adherenceShot(
+		[]any{90.0, 90.0, 90.0, 90.0, 90.0},
+		[]any{75.0, 75.0, 75.0, 75.0, 75.0},
+	)
+	classic := classicModel().Score(shot, ScoreTargets{})
+	before := make([]ScoreComponent, len(classic.Components))
+	copy(before, classic.Components)
+
+	detail := adherenceModel().Score(shot, ScoreTargets{})
+	if len(detail.Components) != len(before)+1 {
+		t.Fatalf("adherence components = %d, want classic's %d plus one", len(detail.Components), len(before))
+	}
+	classicWeight := 0
+	for i, c := range before {
+		if !reflect.DeepEqual(detail.Components[i], c) {
+			t.Errorf("component %d = %+v, want classic's %+v in the same order", i, detail.Components[i], c)
+		}
+		classicWeight += c.Weight
+	}
+	part := detail.Components[len(detail.Components)-1]
+	if part.Name != PressureAdherenceComponent || part.Weight != adherenceWeight {
+		t.Fatalf("last component = %+v, want a %s part of weight %d", part, PressureAdherenceComponent, adherenceWeight)
+	}
+	total := 0
+	for _, c := range detail.Components {
+		total += c.Weight
+	}
+	if want := classicWeight + adherenceWeight; total != want {
+		t.Errorf("weight sum = %d, want classic's %d plus %d", total, classicWeight, adherenceWeight)
+	}
+	if !reflect.DeepEqual(classic.Components, before) {
+		t.Errorf("classic detail components were mutated in place: %+v, want %+v", classic.Components, before)
+	}
+}
+
+func TestRegisterDevScoreModels_AddsAdherenceAfterClassic(t *testing.T) {
+	restore := RegisterDevScoreModels()
+	t.Cleanup(restore)
+
+	if got, want := ScoreModelIDs(), []string{ClassicScoreModel, AdherenceScoreModel}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("registry ids = %v, want %v", got, want)
+	}
+
+	again := RegisterDevScoreModels()
+	t.Cleanup(again)
+	if got, want := ScoreModelIDs(), []string{ClassicScoreModel, AdherenceScoreModel}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("second registration: ids = %v, want %v", got, want)
+	}
+
+	if got, want := scoreModelByID(AdherenceScoreModel).fingerprintSuffix(), "|m="+AdherenceScoreModel; got != want {
+		t.Errorf("adherence fingerprint suffix = %q, want %q", got, want)
+	}
+
+	restore()
+	if got, want := ScoreModelIDs(), []string{ClassicScoreModel}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("after restore: ids = %v, want %v", got, want)
+	}
+}
+
+func TestRegisterDevScoreModels_ClassicSelectedUnchanged(t *testing.T) {
+	t.Cleanup(func() { SetScoreModelSource(nil) })
+	t.Cleanup(RegisterDevScoreModels())
+
+	for _, c := range loadScoreParityCases(t) {
+		targets := ScoreTargets{}
+		if c.Bean != nil {
+			targets.Bean = &Bean{BrewTempC: c.Bean.BrewTempC, BrewRatio: c.Bean.BrewRatio}
+		}
+		if c.TimeTarget != nil {
+			targets.Time = &TimeTarget{MinS: c.TimeTarget.MinS, MaxS: c.TimeTarget.MaxS}
+		}
+		shot := Shot(c.Shot)
+
+		SetScoreModelSource(nil)
+		if got, want := activeScoreModel().Score(shot, targets), CalcShotScoreTargets(shot, targets); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: no source with dev models registered: detail = %+v, want classic's %+v", c.Name, got, want)
+		}
+
+		SetScoreModelSource(func() string { return ClassicScoreModel })
+		if got, want := activeScoreModel().Score(shot, targets), CalcShotScoreTargets(shot, targets); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: classic selected with dev models registered: detail = %+v, want %+v", c.Name, got, want)
+		}
+	}
+
+	SetScoreModelSource(func() string { return AdherenceScoreModel })
+	if got := ActiveScoreModelID(); got != AdherenceScoreModel {
+		t.Errorf("ActiveScoreModelID = %q, want %q", got, AdherenceScoreModel)
+	}
+}
+

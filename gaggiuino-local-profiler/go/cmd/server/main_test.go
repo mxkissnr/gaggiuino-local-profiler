@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"syscall"
 	"testing"
 	"time"
@@ -240,3 +241,24 @@ func TestScoreModelPref_StableIgnoresStoredModel(t *testing.T) {
 		t.Errorf("missing key: scoreModelPref() = %q, want %q", got, shots.ClassicScoreModel)
 	}
 }
+
+// #2186: the experimental score models exist on a dev build only. A stable
+// build (no GLP_DEV_BUILD) must keep classic as its only registered model.
+func TestRegisterDevScoreModels_DevBuildOnly(t *testing.T) {
+	t.Setenv("GLP_DEV_BUILD", "")
+	restore := registerDevScoreModels()
+	if got, want := shots.ScoreModelIDs(), []string{shots.ClassicScoreModel}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("stable build: ids = %v, want %v", got, want)
+	}
+	restore()
+	if got, want := shots.ScoreModelIDs(), []string{shots.ClassicScoreModel}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("stable build after restore: ids = %v, want %v", got, want)
+	}
+
+	t.Setenv("GLP_DEV_BUILD", "dev")
+	t.Cleanup(registerDevScoreModels())
+	if got, want := shots.ScoreModelIDs(), []string{shots.ClassicScoreModel, shots.AdherenceScoreModel}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("dev build: ids = %v, want %v", got, want)
+	}
+}
+
