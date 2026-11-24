@@ -461,6 +461,23 @@ export function isLongTrendPeriod(days: number): boolean {
   return days === 90 || days === 0;
 }
 
+// #2201: tick text for the per-shot trend (7 and 30 days). The axis has one
+// category per shot, so a day with several shots repeated its date. Only the
+// first shot of a day carries the date, and a date is left out while it is
+// fewer than ceil(n / maxLabels) points after the last drawn one, so at most
+// maxLabels flat labels are drawn on any width. The labels, data, tooltip and
+// click indices stay per shot; only the drawn tick text changes.
+export function trendDateTickLabels(labels: readonly string[], maxLabels: number): string[] {
+  const minGap = Math.max(1, Math.ceil(labels.length / Math.max(1, maxLabels)));
+  let lastShown = -Infinity;
+  return labels.map((label, i) => {
+    if (i > 0 && label === labels[i - 1]) return '';
+    if (i - lastShown < minGap) return '';
+    lastShown = i;
+    return label;
+  });
+}
+
 export interface TrendDailyBand {
   keys: string[];          // local calendar day keys, one per day, first → last shot
   mean: (number | null)[]; // 7-day rolling mean score, null when the window has no shot
@@ -668,6 +685,9 @@ export function buildTrendChart() {
 
   // 7 and 30 days keep the per-shot line from #1467.
   const labels    = src.map(s => new Date(s.timestamp * 1000).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' }));
+  // #2201: each date once, thinned to fit; same width rule as the shot chart.
+  const tickLabels = trendDateTickLabels(labels, window.innerWidth <= 600 ? 6 : 12);
+  const gridColor  = themeColor('--gray-700', '#2b2f33');
   const pointColors = scoreData.map(_scoreChartColor);
   const pointRadii  = scoreData.map((sc, i) => (i === scoreData.length - 1 ? 6 : 4) + (sc >= 100 ? 1 : 0));
 
@@ -706,7 +726,10 @@ export function buildTrendChart() {
         legend: { labels: { color: C.tick, font: { size: 11 }, usePointStyle: true } },
       },
       scales: {
-        x: { ticks: { color: _mutedTickColor(), font: { size: 10 }, maxRotation: 45 }, grid: { color: themeColor('--gray-700', '#2b2f33') } },
+        x: { ticks: { color: _mutedTickColor(), font: { size: 10 }, autoSkip: false, maxRotation: 0,
+            callback: (_value: string | number, index: number) => tickLabels[index] ?? '' },
+          // Grid lines only under a drawn date, as before when autoSkip thinned the ticks.
+          grid: { color: (c: { index: number }) => (tickLabels[c.index] ? gridColor : 'transparent') } },
         y: { min: _trendAxisMin(scoreData), max: 100, ticks: { color: _mutedTickColor(), font: { size: 10 }, stepSize: 20 }, grid: { color: themeColor('--gray-700', '#2b2f33') } }
       }
     }

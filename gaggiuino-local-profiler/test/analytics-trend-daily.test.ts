@@ -6,6 +6,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 type Analytics = typeof import('../public-src/views/analytics.js');
 let trendDailyBand: Analytics['trendDailyBand'];
 let isLongTrendPeriod: Analytics['isLongTrendPeriod'];
+let trendDateTickLabels: Analytics['trendDateTickLabels'];
 
 type ShotRow = Parameters<Analytics['trendDailyBand']>[0][number];
 
@@ -22,7 +23,7 @@ beforeAll(async () => {
     value: { calcShotScore: () => null, getShotData: () => ({}) },
     configurable: true, writable: true,
   });
-  ({ trendDailyBand, isLongTrendPeriod } = await import('../public-src/views/analytics.js'));
+  ({ trendDailyBand, isLongTrendPeriod, trendDateTickLabels } = await import('../public-src/views/analytics.js'));
 });
 
 // Local wall-clock timestamps at 08:00 so _dayKeyOf() (which reads local
@@ -81,5 +82,26 @@ describe('isLongTrendPeriod (#1490)', () => {
     expect(isLongTrendPeriod(0)).toBe(true);
     expect(isLongTrendPeriod(7)).toBe(false);
     expect(isLongTrendPeriod(30)).toBe(false);
+  });
+});
+
+describe('trendDateTickLabels (#2201)', () => {
+  it('draws each date once when a day has several shots', () => {
+    expect(trendDateTickLabels(['01.11', '01.11', '02.11', '02.11', '02.11', '03.11'], 12))
+      .toEqual(['01.11', '', '02.11', '', '', '03.11']);
+  });
+
+  it('draws at most maxLabels dates, evenly spaced', () => {
+    const labels = Array.from({ length: 30 }, (_, i) => `d${i + 1}`);
+    const out = trendDateTickLabels(labels, 6);
+    expect(out.filter(l => l !== '')).toHaveLength(6);
+    out.forEach((l, i) => {
+      if (l !== '') expect([0, 5, 10, 15, 20, 25]).toContain(i);
+    });
+  });
+
+  it('keeps one entry per shot', () => {
+    expect(trendDateTickLabels(['a', 'b'], 12)).toHaveLength(2);
+    expect(trendDateTickLabels([], 6)).toEqual([]);
   });
 });
