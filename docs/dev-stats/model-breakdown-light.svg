@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 654" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
 <title id="t">AI model breakdown (by commits)</title>
-<desc id="d">Bar chart: DeepSeek V4.1 Flash 936, Claude Sonnet 5 829, Claude Sonnet 4.6 355, Claude Opus 5.5 131, Claude Opus 5 55, Claude Opus 4.8 47, Claude Sonnet 5.5 42, Claude Fable 5 41, Claude (version not recorded) 12, DeepSeek V4 Flash 9, Big Pickle 4, Claude Haiku 4.5 4, Claude Fable 5.2 2, Claude Haiku 5.5 2.</desc>
+<desc id="d">Bar chart: DeepSeek V4.1 Flash 936, Claude Sonnet 5 829, Claude Sonnet 4.6 355, Claude Opus 5.5 134, Claude Opus 5 55, Claude Opus 4.8 47, Claude Sonnet 5.5 42, Claude Fable 5 41, Claude (version not recorded) 12, DeepSeek V4 Flash 9, Big Pickle 4, Claude Haiku 4.5 4, Claude Fable 5.2 2, Claude Haiku 5.5 2.</desc>
 <rect x="12" y="12" width="868" height="642" fill="#0b0b0b"/>
 <rect x="5.5" y="5.5" width="868" height="642" fill="#fffaf0" stroke="#0b0b0b" stroke-width="3"/>
 <text x="26" y="40" fill="#0b0b0b" font-weight="800" font-size="19" letter-spacing="0.5">AI MODEL BREAKDOWN (BY COMMITS)</text>
@@ -21,8 +21,8 @@
 <rect x="237.5" y="174" width="213" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
 <text x="461" y="190" fill="#0b0b0b" font-weight="800" font-size="14">355</text>
 <text x="222" y="228" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">Claude Opus 5.5</text>
-<rect x="237.5" y="212" width="79" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
-<text x="327" y="228" fill="#0b0b0b" font-weight="800" font-size="14">131</text>
+<rect x="237.5" y="212" width="80" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
+<text x="328" y="228" fill="#0b0b0b" font-weight="800" font-size="14">134</text>
 <text x="222" y="266" fill="#0b0b0b" font-weight="800" font-size="13" text-anchor="end">Claude Opus 5</text>
 <rect x="237.5" y="250" width="33" height="24" fill="#1f5fff" stroke="#0b0b0b" stroke-width="3"/>
 <text x="281" y="266" fill="#0b0b0b" font-weight="800" font-size="14">55</text>

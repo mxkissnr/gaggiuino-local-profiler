@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 440" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" role="img" aria-labelledby="t d">
 <title id="t">AI commits per month by model</title>
-<desc id="d">Line chart of AI commits per month from 2026-05 to 2026-11 (current month still in progress), one line per model: DeepSeek V4.1 Flash (936 commits), Claude Sonnet 5 (829 commits), Claude Sonnet 4.6 (355 commits), Claude Opus 5.5 (131 commits), Claude Opus 5 (55 commits), Claude Opus 4.8 (47 commits), Claude Sonnet 5.5 (42 commits), Claude Fable 5 (41 commits), Claude (version not recorded) (12 commits), DeepSeek V4 Flash (9 commits), Big Pickle (4 commits), Claude Haiku 4.5 (4 commits), Claude Fable 5.2 (2 commits), Claude Haiku 5.5 (2 commits).</desc>
+<desc id="d">Line chart of AI commits per month from 2026-05 to 2026-11 (current month still in progress), one line per model: DeepSeek V4.1 Flash (936 commits), Claude Sonnet 5 (829 commits), Claude Sonnet 4.6 (355 commits), Claude Opus 5.5 (134 commits), Claude Opus 5 (55 commits), Claude Opus 4.8 (47 commits), Claude Sonnet 5.5 (42 commits), Claude Fable 5 (41 commits), Claude (version not recorded) (12 commits), DeepSeek V4 Flash (9 commits), Big Pickle (4 commits), Claude Haiku 4.5 (4 commits), Claude Fable 5.2 (2 commits), Claude Haiku 5.5 (2 commits).</desc>
 <rect x="12" y="12" width="868" height="428" fill="#0b0b0b"/>
 <rect x="5.5" y="5.5" width="868" height="428" fill="#fffaf0" stroke="#0b0b0b" stroke-width="3"/>
 <text x="26" y="40" fill="#0b0b0b" font-weight="800" font-size="19" letter-spacing="0.5">AI COMMITS PER MONTH BY MODEL</text>
@@ -83,10 +83,10 @@
 <polyline points="64.0,296.6 192.0,353.3 320.0,376.0 448.0,376.0 576.0,376.0 704.0,376.0 832.0,376.0" fill="none" stroke="#6aa8ff" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="3 5"/>
 <polygon points="64.0,288.6 72.0,296.6 64.0,304.6 56.0,296.6" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
 <polygon points="192.0,345.3 200.0,353.3 192.0,361.3 184.0,353.3" fill="#6aa8ff" stroke="#0b0b0b" stroke-width="2"/>
-<polyline points="64.0,376.0 192.0,376.0 320.0,376.0 448.0,376.0 576.0,373.7 704.0,351.9 832.0,364.8" fill="none" stroke="#0a2a8a" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="10 4 3 4"/>
+<polyline points="64.0,376.0 192.0,376.0 320.0,376.0 448.0,376.0 576.0,373.7 704.0,351.9 832.0,363.9" fill="none" stroke="#0a2a8a" stroke-width="4" stroke-linejoin="miter" stroke-dasharray="10 4 3 4"/>
 <rect x="571.0" y="368.7" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
 <rect x="699.0" y="346.9" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
-<rect x="827.0" y="359.8" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
+<rect x="827.0" y="358.9" width="10" height="10" fill="#0a2a8a" stroke="#0b0b0b" stroke-width="2"/>
 <polyline points="64.0,376.0 192.0,376.0 320.0,374.0 448.0,362.8 576.0,375.4 704.0,376.0 832.0,376.0" fill="none" stroke="#00a6c0" stroke-width="4" stroke-linejoin="miter"/>
 <circle cx="320.0" cy="374.0" r="6" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
 <circle cx="448.0" cy="362.8" r="6" fill="#00a6c0" stroke="#0b0b0b" stroke-width="2"/>
