@@ -73,15 +73,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         'Fixed: barcode scanning on iPhone and iPad, view settings that follow you across devices, kiosk orders that keep the chosen milk or bean, and a reliable preheat countdown.',
         'Security: built with Go 1.27.2 and an updated HTTP/2 library, unknown host names are refused, and the MQTT password no longer reaches the browser.',
     ] },
-    { version: '3.3.0', date: '2026-10-02', highlights: [
-        'Beans can now hold several bags as a queue, with a drag-reorderable upcoming list and per-bag stock.',
-        'Machine profiles can be created, edited and deleted while the machine is offline, and are pushed to it automatically once it is reachable again.',
-        'The live view has a shot setup panel: pick bean, dose, grinder, grind setting, basket, puck screen and recipe before you pull, and they are saved to the shot.',
-        'Try the app in your browser with sample data and a simulated live shot, no machine needed.',
-        'AI assistants such as Claude can read your shots, beans and analytics through an optional built-in MCP server, switched on in Settings.',
-        'Fixed: GaggiMate machines on firmware v1.9.0 show the profile name, steaming, scale weight and live readings again.',
-        'Fixed: changes made at the same moment, such as a milk deduction from an order while you edit a bean, no longer overwrite each other.',
-    ] },
 ];
 
 const MAX_ENTRIES = 8;
