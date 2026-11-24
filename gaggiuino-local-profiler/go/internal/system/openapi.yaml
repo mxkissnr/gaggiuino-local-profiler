@@ -3165,7 +3165,7 @@ paths:
                 properties:
                   ok:    { type: boolean }
                   state: { type: boolean, description: New state after toggle }
-        "400": { description: switch_entity not configured, or machineId is not a number }
+        "400": { description: "switch_entity not configured, or machineId is not a number" }
         "404": { description: Unknown machineId }
         "500": { description: HA call failed }
 

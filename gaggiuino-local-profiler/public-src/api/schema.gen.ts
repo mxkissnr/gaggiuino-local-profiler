@@ -4796,6 +4796,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
+                    /** @description #2202: the machine whose switch to read; omitted = the default machine */
                     machineId?: number;
                 };
                 header?: never;
@@ -4855,6 +4856,7 @@ export interface paths {
         post: {
             parameters: {
                 query?: {
+                    /** @description #2202: the machine whose switch to toggle; omitted = the default machine */
                     machineId?: number;
                 };
                 header?: never;
