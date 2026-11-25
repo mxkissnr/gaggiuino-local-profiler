@@ -23,10 +23,11 @@ import { openTopbarTab } from '../../scripts/topbar-nav.mts';
 
 let browser: Browser;
 let page: Page;
+let baseUrl = '';
 const consoleErrors: string[] = [];
 
 before(async () => {
-    const baseUrl = await bootServer();
+    baseUrl = await bootServer();
     await seed(baseUrl);
 
     browser = await chromium.launch();
@@ -45,9 +46,10 @@ before(async () => {
 // version is ahead of the latest published release; #btnLive stays
 // display:none until a switch_entity is configured, which this throwaway
 // instance never has. Re-applied after every reload in the top bar test.
-async function applyOverrides(): Promise<void> {
-    await page.addStyleTag({ content: '#glpUpdateBanner{display:none!important}' });
-    await page.addStyleTag({ content: '#btnLive{display:flex!important}' });
+// The phone overflow test (#2214) passes its own page.
+async function applyOverrides(target: Page = page): Promise<void> {
+    await target.addStyleTag({ content: '#glpUpdateBanner{display:none!important}' });
+    await target.addStyleTag({ content: '#btnLive{display:flex!important}' });
 }
 
 after(async () => {
@@ -62,6 +64,9 @@ after(async () => {
 interface View {
     name: string;
     nav: string;
+    // components/mode.ts mode name; the phone overflow test (#2214) opens the
+    // view with window.switchMode() because the phone has no top bar tabs.
+    mode: string;
     post?: (page: Page) => Promise<void>;
     ready: () => boolean;
 }
@@ -91,6 +96,7 @@ const VIEWS: View[] = [
     {
         name: 'Shots',
         nav: '#btnShots',
+        mode: 'shots',
         // sidebar.ts renders one `wrapper-<id>` element per shot (see
         // components/mode.ts's goToShot()) — the demo dataset seeds 12.
         ready: () => !!document.querySelector('[id^="wrapper-"]'),
@@ -98,6 +104,7 @@ const VIEWS: View[] = [
     {
         name: 'Library',
         nav: '#btnLibrary',
+        mode: 'library',
         // renderBeanList() (views/library.ts) replaces #beanListUI's
         // content with real bean cards once S.coffeeLibrary loads —
         // checking for one of the seeded bean names proves it rendered the
@@ -108,6 +115,7 @@ const VIEWS: View[] = [
     {
         name: 'Analytics',
         nav: '#btnAnalytics',
+        mode: 'analytics',
         post: async p => { await p.locator('#worldMapWrap').scrollIntoViewIfNeeded(); },
         // The ECharts world map (views/analytics.ts) mounts a <canvas> into
         // #worldMapWrap once echarts.init() renders — same element
@@ -117,6 +125,7 @@ const VIEWS: View[] = [
     {
         name: 'Maintenance',
         nav: '#btnMaintenance',
+        mode: 'maintenance',
         // renderMaintenanceDashboard() (views/maintenance.ts) fills
         // #maintVerdict once the async maintenance data loads.
         ready: () => !!document.querySelector('#maintVerdict .analytics-verdict-title'),
@@ -124,6 +133,7 @@ const VIEWS: View[] = [
     {
         name: 'Dialin',
         nav: '#btnDialin',
+        mode: 'dialin',
         // views/dialin.ts fills #dialinGrid with real shot cards once
         // recent shots load; an empty grid would still contain a single
         // ".dialin-empty" placeholder node, so this must specifically wait
@@ -136,6 +146,7 @@ const VIEWS: View[] = [
     {
         name: 'Live',
         nav: '#btnLive',
+        mode: 'live',
         // connectLiveStream() (views/live.ts) sets the badge to 'connecting'
         // synchronously, then the first api/live/data response resolves it
         // to ready/unreachable/idle/brewing/error via setLiveBadge() — this
@@ -150,6 +161,7 @@ const VIEWS: View[] = [
     {
         name: 'Orders',
         nav: '#btnOrders',
+        mode: 'orders',
         // loadOrdersView() fills the verdict title once the orders have
         // loaded (#2148).
         ready: () => !!document.getElementById('ordersVerdictTitle')?.textContent,
@@ -159,6 +171,7 @@ const VIEWS: View[] = [
         // #1514: still #btnSettings — the button left the scrolling nav row,
         // but the id (and page.click()'s visibility check at 1400 px) is intact.
         nav: '#btnSettings',
+        mode: 'settings',
         // renderMachinesList() (components/machines-settings.ts) renders one
         // .machine-row per machine — the default row plus the second
         // machine seed() adds.
@@ -472,3 +485,124 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
     await resizeTo(1400);
     await useLang('en');
 });
+
+// ── No sideways scrolling on a phone (#2214) ──────────────────────────────
+// On a phone nothing may scroll sideways: content flows down and the bottom
+// navigation is the only way across. Every main view and the shot's "All
+// notes" sheet are checked at 390 and 360 px in a mobile touch context (44 px
+// controls). Each width gets its own context, so the shared desktop page above
+// is not resized.
+
+const PHONE_WIDTHS = [390, 360];
+
+/* eslint-disable no-undef */
+const PHONE_VIEWS: View[] = [
+    ...VIEWS,
+    {
+        name: 'Achievements',
+        nav: '#btnAchievements',
+        mode: 'achievements',
+        // loadAchievementsView() replaces its loading state with the filter
+        // chips once the achievements have loaded.
+        ready: () => !!document.querySelector('#achievements-view .ach-chips'),
+    },
+];
+
+// In-page check: one line per visible element that sticks out past the right
+// edge of the screen (only the outermost one of a nested run), and one per
+// visible element that scrolls sideways (overflow-x auto or scroll with content
+// wider than its box). An empty list means nothing scrolls sideways.
+const readHorizontalOverflow = (): string[] => {
+    const vw = document.documentElement.clientWidth;
+    const label = (el: Element): string => {
+        let s = el.tagName.toLowerCase();
+        if (el.id) s += `#${el.id}`;
+        const cls = typeof el.className === 'string' ? el.className.trim().split(/\s+/).filter(Boolean).slice(0, 2) : [];
+        return cls.length ? `${s}.${cls.join('.')}` : s;
+    };
+    const path = (el: Element): string => {
+        const parts: string[] = [];
+        let e: Element | null = el;
+        for (let i = 0; e && i < 3; i++, e = e.parentElement) parts.unshift(label(e));
+        return parts.join(' > ');
+    };
+    const problems: string[] = [];
+    const docWidth = document.documentElement.scrollWidth;
+    if (docWidth > vw + 1) problems.push(`the page is ${docWidth} px wide on a ${vw} px screen`);
+    for (const el of [...document.querySelectorAll('body *')]) {
+        const box = el.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0) continue;
+        const style = getComputedStyle(el);
+        if (style.visibility === 'hidden') continue;
+        if ((style.overflowX === 'auto' || style.overflowX === 'scroll') && el.scrollWidth > el.clientWidth + 2) {
+            problems.push(`${path(el)} scrolls sideways (${el.scrollWidth} px of content in ${el.clientWidth} px)`);
+        }
+        if (box.right <= vw + 1 || box.left >= vw) continue;
+        let outermost = true;
+        for (let p = el.parentElement; p; p = p.parentElement) {
+            if (p.getBoundingClientRect().right > vw + 1) { outermost = false; break; }
+            if (getComputedStyle(p).overflowX !== 'visible') break;
+        }
+        if (outermost) problems.push(`${path(el)} ends at ${Math.round(box.right)} px, past the ${vw} px screen`);
+    }
+    return problems;
+};
+
+// Opens the newest shot and its "All notes" sheet with every photo control
+// shown (thumb, choose, take, crop, remove), as for a shot with a photo on a
+// phone with a camera: the widest the photo row gets.
+async function openNotesSheetWithAllPhotoControls(p: Page): Promise<void> {
+    await p.evaluate(() => {
+        const id = Number(document.querySelector('[id^="wrapper-"]')?.id.slice('wrapper-'.length));
+        (window as unknown as { goToShot(shotId: number): void }).goToShot(id);
+    });
+    await p.locator('#shotNotesOpen').click();
+    await p.waitForSelector('#detailSheet #shotNotesPanel');
+    await p.evaluate(() => {
+        for (const id of ['annPhotoThumb', 'annPhotoPickBtn', 'annPhotoCameraBtn', 'annPhotoAdjustBtn', 'annPhotoRemoveBtn']) {
+            const el = document.getElementById(id);
+            if (el) el.style.display = '';
+        }
+    });
+    await p.waitForTimeout(400); // let the sheet finish sliding in
+}
+
+void test('no view and no notes sheet scrolls sideways on a phone (#2214)', async () => {
+    const failures: string[] = [];
+    for (const width of PHONE_WIDTHS) {
+        const context = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+        try {
+            const phone = await context.newPage();
+            await phone.goto(baseUrl, { waitUntil: 'networkidle' });
+            await applyOverrides(phone);
+            await phone.waitForTimeout(500);
+
+            // The check must see a real overflow, or a broken check would pass.
+            await phone.evaluate(() => {
+                const probe = document.createElement('div');
+                probe.id = 'overflowProbe';
+                probe.style.width = '200vw';
+                probe.style.height = '1px';
+                document.body.append(probe);
+            });
+            const probed = await phone.evaluate(readHorizontalOverflow);
+            assert.ok(probed.some(line => line.includes('#overflowProbe')), `the overflow check missed a 200vw probe at ${width} px`);
+            await phone.evaluate(() => { document.getElementById('overflowProbe')?.remove(); });
+
+            for (const view of PHONE_VIEWS) {
+                await phone.evaluate(mode => { (window as unknown as { switchMode(m: string): void }).switchMode(mode); }, view.mode);
+                if (view.post) await view.post(phone);
+                await phone.waitForFunction(view.ready, undefined, { timeout: 10000 });
+                await phone.waitForTimeout(300);
+                for (const problem of await phone.evaluate(readHorizontalOverflow)) failures.push(`${view.name} at ${width} px: ${problem}`);
+            }
+
+            await openNotesSheetWithAllPhotoControls(phone);
+            for (const problem of await phone.evaluate(readHorizontalOverflow)) failures.push(`All notes sheet at ${width} px: ${problem}`);
+        } finally {
+            await context.close();
+        }
+    }
+    assert.deepEqual(failures, [], `sideways scrolling on a phone:\n${failures.join('\n')}`);
+});
+/* eslint-enable no-undef */
