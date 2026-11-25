@@ -124,9 +124,10 @@ const VIEWS: View[] = [
         // #worldMapWrap once echarts.init() renders — same element
         // scripts/screenshots.mts scrolls to before its own screenshot.
         ready: () => !!document.querySelector('#worldMapWrap canvas'),
-        // A phone has no room for the aspect-ratio map card to give echarts a
-        // measurable canvas, so wait for the loaded verdict plus a period
-        // section rebuildAnalyticsPage() has un-hidden from its empty state.
+        // In a fresh phone context the map card only mounts its canvas once it
+        // is scrolled into view, which this test does not do, so wait for the
+        // loaded verdict plus a period section rebuildAnalyticsPage() has
+        // un-hidden from its empty state.
         phoneReady: () => {
             const verdict = document.getElementById('verdictTitle')?.textContent;
             const section = document.querySelector<HTMLElement>('[data-analytics-period]');
