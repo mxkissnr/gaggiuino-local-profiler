@@ -84,13 +84,13 @@ describe('_calendarWindow (#2214)', () => {
   const year = Array.from({ length: 53 }, (_, i) => i);
 
   it('shows every week as one page from 900 px up', () => {
+    // A desktop view ignores the requested page: every week, one page, no pager.
     for (const width of [900, 1280]) {
       const win = calendarWindow(year, width, width === 900 ? 3 : 0);
-      expect(win.weeks).toHaveLength(53);
-      expect(win.weeks[0]).toBe(0);
-      expect(win.weeks[52]).toBe(52);
+      expect(win.weeks).toEqual(year);
       expect(win.page).toBe(0);
       expect(win.pages).toBe(1);
+      // A copy, so a caller cannot mutate the caller's week list through it.
       expect(win.weeks).not.toBe(year);
     }
   });
@@ -98,8 +98,7 @@ describe('_calendarWindow (#2214)', () => {
   it('shows the newest 22 weeks on page 0 below 900 px', () => {
     for (const width of [390, 899]) {
       const win = calendarWindow(year, width, 0);
-      expect(win.weeks[0]).toBe(31);
-      expect(win.weeks[21]).toBe(52);
+      expect(win.weeks).toEqual(year.slice(31));
       expect(win.weeks).toHaveLength(22);
       expect(win.page).toBe(0);
       expect(win.pages).toBe(3);
@@ -107,17 +106,19 @@ describe('_calendarWindow (#2214)', () => {
   });
 
   it('steps 22 weeks back per page', () => {
+    // Page 1 ends right before page 0 starts, so no week is shown twice.
     const win = calendarWindow(year, 390, 1);
+    expect(win.weeks).toEqual(year.slice(9, 31));
     expect(win.weeks).toHaveLength(22);
-    expect(win.weeks[0]).toBe(9);
-    expect(win.weeks[21]).toBe(30);
+    expect(win.page).toBe(1);
   });
 
   it('fills the oldest page with the first 22 weeks', () => {
+    // The oldest page is a full grid too: it starts at week 0 and overlaps page 1.
     const win = calendarWindow(year, 390, 2);
-    expect(win.weeks[0]).toBe(0);
-    expect(win.weeks[21]).toBe(21);
+    expect(win.weeks).toEqual(year.slice(0, 22));
     expect(win.page).toBe(2);
+    expect(win.pages).toBe(3);
   });
 
   it('clamps a page outside the range', () => {
