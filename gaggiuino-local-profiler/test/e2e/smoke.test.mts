@@ -124,9 +124,14 @@ const VIEWS: View[] = [
         // #worldMapWrap once echarts.init() renders — same element
         // scripts/screenshots.mts scrolls to before its own screenshot.
         ready: () => !!document.querySelector('#worldMapWrap canvas'),
-        // A 390 px phone viewport can leave the map card without a measurable
-        // canvas, so wait for the verdict header initAnalytics() renders first.
-        phoneReady: () => !!document.getElementById('verdictTitle')?.textContent,
+        // A phone has no room for the aspect-ratio map card to give echarts a
+        // measurable canvas, so wait for the loaded verdict plus a period
+        // section rebuildAnalyticsPage() has un-hidden from its empty state.
+        phoneReady: () => {
+            const verdict = document.getElementById('verdictTitle')?.textContent;
+            const section = document.querySelector<HTMLElement>('[data-analytics-period]');
+            return !!verdict && !!section && section.offsetParent !== null;
+        },
     },
     {
         name: 'Maintenance',
@@ -606,7 +611,11 @@ void test('no view and no notes sheet scrolls sideways on a phone (#2214)', asyn
 
             for (const view of PHONE_VIEWS) {
                 await phone.evaluate(mode => { (window as unknown as { switchMode(m: string): void }).switchMode(mode); }, view.mode);
-                if (view.post) await view.post(phone);
+                // view.post stays desktop-only: it scrolls #worldMapWrap into
+                // view so the ECharts canvas mounts for the screenshot check,
+                // but a fresh phone context hides every [data-analytics-period]
+                // section until the analytics data loads, so scrolling there
+                // just times out. This test only measures overflow.
                 try {
                     await phone.waitForFunction(view.phoneReady ?? view.ready, undefined, { timeout: 10000 });
                 } catch {
