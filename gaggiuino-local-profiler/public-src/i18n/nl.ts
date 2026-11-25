@@ -277,6 +277,7 @@ const nl: Partial<Translations> = {
     analytics_recipe_recipe:'Recept', analytics_recipe_time:'Zettijd', analytics_recipe_grind:'Maalgraadbereik',
     analytics_calendar:'Koffiejaar', analytics_profiles:'Profiel Prestaties',
     analytics_cal_less:'minder', analytics_cal_more:'meer', analytics_cal_perfect_dot:'een shot met 100',
+    analytics_cal_earlier:'Eerdere weken', analytics_cal_later:'Latere weken',
     analytics_no_trend:'Niet genoeg gescoorde shots voor trend.',
     analytics_no_beans:'Nog geen bonen ingevoerd in annotaties.',
     analytics_no_profiles:'Geen profieldata beschikbaar.',

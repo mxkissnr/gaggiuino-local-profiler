@@ -277,6 +277,7 @@ const de: Partial<Translations> = {
     analytics_recipe_recipe:'Rezept', analytics_recipe_time:'Bezugszeit', analytics_recipe_grind:'Mahlgrad-Spanne',
     analytics_calendar:'Kaffeejahr', analytics_profiles:'Profil-Performance',
     analytics_cal_less:'weniger', analytics_cal_more:'mehr', analytics_cal_perfect_dot:'Shot mit Score 100',
+    analytics_cal_earlier:'Frühere Wochen', analytics_cal_later:'Spätere Wochen',
     analytics_no_trend:'Nicht genug Shots mit Score für den Trend.',
     analytics_no_beans:'Noch keine Bohnen in Annotationen eingetragen.',
     analytics_no_profiles:'Keine Profil-Daten verfügbar.',

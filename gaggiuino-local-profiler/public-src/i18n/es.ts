@@ -277,6 +277,7 @@ const es: Partial<Translations> = {
     analytics_recipe_recipe:'Receta', analytics_recipe_time:'Tiempo', analytics_recipe_grind:'Rango de molienda',
     analytics_calendar:'Año cafetero', analytics_profiles:'Rendimiento de Perfiles',
     analytics_cal_less:'menos', analytics_cal_more:'más', analytics_cal_perfect_dot:'un shot con 100',
+    analytics_cal_earlier:'Semanas anteriores', analytics_cal_later:'Semanas posteriores',
     analytics_no_trend:'No hay suficientes shots con score.',
     analytics_no_beans:'No se han introducido granos en las notas.',
     analytics_no_profiles:'No hay datos de perfil disponibles.',
