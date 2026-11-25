@@ -69,6 +69,9 @@ interface View {
     mode: string;
     post?: (page: Page) => Promise<void>;
     ready: () => boolean;
+    // A phone-context readiness check (#2214) for a view whose desktop
+    // marker depends on the desktop layout or the nav click.
+    phoneReady?: () => boolean;
 }
 
 // Snapshots consoleErrors, runs the view transition, waits for its
@@ -121,6 +124,9 @@ const VIEWS: View[] = [
         // #worldMapWrap once echarts.init() renders — same element
         // scripts/screenshots.mts scrolls to before its own screenshot.
         ready: () => !!document.querySelector('#worldMapWrap canvas'),
+        // A 390 px phone viewport can leave the map card without a measurable
+        // canvas, so wait for the verdict header initAnalytics() renders first.
+        phoneReady: () => !!document.getElementById('verdictTitle')?.textContent,
     },
     {
         name: 'Maintenance',
@@ -601,7 +607,12 @@ void test('no view and no notes sheet scrolls sideways on a phone (#2214)', asyn
             for (const view of PHONE_VIEWS) {
                 await phone.evaluate(mode => { (window as unknown as { switchMode(m: string): void }).switchMode(mode); }, view.mode);
                 if (view.post) await view.post(phone);
-                await phone.waitForFunction(view.ready, undefined, { timeout: 10000 });
+                try {
+                    await phone.waitForFunction(view.phoneReady ?? view.ready, undefined, { timeout: 10000 });
+                } catch {
+                    failures.push(`${view.name} at ${width} px: did not become ready within 10 s on a phone`);
+                    continue;
+                }
                 await phone.waitForTimeout(300);
                 for (const problem of await phone.evaluate(readHorizontalOverflow)) failures.push(`${view.name} at ${width} px: ${problem}`);
             }
