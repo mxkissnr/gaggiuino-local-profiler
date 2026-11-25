@@ -567,7 +567,9 @@ const readHorizontalOverflow = (): string[] => {
 async function closeSetupWizardIfOpen(p: Page): Promise<void> {
     const modal = p.locator('#setupWizardModal');
     if (!(await modal.isVisible())) return;
-    await p.locator('#setupWizardModal [data-action="setup-wizard-close"]').click();
+    // The wizard has two close actions (the header X and the welcome step's
+    // "Later" link); the header X exists on every step.
+    await modal.locator('.lib-sheet-close').click();
     await modal.waitFor({ state: 'hidden' });
 }
 
