@@ -568,6 +568,8 @@ async function openNotesSheetWithAllPhotoControls(p: Page): Promise<void> {
 }
 
 void test('no view and no notes sheet scrolls sideways on a phone (#2214)', async () => {
+    // The nine main views, plus the opened notes sheet checked below.
+    assert.equal(PHONE_VIEWS.length, 9, 'the phone test covers the nine main views');
     const failures: string[] = [];
     for (const width of PHONE_WIDTHS) {
         const context = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
