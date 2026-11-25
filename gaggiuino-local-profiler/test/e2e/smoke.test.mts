@@ -604,14 +604,37 @@ async function noSidewaysScrollingOnAPhone(): Promise<void> {
     // The nine main views, plus the opened notes sheet checked below.
     assert.equal(PHONE_VIEWS.length, 9, 'the phone test covers the nine main views');
     const failures: string[] = [];
-    for (const width of PHONE_WIDTHS) {
-        const context = await browser.newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
+    // One phone context, resized per width instead of a fresh context each
+    // time: every context boots the whole data chain from scratch, and a
+    // second cold boot in the same run left the landing view waiting for a
+    // shot list that was still loading (#2214). The width is the only thing
+    // under test, and a resize exercises it without paying for a second boot.
+    const context = await browser.newContext({ viewport: { width: PHONE_WIDTHS[0], height: 844 }, isMobile: true, hasTouch: true });
+    try {
+        const phone = await context.newPage();
+        await phone.goto(baseUrl, { waitUntil: 'networkidle' });
+        await applyOverrides(phone);
+        await phone.waitForTimeout(500);
+        await closeSetupWizardIfOpen(phone);
+
+        // Views paint from the shared boot data, so a view opened before that
+        // data lands only shows its loading state. Settle on the landing
+        // view's own data first: the shot list is filled once loadData()
+        // resolved.
         try {
-            const phone = await context.newPage();
-            await phone.goto(baseUrl, { waitUntil: 'networkidle' });
-            await applyOverrides(phone);
-            await phone.waitForTimeout(500);
-            await closeSetupWizardIfOpen(phone);
+            await phone.waitForFunction(
+                () => document.querySelectorAll('[id^="wrapper-"]').length > 0,
+                undefined,
+                { timeout: 60000 },
+            );
+        } catch {
+            failures.push(`no view at ${PHONE_WIDTHS[0]} px: the app did not load its shot list within 60 s on a phone`);
+        }
+
+        for (const width of PHONE_WIDTHS) {
+            if (failures.length) break;
+            await phone.setViewportSize({ width, height: 844 });
+            await phone.waitForTimeout(300);
 
             // The check must see a real overflow, or a broken check would pass.
             await phone.evaluate(() => {
@@ -651,9 +674,12 @@ async function noSidewaysScrollingOnAPhone(): Promise<void> {
 
             await openNotesSheetWithAllPhotoControls(phone);
             for (const problem of await phone.evaluate(readHorizontalOverflow)) failures.push(`All notes sheet at ${width} px: ${problem}`);
-        } finally {
-            await context.close();
+            // Close it so the next width starts from the view, not the sheet.
+            await phone.locator('#detailSheet .lib-sheet-close').click();
+            await phone.waitForSelector('#detailSheet .lib-sheet', { state: 'detached' });
         }
+    } finally {
+        await context.close();
     }
     assert.deepEqual(failures, [], `sideways scrolling on a phone:\n${failures.join('\n')}`);
 }
