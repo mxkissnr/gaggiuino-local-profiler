@@ -277,6 +277,7 @@ const en: Translations = {
     analytics_recipe_recipe:'Recipe', analytics_recipe_time:'Brew time', analytics_recipe_grind:'Grind range',
     analytics_calendar:'Coffee year', analytics_profiles:'Profile Performance',
     analytics_cal_less:'less', analytics_cal_more:'more', analytics_cal_perfect_dot:'a shot scoring 100',
+    analytics_cal_earlier:'Earlier weeks', analytics_cal_later:'Later weeks',
     analytics_no_trend:'Not enough scored shots for trend.',
     analytics_no_beans:'No beans entered in annotations yet.',
     analytics_no_profiles:'No profile data available.',
