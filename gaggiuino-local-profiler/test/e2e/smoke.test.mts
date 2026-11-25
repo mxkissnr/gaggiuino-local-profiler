@@ -501,10 +501,10 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
 // On a phone nothing may scroll sideways: content flows down and the bottom
 // navigation is the only way across. Every main view and the shot's "All
 // notes" sheet are checked at 390 and 360 px in a mobile touch context (44 px
-// controls). Each width gets its own context, so the shared desktop page above
-// is not resized.
+// controls). Its own context keeps it off the shared desktop page above.
 
-// Named first width: the phone context opens at it before the loop resizes.
+// The context opens at this width and is resized to the others in turn; a new
+// context per width would re-run the whole boot chain once more.
 const PHONE_START_WIDTH = 390;
 const PHONE_WIDTHS = [PHONE_START_WIDTH, 360];
 
