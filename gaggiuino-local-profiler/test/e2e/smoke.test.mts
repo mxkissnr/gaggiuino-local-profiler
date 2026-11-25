@@ -504,7 +504,9 @@ void test('top bar fits at laptop widths in every language (#2079)', async () =>
 // controls). Each width gets its own context, so the shared desktop page above
 // is not resized.
 
-const PHONE_WIDTHS = [390, 360];
+// Named first width: the phone context opens at it before the loop resizes.
+const PHONE_START_WIDTH = 390;
+const PHONE_WIDTHS = [PHONE_START_WIDTH, 360];
 
 /* eslint-disable no-undef */
 const PHONE_VIEWS: View[] = [
@@ -609,7 +611,7 @@ async function noSidewaysScrollingOnAPhone(): Promise<void> {
     // second cold boot in the same run left the landing view waiting for a
     // shot list that was still loading (#2214). The width is the only thing
     // under test, and a resize exercises it without paying for a second boot.
-    const context = await browser.newContext({ viewport: { width: PHONE_WIDTHS[0], height: 844 }, isMobile: true, hasTouch: true });
+    const context = await browser.newContext({ viewport: { width: PHONE_START_WIDTH, height: 844 }, isMobile: true, hasTouch: true });
     try {
         const phone = await context.newPage();
         await phone.goto(baseUrl, { waitUntil: 'networkidle' });
@@ -628,7 +630,7 @@ async function noSidewaysScrollingOnAPhone(): Promise<void> {
                 { timeout: 60000 },
             );
         } catch {
-            failures.push(`no view at ${PHONE_WIDTHS[0]} px: the app did not load its shot list within 60 s on a phone`);
+            failures.push(`no view at ${PHONE_START_WIDTH} px: the app did not load its shot list within 60 s on a phone`);
         }
 
         // Without the boot data there is nothing to measure at either width.
