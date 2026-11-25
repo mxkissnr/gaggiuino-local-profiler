@@ -597,7 +597,10 @@ async function openNotesSheetWithAllPhotoControls(p: Page): Promise<void> {
     await p.waitForTimeout(400); // let the sheet finish sliding in
 }
 
-void test('no view and no notes sheet scrolls sideways on a phone (#2214)', async () => {
+// The phone overflow guard (#2214). The body is a named function so its
+// registration below stays a single line with the plan's exact title and a
+// failure points at this check by name.
+async function noSidewaysScrollingOnAPhone(): Promise<void> {
     // The nine main views, plus the opened notes sheet checked below.
     assert.equal(PHONE_VIEWS.length, 9, 'the phone test covers the nine main views');
     const failures: string[] = [];
@@ -653,5 +656,7 @@ void test('no view and no notes sheet scrolls sideways on a phone (#2214)', asyn
         }
     }
     assert.deepEqual(failures, [], `sideways scrolling on a phone:\n${failures.join('\n')}`);
-});
+}
+
+void test('no view and no notes sheet scrolls sideways on a phone (#2214)', noSidewaysScrollingOnAPhone);
 /* eslint-enable no-undef */
