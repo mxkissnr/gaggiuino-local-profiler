@@ -581,6 +581,13 @@ void test('no view and no notes sheet scrolls sideways on a phone (#2214)', asyn
             await phone.evaluate(() => {
                 const probe = document.createElement('div');
                 probe.id = 'overflowProbe';
+                // body is a flex container with overflow:hidden, so a plain
+                // child shrinks to fit and is placed after the main column,
+                // where the check skips elements that start past the screen.
+                // Fixed at the top-left it neither shrinks nor starts off-screen.
+                probe.style.position = 'fixed';
+                probe.style.left = '0';
+                probe.style.top = '0';
                 probe.style.width = '200vw';
                 probe.style.height = '1px';
                 document.body.append(probe);
