@@ -559,14 +559,31 @@ const readHorizontalOverflow = (): string[] => {
     return problems;
 };
 
+// A fresh phone context has no saved "setup wizard completed" flag, and the
+// first-run wizard is a full-screen overlay that would swallow every click
+// this test makes. It normally stays shut because the seeded machines carry a
+// host, but a boot-time machines fetch that fails leaves the list empty, which
+// opens it. Close it when it is there (#2214).
+async function closeSetupWizardIfOpen(p: Page): Promise<void> {
+    const modal = p.locator('#setupWizardModal');
+    if (!(await modal.isVisible())) return;
+    await p.locator('#setupWizardModal [data-action="setup-wizard-close"]').click();
+    await modal.waitFor({ state: 'hidden' });
+}
+
 // Opens the newest shot and its "All notes" sheet with every photo control
 // shown (thumb, choose, take, crop, remove), as for a shot with a photo on a
 // phone with a camera: the widest the photo row gets.
 async function openNotesSheetWithAllPhotoControls(p: Page): Promise<void> {
+    await closeSetupWizardIfOpen(p);
     await p.evaluate(() => {
         const id = Number(document.querySelector('[id^="wrapper-"]')?.id.slice('wrapper-'.length));
         (window as unknown as { goToShot(shotId: number): void }).goToShot(id);
     });
+    // Centre the row before clicking. scrollIntoViewIfNeeded() stops as soon as
+    // the row is technically in view, which on a phone is right behind the
+    // fixed #bottom-nav — the click then never gets through (#2214).
+    await p.locator('#shotNotesOpen').evaluate(el => el.scrollIntoView({ block: 'center' }));
     await p.locator('#shotNotesOpen').click();
     await p.waitForSelector('#detailSheet #shotNotesPanel');
     await p.evaluate(() => {
@@ -589,6 +606,7 @@ void test('no view and no notes sheet scrolls sideways on a phone (#2214)', asyn
             await phone.goto(baseUrl, { waitUntil: 'networkidle' });
             await applyOverrides(phone);
             await phone.waitForTimeout(500);
+            await closeSetupWizardIfOpen(phone);
 
             // The check must see a real overflow, or a broken check would pass.
             await phone.evaluate(() => {
