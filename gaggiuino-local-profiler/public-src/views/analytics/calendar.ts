@@ -71,6 +71,8 @@ export function computeCalendarStats(
 }
 
 export function buildCalendar() {
+  // #2214: a new build (period, filter or data change) starts at the newest weeks.
+  _calPage = 0;
   _renderCalendar();
 }
 
@@ -154,26 +156,72 @@ export function openCalendarDayDetail(day: string, anchor: HTMLElement | DetailA
   });
 }
 
-// #1490: below 900px the last 22 weeks should fill the wrapper, so the newest
-// weeks read at a glance while the older ones stay one horizontal scroll away.
-// The grid is max-content (that is what makes the year scrollable), which rules
-// out a percentage track size — measure the wrapper and set the cell in px.
+// #1490, #2214: below 900 px the coffee year draws 22 weeks at a time, sized to
+// fill the wrapper, and a pager steps through the rest of the year, so the grid
+// never scrolls sideways on a phone. The grid is max-content, which rules out a
+// percentage track size — measure the wrapper and set the cell in px. From
+// 900 px up the whole year keeps the stylesheet's fixed cell size.
+const CAL_DESKTOP_MIN_WIDTH = 900;
 const CAL_PHONE_WEEKS = 22;
-// Weekday column + the gap after it + the 21 gaps between the 22 week columns.
-const CAL_PHONE_GUTTER = 26 + 3 + (CAL_PHONE_WEEKS - 1) * 3;
+// Weekday column + the gap after it + the 21 gaps between the 22 week columns
+// + the 12 px (--sp-3) the grid and the month row keep free on the right, so a
+// month label that starts in the newest shown week still fits the wrapper.
+const CAL_PHONE_GUTTER = 26 + 3 + (CAL_PHONE_WEEKS - 1) * 3 + 12;
+
+const CAL_CHEVRON_EARLIER = html`<svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>`;
+const CAL_CHEVRON_LATER = html`<svg class="rail-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>`;
+
+export interface CalendarWindow<T> { weeks: T[]; page: number; pages: number }
+
+// The weeks the grid draws (pure, for the tests). From CAL_DESKTOP_MIN_WIDTH
+// up: every week, one page. Below: page 0 is the newest CAL_PHONE_WEEKS weeks,
+// page 1 the 22 before them, and so on; the oldest page is the first 22 weeks
+// of the range (it may overlap the page after it), so every page is a full
+// grid. `page` is clamped to the pages that exist.
+export function _calendarWindow<T>(weeks: readonly T[], viewportWidth: number, page: number): CalendarWindow<T> {
+  if (viewportWidth < CAL_DESKTOP_MIN_WIDTH) {
+    const pages = Math.max(1, Math.ceil(weeks.length / CAL_PHONE_WEEKS));
+    const p = Math.min(Math.max(0, Math.trunc(page)), pages - 1);
+    const start = Math.max(0, weeks.length - CAL_PHONE_WEEKS * (p + 1));
+    return { weeks: weeks.slice(start, start + CAL_PHONE_WEEKS), page: p, pages };
+  }
+  return { weeks: weeks.slice(), page: 0, pages: 1 };
+}
 
 function _sizeCalendarCells(el: HTMLElement): void {
-  if (window.innerWidth >= 900) el.style.removeProperty('--cal-cell');
+  if (window.innerWidth >= CAL_DESKTOP_MIN_WIDTH) el.style.removeProperty('--cal-cell');
   else el.style.setProperty('--cal-cell', `${Math.max(6, Math.floor((el.clientWidth - CAL_PHONE_GUTTER) / CAL_PHONE_WEEKS))}px`);
+}
+
+// Which 22-week page the phone grid shows (0 = the newest weeks).
+let _calPage = 0;
+// Whether the last render drew the phone range (true) or the whole year
+// (false); null before the first render.
+let _calPhoneRange: boolean | null = null;
+
+// The pager: one page back (+1, earlier weeks) or forward (-1, later weeks).
+// The pressed button gets the focus back after the redraw, or its partner when
+// the pressed one is now disabled at the end of the range.
+function _stepCalendarPage(delta: 1 | -1): void {
+  _calPage += delta;
+  _renderCalendar();
+  const el = document.getElementById('shotCalendar');
+  if (!el || typeof el.querySelector !== 'function') return;
+  const pressed = el.querySelector<HTMLButtonElement>(`[data-cal-page="${delta > 0 ? 'earlier' : 'later'}"]`);
+  const partner = el.querySelector<HTMLButtonElement>(`[data-cal-page="${delta > 0 ? 'later' : 'earlier'}"]`);
+  (pressed && !pressed.disabled ? pressed : partner)?.focus();
 }
 
 // A mobile browser's URL bar showing or hiding fires `resize` while the viewer
 // is mid-scroll, so re-measure the cells but leave the horizontal position
 // alone — snapping back to the newest week there would yank the grid out from
 // under them. Only the initial render pins to the newest week.
+// Crossing 900 px draws the grid again: phone and desktop show different weeks.
 function _onCalendarResize(): void {
   const el = document.getElementById('shotCalendar');
-  if (el) _sizeCalendarCells(el);
+  if (!el) return;
+  if ((window.innerWidth < CAL_DESKTOP_MIN_WIDTH) !== _calPhoneRange) { _renderCalendar(); return; }
+  _sizeCalendarCells(el);
 }
 
 let _calResizeBound = false;
@@ -257,7 +305,7 @@ export function _renderCalendar() {
   const cls = (c: number): string => c === 0 ? 'cal-0' : c === 1 ? 'cal-1' : c === 2 ? 'cal-2' : c === 3 ? 'cal-3' : 'cal-4';
 
   interface CalDay { date: Date; key: string; count: number; avg: number | null; hasPerfect: boolean; isFuture: boolean; isToday: boolean; }
-  const weeks: CalDay[][] = [];
+  const allWeeks: CalDay[][] = [];
   const cur = new Date(start);
   while (cur <= end) {
     const week: CalDay[] = [];
@@ -269,7 +317,24 @@ export function _renderCalendar() {
       week.push({ date: new Date(cur), key, count, avg, hasPerfect: !!agg?.hasPerfect, isFuture: cur > today, isToday: key === todayKey });
       cur.setDate(cur.getDate() + 1);
     }
-    weeks.push(week);
+    allWeeks.push(week);
+  }
+
+  const isPhone = window.innerWidth < CAL_DESKTOP_MIN_WIDTH;
+  const shown = _calendarWindow(allWeeks, window.innerWidth, _calPage);
+  _calPage = shown.page;
+  _calPhoneRange = isPhone;
+  const weeks = shown.weeks;
+
+  // #2214: pager above the phone grid, only when there is more than one page.
+  let pager: Html = html``;
+  if (isPhone && shown.pages > 1) {
+    const first = weeks[0]?.[0]?.date;
+    const last = weeks[weeks.length - 1]?.filter(d => !d.isFuture).pop()?.date;
+    const range = first && last ? `${formatDate(first, locale)} – ${formatDate(last, locale)}` : '';
+    const earlier = t('analytics_cal_earlier');
+    const later = t('analytics_cal_later');
+    pager = html`<div class="cal-pager"><button type="button" class="btn btn--quiet btn--icon" data-cal-page="earlier" aria-label="${esc(earlier)}" title="${esc(earlier)}"${shown.page >= shown.pages - 1 ? html` disabled` : html``}>${CAL_CHEVRON_EARLIER}</button><span class="cal-pager-range" aria-live="polite">${esc(range)}</span><button type="button" class="btn btn--quiet btn--icon" data-cal-page="later" aria-label="${esc(later)}" title="${esc(later)}"${shown.page === 0 ? html` disabled` : html``}>${CAL_CHEVRON_LATER}</button></div>`;
   }
 
   // Month labels above the first week of each month. Overlapping short names
@@ -312,7 +377,13 @@ export function _renderCalendar() {
     }
   }
 
-  el.innerHTML = html`<div class="cal-months">${joinHtml(monthItems)}</div><div class="cal-grid">${joinHtml(cells)}</div>`;
+  el.innerHTML = html`${pager}<div class="cal-months">${joinHtml(monthItems)}</div><div class="cal-grid">${joinHtml(cells)}</div>`;
+  // The grid's innerHTML is replaced on every render, so these listeners never stack.
+  if (typeof el.querySelectorAll === 'function') {
+    for (const btn of Array.from(el.querySelectorAll<HTMLButtonElement>('[data-cal-page]'))) {
+      btn.onclick = () => { _stepCalendarPage(btn.dataset.calPage === 'earlier' ? 1 : -1); };
+    }
+  }
   // Size the phone cells to the wrapper, then pin to the newest week. Only this
   // initial render scrolls; resize keeps whatever position the viewer has.
   _bindCalendarResize();
