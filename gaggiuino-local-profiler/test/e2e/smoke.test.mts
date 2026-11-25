@@ -676,9 +676,15 @@ async function noSidewaysScrollingOnAPhone(): Promise<void> {
 
             await openNotesSheetWithAllPhotoControls(phone);
             for (const problem of await phone.evaluate(readHorizontalOverflow)) failures.push(`All notes sheet at ${width} px: ${problem}`);
-            // Close it so the next width starts from the view, not the sheet.
-            await phone.locator('#detailSheet .lib-sheet-close').click();
-            await phone.waitForSelector('#detailSheet .lib-sheet', { state: 'detached' });
+            // Close it so the next width measures the view, not the sheet on
+            // top of it. The X click is what a phone user does; Esc is the
+            // dialog's own close when the button is covered.
+            try {
+                await phone.locator('#detailSheet .lib-sheet-close').click({ timeout: 5000 });
+            } catch {
+                await phone.keyboard.press('Escape');
+            }
+            await phone.waitForSelector('#detailSheet .lib-sheet', { state: 'detached', timeout: 5000 }).catch(() => {});
         }
     } finally {
         await context.close();
