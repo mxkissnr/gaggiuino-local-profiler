@@ -631,8 +631,8 @@ async function noSidewaysScrollingOnAPhone(): Promise<void> {
             failures.push(`no view at ${PHONE_WIDTHS[0]} px: the app did not load its shot list within 60 s on a phone`);
         }
 
-        for (const width of PHONE_WIDTHS) {
-            if (failures.length) break;
+        // Without the boot data there is nothing to measure at either width.
+        for (const width of failures.length ? [] : PHONE_WIDTHS) {
             await phone.setViewportSize({ width, height: 844 });
             await phone.waitForTimeout(300);
 
