@@ -1456,9 +1456,10 @@ func adaptiveShotData() map[string]any {
 	}
 }
 
-// TestExplainScoreReportsShotControl covers #2219: explain_score carries what
-// the shot's profile controlled, for a Gaggiuino shot with an embedded
-// profile and for one classic cannot score at all.
+// TestExplainScoreReportsShotControl covers #2219: explain_score carries the
+// control object for a Gaggiuino shot with an embedded profile (stop mode,
+// free result, recipe and per-phase control) and for a shot classic cannot
+// score at all, whose phases must still be an empty array.
 func TestExplainScoreReportsShotControl(t *testing.T) {
 	ts, sqlDB := newDeveloperServer(t, true, false)
 	insertShot(t, sqlDB, 71, 1000, adaptiveShotData(), map[string]any{"coffee": "Alpha"})

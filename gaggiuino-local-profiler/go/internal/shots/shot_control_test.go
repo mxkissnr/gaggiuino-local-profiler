@@ -38,6 +38,10 @@ func adaptiveDatapoints() map[string]any {
 	}
 }
 
+// TestResolveShotControlAdaptiveWeightStop covers the Adaptive profile
+// (#2219): a global 37 g weight stop, a 15 g -> 33 g recipe, four phases
+// timed by the phaseIndex series, and the raw-datapoints shape resolving
+// identically to the map shape.
 func TestResolveShotControlAdaptiveWeightStop(t *testing.T) {
 	shot := Shot{"profileName": nil, "profile": adaptiveProfile(), "datapoints": adaptiveDatapoints()}
 	c := ResolveShotControl(shot)
@@ -98,6 +102,10 @@ func TestResolveShotControlAdaptiveWeightStop(t *testing.T) {
 	}
 }
 
+// TestResolveShotControlStopModes covers where a Gaggiuino shot's stop comes
+// from (#2219): the global conditions first, else the last phase's, weight
+// over water over time within one set, and no stop for a pressure-only
+// condition.
 func TestResolveShotControlStopModes(t *testing.T) {
 	flowPhase := func(stop map[string]any) map[string]any {
 		return map[string]any{"type": "FLOW", "stopConditions": stop}
@@ -198,6 +206,9 @@ func TestResolveShotControlStopModes(t *testing.T) {
 	}
 }
 
+// TestResolveShotControlNoProfileData covers shots without an embedded
+// profile (#2219): no phases, no stop and no recipe, with Phases an empty
+// non-nil slice so the tool always emits an array.
 func TestResolveShotControlNoProfileData(t *testing.T) {
 	shots := []Shot{
 		{"datapoints": map[string]any{
@@ -221,6 +232,8 @@ func TestResolveShotControlNoProfileData(t *testing.T) {
 	}
 }
 
+// TestResolveShotControlRecipeRatio covers a ratio-only recipe (#2219): dose
+// and ratio read, yield left nil.
 func TestResolveShotControlRecipeRatio(t *testing.T) {
 	c := ResolveShotControl(Shot{"profile": map[string]any{
 		"recipe": map[string]any{"coffeeIn": 18.0, "ratio": 2.0},
