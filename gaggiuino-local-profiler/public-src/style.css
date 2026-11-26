@@ -2977,6 +2977,11 @@
         .orders-side { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }
         .orders-queue, .orders-progress, .orders-manage { min-width:0; }
         .orders-panel { display:flex; flex-direction:column; gap: var(--sp-4); min-width:0; }
+        .donation-panel { display:flex; flex-direction:column; gap: var(--sp-4); min-width:0; }
+        .donation-range { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-2); }
+        .donation-since:not([hidden]) { display:inline-flex; align-items:center; gap: var(--sp-2); }
+        .donation-list { margin:0; padding-inline-start: var(--sp-5); display:flex; flex-direction:column; gap: var(--sp-1); }
+        .donation-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap: var(--sp-2); }
         /* Desktop: verdict across the top, the queue left, in progress and manage right. */
         @media (min-width: 900px) {
             .orders-layout { display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "verdict verdict" "queue side"; column-gap: var(--sp-6); row-gap: var(--sp-5); align-items:start; }

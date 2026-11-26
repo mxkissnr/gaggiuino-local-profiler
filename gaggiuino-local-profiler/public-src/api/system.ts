@@ -167,6 +167,11 @@ export function requestBackup({ sections, passphrase, onProgress }: BackupReques
   });
 }
 
+/** GET /api/shot-donation — the anonymised shot donation file (#2220); since = YYYY-MM-DD, or null for all rated shots. */
+export function getShotDonation(since: string | null): Promise<Response> {
+  return apiFetch(since ? `api/shot-donation?since=${encodeURIComponent(since)}` : 'api/shot-donation');
+}
+
 /**
  * The restore result shape: a real Response for the JSON/dry-run paths, or
  * the `{ ok, status, json() }` facade apiUpload is adapted into for the

@@ -1787,6 +1787,61 @@
                 <input type="file" id="backupRestoreInput" accept=".zip,.json" style="display:none">
             </label>
         </div>
+        <div class="settings-card">
+            <h3 class="card-title" data-i18n="donation_title">Shots für die Score-Forschung spenden</h3>
+            <p class="settings-card-desc" data-i18n="donation_desc">Speichert deine bewerteten Shots als anonymisierte Datei, die du im GLP-Discord posten kannst, damit der Shot-Score besser wird. GLP sendet selbst nichts.</p>
+            <button id="donationOpenBtn" type="button" class="btn btn--tonal" data-i18n="donation_open">Shots spenden …</button>
+        </div>
+        <!-- Shot donation confirmation (#2220): hidden here, shown while the detail sheet holds it (openShotDonation) -->
+        <div class="donation-panels" hidden>
+            <div class="donation-panel" id="donationPanel">
+                <div class="settings-group">
+                    <div class="settings-row settings-row-static">
+                        <span class="settings-row-text"><span class="settings-row-title" data-i18n="donation_count_label">Bewertete Shots in der Datei</span></span>
+                        <span class="settings-row-value" id="donationCount" aria-live="polite">–</span>
+                    </div>
+                </div>
+                <p class="settings-card-desc" id="donationEmpty" data-i18n="donation_empty" hidden>Keine bewerteten Shots in diesem Zeitraum. Gespendet werden Shots mit 1 bis 5 Sternen.</p>
+                <div class="donation-range" role="group" aria-labelledby="donationRangeLabel">
+                    <span class="settings-card-desc" id="donationRangeLabel" data-i18n="donation_range_label">Welche Shots</span>
+                    <button type="button" class="chip" id="donationRangeAll" aria-pressed="true" data-i18n="donation_range_all">Alle bewerteten Shots</button>
+                    <button type="button" class="chip" id="donationRangeSince" aria-pressed="false" data-i18n="donation_range_since">Ab einem Datum</button>
+                    <span class="donation-since" id="donationSinceWrap" hidden>
+                        <label for="donationSinceDate" data-i18n="donation_since_label">Ab</label>
+                        <input type="date" class="lib-input" id="donationSinceDate">
+                    </span>
+                </div>
+                <h3 class="section-title" data-i18n="donation_included_title">In der Datei</h3>
+                <ul class="donation-list">
+                    <li data-i18n="donation_included_machine">Der Maschinentyp: Gaggiuino oder GaggiMate</li>
+                    <li data-i18n="donation_included_curves">Die aufgezeichneten Kurven: Druck, Fluss, Gewicht, Temperatur, ihre Zielwerte und die Phasenwechsel</li>
+                    <li data-i18n="donation_included_profile">Der Aufbau des Profils: Phasen, Zielwerte, Grenzen, Stoppbedingungen, Rezept und Wassertemperatur</li>
+                    <li data-i18n="donation_included_values">Bewertung, Dosis, Ausbeute, TDS, Getränk, Röstgrad und Bohnenalter in Tagen</li>
+                    <li data-i18n="donation_included_scores">Der Score jedes Score-Modells</li>
+                    <li data-i18n="donation_included_keys">Zufällige Schlüssel, die wiederholte Spenden auseinanderhalten, ohne den Shot oder diese Installation zu nennen</li>
+                </ul>
+                <h3 class="section-title" data-i18n="donation_excluded_title">Nicht in der Datei</h3>
+                <ul class="donation-list">
+                    <li data-i18n="donation_excluded_names">Namen von Profilen, Bohnen, Röstereien, Mühlen und allem anderen in der Bibliothek</li>
+                    <li data-i18n="donation_excluded_text">Notizen, Mahlgrade und jeder andere Text, den du eingegeben hast</li>
+                    <li data-i18n="donation_excluded_photos">Fotos</li>
+                    <li data-i18n="donation_excluded_time">Wann ein Shot gemacht wurde</li>
+                    <li data-i18n="donation_excluded_ids">Shot- und Maschinen-IDs, Adressen, Einstellungen und Tokens</li>
+                </ul>
+                <p class="settings-card-desc" data-i18n="donation_public_note">Sobald du die Datei postest, ist sie öffentlich und darf zur Verbesserung des Shot-Scores genutzt werden.</p>
+                <div class="settings-group">
+                    <a class="settings-row" href="https://discord.gg/CbPtWXKRev" target="_blank" rel="noopener noreferrer">
+                        <span class="settings-row-text"><span class="settings-row-title" data-i18n="donation_channel_link">Im GLP-Discord posten</span><span class="settings-row-sub" data-i18n="donation_channel_sub">Kanal #shot-donations</span></span>
+                        <span class="settings-chev" aria-hidden="true"></span>
+                    </a>
+                </div>
+                <p class="settings-card-desc" id="donationError" role="alert" hidden></p>
+                <div class="donation-actions">
+                    <button type="button" class="btn btn--quiet" id="donationCancelBtn" data-i18n="lib_cancel">Abbrechen</button>
+                    <button type="button" class="btn btn--primary" id="donationDownloadBtn" data-i18n="donation_download" disabled>Datei herunterladen</button>
+                </div>
+            </div>
+        </div>
         </section>
         <section class="settings-page" data-settings-page="developer" hidden>
         <!-- Shown once the session holds a token (default: any caller that can

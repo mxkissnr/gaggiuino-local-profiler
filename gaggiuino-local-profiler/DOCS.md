@@ -623,6 +623,33 @@ Where the built-in values come from: only the direction is well established — 
 
 **Home Assistant backups include the app's data.** When Home Assistant backs the app up, it stops the app for the few seconds the backup takes and starts it again afterwards, so the database inside the backup is always consistent. Shots the machine makes during those seconds are imported by the next sync.
 
+### Donate shots for score research
+
+⚙ Settings → Data → **Donate shots …** saves an anonymised JSON file of your rated shots (rated 1 to 5 stars) that you can post yourself in the `#shot-donations` channel on the [GLP Discord](https://discord.gg/CbPtWXKRev) to help calibrate the shot score for more profiles and both machine types. GLP sends nothing by itself: no upload, no telemetry.
+
+**Choosing and confirming.** Pick all rated shots or the shots since a date; the dialog shows how many shots the file holds and what is and is not in it; the file is saved only when you press Download file. Once posted, the file is public and may be used to improve the score.
+
+**In the file (format `glp-shot-donation`, version 1).**
+
+- The machine type: Gaggiuino or GaggiMate.
+- The recorded series: time, pressure, pump and weight flow, weight, temperature, the target pressure, flow and temperature, water pumped and the phase index.
+- The phase changes (time, phase number, exit reason, without phase names) and the final exit reason.
+- For Gaggiuino shots the profile structure: phase type, target curve, start, end, time and volume, restriction, stop conditions, skip, the water temperature per phase and for the profile, the recipe and the global stop conditions. GaggiMate shots carry no profile.
+- The rating, dose, yield, TDS, drink type (the six built-in drinks by name, every custom menu drink as `other`), the bean's roast level and its age in days.
+- The score of every score model.
+- The app version.
+
+**Not in the file.**
+
+- The profile, phase, bean, roaster, grinder and every other library name.
+- Notes, grind setting and any other text you typed.
+- Photos.
+- Dates and times of shots.
+- Shot and machine ids, machine names and addresses.
+- Settings, tokens and passwords.
+
+**Grouping and repeated donations.** Each profile gets a profile key, a hash of its structure, so shots on the same profile group together without its name; renaming a profile keeps the key, changing a phase changes it. Each shot gets a random-looking key and the file a donation id, both derived from a random secret created on your first donation and kept only in this install's database (never in a backup), so repeated donations can be matched without telling anyone which shot or install they come from. A new install, or a restore onto a new install, starts a new secret.
+
 ### Machine settings backups (Gaggiuino)
 
 **Backups** in a Gaggiuino machine's ⋯ menu under Settings → Machines opens that machine's backup history: its settings and profiles in the machine's own backup format.

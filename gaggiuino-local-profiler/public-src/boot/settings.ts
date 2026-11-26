@@ -5,6 +5,7 @@
 import { S } from '../state/index.js';
 import { t } from '../i18n.js';
 import { openBackupExportModal, openBackupRestoreModal } from '../components/backup-modal.js';
+import { openShotDonation } from '../components/shot-donation.js';
 import { exportDevDb, importDevDb } from '../components/status.js';
 import { openMachineForm, saveMachineForm, testMachineForm, onThemeCustomColorAChange,
          onThemeCustomColorBChange, onThemeGradientToggleChange, onMachineTypeChange } from '../components/machines-settings.js';
@@ -61,6 +62,7 @@ export function wireSettings(): void {
   // main.ts, but this modal's actions depend on which flow opened it).
   document.getElementById('backupRestoreInput')!.addEventListener('change', e => { void openBackupRestoreModal(e.target as HTMLInputElement); });
   document.getElementById('backupDownloadBtn')!.addEventListener('click', openBackupExportModal);
+  document.getElementById('donationOpenBtn')?.addEventListener('click', openShotDonation);
   document.getElementById('devExportDbBtn')?.addEventListener('click', () => { void exportDevDb(); });
   document.getElementById('devImportDbInput')?.addEventListener('change', e => {
     const input = e.target as HTMLInputElement;

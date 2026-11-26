@@ -8152,6 +8152,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shot-donation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the anonymised shot donation file
+         * @description Every rated (1-5 stars), non-trashed shot as an anonymised file the user can post on the GLP Discord to help calibrate the shot score (#2220). Built from an allow-list only: no names, notes or other free text, no photos, timestamps, shot or machine ids, hosts, settings or tokens. Shot keys and the donation id are HMACs under a random per-install secret that is never exported in a backup.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Only shots made on or after this local date (YYYY-MM-DD). A server-side filter; the file holds no timestamps. */
+                    since?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The donation file (Content-Disposition attachment) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ShotDonation"];
+                    };
+                };
+                /** @description Invalid since date */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded — per-IP limit, 20/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/restore": {
         parameters: {
             query?: never;
@@ -9279,6 +9335,47 @@ export interface components {
             /** @description #2139: the controller error code (sys.c) when machineSystemState is error, else 0 */
             machineSystemErrorCode: number;
             machineControl: components["schemas"]["MachineControlState"] | null;
+        };
+        ShotDonation: {
+            /** @enum {string} */
+            format: "glp-shot-donation";
+            /** @example 1 */
+            version: number;
+            appVersion: string;
+            /** @description 16 hex chars, HMAC of a fixed label under the per-install secret */
+            donationId: string;
+            shots: components["schemas"]["ShotDonationShot"][];
+        };
+        ShotDonationShot: {
+            /** @description 16 hex chars, HMAC of the shot id under the per-install secret */
+            key: string;
+            /** @enum {string|null} */
+            machineType: "gaggiuino" | "gaggimate" | null;
+            /** @description 16 hex chars of SHA-256 over the profile object's JSON */
+            profileKey: string | null;
+            /** @description Profile structure without names or ids (phases, targets, restrictions, stop conditions, recipe, water temperature); null for GaggiMate shots */
+            profile: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Allow-listed numeric series, phaseTransitions as {t, phase, reason}, finalExitReason, bleScaleConnected */
+            datapoints: {
+                [key: string]: unknown;
+            };
+            annotation: {
+                rating: number;
+                dose: number | null;
+                yield: number | null;
+                tds: number | null;
+                /** @description A built-in drink id, or other for a custom menu drink */
+                drinkType: string | null;
+                /** @enum {string|null} */
+                roastLevel: "light" | "medium-light" | "medium" | "medium-dark" | "dark" | null;
+                beanAgeDays: number | null;
+            };
+            /** @description { [scoreModelId]: score or null } */
+            scores: {
+                [key: string]: number | null;
+            };
         };
         BackupBundle: {
             /** @example true */
