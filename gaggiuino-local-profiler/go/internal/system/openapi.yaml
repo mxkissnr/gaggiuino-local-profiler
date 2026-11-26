@@ -859,6 +859,46 @@ components:
 
     # ── Backup ────────────────────────────────────────────────────────────
 
+    ShotDonation:
+      type: object
+      required: [format, version, appVersion, donationId, shots]
+      properties:
+        format:     { type: string, enum: [glp-shot-donation] }
+        version:    { type: integer, example: 1 }
+        appVersion: { type: string }
+        donationId: { type: string, description: "16 hex chars, HMAC of a fixed label under the per-install secret" }
+        shots:      { type: array, items: { $ref: '#/components/schemas/ShotDonationShot' } }
+    ShotDonationShot:
+      type: object
+      required: [key, machineType, profileKey, profile, datapoints, annotation, scores]
+      properties:
+        key:         { type: string, description: "16 hex chars, HMAC of the shot id under the per-install secret" }
+        machineType: { type: string, enum: [gaggiuino, gaggimate], nullable: true }
+        profileKey:  { type: string, nullable: true, description: "16 hex chars of SHA-256 over the profile object's JSON" }
+        profile:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Profile structure without names or ids (phases, targets, restrictions, stop conditions, recipe, water temperature); null for GaggiMate shots
+        datapoints:
+          type: object
+          additionalProperties: true
+          description: Allow-listed numeric series, phaseTransitions as {t, phase, reason}, finalExitReason, bleScaleConnected
+        annotation:
+          type: object
+          required: [rating, dose, yield, tds, drinkType, roastLevel, beanAgeDays]
+          properties:
+            rating:      { type: integer, minimum: 1, maximum: 5 }
+            dose:        { type: number, nullable: true }
+            yield:       { type: number, nullable: true }
+            tds:         { type: number, nullable: true }
+            drinkType:   { type: string, nullable: true, description: "A built-in drink id, or other for a custom menu drink" }
+            roastLevel:  { type: string, nullable: true, enum: [light, medium-light, medium, medium-dark, dark] }
+            beanAgeDays: { type: integer, nullable: true }
+        scores:
+          type: object
+          description: "{ [scoreModelId]: score or null }"
+          additionalProperties: { type: integer, nullable: true }
     BackupBundle:
       type: object
       required: [glp_backup, version, created, shots]
@@ -4344,6 +4384,32 @@ paths:
             application/zip:
               schema: { type: string, format: binary }
         "429": { description: "Rate limit exceeded — per-IP backup download limit, 5/min (separate from GET's budget, #1626)" }
+
+  /api/shot-donation:
+    get:
+      tags: [Backup]
+      summary: Download the anonymised shot donation file
+      description: >
+        Every rated (1-5 stars), non-trashed shot as an anonymised file the user
+        can post on the GLP Discord to help calibrate the shot score (#2220).
+        Built from an allow-list only: no names, notes or other free text, no
+        photos, timestamps, shot or machine ids, hosts, settings or tokens.
+        Shot keys and the donation id are HMACs under a random per-install
+        secret that is never exported in a backup.
+      parameters:
+        - name: since
+          in: query
+          required: false
+          description: Only shots made on or after this local date (YYYY-MM-DD). A server-side filter; the file holds no timestamps.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The donation file (Content-Disposition attachment)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShotDonation' }
+        "400": { description: "Invalid since date" }
+        "429": { description: "Rate limit exceeded — per-IP limit, 20/min" }
 
   /api/restore:
     post:
