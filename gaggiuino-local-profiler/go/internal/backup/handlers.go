@@ -139,6 +139,7 @@ func (h *Handlers) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/backup", h.getBackup)
 	mux.HandleFunc("POST /api/backup", h.postBackup)
 	mux.HandleFunc("POST /api/restore", h.postRestore)
+	mux.HandleFunc("GET /api/shot-donation", h.getShotDonation)
 }
 
 // ── response helpers (see internal/httputil) ────────────────────────────
