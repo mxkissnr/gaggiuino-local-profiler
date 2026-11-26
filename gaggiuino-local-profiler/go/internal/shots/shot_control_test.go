@@ -317,8 +317,8 @@ func TestResolveShotControlInfersWithoutPhaseIndex(t *testing.T) {
 // 5 s pressure brew recorded with phaseTransitions and an exit reason.
 func gaggiMateDatapoints(exit int) map[string]any {
 	return map[string]any{
-		"timeInShot":       []any{0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0},
-		"targetPumpFlow":   []any{40.0, 40.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+		"timeInShot":     []any{0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0},
+		"targetPumpFlow": []any{40.0, 40.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
 		"phaseTransitions": []any{
 			map[string]any{"t": 0, "phase": 0, "name": "Preinfusion", "reason": 0},
 			map[string]any{"t": 30, "phase": 1, "name": "Brew", "reason": 5},
