@@ -1429,6 +1429,190 @@ func adherenceDatapoints() map[string]any {
 	}
 }
 
+// adaptiveShotData is a Gaggiuino shot shaped like the demo "Adaptive"
+// profile (#2219): global weight stop 37 g, recipe 15 g -> 33 g, phases
+// FLOW, PRESSURE, PRESSURE, FLOW with a phaseIndex series, and a null
+// top-level profileName as Gaggiuino history shots have.
+func adaptiveShotData() map[string]any {
+	return map[string]any{
+		"profileName": nil,
+		"profile": map[string]any{
+			"name":                 "Adaptive",
+			"globalStopConditions": map[string]any{"weight": 37.0},
+			"recipe":               map[string]any{"coffeeIn": 15.0, "coffeeOut": 33.0},
+			"phases": []any{
+				map[string]any{"type": "FLOW", "target": map[string]any{"end": 7.0}, "restriction": 3.0, "stopConditions": map[string]any{"pressureAbove": 3.0, "time": 20000.0}},
+				map[string]any{"type": "PRESSURE", "target": map[string]any{"end": 3.0}, "stopConditions": map[string]any{"time": 6000.0}},
+				map[string]any{"type": "PRESSURE", "target": map[string]any{"end": 9.0, "time": 5000.0}, "stopConditions": map[string]any{"time": 5000.0}},
+				map[string]any{"type": "FLOW", "target": map[string]any{"end": 2.5, "time": 25000.0}, "restriction": 9.0},
+			},
+		},
+		"datapoints": map[string]any{
+			"timeInShot":     []any{0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0},
+			"pressure":       []any{20.0, 30.0, 30.0, 30.0, 60.0, 90.0, 85.0, 80.0},
+			"phaseIndex":     []any{0.0, 0.0, 1.0, 1.0, 2.0, 2.0, 3.0, 3.0},
+			"targetPumpFlow": []any{70.0, 70.0, 0.0, 0.0, 0.0, 0.0, 25.0, 25.0},
+		},
+	}
+}
+
+// TestExplainScoreReportsShotControl covers #2219: explain_score carries the
+// control object for a Gaggiuino shot with an embedded profile (stop mode,
+// free result, recipe and per-phase control) and for a shot classic cannot
+// score at all, whose phases must still be an empty array.
+func TestExplainScoreReportsShotControl(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 71, 1000, adaptiveShotData(), map[string]any{"coffee": "Alpha"})
+	insertShot(t, sqlDB, 72, 1001, map[string]any{"datapoints": map[string]any{
+		"pressure":   []any{0.0, 0.0},
+		"timeInShot": []any{0.0, 10.0},
+	}}, map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+
+	out := structured(t, call(t, session, "explain_score", map[string]any{"id": 71}))
+	control := object(out, "control")
+	if control == nil {
+		t.Fatalf("explain_score has no control object: %v", out)
+	}
+	if got, _ := control["source"].(string); got != "profile" {
+		t.Errorf("source = %q, want profile", got)
+	}
+	if got, _ := control["stop_mode"].(string); got != "weight" {
+		t.Errorf("stop_mode = %q, want weight", got)
+	}
+	if got := numberField(t, control, "stop_target"); got != 37 {
+		t.Errorf("stop_target = %v, want 37", got)
+	}
+	if got, _ := control["stop_from"].(string); got != "global" {
+		t.Errorf("stop_from = %q, want global", got)
+	}
+	if got, _ := control["free_result"].(string); got != "time" {
+		t.Errorf("free_result = %q, want time", got)
+	}
+	recipe := object(control, "recipe")
+	if got := numberField(t, recipe, "dose_g"); got != 15 {
+		t.Errorf("recipe dose_g = %v, want 15", got)
+	}
+	if got := numberField(t, recipe, "yield_g"); got != 33 {
+		t.Errorf("recipe yield_g = %v, want 33", got)
+	}
+	phases := objects(control, "phases")
+	if len(phases) != 4 {
+		t.Fatalf("got %d phases, want 4", len(phases))
+	}
+	p0, _ := phases[0].(map[string]any)
+	if got, _ := p0["control"].(string); got != "flow" {
+		t.Errorf("phase 0 control = %q, want flow", got)
+	}
+	if got, _ := p0["free"].(string); got != "pressure" {
+		t.Errorf("phase 0 free = %q, want pressure", got)
+	}
+	if got := numberField(t, p0, "restriction"); got != 3 {
+		t.Errorf("phase 0 restriction = %v, want 3", got)
+	}
+	p1, _ := phases[1].(map[string]any)
+	if got, _ := p1["control"].(string); got != "pressure" {
+		t.Errorf("phase 1 control = %q, want pressure", got)
+	}
+	if got := numberField(t, p1, "start_s"); got != 2 {
+		t.Errorf("phase 1 start_s = %v, want 2", got)
+	}
+
+	out = structured(t, call(t, session, "explain_score", map[string]any{"id": 72}))
+	control = object(out, "control")
+	if control == nil {
+		t.Fatalf("a shot classic cannot score has no control object: %v", out)
+	}
+	if got, _ := control["source"].(string); got != "none" {
+		t.Errorf("source = %q, want none", got)
+	}
+	if got, _ := control["stop_mode"].(string); got != "none" {
+		t.Errorf("stop_mode = %q, want none", got)
+	}
+	if got, _ := control["free_result"].(string); got != "unknown" {
+		t.Errorf("free_result = %q, want unknown", got)
+	}
+	raw, ok := control["phases"].([]any)
+	if !ok || len(raw) != 0 {
+		t.Errorf("phases = %#v, want an empty array", control["phases"])
+	}
+}
+
+// TestExportShotsDatasetShotControl covers #2219: export_shots_dataset rows
+// carry the shot control as flat fields, and profile_name falls back to the
+// embedded profile's name, which Gaggiuino history shots need. list_shots keeps
+// reading only the top-level name, so its rows for the same shot are unchanged.
+func TestExportShotsDatasetShotControl(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 81, 1000, adaptiveShotData(), map[string]any{"coffee": "Alpha"})
+	insertShot(t, sqlDB, 82, 1001, map[string]any{"datapoints": map[string]any{
+		"pressure":   []any{80.0, 80.0},
+		"timeInShot": []any{0.0, 10.0},
+	}}, map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+
+	all := structured(t, call(t, session, "export_shots_dataset", map[string]any{}))
+	rows := objects(all, "shots")
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+
+	profiled := datasetRowByID(t, rows, 81)
+	if got, _ := profiled["stop_mode"].(string); got != "weight" {
+		t.Errorf("row 81 stop_mode = %q, want weight", got)
+	}
+	if got, _ := profiled["free_result"].(string); got != "time" {
+		t.Errorf("row 81 free_result = %q, want time", got)
+	}
+	if got, _ := profiled["phase_control"].(string); got != "flow,pressure,pressure,flow" {
+		t.Errorf("row 81 phase_control = %q, want flow,pressure,pressure,flow", got)
+	}
+	if got, _ := profiled["profile_name"].(string); got != "Adaptive" {
+		t.Errorf("row 81 profile_name = %q, want Adaptive (from the embedded profile)", got)
+	}
+
+	bare := datasetRowByID(t, rows, 82)
+	if got, _ := bare["stop_mode"].(string); got != "none" {
+		t.Errorf("row 82 stop_mode = %q, want none", got)
+	}
+	if got, _ := bare["free_result"].(string); got != "unknown" {
+		t.Errorf("row 82 free_result = %q, want unknown", got)
+	}
+	if v, ok := bare["phase_control"]; ok {
+		t.Errorf("row 82 phase_control = %v, want the key omitted without phase data", v)
+	}
+	if got, _ := bare["profile_name"].(string); got != "Test Profile" {
+		t.Errorf("row 82 profile_name = %q, want Test Profile", got)
+	}
+
+	// stop_mode and free_result are never omitted, so a reader can rely on them.
+	for _, key := range []string{"stop_mode", "free_result"} {
+		if _, ok := profiled[key]; !ok {
+			t.Errorf("row 81 has no %q key", key)
+		}
+		if _, ok := bare[key]; !ok {
+			t.Errorf("row 82 has no %q key", key)
+		}
+	}
+
+	// The fallback is the dataset row's alone: list_shots still reads the
+	// top-level profileName, which shot 81 does not have.
+	listed := structured(t, call(t, session, "list_shots", map[string]any{}))
+	var listed81 map[string]any
+	for _, raw := range objects(listed, "shots") {
+		row, _ := raw.(map[string]any)
+		if v, _ := row["id"].(float64); v == 81 {
+			listed81 = row
+		}
+	}
+	if listed81 == nil {
+		t.Fatalf("list_shots has no row for shot 81")
+	}
+	if v, ok := listed81["profile_name"]; ok {
+		t.Errorf("list_shots row 81 profile_name = %v, want the key omitted (top-level name is null)", v)
+	}
+}
+
 // componentOf returns the named entry of an explain_score components array.
 func componentOf(t *testing.T, out map[string]any, name string) map[string]any {
 	t.Helper()
