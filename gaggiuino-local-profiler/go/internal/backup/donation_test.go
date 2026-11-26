@@ -51,6 +51,9 @@ func getDonation(t *testing.T, mux *http.ServeMux, query string) (donationFile, 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/shot-donation%s = %d; body=%s", query, rec.Code, rec.Body.String())
 	}
+	if got, want := rec.Header().Get("Content-Disposition"), `attachment; filename="glp-shot-donation.json"`; got != want {
+		t.Fatalf("Content-Disposition = %q, want %q", got, want)
+	}
 	var f donationFile
 	if err := json.Unmarshal(rec.Body.Bytes(), &f); err != nil {
 		t.Fatalf("decoding donation: %v", err)
@@ -66,6 +69,8 @@ func donationKeys(f donationFile) map[string]bool {
 	return keys
 }
 
+// TestShotDonation_RatedShotsOnly pins the envelope and the rating filter: only
+// the shots rated 1-5 stars appear, and no name, note, id or timestamp leaks.
 func TestShotDonation_RatedShotsOnly(t *testing.T) {
 	h, deps, _ := newTestHandlers(t)
 	seedDonationFixture(t, deps)
@@ -90,6 +95,9 @@ func TestShotDonation_RatedShotsOnly(t *testing.T) {
 	}
 }
 
+// TestShotDonation_SinceFilter checks the optional since date: a future date
+// yields an empty shots array, a past date keeps both rated shots, a malformed
+// date is a 400.
 func TestShotDonation_SinceFilter(t *testing.T) {
 	h, deps, _ := newTestHandlers(t)
 	seedDonationFixture(t, deps)
@@ -105,6 +113,8 @@ func TestShotDonation_SinceFilter(t *testing.T) {
 	}
 }
 
+// TestShotDonation_KeysStableAcrossExports checks that two exports of the same
+// install agree on the donation id and every shot key.
 func TestShotDonation_KeysStableAcrossExports(t *testing.T) {
 	h, deps, _ := newTestHandlers(t)
 	seedDonationFixture(t, deps)
@@ -125,6 +135,8 @@ func TestShotDonation_KeysStableAcrossExports(t *testing.T) {
 	}
 }
 
+// TestShotDonation_KeysDifferAcrossInstalls checks that a second install gets
+// its own donation id and a disjoint set of shot keys.
 func TestShotDonation_KeysDifferAcrossInstalls(t *testing.T) {
 	h1, deps1, _ := newTestHandlers(t)
 	seedDonationFixture(t, deps1)
@@ -143,6 +155,9 @@ func TestShotDonation_KeysDifferAcrossInstalls(t *testing.T) {
 	}
 }
 
+// TestShotDonation_SecretNeverInBackup checks that a backup carries neither
+// the secret nor its kv row, so a restore onto a fresh install cannot reuse the
+// source install's donation id.
 func TestShotDonation_SecretNeverInBackup(t *testing.T) {
 	h1, deps1, sqlDB := newTestHandlers(t)
 	seedDonationFixture(t, deps1)
@@ -172,6 +187,8 @@ func TestShotDonation_SecretNeverInBackup(t *testing.T) {
 	}
 }
 
+// TestShotDonation_RateLimited checks that the 21st request in a minute is a
+// 429.
 func TestShotDonation_RateLimited(t *testing.T) {
 	h, _, _ := newTestHandlers(t)
 	mux := newMux(h)
