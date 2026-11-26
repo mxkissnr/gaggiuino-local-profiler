@@ -5,7 +5,12 @@ package shots
 // controlled and the free variable. It is read-only input for profile-relative
 // scoring (#1505). No scorer calls it, so classic and adherence are unchanged.
 
-import "math"
+import (
+	stdjson "encoding/json"
+	"math"
+
+	json "github.com/goccy/go-json"
+)
 
 const (
 	stopWeight = "weight"
@@ -21,6 +26,13 @@ const (
 	sourceInferred = "inferred"
 	sourceNone     = "none"
 )
+
+// gaggiMateExitReasons names GaggiMate's PHASE_EXIT_REASON_* codes
+// (shot_log_format.h); 0 (unknown/legacy) has no name.
+var gaggiMateExitReasons = map[int]string{
+	1: "weight", 2: "pressure", 3: "flow", 4: "water", 5: "time",
+	6: "safety_timeout", 7: "manual", 8: "button_released", 9: "ratio",
+}
 
 // ShotControl describes what a shot's profile controlled and what it left free.
 type ShotControl struct {
@@ -89,7 +101,9 @@ type PhaseControl struct {
 func ResolveShotControl(shot Shot) ShotControl {
 	profile := toMap(shot["profile"])
 	profilePhases, _ := profile["phases"].([]any)
-	series := alignedSeries(shot["datapoints"], "timeInShot", "phaseIndex")
+	transitions, finalExit, hasExit := gaggiMatePhaseLog(shot["datapoints"])
+	series := alignedSeries(shot["datapoints"], "timeInShot", "targetPumpFlow", "phaseIndex")
+	timeInShot, targetPumpFlow, phaseIndex := series["timeInShot"], series["targetPumpFlow"], series["phaseIndex"]
 
 	c := ShotControl{
 		Recipe:      recipeTarget(profile),
@@ -97,10 +111,27 @@ func ResolveShotControl(shot Shot) ShotControl {
 		Source:      sourceNone,
 		ProfileName: scoreProfileName(shot),
 	}
-	c.StopMode, c.StopTarget, c.StopFrom = profileStop(profile, profilePhases)
+	if hasExit {
+		c.StopMode = exitReasonStop(finalExit)
+		if c.StopMode != stopNone {
+			c.StopFrom = "exit_reason"
+		}
+	} else {
+		c.StopMode, c.StopTarget, c.StopFrom = profileStop(profile, profilePhases)
+	}
 	c.FreeResult = freeResult(c.StopMode)
-	if len(profilePhases) > 0 {
-		c.Phases, c.Source = profilePhaseControls(profilePhases, series["timeInShot"], series["phaseIndex"]), sourceProfile
+
+	switch {
+	case len(transitions) > 0:
+		c.Phases, c.Source = gaggiMatePhases(transitions, finalExit, timeInShot, targetPumpFlow), sourceInferred
+	case len(profilePhases) > 0 && hasPhaseIndex(phaseIndex):
+		c.Phases, c.Source = profilePhaseControls(profilePhases, timeInShot, phaseIndex), sourceProfile
+	default:
+		if inferred := inferredPhases(timeInShot, targetPumpFlow); len(inferred) > 0 {
+			c.Phases, c.Source = inferred, sourceInferred
+		} else if len(profilePhases) > 0 {
+			c.Phases, c.Source = profilePhaseControls(profilePhases, nil, nil), sourceProfile
+		}
 	}
 	return c
 }
@@ -232,4 +263,144 @@ func nonZeroConditions(m map[string]any) map[string]float64 {
 		}
 	}
 	return out
+}
+
+// exitReasonStop maps a GaggiMate finalExitReason to a stop mode; a ratio
+// stop is a weight stop (yield = dose x ratio).
+func exitReasonStop(code int) string {
+	switch code {
+	case 1, 9:
+		return stopWeight
+	case 4:
+		return stopWater
+	case 5:
+		return stopTime
+	}
+	return stopNone
+}
+
+func hasPhaseIndex(phaseIndex []float64) bool {
+	for _, pi := range phaseIndex {
+		if _, ok := wholePhaseIndex(pi); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// inferredPhases splits a shot without phase data into runs of samples with
+// the same control type: flow-controlled when targetPumpFlow > 0, else
+// pressure-controlled. Two adjacent profile phases of the same type merge.
+func inferredPhases(timeInShot, targetPumpFlow []float64) []PhaseControl {
+	var out []PhaseControl
+	for i, tf := range targetPumpFlow {
+		t := at(timeInShot, i)
+		if math.IsNaN(tf) || math.IsNaN(t) {
+			continue
+		}
+		control := controlPressure
+		if tf > 0 {
+			control = controlFlow
+		}
+		if len(out) == 0 || out[len(out)-1].Control != control {
+			start := t / 10
+			out = append(out, PhaseControl{Index: len(out), Control: control, Free: freeOf(control), StartS: &start})
+		}
+		end := t / 10
+		out[len(out)-1].EndS = &end
+	}
+	return out
+}
+
+// gaggiMateTransition is one entry of the GaggiMate adapter's
+// phaseTransitions list; T is deciseconds like timeInShot.
+type gaggiMateTransition struct {
+	T      float64 `json:"t"`
+	Phase  int     `json:"phase"`
+	Name   string  `json:"name"`
+	Reason int     `json:"reason"`
+}
+
+// gaggiMatePhaseLog reads phaseTransitions and finalExitReason from a shot's
+// datapoints in either shape. hasExit is false without a finalExitReason (a
+// Gaggiuino shot or a GaggiMate log from before firmware 1.9.0).
+func gaggiMatePhaseLog(v any) (transitions []gaggiMateTransition, finalExit int, hasExit bool) {
+	var trRaw, exitRaw []byte
+	switch t := v.(type) {
+	case map[string]any:
+		trRaw, _ = json.Marshal(t["phaseTransitions"])
+		exitRaw, _ = json.Marshal(t["finalExitReason"])
+	case stdjson.RawMessage:
+		m := SplitSeries(t)
+		trRaw, exitRaw = m["phaseTransitions"], m["finalExitReason"]
+	case []byte:
+		m := SplitSeries(t)
+		trRaw, exitRaw = m["phaseTransitions"], m["finalExitReason"]
+	}
+	if !isJSONNull(trRaw) {
+		if err := json.Unmarshal(trRaw, &transitions); err != nil {
+			transitions = nil
+		}
+	}
+	if !isJSONNull(exitRaw) && json.Unmarshal(exitRaw, &finalExit) == nil {
+		hasExit = true
+	}
+	return transitions, finalExit, hasExit
+}
+
+// gaggiMatePhases builds one phase per recorded transition. A phase runs from
+// its transition to the next one (the last phase to the last sample); the
+// next transition's reason, or finalExitReason for the last phase, says why it
+// ended.
+func gaggiMatePhases(trs []gaggiMateTransition, finalExit int, timeInShot, targetPumpFlow []float64) []PhaseControl {
+	last := 0.0
+	for _, t := range timeInShot {
+		if !math.IsNaN(t) && t > last {
+			last = t
+		}
+	}
+	out := make([]PhaseControl, len(trs))
+	for k, tr := range trs {
+		t0, t1, reason := tr.T, math.Max(last, tr.T), finalExit
+		isLast := k+1 == len(trs)
+		if !isLast {
+			t1, reason = trs[k+1].T, trs[k+1].Reason
+		}
+		control := sampledControl(timeInShot, targetPumpFlow, t0, t1, isLast)
+		start, end := t0/10, t1/10
+		out[k] = PhaseControl{
+			Index:      tr.Phase,
+			Name:       tr.Name,
+			Control:    control,
+			Free:       freeOf(control),
+			ExitReason: gaggiMateExitReasons[reason],
+			StartS:     &start,
+			EndS:       &end,
+		}
+	}
+	return out
+}
+
+// sampledControl is the control type most samples in [t0, t1) ran under
+// ([t0, t1] for the last phase): flow when more than half have
+// targetPumpFlow > 0, pressure otherwise, unknown without a sample.
+func sampledControl(timeInShot, targetPumpFlow []float64, t0, t1 float64, closed bool) string {
+	flow, total := 0, 0
+	for i, t := range timeInShot {
+		tf := at(targetPumpFlow, i)
+		if math.IsNaN(t) || math.IsNaN(tf) || t < t0 || t > t1 || (t == t1 && !closed) {
+			continue
+		}
+		total++
+		if tf > 0 {
+			flow++
+		}
+	}
+	switch {
+	case total == 0:
+		return controlUnknown
+	case flow*2 > total:
+		return controlFlow
+	}
+	return controlPressure
 }
