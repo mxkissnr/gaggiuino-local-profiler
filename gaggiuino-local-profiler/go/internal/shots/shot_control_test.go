@@ -38,6 +38,172 @@ func adaptiveDatapoints() map[string]any {
 	}
 }
 
+// TestResolveShotControlInfersWithoutPhaseIndex covers shots without a
+// phaseIndex series (#2219): the control type is inferred per sample from
+// targetPumpFlow, and consecutive samples of one class form one phase.
+func TestResolveShotControlInfersWithoutPhaseIndex(t *testing.T) {
+	dp := adaptiveDatapoints()
+	delete(dp, "phaseIndex")
+	c := ResolveShotControl(Shot{"profile": adaptiveProfile(), "datapoints": dp})
+
+	if c.Source != sourceInferred {
+		t.Errorf("source = %q, want inferred", c.Source)
+	}
+	if c.StopMode != stopWeight || !ptrIs(c.StopTarget, 37) || c.StopFrom != "global" {
+		t.Errorf("stop = %q/%v/%q, want weight/37/global", c.StopMode, c.StopTarget, c.StopFrom)
+	}
+	want := []struct {
+		control string
+		start   float64
+		end     float64
+	}{
+		{controlFlow, 0, 1},
+		{controlPressure, 2, 5},
+		{controlFlow, 6, 7},
+	}
+	if len(c.Phases) != len(want) {
+		t.Fatalf("got %d phases, want %d: %+v", len(c.Phases), len(want), c.Phases)
+	}
+	for i, w := range want {
+		p := c.Phases[i]
+		if p.Index != i || p.Control != w.control || p.Free != freeOf(w.control) {
+			t.Errorf("phase %d = %+v, want index %d control %q", i, p, i, w.control)
+		}
+		if !ptrIs(p.StartS, w.start) || !ptrIs(p.EndS, w.end) {
+			t.Errorf("phase %d timing = %v..%v, want %v..%v", i, p.StartS, p.EndS, w.start, w.end)
+		}
+		if p.TargetEnd != nil || p.Restriction != nil || p.StopConditions != nil || p.ExitReason != "" || p.Name != "" {
+			t.Errorf("phase %d = %+v, want inferred fields only", i, p)
+		}
+	}
+
+	raw, err := stdjson.Marshal(dp)
+	if err != nil {
+		t.Fatalf("marshal datapoints: %v", err)
+	}
+	rawShot := Shot{"profile": adaptiveProfile(), "datapoints": stdjson.RawMessage(raw)}
+	if got := ResolveShotControl(rawShot); !reflect.DeepEqual(got, c) {
+		t.Errorf("raw datapoints resolve differently:\n got %+v\nwant %+v", got, c)
+	}
+
+	// A GaggiMate shot without a phase log and without a profile.
+	gm := ResolveShotControl(Shot{"machineType": "gaggimate", "datapoints": map[string]any{
+		"timeInShot":     []any{0.0, 10.0, 20.0},
+		"targetPumpFlow": []any{40.0, 0.0, 0.0},
+	}})
+	if gm.Source != sourceInferred || gm.StopMode != stopNone || gm.StopFrom != "" || gm.FreeResult != "unknown" {
+		t.Errorf("gaggimate: source/stop = %q/%q/%q free %q, want inferred/none/\"\"/unknown",
+			gm.Source, gm.StopMode, gm.StopFrom, gm.FreeResult)
+	}
+	if len(gm.Phases) != 2 {
+		t.Fatalf("gaggimate: got %d phases, want 2: %+v", len(gm.Phases), gm.Phases)
+	}
+	if p := gm.Phases[0]; p.Control != controlFlow || !ptrIs(p.StartS, 0) || !ptrIs(p.EndS, 0) {
+		t.Errorf("gaggimate phase 0 = %+v, want flow 0..0", p)
+	}
+	if p := gm.Phases[1]; p.Control != controlPressure || !ptrIs(p.StartS, 1) || !ptrIs(p.EndS, 2) {
+		t.Errorf("gaggimate phase 1 = %+v, want pressure 1..2", p)
+	}
+}
+
+// gaggiMateDatapoints is a GaggiMate shot log: a 3 s flow preinfusion, then a
+// 5 s pressure brew recorded with phaseTransitions and an exit reason.
+func gaggiMateDatapoints(exit int) map[string]any {
+	return map[string]any{
+		"timeInShot":     []any{0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0},
+		"targetPumpFlow": []any{40.0, 40.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
+		"phaseTransitions": []any{
+			map[string]any{"t": 0, "phase": 0, "name": "Preinfusion", "reason": 0},
+			map[string]any{"t": 30, "phase": 1, "name": "Brew", "reason": 5},
+		},
+		"finalExitReason": exit,
+	}
+}
+
+// TestResolveShotControlGaggiMate covers GaggiMate shots (#2219): the stop
+// comes from finalExitReason, phases from phaseTransitions, and the raw
+// datapoints shape resolves identically to the map shape.
+func TestResolveShotControlGaggiMate(t *testing.T) {
+	shot := Shot{"machineType": "gaggimate", "profileName": "Turbo", "datapoints": gaggiMateDatapoints(1)}
+	c := ResolveShotControl(shot)
+
+	if c.StopMode != stopWeight || c.StopTarget != nil || c.StopFrom != "exit_reason" || c.FreeResult != "time" {
+		t.Errorf("stop = %q/%v/%q free %q, want weight/nil/exit_reason/time",
+			c.StopMode, c.StopTarget, c.StopFrom, c.FreeResult)
+	}
+	if c.Source != sourceInferred || c.Recipe != nil || c.ProfileName != "Turbo" {
+		t.Errorf("source/recipe/profile = %q/%v/%q, want inferred/nil/Turbo", c.Source, c.Recipe, c.ProfileName)
+	}
+	if len(c.Phases) != 2 {
+		t.Fatalf("got %d phases, want 2: %+v", len(c.Phases), c.Phases)
+	}
+	p0, p1 := c.Phases[0], c.Phases[1]
+	if p0.Index != 0 || p0.Name != "Preinfusion" || p0.Control != controlFlow || p0.Free != controlPressure {
+		t.Errorf("phase 0 = %+v, want Preinfusion flow/free pressure", p0)
+	}
+	if p0.ExitReason != "time" || !ptrIs(p0.StartS, 0) || !ptrIs(p0.EndS, 3) {
+		t.Errorf("phase 0 exit/timing = %q %v..%v, want time 0..3", p0.ExitReason, p0.StartS, p0.EndS)
+	}
+	if p1.Index != 1 || p1.Name != "Brew" || p1.Control != controlPressure || p1.Free != controlFlow {
+		t.Errorf("phase 1 = %+v, want Brew pressure/free flow", p1)
+	}
+	if p1.ExitReason != "weight" || !ptrIs(p1.StartS, 3) || !ptrIs(p1.EndS, 8) {
+		t.Errorf("phase 1 exit/timing = %q %v..%v, want weight 3..8", p1.ExitReason, p1.StartS, p1.EndS)
+	}
+	for i, p := range c.Phases {
+		if p.TargetEnd != nil || p.Restriction != nil || p.StopConditions != nil {
+			t.Errorf("phase %d = %+v, want no profile targets: GaggiMate embeds no profile", i, p)
+		}
+	}
+
+	raw, err := stdjson.Marshal(shot["datapoints"])
+	if err != nil {
+		t.Fatalf("marshal datapoints: %v", err)
+	}
+	rawShot := Shot{"machineType": "gaggimate", "profileName": "Turbo", "datapoints": stdjson.RawMessage(raw)}
+	if got := ResolveShotControl(rawShot); !reflect.DeepEqual(got, c) {
+		t.Errorf("raw datapoints resolve differently:\n got %+v\nwant %+v", got, c)
+	}
+
+	stopped := ResolveShotControl(Shot{"machineType": "gaggimate", "datapoints": gaggiMateDatapoints(7)})
+	if stopped.StopMode != stopNone || stopped.StopFrom != "" || stopped.FreeResult != "unknown" {
+		t.Errorf("manual stop = %q/%q free %q, want none/\"\"/unknown",
+			stopped.StopMode, stopped.StopFrom, stopped.FreeResult)
+	}
+	if last := stopped.Phases[len(stopped.Phases)-1]; last.ExitReason != "manual" {
+		t.Errorf("last phase exit reason = %q, want manual", last.ExitReason)
+	}
+
+	water := ResolveShotControl(Shot{"machineType": "gaggimate", "datapoints": gaggiMateDatapoints(4)})
+	if water.StopMode != stopWater || water.FreeResult != "yield" {
+		t.Errorf("water stop = %q free %q, want water/yield", water.StopMode, water.FreeResult)
+	}
+
+	ratio := ResolveShotControl(Shot{"machineType": "gaggimate", "datapoints": gaggiMateDatapoints(9)})
+	if ratio.StopMode != stopWeight {
+		t.Errorf("ratio stop = %q, want weight", ratio.StopMode)
+	}
+
+	// Without finalExitReason (a log from before firmware 1.9.0) the embedded
+	// Gaggiuino profile's stop still applies.
+	legacy := gaggiMateDatapoints(1)
+	delete(legacy, "finalExitReason")
+	delete(legacy, "phaseTransitions")
+	profile := ResolveShotControl(Shot{"machineType": "gaggimate", "profile": adaptiveProfile(), "datapoints": legacy})
+	if profile.StopMode != stopWeight || !ptrIs(profile.StopTarget, 37) || profile.StopFrom != "global" {
+		t.Errorf("legacy stop = %q/%v/%q, want weight/37/global", profile.StopMode, profile.StopTarget, profile.StopFrom)
+	}
+	if profile.Source != sourceInferred || len(profile.Phases) != 2 {
+		t.Fatalf("legacy phases = %q/%d, want inferred/2", profile.Source, len(profile.Phases))
+	}
+	if p := profile.Phases[0]; p.Control != controlFlow || !ptrIs(p.StartS, 0) || !ptrIs(p.EndS, 2) {
+		t.Errorf("legacy phase 0 = %+v, want flow 0..2", p)
+	}
+	if p := profile.Phases[1]; p.Control != controlPressure || !ptrIs(p.StartS, 3) || !ptrIs(p.EndS, 8) {
+		t.Errorf("legacy phase 1 = %+v, want pressure 3..8", p)
+	}
+}
+
 // TestResolveShotControlAdaptiveWeightStop covers the Adaptive profile
 // (#2219): a global 37 g weight stop, a 15 g -> 33 g recipe, four phases
 // timed by the phaseIndex series, and the raw-datapoints shape resolving
@@ -244,145 +410,3 @@ func TestResolveShotControlRecipeRatio(t *testing.T) {
 }
 
 func ptr(v float64) *float64 { return &v }
-
-// TestResolveShotControlInfersWithoutPhaseIndex covers shots without a
-// phaseIndex series (#2219): the control type is inferred per sample from
-// targetPumpFlow, and consecutive samples of one class form one phase.
-func TestResolveShotControlInfersWithoutPhaseIndex(t *testing.T) {
-	dp := adaptiveDatapoints()
-	delete(dp, "phaseIndex")
-	c := ResolveShotControl(Shot{"profile": adaptiveProfile(), "datapoints": dp})
-
-	if c.Source != sourceInferred {
-		t.Errorf("source = %q, want inferred", c.Source)
-	}
-	if c.StopMode != stopWeight || !ptrIs(c.StopTarget, 37) || c.StopFrom != "global" {
-		t.Errorf("stop = %q/%v/%q, want weight/37/global", c.StopMode, c.StopTarget, c.StopFrom)
-	}
-	want := []struct {
-		control string
-		start   float64
-		end     float64
-	}{
-		{controlFlow, 0, 1},
-		{controlPressure, 2, 5},
-		{controlFlow, 6, 7},
-	}
-	if len(c.Phases) != len(want) {
-		t.Fatalf("got %d phases, want %d: %+v", len(c.Phases), len(want), c.Phases)
-	}
-	for i, w := range want {
-		p := c.Phases[i]
-		if p.Index != i || p.Control != w.control || p.Free != freeOf(w.control) {
-			t.Errorf("phase %d = %+v, want index %d control %q", i, p, i, w.control)
-		}
-		if !ptrIs(p.StartS, w.start) || !ptrIs(p.EndS, w.end) {
-			t.Errorf("phase %d timing = %v..%v, want %v..%v", i, p.StartS, p.EndS, w.start, w.end)
-		}
-		if p.TargetEnd != nil || p.Restriction != nil || p.StopConditions != nil || p.ExitReason != "" || p.Name != "" {
-			t.Errorf("phase %d = %+v, want inferred fields only", i, p)
-		}
-	}
-
-	raw, err := stdjson.Marshal(dp)
-	if err != nil {
-		t.Fatalf("marshal datapoints: %v", err)
-	}
-	rawShot := Shot{"profile": adaptiveProfile(), "datapoints": stdjson.RawMessage(raw)}
-	if got := ResolveShotControl(rawShot); !reflect.DeepEqual(got, c) {
-		t.Errorf("raw datapoints resolve differently:\n got %+v\nwant %+v", got, c)
-	}
-
-	// A GaggiMate shot without a phase log and without a profile.
-	gm := ResolveShotControl(Shot{"machineType": "gaggimate", "datapoints": map[string]any{
-		"timeInShot":     []any{0.0, 10.0, 20.0},
-		"targetPumpFlow": []any{40.0, 0.0, 0.0},
-	}})
-	if gm.Source != sourceInferred || gm.StopMode != stopNone || gm.StopFrom != "" || gm.FreeResult != "unknown" {
-		t.Errorf("gaggimate: source/stop = %q/%q/%q free %q, want inferred/none/\"\"/unknown",
-			gm.Source, gm.StopMode, gm.StopFrom, gm.FreeResult)
-	}
-	if len(gm.Phases) != 2 {
-		t.Fatalf("gaggimate: got %d phases, want 2: %+v", len(gm.Phases), gm.Phases)
-	}
-	if p := gm.Phases[0]; p.Control != controlFlow || !ptrIs(p.StartS, 0) || !ptrIs(p.EndS, 0) {
-		t.Errorf("gaggimate phase 0 = %+v, want flow 0..0", p)
-	}
-	if p := gm.Phases[1]; p.Control != controlPressure || !ptrIs(p.StartS, 1) || !ptrIs(p.EndS, 2) {
-		t.Errorf("gaggimate phase 1 = %+v, want pressure 1..2", p)
-	}
-}
-
-// gaggiMateDatapoints is a GaggiMate shot log: a 3 s flow preinfusion, then a
-// 5 s pressure brew recorded with phaseTransitions and an exit reason.
-func gaggiMateDatapoints(exit int) map[string]any {
-	return map[string]any{
-		"timeInShot":     []any{0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0},
-		"targetPumpFlow": []any{40.0, 40.0, 40.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0},
-		"phaseTransitions": []any{
-			map[string]any{"t": 0, "phase": 0, "name": "Preinfusion", "reason": 0},
-			map[string]any{"t": 30, "phase": 1, "name": "Brew", "reason": 5},
-		},
-		"finalExitReason": exit,
-	}
-}
-
-// TestResolveShotControlGaggiMate covers GaggiMate shots (#2219): the stop
-// comes from finalExitReason, phases from phaseTransitions, and the raw
-// datapoints shape resolves identically to the map shape.
-func TestResolveShotControlGaggiMate(t *testing.T) {
-	shot := Shot{"machineType": "gaggimate", "profileName": "Turbo", "datapoints": gaggiMateDatapoints(1)}
-	c := ResolveShotControl(shot)
-
-	if c.StopMode != stopWeight || c.StopTarget != nil || c.StopFrom != "exit_reason" || c.FreeResult != "time" {
-		t.Errorf("stop = %q/%v/%q free %q, want weight/nil/exit_reason/time",
-			c.StopMode, c.StopTarget, c.StopFrom, c.FreeResult)
-	}
-	if c.Source != sourceInferred || c.Recipe != nil || c.ProfileName != "Turbo" {
-		t.Errorf("source/recipe/profile = %q/%v/%q, want inferred/nil/Turbo", c.Source, c.Recipe, c.ProfileName)
-	}
-	if len(c.Phases) != 2 {
-		t.Fatalf("got %d phases, want 2: %+v", len(c.Phases), c.Phases)
-	}
-	p0, p1 := c.Phases[0], c.Phases[1]
-	if p0.Index != 0 || p0.Name != "Preinfusion" || p0.Control != controlFlow || p0.Free != controlPressure {
-		t.Errorf("phase 0 = %+v, want Preinfusion flow/free pressure", p0)
-	}
-	if p0.ExitReason != "time" || !ptrIs(p0.StartS, 0) || !ptrIs(p0.EndS, 3) {
-		t.Errorf("phase 0 exit/timing = %q %v..%v, want time 0..3", p0.ExitReason, p0.StartS, p0.EndS)
-	}
-	if p1.Index != 1 || p1.Name != "Brew" || p1.Control != controlPressure || p1.Free != controlFlow {
-		t.Errorf("phase 1 = %+v, want Brew pressure/free flow", p1)
-	}
-	if p1.ExitReason != "weight" || !ptrIs(p1.StartS, 3) || !ptrIs(p1.EndS, 8) {
-		t.Errorf("phase 1 exit/timing = %q %v..%v, want weight 3..8", p1.ExitReason, p1.StartS, p1.EndS)
-	}
-
-	raw, err := stdjson.Marshal(shot["datapoints"])
-	if err != nil {
-		t.Fatalf("marshal datapoints: %v", err)
-	}
-	rawShot := Shot{"machineType": "gaggimate", "profileName": "Turbo", "datapoints": stdjson.RawMessage(raw)}
-	if got := ResolveShotControl(rawShot); !reflect.DeepEqual(got, c) {
-		t.Errorf("raw datapoints resolve differently:\n got %+v\nwant %+v", got, c)
-	}
-
-	stopped := ResolveShotControl(Shot{"machineType": "gaggimate", "datapoints": gaggiMateDatapoints(7)})
-	if stopped.StopMode != stopNone || stopped.StopFrom != "" || stopped.FreeResult != "unknown" {
-		t.Errorf("manual stop = %q/%q free %q, want none/\"\"/unknown",
-			stopped.StopMode, stopped.StopFrom, stopped.FreeResult)
-	}
-	if last := stopped.Phases[len(stopped.Phases)-1]; last.ExitReason != "manual" {
-		t.Errorf("last phase exit reason = %q, want manual", last.ExitReason)
-	}
-
-	water := ResolveShotControl(Shot{"machineType": "gaggimate", "datapoints": gaggiMateDatapoints(4)})
-	if water.StopMode != stopWater || water.FreeResult != "yield" {
-		t.Errorf("water stop = %q free %q, want water/yield", water.StopMode, water.FreeResult)
-	}
-
-	ratio := ResolveShotControl(Shot{"machineType": "gaggimate", "datapoints": gaggiMateDatapoints(9)})
-	if ratio.StopMode != stopWeight {
-		t.Errorf("ratio stop = %q, want weight", ratio.StopMode)
-	}
-}
