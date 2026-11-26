@@ -626,6 +626,33 @@ Woher die eingebauten Werte kommen: Gesichert ist nur die Richtung — eine dunk
 
 **Home-Assistant-Backups enthalten die Daten der App.** Wenn Home Assistant die App sichert, stoppt er die App für die wenigen Sekunden, die das Backup dauert, und startet sie danach wieder — die Datenbank im Backup ist damit immer konsistent. Shots, die die Maschine in diesen Sekunden zieht, werden beim nächsten Sync importiert.
 
+### Shots für die Score-Forschung spenden
+
+⚙ Einstellungen → Daten → **Shots spenden …** speichert deine bewerteten Shots (1 bis 5 Sterne) als anonymisierte JSON-Datei, die du selbst im Kanal `#shot-donations` im [GLP Discord](https://discord.gg/CbPtWXKRev) posten kannst, damit der Shot-Score für mehr Profile und beide Maschinentypen besser kalibriert wird. GLP sendet selbst nichts: kein Upload, keine Telemetrie.
+
+**Auswählen und bestätigen.** Wähle alle bewerteten Shots oder die Shots ab einem Datum; der Dialog zeigt, wie viele Shots die Datei enthält und was darin steht und was nicht; gespeichert wird die Datei erst, wenn du **Datei herunterladen** drückst. Sobald du sie postest, ist die Datei öffentlich und darf zur Verbesserung des Scores genutzt werden.
+
+**In der Datei (Format `glp-shot-donation`, Version 1).**
+
+- Der Maschinentyp: Gaggiuino oder GaggiMate.
+- Die aufgezeichneten Reihen: Zeit, Druck, Pumpen- und Gewichtsfluss, Gewicht, Temperatur, die Zielwerte für Druck, Fluss und Temperatur, gefördertes Wasser und der Phasenindex.
+- Die Phasenwechsel (Zeit, Phasennummer, Austrittsgrund, ohne Phasennamen) und der letzte Austrittsgrund.
+- Bei Gaggiuino-Shots der Aufbau des Profils: Phasentyp, Zielkurve, Start, Ende, Zeit und Volumen, Begrenzung, Stoppbedingungen, Skip, die Wassertemperatur pro Phase und für das Profil, das Rezept und die globalen Stoppbedingungen. GaggiMate-Shots enthalten kein Profil.
+- Die Bewertung, Dosis, Ausbeute, TDS, das Getränk (die sechs eingebauten Getränke mit Namen, jedes selbst angelegte Menü-Getränk als `other`), der Röstgrad der Bohne und ihr Alter in Tagen.
+- Der Score jedes Score-Modells.
+- Die App-Version.
+
+**Nicht in der Datei.**
+
+- Die Namen von Profil, Phase, Bohne, Rösterei, Mühle und allem anderen aus der Bibliothek.
+- Notizen, Mahlgrad und jeder andere Text, den du eingegeben hast.
+- Fotos.
+- Datum und Uhrzeit der Shots.
+- Shot- und Maschinen-IDs, Maschinennamen und Adressen.
+- Einstellungen, Tokens und Passwörter.
+
+**Gruppierung und wiederholte Spenden.** Jedes Profil bekommt einen Profilschlüssel, einen Hash seines Aufbaus, damit Shots auf demselben Profil zusammenbleiben, ohne seinen Namen zu nennen; ein umbenanntes Profil behält den Schlüssel, eine geänderte Phase ändert ihn. Jeder Shot bekommt einen zufällig wirkenden Schlüssel und die Datei eine Spenden-ID, beide abgeleitet aus einem zufälligen Geheimnis, das bei deiner ersten Spende erzeugt und nur in der Datenbank dieser Installation aufbewahrt wird (nie in einem Backup), sodass sich wiederholte Spenden zuordnen lassen, ohne zu verraten, von welchem Shot oder welcher Installation sie stammen. Eine neue Installation oder eine Wiederherstellung auf einer neuen Installation beginnt mit einem neuen Geheimnis.
+
 ### Maschinen-Backups (Gaggiuino)
 
 **Backups** im ⋯-Menü einer Gaggiuino-Maschine unter Einstellungen → Maschinen öffnet ihren Backup-Verlauf: ihre Einstellungen und Profile im eigenen Backup-Format der Maschine.
