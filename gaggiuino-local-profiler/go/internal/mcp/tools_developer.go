@@ -90,7 +90,7 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:         "export_shots_dataset",
 		Title:        "Export shots dataset",
-		Description:  "Export a filtered batch of shots as one flat dataset: per shot its derived metrics, GLP score, every registered score model's score per shot, used-bean-target flag and the user's own annotation (bean, rating, grind setting, TDS, notes), with no brew curves. Use it to compare a scoring idea against the user's ratings. Page with cursor/limit.",
+		Description:  "Export a filtered batch of shots as one flat dataset: per shot its derived metrics, GLP score, every registered score model's score per shot, used-bean-target flag and the user's own annotation (bean, rating, grind setting, TDS, notes), how the shot was stopped and its phases' control types, with no brew curves. Use it to compare a scoring idea against the user's ratings. Page with cursor/limit.",
 		Annotations:  readOnlyAnnotations("Export shots dataset"),
 		InputSchema:  exportShotsDatasetSchema(),
 		OutputSchema: mustSchema[exportShotsDatasetOutput](),
@@ -539,7 +539,7 @@ type datasetRow struct {
 	ID             int64              `json:"id" jsonschema:"the shot's stable id"`
 	Timestamp      string             `json:"timestamp" jsonschema:"shot start time, RFC 3339 UTC"`
 	MachineID      int64              `json:"machine_id" jsonschema:"machine that pulled the shot"`
-	ProfileName    string             `json:"profile_name,omitempty" jsonschema:"brewing profile name"`
+	ProfileName    string             `json:"profile_name,omitempty" jsonschema:"brewing profile name; falls back to the embedded profile's name"`
 	Bean           string             `json:"bean,omitempty" jsonschema:"bean (coffee) name annotation, or A + B for a mixed shot"`
 	Score          *int               `json:"score,omitempty" jsonschema:"GLP score 0-100; omitted when there is too little data to score"`
 	ModelScores    []modelScoreOutput `json:"model_scores" jsonschema:"every registered score model's score for this shot, side by side"`
@@ -549,6 +549,9 @@ type datasetRow struct {
 	GrindSetting   string             `json:"grind_setting,omitempty" jsonschema:"free-text grinder setting"`
 	TDSPct         *float64           `json:"tds_pct,omitempty" jsonschema:"TDS annotation, percent"`
 	Notes          string             `json:"notes,omitempty" jsonschema:"the user's full notes, truncated to 2000 characters"`
+	StopMode       string             `json:"stop_mode" jsonschema:"how the shot was stopped: weight, time, water or none (explain_score's control has the details)"`
+	FreeResult     string             `json:"free_result" jsonschema:"the result the stop leaves free: time for a weight stop, yield for a time or water stop, unknown otherwise"`
+	PhaseControl   string             `json:"phase_control,omitempty" jsonschema:"each phase's control type in shot order, comma-separated, e.g. flow,pressure,pressure,flow; omitted without phase data"`
 	shotMetrics
 }
 
@@ -610,17 +613,21 @@ func exportShotsDataset(svc *shots.Service, in exportShotsDatasetInput) (exportS
 // scores (#1922) load the beans and the registry once per export, not per row.
 func toDatasetRow(row shots.PageRow, all func(shots.Shot) []shots.ModelScore) datasetRow {
 	shot := row.Shot
+	ctl := shots.ResolveShotControl(shot)
 	out := datasetRow{
 		ID:             intField(shot, "id"),
 		Timestamp:      formatTimestamp(shot),
 		MachineID:      machineIDOf(shot),
-		ProfileName:    profileNameOf(shot),
+		ProfileName:    ctl.ProfileName,
 		Bean:           shotBeanLabel(shot),
 		UsedBeanTarget: row.UsedBeanTarget,
 		ModelScores:    modelScoresOutput(all(shot)),
 		BeanComponents: beanComponents(shot),
 		GrindSetting:   annotationString(shot, "grindSetting"),
 		Notes:          truncate(annotationString(shot, "notes"), maxDatasetNotes),
+		StopMode:       ctl.StopMode,
+		FreeResult:     ctl.FreeResult,
+		PhaseControl:   phaseControlList(ctl.Phases),
 		shotMetrics:    *buildMetrics(shot),
 	}
 	if row.Score != nil {
@@ -632,6 +639,16 @@ func toDatasetRow(row shots.PageRow, all func(shots.Shot) []shots.ModelScore) da
 	}
 	out.TDSPct = annotationFloat(shot, "tds")
 	return out
+}
+
+// phaseControlList joins the phases' control types in shot order, e.g.
+// "flow,pressure,pressure,flow"; "" without phases.
+func phaseControlList(phases []shots.PhaseControl) string {
+	parts := make([]string, len(phases))
+	for i, p := range phases {
+		parts[i] = p.Control
+	}
+	return strings.Join(parts, ",")
 }
 
 // annotationFloat reads a numeric annotation value or reports it absent. TDS

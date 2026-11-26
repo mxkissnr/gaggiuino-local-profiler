@@ -1538,6 +1538,53 @@ func TestExplainScoreReportsShotControl(t *testing.T) {
 	}
 }
 
+// TestExportShotsDatasetShotControl covers #2219: export_shots_dataset rows
+// carry the shot control as flat fields, and profile_name falls back to the
+// embedded profile's name, which Gaggiuino history shots need.
+func TestExportShotsDatasetShotControl(t *testing.T) {
+	ts, sqlDB := newDeveloperServer(t, true, false)
+	insertShot(t, sqlDB, 81, 1000, adaptiveShotData(), map[string]any{"coffee": "Alpha"})
+	insertShot(t, sqlDB, 82, 1001, map[string]any{"datapoints": map[string]any{
+		"pressure":   []any{80.0, 80.0},
+		"timeInShot": []any{0.0, 10.0},
+	}}, map[string]any{"coffee": "Alpha"})
+	session := connect(t, ts.URL+Path)
+
+	all := structured(t, call(t, session, "export_shots_dataset", map[string]any{}))
+	rows := objects(all, "shots")
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+
+	profiled := datasetRowByID(t, rows, 81)
+	if got, _ := profiled["stop_mode"].(string); got != "weight" {
+		t.Errorf("row 81 stop_mode = %q, want weight", got)
+	}
+	if got, _ := profiled["free_result"].(string); got != "time" {
+		t.Errorf("row 81 free_result = %q, want time", got)
+	}
+	if got, _ := profiled["phase_control"].(string); got != "flow,pressure,pressure,flow" {
+		t.Errorf("row 81 phase_control = %q, want flow,pressure,pressure,flow", got)
+	}
+	if got, _ := profiled["profile_name"].(string); got != "Adaptive" {
+		t.Errorf("row 81 profile_name = %q, want Adaptive (from the embedded profile)", got)
+	}
+
+	bare := datasetRowByID(t, rows, 82)
+	if got, _ := bare["stop_mode"].(string); got != "none" {
+		t.Errorf("row 82 stop_mode = %q, want none", got)
+	}
+	if got, _ := bare["free_result"].(string); got != "unknown" {
+		t.Errorf("row 82 free_result = %q, want unknown", got)
+	}
+	if v, ok := bare["phase_control"]; ok {
+		t.Errorf("row 82 phase_control = %v, want the key omitted without phase data", v)
+	}
+	if got, _ := bare["profile_name"].(string); got != "Test Profile" {
+		t.Errorf("row 82 profile_name = %q, want Test Profile", got)
+	}
+}
+
 // componentOf returns the named entry of an explain_score components array.
 func componentOf(t *testing.T, out map[string]any, name string) map[string]any {
 	t.Helper()
