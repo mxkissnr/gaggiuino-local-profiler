@@ -78,7 +78,7 @@ func registerDeveloperTools(srv *mcpsdk.Server, deps Deps) {
 	mcpsdk.AddTool(srv, &mcpsdk.Tool{
 		Name:         "explain_score",
 		Title:        "Explain shot score",
-		Description:  "Break one shot's GLP score (0-100) into its weighted parts with the measured inputs and the targets used, list the parts that were skipped and why, and list every registered score model's score side by side. Use it to understand or debug a score.",
+		Description:  "Break one shot's GLP score (0-100) into its weighted parts with the measured inputs and the targets used, list the parts that were skipped and why, and list every registered score model's score side by side. It also says what the shot's profile controlled: how the shot was stopped, which result that left free and each phase's controlled and free variable. Use it to understand or debug a score.",
 		Annotations:  readOnlyAnnotations("Explain shot score"),
 		InputSchema:  explainScoreInputSchema(),
 		OutputSchema: mustSchema[explainScoreOutput](),
@@ -258,6 +258,7 @@ type explainScoreOutput struct {
 	PressureNote   string                  `json:"pressure_note,omitempty" jsonschema:"why the pressure part was scored against the profile target or left out; empty for a normal >=5-bar shot"`
 	Components     []scoreComponentOutput  `json:"components" jsonschema:"the weighted parts, in scoring order"`
 	Skipped        []skippedScoreComponent `json:"skipped" jsonschema:"parts that could not be scored, with the reason"`
+	Control        shotControlOutput       `json:"control" jsonschema:"what the shot's profile controlled and what it left free: stop mode, free result, recipe and per-phase control (#2219); read-only, no score uses it yet"`
 }
 
 // modelScoreOutput is one registered score model's score for a shot, for the
@@ -266,6 +267,60 @@ type explainScoreOutput struct {
 type modelScoreOutput struct {
 	Model string `json:"model" jsonschema:"a registered score model id; classic is today's score"`
 	Score *int   `json:"score,omitempty" jsonschema:"that model's 0-100 score; omitted when it cannot score the shot"`
+}
+
+// shotControlOutput is shots.ShotControl for the tools (#2219): what the
+// shot's profile controlled and what it left free.
+type shotControlOutput struct {
+	Source     string               `json:"source" jsonschema:"where the phases came from: profile (the embedded profile's phases), inferred (control type guessed from the target curves) or none"`
+	StopMode   string               `json:"stop_mode" jsonschema:"how the shot was stopped: weight, time, water or none"`
+	StopTarget *float64             `json:"stop_target,omitempty" jsonschema:"the stop value: g for weight, ml for water, s for time; omitted when unknown"`
+	StopFrom   string               `json:"stop_from,omitempty" jsonschema:"where the stop was read: global (the profile's global stop conditions), last_phase or exit_reason (GaggiMate); omitted for none"`
+	FreeResult string               `json:"free_result" jsonschema:"the result the stop leaves free: time for a weight stop, yield for a time or water stop, unknown otherwise"`
+	Recipe     *recipeOutput        `json:"recipe,omitempty" jsonschema:"the profile's recipe; omitted when it names none"`
+	Phases     []phaseControlOutput `json:"phases" jsonschema:"the phases in shot order; empty without phase data"`
+}
+
+// recipeOutput mirrors shots.RecipeTarget field for field (struct conversion).
+type recipeOutput struct {
+	DoseG  *float64 `json:"dose_g,omitempty" jsonschema:"recipe dose in g"`
+	YieldG *float64 `json:"yield_g,omitempty" jsonschema:"recipe yield in g"`
+	Ratio  *float64 `json:"ratio,omitempty" jsonschema:"recipe brew ratio"`
+}
+
+// phaseControlOutput mirrors shots.PhaseControl field for field (struct
+// conversion), so keep both in the same order.
+type phaseControlOutput struct {
+	Index          int                `json:"index" jsonschema:"the profile phase index"`
+	Name           string             `json:"name,omitempty" jsonschema:"the recorded phase name (GaggiMate)"`
+	Control        string             `json:"control" jsonschema:"what the phase controlled: flow, pressure or unknown"`
+	Free           string             `json:"free" jsonschema:"the variable the phase leaves free: pressure for a flow phase, flow for a pressure phase"`
+	TargetEnd      *float64           `json:"target_end,omitempty" jsonschema:"the phase's target end value, bar or ml/s"`
+	Restriction    *float64           `json:"restriction,omitempty" jsonschema:"the phase's limit on the free variable"`
+	StopConditions map[string]float64 `json:"stop_conditions,omitempty" jsonschema:"the phase's non-zero stop conditions as the profile stores them (time in ms)"`
+	ExitReason     string             `json:"exit_reason,omitempty" jsonschema:"why the phase ended (GaggiMate): weight, pressure, flow, water, time, safety_timeout, manual, button_released or ratio"`
+	StartS         *float64           `json:"start_s,omitempty" jsonschema:"first sample time of the phase, s; omitted when the shot never ran it"`
+	EndS           *float64           `json:"end_s,omitempty" jsonschema:"last sample time of the phase, s"`
+}
+
+// shotControlOutputOf converts a resolved ShotControl; Phases is never nil.
+func shotControlOutputOf(c shots.ShotControl) shotControlOutput {
+	out := shotControlOutput{
+		Source:     c.Source,
+		StopMode:   c.StopMode,
+		StopTarget: c.StopTarget,
+		StopFrom:   c.StopFrom,
+		FreeResult: c.FreeResult,
+		Phases:     make([]phaseControlOutput, 0, len(c.Phases)),
+	}
+	if c.Recipe != nil {
+		r := recipeOutput(*c.Recipe)
+		out.Recipe = &r
+	}
+	for _, p := range c.Phases {
+		out.Phases = append(out.Phases, phaseControlOutput(p))
+	}
+	return out
 }
 
 // modelScoresOutput converts the registry's per-shot scores to the tool
@@ -345,6 +400,7 @@ func explainScore(svc *shots.Service, in explainScoreInput) (explainScoreOutput,
 	out.ModelScores = modelScoresOutput(svc.AllModelsScorer()(shot))
 	out.UsedBeanTarget = detail.UsedBeanTarget
 	out.PressureNote = pressureNoteReason(detail.PressureNote)
+	out.Control = shotControlOutputOf(shots.ResolveShotControl(shot))
 	if detail.Score == nil {
 		out.Skipped = append(out.Skipped, skippedScoreComponent{
 			Name:   "all",
