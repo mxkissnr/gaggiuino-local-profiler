@@ -110,70 +110,6 @@ func donationKeys(f donationFile) map[string]bool {
 	return keys
 }
 
-func TestShotDonation_LeaksNoFreeTextOrIDs(t *testing.T) {
-	h, deps, _ := newTestHandlers(t)
-	seedDonationFixture(t, deps)
-	_, body := getDonation(t, newMux(h), "")
-	for _, banned := range []string{
-		"SECRET", "987654321", "987654322", "1700000123", "2026-01-02", "jpg",
-		`"name"`, `"id"`, "machineId", "timestamp", "test-token-value",
-	} {
-		if strings.Contains(body, banned) {
-			t.Errorf("donation file contains %q:\n%s", banned, body)
-		}
-	}
-}
-
-func TestShotDonation_AnnotationValues(t *testing.T) {
-	h, deps, _ := newTestHandlers(t)
-	seedDonationFixture(t, deps)
-	f, _ := getDonation(t, newMux(h), "")
-	if f.Format != "glp-shot-donation" || f.Version != 1 || len(f.DonationID) != 16 {
-		t.Fatalf("envelope = %+v", f)
-	}
-	if len(f.Shots) != 2 {
-		t.Fatalf("shots = %d, want 2 (rated 1-5 only)", len(f.Shots))
-	}
-	var gaggiuino, gaggimate *donationShot
-	for i := range f.Shots {
-		switch f.Shots[i].Annotation.Rating {
-		case 4:
-			gaggiuino = &f.Shots[i]
-		case 3:
-			gaggimate = &f.Shots[i]
-		}
-	}
-	if gaggiuino == nil || gaggimate == nil {
-		t.Fatalf("missing shots: %+v", f.Shots)
-	}
-	a := gaggiuino.Annotation
-	if a.Dose == nil || *a.Dose != 18 || a.TDS == nil || *a.TDS != 9.5 || a.Yield == nil {
-		t.Errorf("annotation numbers = %+v", a)
-	}
-	if a.DrinkType == nil || *a.DrinkType != "other" {
-		t.Errorf("custom drink = %v, want other", a.DrinkType)
-	}
-	if gaggimate.Annotation.DrinkType == nil || *gaggimate.Annotation.DrinkType != "espresso" {
-		t.Errorf("built-in drink = %v, want espresso", gaggimate.Annotation.DrinkType)
-	}
-	dp := gaggiuino.Datapoints
-	idx, _ := dp["phaseIndex"].([]any)
-	if len(idx) != 6 || idx[4] != nil || idx[5] != nil {
-		t.Errorf("phaseIndex = %v, want 6 entries with the last two null", dp["phaseIndex"])
-	}
-	tr, _ := dp["phaseTransitions"].([]any)
-	if len(tr) != 1 {
-		t.Fatalf("phaseTransitions = %v", dp["phaseTransitions"])
-	}
-	entry, _ := tr[0].(map[string]any)
-	if len(entry) != 3 || entry["t"] != float64(10) || entry["phase"] != float64(1) || entry["reason"] != float64(2) {
-		t.Errorf("transition = %v, want only t/phase/reason", entry)
-	}
-	if dp["finalExitReason"] != float64(3) || dp["bleScaleConnected"] != true {
-		t.Errorf("finalExitReason/bleScaleConnected = %v/%v", dp["finalExitReason"], dp["bleScaleConnected"])
-	}
-}
-
 func TestShotDonation_RatedShotsOnly(t *testing.T) {
 	h, deps, _ := newTestHandlers(t)
 	seedDonationFixture(t, deps)
@@ -292,6 +228,73 @@ func TestShotDonation_RateLimited(t *testing.T) {
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/shot-donation", nil))
 	if rec.Code != http.StatusTooManyRequests {
 		t.Errorf("request %d = %d, want 429", donationRateLimitPerMin+1, rec.Code)
+	}
+}
+
+// Slice 2 (#2220): datapoints, annotation values, profile structure and key,
+// machine type and scores.
+
+func TestShotDonation_LeaksNoFreeTextOrIDs(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	seedDonationFixture(t, deps)
+	_, body := getDonation(t, newMux(h), "")
+	for _, banned := range []string{
+		"SECRET", "987654321", "987654322", "1700000123", "2026-01-02", "jpg",
+		`"name"`, `"id"`, "machineId", "timestamp", "test-token-value",
+	} {
+		if strings.Contains(body, banned) {
+			t.Errorf("donation file contains %q:\n%s", banned, body)
+		}
+	}
+}
+
+func TestShotDonation_AnnotationValues(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	seedDonationFixture(t, deps)
+	f, _ := getDonation(t, newMux(h), "")
+	if f.Format != "glp-shot-donation" || f.Version != 1 || len(f.DonationID) != 16 {
+		t.Fatalf("envelope = %+v", f)
+	}
+	if len(f.Shots) != 2 {
+		t.Fatalf("shots = %d, want 2 (rated 1-5 only)", len(f.Shots))
+	}
+	var gaggiuino, gaggimate *donationShot
+	for i := range f.Shots {
+		switch f.Shots[i].Annotation.Rating {
+		case 4:
+			gaggiuino = &f.Shots[i]
+		case 3:
+			gaggimate = &f.Shots[i]
+		}
+	}
+	if gaggiuino == nil || gaggimate == nil {
+		t.Fatalf("missing shots: %+v", f.Shots)
+	}
+	a := gaggiuino.Annotation
+	if a.Dose == nil || *a.Dose != 18 || a.TDS == nil || *a.TDS != 9.5 || a.Yield == nil {
+		t.Errorf("annotation numbers = %+v", a)
+	}
+	if a.DrinkType == nil || *a.DrinkType != "other" {
+		t.Errorf("custom drink = %v, want other", a.DrinkType)
+	}
+	if gaggimate.Annotation.DrinkType == nil || *gaggimate.Annotation.DrinkType != "espresso" {
+		t.Errorf("built-in drink = %v, want espresso", gaggimate.Annotation.DrinkType)
+	}
+	dp := gaggiuino.Datapoints
+	idx, _ := dp["phaseIndex"].([]any)
+	if len(idx) != 6 || idx[4] != nil || idx[5] != nil {
+		t.Errorf("phaseIndex = %v, want 6 entries with the last two null", dp["phaseIndex"])
+	}
+	tr, _ := dp["phaseTransitions"].([]any)
+	if len(tr) != 1 {
+		t.Fatalf("phaseTransitions = %v", dp["phaseTransitions"])
+	}
+	entry, _ := tr[0].(map[string]any)
+	if len(entry) != 3 || entry["t"] != float64(10) || entry["phase"] != float64(1) || entry["reason"] != float64(2) {
+		t.Errorf("transition = %v, want only t/phase/reason", entry)
+	}
+	if dp["finalExitReason"] != float64(3) || dp["bleScaleConnected"] != true {
+		t.Errorf("finalExitReason/bleScaleConnected = %v/%v", dp["finalExitReason"], dp["bleScaleConnected"])
 	}
 }
 
