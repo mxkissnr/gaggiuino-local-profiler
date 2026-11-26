@@ -1540,7 +1540,8 @@ func TestExplainScoreReportsShotControl(t *testing.T) {
 
 // TestExportShotsDatasetShotControl covers #2219: export_shots_dataset rows
 // carry the shot control as flat fields, and profile_name falls back to the
-// embedded profile's name, which Gaggiuino history shots need.
+// embedded profile's name, which Gaggiuino history shots need. list_shots keeps
+// reading only the top-level name, so its rows for the same shot are unchanged.
 func TestExportShotsDatasetShotControl(t *testing.T) {
 	ts, sqlDB := newDeveloperServer(t, true, false)
 	insertShot(t, sqlDB, 81, 1000, adaptiveShotData(), map[string]any{"coffee": "Alpha"})
@@ -1582,6 +1583,33 @@ func TestExportShotsDatasetShotControl(t *testing.T) {
 	}
 	if got, _ := bare["profile_name"].(string); got != "Test Profile" {
 		t.Errorf("row 82 profile_name = %q, want Test Profile", got)
+	}
+
+	// stop_mode and free_result are never omitted, so a reader can rely on them.
+	for _, key := range []string{"stop_mode", "free_result"} {
+		if _, ok := profiled[key]; !ok {
+			t.Errorf("row 81 has no %q key", key)
+		}
+		if _, ok := bare[key]; !ok {
+			t.Errorf("row 82 has no %q key", key)
+		}
+	}
+
+	// The fallback is the dataset row's alone: list_shots still reads the
+	// top-level profileName, which shot 81 does not have.
+	listed := structured(t, call(t, session, "list_shots", map[string]any{}))
+	var listed81 map[string]any
+	for _, raw := range objects(listed, "shots") {
+		row, _ := raw.(map[string]any)
+		if v, _ := row["id"].(float64); v == 81 {
+			listed81 = row
+		}
+	}
+	if listed81 == nil {
+		t.Fatalf("list_shots has no row for shot 81")
+	}
+	if v, ok := listed81["profile_name"]; ok {
+		t.Errorf("list_shots row 81 profile_name = %v, want the key omitted (top-level name is null)", v)
 	}
 }
 
