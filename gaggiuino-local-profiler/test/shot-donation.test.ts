@@ -56,17 +56,17 @@ beforeEach(() => {
 });
 
 describe('shot donation dialog (#2220)', () => {
-  it('counts the shots of a donation file', () => {
+  it("counts the shots of a donation file", () => {
     expect(donationShotCount({ format: 'glp-shot-donation', version: 1, shots: [{}, {}] })).toBe(2);
     expect(donationShotCount({ format: 'other', shots: [] })).toBeNull();
     expect(donationShotCount(null)).toBeNull();
   });
 
-  it('names the download after today', () => {
+  it("names the download after today", () => {
     expect(donationFilename('2026-11-26')).toBe('glp-shot-donation-2026-11-26.json');
   });
 
-  it('opens the panel in a dialog and shows the count', async () => {
+  it("opens the panel in a dialog and shows the count", async () => {
     mocks.getShotDonation.mockReturnValue(fileResponse(3));
     openShotDonation();
     await flush();
@@ -79,7 +79,7 @@ describe('shot donation dialog (#2220)', () => {
     expect(els.donationDownloadBtn!.disabled).toBe(false);
   });
 
-  it('keeps download disabled for an empty range', async () => {
+  it("keeps download disabled for an empty range", async () => {
     mocks.getShotDonation.mockReturnValue(fileResponse(0));
     openShotDonation();
     await flush();
@@ -88,7 +88,7 @@ describe('shot donation dialog (#2220)', () => {
     expect(els.donationEmpty!.hidden).toBe(false);
   });
 
-  it('since range requests the picked date', async () => {
+  it("since range requests the picked date", async () => {
     mocks.getShotDonation.mockReturnValue(fileResponse(2));
     openShotDonation();
     await flush();
@@ -105,7 +105,7 @@ describe('shot donation dialog (#2220)', () => {
     expect(els.donationCount!.textContent).toBe('2');
   });
 
-  it('shows an error and no download on a failed request', async () => {
+  it("shows an error and no download on a failed request", async () => {
     mocks.getShotDonation.mockReturnValue(Promise.resolve({ ok: false, status: 429, text: () => Promise.resolve('') }));
     openShotDonation();
     await flush();
@@ -114,7 +114,7 @@ describe('shot donation dialog (#2220)', () => {
     expect(els.donationDownloadBtn!.disabled).toBe(true);
   });
 
-  it('downloads only after confirming', async () => {
+  it("downloads only after confirming", async () => {
     mocks.getShotDonation.mockReturnValue(fileResponse(1));
     openShotDonation();
     await flush();
@@ -128,7 +128,7 @@ describe('shot donation dialog (#2220)', () => {
     expect(mocks.requestCloseDetailSheet).toHaveBeenCalledTimes(1);
   });
 
-  it('ignores a stale response', async () => {
+  it("ignores a stale response", async () => {
     let resolveFirst: (v: unknown) => void = () => {};
     mocks.getShotDonation
       .mockReturnValueOnce(new Promise(r => { resolveFirst = r; }))
