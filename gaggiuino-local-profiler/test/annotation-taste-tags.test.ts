@@ -272,6 +272,8 @@ describe('quick rating strip markup (#2226)', () => {
     expect(markup).toContain('data-action="quick-rate" data-id="7" data-val="3" aria-label="3 of 5 stars" aria-pressed="true"');
     expect(markup).toContain('aria-pressed="true" data-action="quick-taste" data-id="7" data-val="bitter"');
     expect(markup.match(/aria-pressed="true"/g)).toHaveLength(2);
+    expect(markup.match(/class="star(?: active)?"/g)).toHaveLength(5);
+    expect(markup.match(/class="chip"/g)).toHaveLength(4);
   });
 
   it('labels every star for screen readers', () => {
@@ -302,6 +304,9 @@ describe('quick rating strip markup (#2226)', () => {
 
   it('picks the newest shot only while it is unrated', () => {
     expect(newestUnratedShotId([{ id: 1, timestamp: 100 }, { id: 2, timestamp: 200, annotation: {} }])).toBe(2);
+    // shot 1 is older, so a rated newest shot leaves the list without a strip
+    // instead of falling back to it.
+    expect(newestUnratedShotId([{ id: 1, timestamp: 100 }, { id: 2, timestamp: 200, annotation: { rating: 4 } }])).not.toBe(1);
     expect(newestUnratedShotId([{ id: 1, timestamp: 100 }, { id: 2, timestamp: 200, annotation: { rating: 4 } }])).toBeNull();
     expect(newestUnratedShotId([])).toBeNull();
     expect(newestUnratedShotId([{ id: 3, timestamp: 100 }, { id: 5, timestamp: 100 }])).toBe(5);
