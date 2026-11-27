@@ -23,11 +23,11 @@ import type { ShotLike } from './shots/utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { mapShotDatapoints } from '../utils.js';
 import { calcBestGrindCombosForBean, defaultGrinderName, suggestGrindDoseForBean,
-         _miniShotChart, _parseGrindNum } from './shots/grind.js';
+         _miniShotChart } from './shots/grind.js';
 import { normalizeGrindToNow } from '../grind-zero.js';
 import { calcNextGrindSuggestion, isConverged } from '../dialin-convergence.js';
 import type { DialinBand, DialinSuggestion } from '../dialin-convergence.js';
-import { prefillGrind, scaleForGrinder } from '../grind-scale.js';
+import { formatGrind, grindPosition, prefillGrind, scaleForGrinder } from '../grind-scale.js';
 import type { GrindScale } from '../grind-scale.js';
 import { renderSidebar, updateSidebarHighlighting } from '../components/sidebar.js';
 import { renderGrinderField, getGrinderFieldValue, handleGrinderFieldChange, _renderBeanSelect } from './shots/annotation.js';
@@ -172,10 +172,10 @@ export function closeDialinWizard(): void {
 // shot on this grinder" may be another bean's — so the grind module's
 // bean-aware suggestion (which already filters to the default grinder) is the
 // only source. It returns null for a bean-less session.
-function _suggestStartGrind(beanName: string | undefined, grinderName: string | undefined, beanId: number | null): number | null {
+function _suggestStartGrind(beanName: string | undefined, grinderName: string | undefined, beanId: number | null): string | number | null {
   if (defaultGrinderName(S.coffeeLibrary)) {
     if (!beanName) return null;
-    return _parseGrindNum(suggestGrindDoseForBean(beanName, S.coffeeLibrary, wizard.shots(), { beanId }).grindSetting);
+    return _startSetting(grinderName, suggestGrindDoseForBean(beanName, S.coffeeLibrary, wizard.shots(), { beanId }).grindSetting);
   }
   if (beanName) {
     const combos = calcBestGrindCombosForBean(beanName, wizard.shots(), beanId);
@@ -185,24 +185,42 @@ function _suggestStartGrind(beanName: string | undefined, grinderName: string | 
         : undefined;
       const [firstCombo] = combos;
       const combo = matched || firstCombo;
-      if (combo) return combo.grindSetting;
+      if (combo) return _startSetting(combo.grinder, combo.grindSetting);
     }
     const bean = beanId != null
       ? S.coffeeLibrary?.beans?.find(b => b.id === beanId)
       : S.coffeeLibrary?.beans?.find(b => b.name === beanName);
     const known = (bean?.knownGrindSettings as { grinder: string; grindSetting?: string | number }[] | undefined)?.find(k =>
       !grinderName || k.grinder.toLowerCase() === grinderName.toLowerCase());
-    if (known) return _parseGrindNum(known.grindSetting);
+    if (known) return _startSetting(known.grinder, known.grindSetting);
   }
   if (grinderName) {
     const last = [...wizard.shots()]
       .filter(s => (s.annotation?.grinder || '').toLowerCase() === grinderName.toLowerCase())
       .sort((a, b) => (b.timestamp as number) - (a.timestamp as number))[0];
-    const raw = _parseGrindNum(last?.annotation?.grindSetting);
+    const scale = scaleForGrinder(S.coffeeLibrary?.grinders, grinderName);
+    const raw = grindPosition(scale, last?.annotation?.grindSetting);
     const g = normalizeGrindToNow(S.coffeeLibrary?.grinders, grinderName, raw, last?.timestamp != null ? last.timestamp * 1000 : undefined) ?? null;
-    if (g !== null) return g;
+    if (g !== null) return scale ? formatGrind(scale, g) : g;
   }
   return null;
+}
+
+// #2225: a start setting as the grinder's scale writes it (8.0, 8.2,5, 12E);
+// without a scale the first number of the text, as before.
+function _startSetting(grinder: string | null | undefined, value: string | number | null | undefined): string | number | null {
+  const scale = scaleForGrinder(S.coffeeLibrary?.grinders, grinder);
+  const pos = grindPosition(scale, value);
+  if (pos === null) return null;
+  return scale ? formatGrind(scale, pos) : pos;
+}
+
+// A round's position written for the session's grinder; the number itself
+// without a scale.
+function _grindText(s: DialinSession, v: number | null | undefined): string | number {
+  if (v === null || v === undefined) return '';
+  const scale = _sessionScale(s);
+  return scale ? formatGrind(scale, v) : v;
 }
 
 // #1961: read fresh, so a scale edited during a session takes effect at once.
@@ -272,7 +290,7 @@ export function dialinAcceptNext(): void {
     renderDialinWizard();
     return;
   }
-  s.pendingGrind = suggestion.nextGrind ?? s.pendingGrind;
+  s.pendingGrind = suggestion.nextGrind !== null ? _grindText(s, suggestion.nextGrind) : s.pendingGrind;
   s.awaitingShotSince = Math.floor(Date.now() / 1000);
   wizard.persist();
   renderDialinWizard();
@@ -357,9 +375,9 @@ export async function dialinConfirmShot(shotId: number, isMatch: boolean): Promi
   const shotRow = wizard.shots().find(sh => sh.id === shotId) || shot;
   if (s.timeBand === undefined) s.timeBand = dialinBandFromShot(shotRow);
   const evald = await _evalShot(shotRow);
-  // _parseGrindNum already returns a finite number or null, so fall back to
+  // grindPosition already returns a finite number or null, so fall back to
   // 0 only when there is no usable setting (never send NaN).
-  const grindNum = _parseGrindNum(s.pendingGrind);
+  const grindNum = grindPosition(_sessionScale(s), s.pendingGrind);
   s.reviewRound = {
     grindSetting: grindNum !== null && Number.isFinite(grindNum) ? grindNum : 0,
     shotId, score: evald.score, seconds: evald.secs, ratio: evald.ratio, channeling: evald.channeling,
@@ -380,7 +398,7 @@ export async function dialinSaveKnownGrind(): Promise<void> {
   if (!bean || !best) return;
   // saveBeanKnownGrind's grindSetting accepts the round's numeric value too,
   // so the wire body stays identical to the untyped .js.
-  const updated = await saveBeanKnownGrind(bean.id as number, { grinder: s.grinder, grindSetting: best.grindSetting });
+  const updated = await saveBeanKnownGrind(bean.id as number, { grinder: s.grinder, grindSetting: _grindText(s, best.grindSetting) });
   if (updated) {
     const idx = S.coffeeLibrary.beans.findIndex(b => b.id === bean.id);
     if (idx !== -1) S.coffeeLibrary.beans[idx] = updated;
@@ -432,7 +450,7 @@ function _fillSetupFields(s: DialinSession): void {
   // #1961: this is a suggestion, not a saved value, so it must be a valid one.
   const scale = scaleForGrinder(S.coffeeLibrary?.grinders, grinder);
   // Without a scale the markup's value attribute already shows the suggestion.
-  if (scale) renderGrindField('dwStartGrind', grinder, prefillGrind(scale, _parseGrindNum(s.pendingGrind)));
+  if (scale) renderGrindField('dwStartGrind', grinder, prefillGrind(scale, grindPosition(scale, s.pendingGrind)));
   else forgetGrindField('dwStartGrind');
 }
 
@@ -477,13 +495,13 @@ function _renderSetup(s: DialinSession): Html {
 
 function _renderRound(s: DialinSession): Html {
   const roundNum = s.rounds.length + 1;
-  const chips = renderChips(s.rounds, r => esc(String(r.grindSetting)));
+  const chips = renderChips(s.rounds, r => esc(_grindText(s, r.grindSetting)));
 
   if (s.reviewRound) {
     const rr  = s.reviewRound;
     const sug = rr.suggestion as DialinSuggestion;
     const sugText = (sug.type === 'finer' || sug.type === 'coarser')
-      ? t(sug.reason, rr.grindSetting, sug.nextGrind)
+      ? t(sug.reason, _grindText(s, rr.grindSetting), _grindText(s, sug.nextGrind))
       : t(sug.reason);
     return html`<div class="dw-round">
       <div class="dw-round-label">${tHtml('dialin_wizard_round_label', roundNum)}</div>
@@ -535,14 +553,14 @@ function _renderSummary(s: DialinSession): Html {
     ${reasonText ? html`<div class="dw-summary-reason">${esc(reasonText)}</div>` : html``}
     ${best ? html`<div class="dw-summary-best">
       <div class="${esc(scoreBadgeClass(best.score))}">${esc(best.score)}</div>
-      <div>${tHtml('dialin_wizard_summary_best')}: ${esc(String(best.grindSetting))} · ${esc(best.seconds.toFixed(0))} s</div>
+      <div>${tHtml('dialin_wizard_summary_best')}: ${esc(_grindText(s, best.grindSetting))} · ${esc(best.seconds.toFixed(0))} s</div>
     </div>` : html``}
     <div class="dw-actions">
       ${best ? html`<button type="button" class="btn btn--primary" data-action="dialin-save-known-grind">${tHtml('dialin_wizard_save_known')}</button>` : html``}
       ${best ? html`<button type="button" class="btn btn--quiet" data-action="goto-shot" data-id="${esc(best.shotId)}">${tHtml('dialin_wizard_goto_shot')}</button>` : html``}
       <button type="button" class="btn btn--quiet" data-action="dialin-close">${tHtml('dialin_wizard_continue')}</button>
     </div>
-    ${renderChips(s.rounds, r => esc(String(r.grindSetting)))}
+    ${renderChips(s.rounds, r => esc(_grindText(s, r.grindSetting)))}
   </div>`;
 }
 
