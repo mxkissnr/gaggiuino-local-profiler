@@ -474,6 +474,15 @@ describe('half-finished update (#2229)', () => {
       .toEqual({ kind: 'done', result: 'success' });
   });
 
+  it('an ERROR answer restarts the unreachable count before the run is given up', () => {
+    const step = stepper(newPoll());
+    // The machine answered, so only the polls after it count as unreachable.
+    expect(step({ status: 'ERROR' })).toEqual({ kind: 'wait' });
+    expect(step(null)).toEqual({ kind: 'wait' });
+    expect(step(null)).toEqual({ kind: 'wait' });
+    expect(step(null)).toEqual({ kind: 'done', result: 'failed' });
+  });
+
   it('warns on the row and offers the update for a split machine', () => {
     const { row, els } = fakeRow();
     const panel = els['.machine-row-firmware-panel'] ??= new FakeEl();
