@@ -401,8 +401,27 @@ func writePreUpdateError(w http.ResponseWriter, err error) {
 	}
 }
 
+// installedVersions reads the controller (coreVersion) and frontend
+// (frontVersion) firmware hashes from the machine's `versions` settings
+// (#2229). An absent or empty frontVersion yields nil, so older firmware that
+// does not report it behaves exactly as before.
+func installedVersions(raw json.RawMessage) (core, front *string) {
+	var versions struct {
+		CoreVersion  *string `json:"coreVersion"`
+		FrontVersion *string `json:"frontVersion"`
+	}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &versions)
+	}
+	if versions.FrontVersion != nil && *versions.FrontVersion == "" {
+		versions.FrontVersion = nil
+	}
+	return versions.CoreVersion, versions.FrontVersion
+}
+
 // firmwareFromTo best-effort resolves the version being replaced (from: the
-// machine's installed `versions`.coreVersion) and the version it is updating
+// machine's installed `versions`.coreVersion, plus the frontVersion when a
+// half-finished update left it on another hash, #2229) and the version it is updating
 // to (to: the latest release on the machine's `system`.releaseChannel),
 // mirroring the reads firmwareVersion above already does. Both reads are
 // wrapped in SafeCall and swallow every error/panic, so a missing or
@@ -413,14 +432,12 @@ func (h *Handlers) firmwareFromTo(ctx context.Context, machine *Machine, adapter
 	httputil.SafeCall("machines: firmware update from-version fetch", func() {
 		versionsRaw, _ = adapter.GetSettings(ctx, machine, "versions")
 	})
-	var versions struct {
-		CoreVersion *string `json:"coreVersion"`
-	}
-	if len(versionsRaw) > 0 {
-		_ = json.Unmarshal(versionsRaw, &versions)
-	}
-	if versions.CoreVersion != nil {
-		from = *versions.CoreVersion
+	core, front := installedVersions(versionsRaw)
+	if core != nil {
+		from = *core
+		if from != "" && front != nil && *front != from {
+			from += " (frontend " + *front + ")"
+		}
 	}
 
 	var systemRaw json.RawMessage
@@ -513,14 +530,12 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 		}
 		slog.Warn("firmware version: versions settings fetch failed, reporting unknown", "err", versionsErr)
 		writeJSON(w, http.StatusOK, map[string]any{
-			"installed": nil, "latest": nil, "updateAvailable": false, "releaseUrl": nil,
+			"installed": nil, "installedFrontend": nil, "latest": nil,
+			"updateAvailable": false, "partial": false, "releaseUrl": nil,
 		})
 		return
 	}
-	var versions struct {
-		CoreVersion *string `json:"coreVersion"`
-	}
-	_ = json.Unmarshal(versionsRaw, &versions)
+	installed, front := installedVersions(versionsRaw)
 	var system map[string]any
 	if systemErr != nil {
 		slog.Warn("firmware version: system settings fetch failed, using default release channel", "err", systemErr)
@@ -535,13 +550,20 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 		latest = nil
 	}
 
-	installed := versions.CoreVersion
-	updateAvailable := installed != nil && *installed != "" && latest != nil && *installed != latest.Hash
+	// #2229: a half-finished update leaves the controller on the new hash and
+	// the frontend on the old one. Either part behind the latest release is an
+	// available update, and two different hashes mark the split state.
+	hasCore := installed != nil && *installed != ""
+	partial := hasCore && front != nil && *front != *installed
+	updateAvailable := hasCore && latest != nil &&
+		(*installed != latest.Hash || (front != nil && *front != latest.Hash))
 	resp := map[string]any{
-		"installed":       nullOr(installed),
-		"latest":          nil,
-		"updateAvailable": updateAvailable,
-		"releaseUrl":      nil,
+		"installed":         nullOr(installed),
+		"installedFrontend": nullOr(front),
+		"latest":            nil,
+		"updateAvailable":   updateAvailable,
+		"partial":           partial,
+		"releaseUrl":        nil,
 	}
 	if latest != nil {
 		resp["latest"] = latest.Hash

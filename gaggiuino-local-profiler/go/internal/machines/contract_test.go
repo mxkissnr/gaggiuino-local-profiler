@@ -164,8 +164,10 @@ func TestContract_FirmwareVersionShape(t *testing.T) {
 	}
 	body := decodeBody(t, rec.Body.Bytes())
 	requireNullableStringField(t, body, "installed")
+	requireNullableStringField(t, body, "installedFrontend")
 	requireNullableStringField(t, body, "latest")
 	requireBoolField(t, body, "updateAvailable")
+	requireBoolField(t, body, "partial")
 	requireNullableStringField(t, body, "releaseUrl")
 }
 

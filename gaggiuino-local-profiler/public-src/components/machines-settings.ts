@@ -50,7 +50,7 @@ export type FirmwarePollStep =
   | { kind: 'show'; progress: FirmwareProgress }
   | { kind: 'restarting' }
   | { kind: 'wait' }
-  | { kind: 'done'; result: 'success' | 'failed' | 'error' | 'timeout'; detail?: string };
+  | { kind: 'done'; result: 'success' | 'failed' | 'error' | 'timeout'; detail?: string; stage?: string };
 
 // preset key -> i18n label key, e.g. 'ember-espresso' -> 'theme_preset_ember_espresso'.
 export function presetLabelKey(key: string): string {
@@ -623,6 +623,12 @@ export const FIRMWARE_POLL_MAX_MS = 20 * 60 * 1000;
 // #1876: the machine reboots once more right after reporting the migration
 // complete, so the badge's status reload waits for that reboot to finish.
 export const FIRMWARE_STATUS_RELOAD_DELAY_MS = 15000;
+// #2229: after a trigger, how long an ERROR answer is read as the previous
+// run's stale status rather than as this run failing. A machine whose last
+// update failed keeps answering ERROR until the new run starts; on
+// main-7cb0a86 it reported IN_PROGRESS within seconds. Wall clock, like
+// FIRMWARE_POLL_MAX_MS.
+export const FIRMWARE_ERROR_GRACE_MS = 60 * 1000;
 
 // machineId -> { timer, startedAt, failCount, seenActive } -- one entry per
 // machine currently polling update progress. Every Gaggiuino machine's row
@@ -674,9 +680,13 @@ export function firmwarePollStep(poll: FirmwarePoll, progress: FirmwareProgress 
   } else if (progress) {
     const detail = firmwareErrorDetail(progress);
     if (detail !== null) {
-      poll.failCount++;
-      step = poll.seenActive || poll.failCount >= 3
-        ? { kind: 'done', result: 'error', detail }
+      // #2229: an ERROR only ends this run once the machine was seen busy in
+      // it, or once the trigger had the grace period to take effect. The
+      // machine answered, so the unreachable count starts over.
+      poll.failCount = 0;
+      const stage = firmwareFailedStageKey(progress);
+      step = poll.seenActive || now - poll.startedAt >= FIRMWARE_ERROR_GRACE_MS
+        ? { kind: 'done', result: 'error', detail, ...(stage ? { stage } : {}) }
         : { kind: 'wait' };
     } else if (poll.seenActive) {
       step = { kind: 'done', result: 'success' };
@@ -741,10 +751,17 @@ export function renderFirmwareRow(machineId: number, row: HTMLElement, data: Fir
     panel?.remove();
     return;
   }
+  // #2229: controller and frontend on different hashes = a half-finished
+  // update. The row shows a warning badge, next to the update button when the
+  // latest release is known.
+  const partialText = data.partial && data.installedFrontend
+    ? t('settings_machine_firmware_partial', data.installed, data.installedFrontend)
+    : null;
   if (data.updateAvailable && data.latest) {
     update.textContent = t('settings_machine_firmware_badge_update', data.latest);
     update.title = t('settings_machine_firmware_update_available', data.latest);
-    status.style.display = 'none';
+    if (partialText) showPartialFirmwareStatus(status, partialText);
+    else status.style.display = 'none';
     update.style.display = '';
     if (!panel) {
       update.insertAdjacentHTML('afterend', renderFirmwarePanelHtml());
@@ -755,8 +772,12 @@ export function renderFirmwareRow(machineId: number, row: HTMLElement, data: Fir
     }
     const msgEl = panel.querySelector('.machine-firmware-update-msg');
     const linkEl = panel.querySelector<HTMLAnchorElement>('.machine-firmware-changelog-link');
-    if (msgEl) msgEl.textContent = t('settings_machine_firmware_update_available', data.latest);
+    if (msgEl) msgEl.textContent = partialText ?? t('settings_machine_firmware_update_available', data.latest);
     if (linkEl) linkEl.href = safeHttpUrl(data.releaseUrl) ?? '#';
+  } else if (partialText) {
+    showPartialFirmwareStatus(status, partialText);
+    update.style.display = 'none';
+    panel?.remove();
   } else {
     showFirmwareStatus(status, update, t('settings_machine_firmware_badge_current', data.installed), true);
     status.title = t('settings_machine_firmware_installed', data.installed);
@@ -771,6 +792,15 @@ function showFirmwareStatus(status: HTMLElement, update: HTMLElement, text: stri
   status.className = upToDate ? 'badge badge--ok machine-row-firmware-status' : 'badge machine-row-firmware-status';
   status.style.display = '';
   update.style.display = 'none';
+}
+
+// #2229: warning badge for a half-finished update; the full text sits in the
+// badge title and in the expanded panel's message.
+function showPartialFirmwareStatus(status: HTMLElement, text: string): void {
+  status.textContent = t('settings_machine_firmware_badge_partial');
+  status.className = 'badge badge--warn machine-row-firmware-status';
+  status.title = text;
+  status.style.display = '';
 }
 
 function renderFirmwarePanelHtml(): Html {
@@ -868,7 +898,7 @@ async function _pollFirmwareProgressTick(machineId: number, row: HTMLElement, po
   } else if (step.kind === 'restarting') {
     renderFirmwareRestarting(row);
   } else if (step.kind === 'done') {
-    finishFirmwarePolling(machineId, row, step.result, step.detail);
+    finishFirmwarePolling(machineId, row, step.result, step.detail, step.stage);
     return;
   }
   poll.timer = setTimeout(() => void _pollFirmwareProgressTick(machineId, row, poll), FIRMWARE_POLL_INTERVAL_MS);
@@ -879,6 +909,7 @@ function finishFirmwarePolling(
   row: HTMLElement,
   result: 'success' | 'failed' | 'error' | 'timeout',
   detail?: string,
+  stage?: string,
 ): void {
   stopFirmwarePolling(machineId);
   renderFirmwareProgressBar(row, null);
@@ -900,11 +931,14 @@ function finishFirmwarePolling(
   if (result === 'failed') {
     if (window.showToast) window.showToast(t('settings_machine_firmware_update_failed_toast'));
   } else if (result === 'error') {
-    if (window.showToast) {
-      window.showToast(detail
-        ? t('settings_machine_firmware_migration_failed_toast', detail)
-        : t('settings_machine_firmware_update_failed_toast'));
-    }
+    // #2229: name the failed stage when the machine sends no error text, and
+    // keep the message in the row, where the banner is visible again.
+    let message = t('settings_machine_firmware_update_failed_toast');
+    if (detail) message = t('settings_machine_firmware_migration_failed_toast', detail);
+    else if (stage) message = t('settings_machine_firmware_stage_failed_toast', t(stage));
+    if (window.showToast) window.showToast(message);
+    const msgEl = row.querySelector('.machine-firmware-update-msg');
+    if (msgEl) msgEl.textContent = message;
   } else {
     if (window.showToast) window.showToast(t('settings_machine_firmware_update_timeout_toast'));
   }
@@ -921,6 +955,15 @@ const FIRMWARE_STAGE_KEYS: Record<string, string> = {
   F_FW: 'settings_machine_firmware_stage_f_fw',
   F_FS: 'settings_machine_firmware_stage_f_fs',
 };
+
+// #2229: the stage label key of the step that was running when the machine
+// reported ERROR, from the progress `type` only; null when the type is absent
+// or unknown. migration.state is deliberately not read: on main-7cb0a86 it
+// stayed "error" through a whole successful update, so it says nothing about
+// the current run.
+export function firmwareFailedStageKey(p: FirmwareProgress): string | null {
+  return FIRMWARE_STAGE_KEYS[String(p.type || '').toUpperCase()] ?? null;
+}
 
 // Named stage when the firmware reports a type this build knows, the plain
 // "updating firmware" label otherwise -- an unrecognised (or absent) type

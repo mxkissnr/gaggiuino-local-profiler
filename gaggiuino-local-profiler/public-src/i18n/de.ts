@@ -457,6 +457,7 @@ const de: Partial<Translations> = {
     settings_machine_firmware_keep_powered:'Maschine eingeschaltet lassen, bis das Update fertig ist. Sie startet mehrmals neu und kann einige Minuten nicht erreichbar sein.', settings_machine_firmware_restarting:'Maschine startet neu…',
     settings_machine_firmware_migration_label:(op, pct)=> op ? `Update wird abgeschlossen: ${op}… ${pct}%` : `Update wird abgeschlossen… ${pct}%`,
     settings_machine_firmware_migration_failed_toast:(msg)=>`Firmware-Migration fehlgeschlagen: ${msg}`,
+    settings_machine_firmware_badge_partial:'Update unvollständig', settings_machine_firmware_partial:(core, front)=>`Controller ${core}, Frontend ${front}: Das letzte Update wurde nicht abgeschlossen.`, settings_machine_firmware_stage_failed_toast:(stage)=>`Firmware-Update fehlgeschlagen: ${stage}`,
     mbk_row_action:'Backups', mbk_title:(name)=>`Maschinen-Backups · ${name}`, mbk_verdict:(n, when)=>`${n} ${n === 1 ? 'Backup' : 'Backups'} · neuestes ${when}`,
     mbk_empty:'Noch keine Backups. Sichere jetzt oder warte auf das erste automatische Backup.', mbk_backup_now:'Jetzt sichern', mbk_upload:'Hochladen', mbk_download:'Herunterladen', mbk_delete:'Löschen',
     mbk_kind_manual:'Manuell', mbk_kind_scheduled:'Automatisch', mbk_kind_pre_update:'Vor Update', mbk_kind_uploaded:'Hochgeladen',

@@ -457,6 +457,7 @@ const fr: Partial<Translations> = {
     settings_machine_firmware_keep_powered:'Laissez la machine allumée jusqu\'à la fin de la mise à jour. Elle redémarre plusieurs fois et peut rester injoignable quelques minutes.', settings_machine_firmware_restarting:'La machine redémarre…',
     settings_machine_firmware_migration_label:(op, pct)=> op ? `Finalisation de la mise à jour : ${op}… ${pct}%` : `Finalisation de la mise à jour… ${pct}%`,
     settings_machine_firmware_migration_failed_toast:(msg)=>`La migration du firmware a échoué : ${msg}`,
+    settings_machine_firmware_badge_partial:'Mise à jour incomplète', settings_machine_firmware_partial:(core, front)=>`Contrôleur ${core}, frontend ${front} : la dernière mise à jour ne s'est pas terminée.`, settings_machine_firmware_stage_failed_toast:(stage)=>`La mise à jour du firmware a échoué : ${stage}`,
     mbk_row_action:'Sauvegardes', mbk_title:(name)=>`Sauvegardes de la machine · ${name}`, mbk_verdict:(n, when)=>`${n} sauvegarde${n === 1 ? '' : 's'} · la plus récente ${when}`,
     mbk_empty:'Aucune sauvegarde pour l\'instant. Sauvegarde maintenant ou attends la première sauvegarde automatique.', mbk_backup_now:'Sauvegarder', mbk_upload:'Importer', mbk_download:'Télécharger', mbk_delete:'Supprimer',
     mbk_kind_manual:'Manuelle', mbk_kind_scheduled:'Automatique', mbk_kind_pre_update:'Avant mise à jour', mbk_kind_uploaded:'Importée',

@@ -457,6 +457,7 @@ const it: Partial<Translations> = {
     settings_machine_firmware_keep_powered:'Lascia la macchina accesa finché l\'aggiornamento non è terminato. Si riavvia più volte e può restare irraggiungibile per qualche minuto.', settings_machine_firmware_restarting:'La macchina si sta riavviando…',
     settings_machine_firmware_migration_label:(op, pct)=> op ? `Completamento dell'aggiornamento: ${op}… ${pct}%` : `Completamento dell'aggiornamento… ${pct}%`,
     settings_machine_firmware_migration_failed_toast:(msg)=>`Migrazione del firmware non riuscita: ${msg}`,
+    settings_machine_firmware_badge_partial:'Aggiornamento incompleto', settings_machine_firmware_partial:(core, front)=>`Controller ${core}, frontend ${front}: l'ultimo aggiornamento non è stato completato.`, settings_machine_firmware_stage_failed_toast:(stage)=>`Aggiornamento del firmware non riuscito: ${stage}`,
     mbk_row_action:'Backup', mbk_title:(name)=>`Backup della macchina · ${name}`, mbk_verdict:(n, when)=>`${n} backup · il più recente ${when}`,
     mbk_empty:'Ancora nessun backup. Esegui un backup ora o attendi il primo backup automatico.', mbk_backup_now:'Backup ora', mbk_upload:'Carica', mbk_download:'Scarica', mbk_delete:'Elimina',
     mbk_kind_manual:'Manuale', mbk_kind_scheduled:'Automatico', mbk_kind_pre_update:'Prima dell\'aggiornamento', mbk_kind_uploaded:'Caricato',
