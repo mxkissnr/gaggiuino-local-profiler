@@ -24,6 +24,7 @@ const (
 
 	sourceProfile  = "profile"
 	sourceInferred = "inferred"
+	sourceMatched  = "matched"
 	sourceNone     = "none"
 )
 
@@ -53,8 +54,9 @@ type ShotControl struct {
 	// Phases lists the phases in shot order. Never nil.
 	Phases []PhaseControl
 	// Source says where Phases came from: "profile" (the embedded profile's
-	// phases), "inferred" (control type guessed from the target series) or
-	// "none" (no phase data).
+	// phases), "matched" (the embedded profile's phases, aligned to the
+	// target series of a shot without phaseIndex, #2221), "inferred"
+	// (control type guessed from the target series) or "none" (no phase data).
 	Source string
 	// ProfileName is the profile the shot was brewed with: profileName, else
 	// profile.name.
@@ -102,7 +104,8 @@ func ResolveShotControl(shot Shot) ShotControl {
 	profile := toMap(shot["profile"])
 	profilePhases, _ := profile["phases"].([]any)
 	transitions, finalExit, hasExit := gaggiMatePhaseLog(shot["datapoints"])
-	series := alignedSeries(shot["datapoints"], "timeInShot", "targetPumpFlow", "phaseIndex")
+	series := alignedSeries(shot["datapoints"], "timeInShot", "targetPumpFlow", "phaseIndex",
+		"targetPressure", "pressure", "pumpFlow", "shotWeight", "waterPumped")
 	timeInShot, targetPumpFlow, phaseIndex := series["timeInShot"], series["targetPumpFlow"], series["phaseIndex"]
 
 	c := ShotControl{
@@ -127,7 +130,9 @@ func ResolveShotControl(shot Shot) ShotControl {
 	case len(profilePhases) > 0 && hasPhaseIndex(phaseIndex):
 		c.Phases, c.Source = profilePhaseControls(profilePhases, timeInShot, phaseIndex), sourceProfile
 	default:
-		if inferred := inferredPhases(timeInShot, targetPumpFlow); len(inferred) > 0 {
+		if matched := matchProfilePhases(shot, profilePhases, series); matched != nil {
+			c.Phases, c.Source = profilePhaseControls(profilePhases, timeInShot, matched), sourceMatched
+		} else if inferred := inferredPhases(timeInShot, targetPumpFlow); len(inferred) > 0 {
 			c.Phases, c.Source = inferred, sourceInferred
 		} else if len(profilePhases) > 0 {
 			c.Phases, c.Source = profilePhaseControls(profilePhases, nil, nil), sourceProfile

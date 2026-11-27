@@ -272,7 +272,7 @@ type modelScoreOutput struct {
 // shotControlOutput is shots.ShotControl for the tools (#2219): what the
 // shot's profile controlled and what it left free.
 type shotControlOutput struct {
-	Source     string               `json:"source" jsonschema:"where the phases came from: profile (the embedded profile's phases), inferred (control type guessed from the target curves) or none"`
+	Source     string               `json:"source" jsonschema:"where the phases came from: profile (the embedded profile's phases), matched (the embedded profile's phases aligned to the target curves of a shot without recorded phase numbers), inferred (control type guessed from the target curves) or none"`
 	StopMode   string               `json:"stop_mode" jsonschema:"how the shot was stopped: weight, time, water or none"`
 	StopTarget *float64             `json:"stop_target,omitempty" jsonschema:"the stop value: g for weight, ml for water, s for time; omitted when unknown"`
 	StopFrom   string               `json:"stop_from,omitempty" jsonschema:"where the stop was read: global (the profile's global stop conditions), last_phase or exit_reason (GaggiMate); omitted for none"`
