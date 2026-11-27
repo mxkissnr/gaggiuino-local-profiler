@@ -146,6 +146,15 @@ function pickScaleType(type: string): void {
   root.onclick?.({ target: { closest: () => ({ dataset: { scaleType: type } }) } });
 }
 
+// The layout select and a hand edit, delivered as the browser delivers them.
+function pickPreset(id: string): void {
+  doc.root('grinderFormScale').onchange?.({ target: { id: 'grinderFormScalePreset', value: id } });
+}
+
+function edit(id: string): void {
+  doc.root('grinderFormScale').oninput?.({ target: { id } });
+}
+
 function setRange(min: string, max: string, step: string): void {
   el('grinderFormScaleMin').value = min;
   el('grinderFormScaleMax').value = max;
@@ -282,10 +291,6 @@ describe('dial scales in the grinder form and the shot field (#2225)', () => {
     resolution: 2,
   };
 
-  function pickPreset(id: string): void {
-    doc.root('grinderFormScale').onchange?.({ target: { id: 'grinderFormScalePreset', value: id } });
-  }
-
   function setGrinderScale(scale: unknown, name = 'P64'): void {
     S.coffeeLibrary = { beans: [], grinders: [{ name, scale }], baskets: [], puckScreens: [], recipes: [] };
   }
@@ -372,14 +377,7 @@ describe('dial scales in the grinder form and the shot field (#2225)', () => {
 });
 
 describe('grinder scale form fields (#2233)', () => {
-  function pickPreset(id: string): void {
-    doc.root('grinderFormScale').onchange?.({ target: { id: 'grinderFormScalePreset', value: id } });
-  }
-
-  function edit(id: string): void {
-    doc.root('grinderFormScale').oninput?.({ target: { id } });
-  }
-
+  // Only the layout select remembers a pick; a hand edit clears it.
   it('keeps the picked layout in the select until a field is edited', () => {
     openGrinderForm(null);
     pickPreset('ring');
@@ -397,6 +395,12 @@ describe('grinder scale form fields (#2233)', () => {
     expect(el('grinderFormScalePreset').value).toBe('ring');
     pickScaleType('stepless');
     expect(el('grinderFormScalePreset').value).toBe('');
+
+    pickPreset('clicks');
+    expect(el('grinderFormScalePreset').value).toBe('clicks');
+    el('grinderFormScalePart1Count').value = '9';
+    edit('grinderFormScalePart1Count');
+    expect(el('grinderFormScalePreset').value).toBe('');
   });
 
   it('shows only the fields of the chosen scale type', () => {
@@ -405,6 +409,7 @@ describe('grinder scale form fields (#2233)', () => {
     expect(el('grinderFormScaleRange').hidden).toBe(false);
     expect(el('grinderFormScaleStepField').hidden).toBe(false);
     expect(el('grinderFormScaleDial').hidden).toBe(true);
+    expect(el('grinderFormScaleMin').attrs.inputmode).toBe('decimal');
 
     pickScaleType('stepless');
     expect(el('grinderFormScaleRange').hidden).toBe(false);
@@ -415,6 +420,7 @@ describe('grinder scale form fields (#2233)', () => {
     expect(el('grinderFormScaleDial').hidden).toBe(false);
     expect(el('grinderFormScaleStepField').hidden).toBe(true);
     expect(el('grinderFormScaleRange').hidden).toBe(false);
+    expect(el('grinderFormScaleMin').attrs.inputmode).toBe('text');
 
     pickScaleType('');
     expect(el('grinderFormScaleRange').hidden).toBe(true);
@@ -432,6 +438,10 @@ describe('grinder scale form fields (#2233)', () => {
     el('grinderFormScalePart2Count').value = '';
     edit('grinderFormScalePart2Count');
     expect(el('grinderFormScalePart2LabelsField').hidden).toBe(true);
+
+    el('grinderFormScalePart2Count').value = '3';
+    edit('grinderFormScalePart2Count');
+    expect(el('grinderFormScalePart2LabelsField').hidden).toBe(false);
   });
 
   it('shows an example setting for every layout', () => {
@@ -448,6 +458,8 @@ describe('grinder scale form fields (#2233)', () => {
       pickPreset(preset);
       expect(el('grinderFormScaleExample').textContent).toBe(text);
       expect(el('grinderFormScaleExample').hidden).toBe(false);
+      // Only the stepless ring adds the in-between reading.
+      expect(el('grinderFormScaleExample').textContent.split(' · ')).toHaveLength(preset === 'ring' ? 3 : 2);
     }
   });
 
@@ -462,6 +474,11 @@ describe('grinder scale form fields (#2233)', () => {
     expect(el('grinderFormScaleExample').hidden).toBe(true);
     expect(el('grinderFormScaleExample').textContent).toBe('');
 
+    setRange('0', '9', '1');
+    edit('grinderFormScaleMin');
+    expect(el('grinderFormScaleExample').hidden).toBe(false);
+    expect(el('grinderFormScaleExample').textContent).toBe('Example: 0 · 1');
+
     pickScaleType('');
     expect(el('grinderFormScaleExample').hidden).toBe(true);
   });
@@ -471,6 +488,8 @@ describe('grinder scale form fields (#2233)', () => {
     const markup = doc.root('grinderFormScale').markup;
     expect(markup).toContain('data-i18n="lib_grinder_scale_part1_labels"');
     expect(markup).toContain('data-i18n="lib_grinder_scale_part2_labels"');
+    expect(markup).toContain('id="grinderFormScalePart1LabelsField"');
+    expect(markup).toContain('id="grinderFormScalePart2LabelsField"');
     expect(markup).toContain('id="grinderFormScaleExample"');
     expect(markup).not.toContain('data-i18n="lib_grinder_scale_labels"');
   });
