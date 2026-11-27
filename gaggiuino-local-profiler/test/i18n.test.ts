@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -10,6 +10,7 @@ import fr from '../public-src/i18n/fr.js';
 import es from '../public-src/i18n/es.js';
 import nl from '../public-src/i18n/nl.js';
 import { LOCALE_MAP, localeFor } from '../public-src/constants.js';
+import { formatDate } from '../public-src/utils.js';
 
 // setLang() runs applyTranslations() (which touches document) and then re-renders
 // the active view through window.* hooks. Stub those browser globals so the
@@ -32,6 +33,11 @@ const { setLang } = await import('../public-src/i18n.js');
 const localeForUnset = localeFor as (lang: string | null | undefined) => string;
 
 const LANGS = { de, en, it: itLang, fr, es, nl };
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+});
+
 const NEW_KEYS = [
     'machine_ready', 'export_csv_title', 'export_shot_title', 'share_card_tooltip',
     'compare_title', 'please_wait', 'profile_unknown',
@@ -83,7 +89,8 @@ describe('i18n language files', () => {
         expect(localeForUnset(null)).toBe('en-US');
     });
 
-    it('localeFor() returns the exact LOCALE_MAP entry for every supported language', () => {
+    it("localeFor() returns the exact LOCALE_MAP entry for every supported language", () => {
+        vi.stubGlobal('navigator', { language: 'en', languages: ['en'] });
         for (const name of Object.keys(LANGS)) {
             expect(localeFor(name)).toBe(LOCALE_MAP[name]);
         }
@@ -114,6 +121,50 @@ describe('i18n language files', () => {
             expect(rendered, `${name}.js compare_title output`).toContain('11');
             expect(rendered, `${name}.js compare_title output`).toContain('22');
         }
+    });
+});
+
+// #2232: the language picks the words, the browser's region the conventions.
+describe('localeFor() follows the browser region (#2232)', () => {
+    const d = new Date(2026, 10, 9, 16, 2);
+    const clean = (s: string): string => s.replace(/\s/g, ' ');
+
+    it("English UI in a German browser uses day-first dates and a 24-hour clock", () => {
+        vi.stubGlobal('navigator', { language: 'de-DE', languages: ['de-DE', 'de', 'en'] });
+        expect(localeFor('en')).toBe('en-DE');
+        expect(clean(formatDate(d, localeFor('en'), 'short', true))).toBe('09/11/2026 16:02');
+        expect(clean(formatDate(d, localeFor('en'), 'long'))).toBe('9 November 2026');
+    });
+
+    it("English UI in a US browser is unchanged", () => {
+        vi.stubGlobal('navigator', { language: 'en-US', languages: ['en-US'] });
+        expect(localeFor('en')).toBe('en-US');
+        expect(clean(formatDate(d, localeFor('en'), 'short', true))).toBe('11/09/2026 04:02 PM');
+    });
+
+    it("the first browser language wins and keeps the UI language's words", () => {
+        vi.stubGlobal('navigator', { language: 'en-US', languages: ['de-AT', 'en-US'] });
+        expect(localeFor('de')).toBe('de-AT');
+        expect(localeFor('en')).toBe('en-AT');
+        vi.stubGlobal('navigator', { language: 'en-GB', languages: [] });
+        expect(localeFor('en')).toBe('en-GB');
+    });
+
+    it("falls back to the fixed locale without a usable region", () => {
+        vi.stubGlobal('navigator', { language: 'de', languages: ['de'] });
+        expect(localeFor('en')).toBe('en-US');
+        expect(localeFor('de')).toBe('de-DE');
+        vi.stubGlobal('navigator', { language: '', languages: [] });
+        expect(localeFor('fr')).toBe('fr-FR');
+        vi.stubGlobal('navigator', { language: 'x', languages: ['not a locale!'] });
+        expect(localeFor('nl')).toBe('nl-NL');
+        vi.stubGlobal('navigator', undefined);
+        expect(localeFor('it')).toBe('it-IT');
+    });
+
+    it("an unknown UI language still falls back to English", () => {
+        vi.stubGlobal('navigator', { language: 'de-DE', languages: ['de-DE'] });
+        expect(localeFor('pt')).toBe('en-DE');
     });
 });
 
@@ -194,6 +245,21 @@ describe('i18n dictionaries stay consistent with the code (#1620)', () => {
             }
         }
         expect(mismatches).toEqual([]);
+    });
+
+    // #2232: every date/time call must get its locale from localeFor(), which
+    // now depends on the browser region. A call site that inlines a locale
+    // (LOCALE_MAP[...] or a literal) would silently opt out of that fix.
+    it("no date or time call bypasses localeFor", () => {
+        const offenders: string[] = [];
+        for (const file of sourceFiles(SRC_ROOT).filter(path => path.endsWith('.ts'))) {
+            const text = readFileSync(file, 'utf8');
+            for (const m of text.matchAll(/\.toLocale(?:Date|Time)String\(\s*([^,)]*)/g)) {
+                const arg = (m[1] ?? '').trim();
+                if (!/^(locale|localeFor\(.*)$/.test(arg)) offenders.push(`${file}: ${arg}`);
+            }
+        }
+        expect(offenders).toEqual([]);
     });
 });
 

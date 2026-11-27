@@ -14,7 +14,7 @@ export const MAX_DIFF_DEPTH = 32;
 export interface BackupDocument {
   readonly [key: string]: unknown;
   readonly format?: unknown; // "gaggiuino-settings"
-  readonly version?: unknown; // 1
+  readonly version?: unknown; // 1, or 2 since firmware main-7cb0a86
   readonly firmware?: unknown; // { core: string, frontend: string }
   readonly defaultProfileId?: unknown; // a profile id
   readonly settings?: unknown; // { <category>: { <key>: value | { ... } } }
@@ -160,6 +160,24 @@ const PROFILE_META_KEYS = new Set(['id', 'name', 'phases']);
 const isSecretSetting = (p: readonly string[]): boolean =>
   p[0] === 'system' && p[1] !== undefined && SECRET_SETTING_KEYS.has(p[1]);
 
+// Keep in step with tokenKeys in go/internal/machines/redact.go: since firmware main-7cb0a86 each
+// Cafe Mode user's preferences carry their own tokens (#2231). display.homeUsers is a list, which
+// the walk compares whole, so the path skip above cannot reach them.
+const HOME_USER_TOKEN_KEYS = new Set(['visualizerToken', 'sprofilerToken']);
+
+/** `settings` with every Cafe Mode user's tokens left out; a copy, the input is never changed. */
+function withoutHomeUserTokens(settings: unknown): unknown {
+  const display = isPlainObject(settings) ? own(settings, 'display') : undefined;
+  const users = isPlainObject(display) ? own(display, 'homeUsers') : undefined;
+  if (!isPlainObject(settings) || !isPlainObject(display) || !isList(users)) return settings;
+  const clean = users.map((user) => {
+    const prefs = isPlainObject(user) ? own(user, 'preferences') : undefined;
+    if (!isPlainObject(user) || !isPlainObject(prefs)) return user;
+    return { ...user, preferences: Object.fromEntries(Object.entries(prefs).filter(([key]) => !HOME_USER_TOKEN_KEYS.has(key))) };
+  });
+  return { ...settings, display: { ...display, homeUsers: clean } };
+}
+
 const isProfileMeta = (p: readonly string[]): boolean =>
   p.length === 1 && p[0] !== undefined && PROFILE_META_KEYS.has(p[0]);
 
@@ -285,7 +303,8 @@ export function diffMachineBackups(
   if (!deepEqual(own(before, 'defaultProfileId'), own(after, 'defaultProfileId'), 1)) {
     changes.push({ kind: 'defaultProfile', from: defaultProfileRef(before, beforeProfiles), to: defaultProfileRef(after, afterProfiles) });
   }
-  for (const leaf of diffSectionLeaves(own(before, 'settings'), own(after, 'settings'), 1, isSecretSetting)) {
+  const [fromSettings, toSettings] = [withoutHomeUserTokens(own(before, 'settings')), withoutHomeUserTokens(own(after, 'settings'))];
+  for (const leaf of diffSectionLeaves(fromSettings, toSettings, 1, isSecretSetting)) {
     changes.push({ kind: 'setting', path: leaf.path, ...valueChange(leaf) });
   }
   changes.push(...diffProfiles(beforeProfiles, afterProfiles));

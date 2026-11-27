@@ -51,14 +51,19 @@ const documentFormat = "gaggiuino-settings"
 
 // knownVersions lists the document versions GLP has checked for secret fields.
 // A version missing here is rejected: GLP fails closed rather than storing a
-// document whose new fields might carry a secret.
-var knownVersions = map[string]bool{"1": true}
+// document whose new fields might carry a secret. Version 2 (firmware
+// main-7cb0a86, #2231) was reviewed field by field against version 1: its only
+// new secrets are the per-user Cafe Mode tokens in
+// settings.display.homeUsers[*].preferences (machines.StripHomeUserTokens).
+var knownVersions = map[string]bool{"1": true, "2": true}
 
 // secretPaths is THE one list of machine secrets GLP never stores (maintainer
 // decision on #1878). The whole wifi block is a secret, so a restore never
 // changes any network setting, whatever fields future firmware adds there.
 // Every store path goes through prepare, so adding a path here is enough to
-// keep it out of every backup.
+// keep it out of every backup. The per-user Cafe Mode tokens sit in a list, so
+// they are not paths here: stripSecrets and mergeSecrets handle them through
+// machines.StripHomeUserTokens and machines.RestoreHomeUserTokens.
 var secretPaths = [][]string{
 	{"wifi"},
 	{"settings", "system", "mqttUsername"},
@@ -110,7 +115,52 @@ func parseDocument(raw []byte) (map[string]any, error) {
 			return nil, fmt.Errorf("%w: unexpected structure", ErrInvalidDocument)
 		}
 	}
+	if !homeUsersWellFormed(doc) {
+		return nil, fmt.Errorf("%w: unexpected structure", ErrInvalidDocument)
+	}
 	return doc, nil
+}
+
+// homeUsersWellFormed reports whether settings.display, when present, is an
+// object whose homeUsers, when present, is null or a list of objects whose
+// preferences, when present, are objects. Any other shape could hide a
+// per-user token where stripSecrets does not look, so parseDocument refuses
+// it (fail closed, like the secret paths).
+func homeUsersWellFormed(doc map[string]any) bool {
+	raw, present := valueAt(doc, []string{"settings", "display"})
+	if !present {
+		return true
+	}
+	display, ok := raw.(map[string]any)
+	if !ok {
+		return false
+	}
+	if display["homeUsers"] == nil {
+		return true
+	}
+	users, ok := display["homeUsers"].([]any)
+	if !ok {
+		return false
+	}
+	for _, u := range users {
+		user, ok := u.(map[string]any)
+		if !ok {
+			return false
+		}
+		if prefs, present := user["preferences"]; present {
+			if _, ok := prefs.(map[string]any); !ok {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// displaySettings returns settings.display when it is an object.
+func displaySettings(doc map[string]any) (map[string]any, bool) {
+	raw, _ := valueAt(doc, []string{"settings", "display"})
+	display, ok := raw.(map[string]any)
+	return display, ok
 }
 
 // parentsAreObjects reports whether every existing parent on path is a JSON
@@ -132,7 +182,8 @@ func parentsAreObjects(doc map[string]any, path []string) bool {
 	return ok
 }
 
-// stripSecrets deletes every secret path from doc; missing paths are fine.
+// stripSecrets deletes every secret path and every per-user Cafe Mode token
+// from doc; missing paths are fine.
 func stripSecrets(doc map[string]any) {
 	for _, path := range secretPaths {
 		parent := doc
@@ -149,10 +200,14 @@ func stripSecrets(doc map[string]any) {
 			delete(parent, path[len(path)-1])
 		}
 	}
+	if display, ok := displaySettings(doc); ok {
+		machines.StripHomeUserTokens(display)
+	}
 }
 
 // mergeSecrets copies every secret path that exists in current, a fresh
-// document from the machine, into stored and returns how many it copied.
+// document from the machine, into stored, plus each Cafe Mode user's tokens
+// matched by user id, and returns how many values it copied.
 // Missing parents are created; parseDocument already refused a document whose
 // existing parent is not an object, so nothing is overwritten by a parent.
 func mergeSecrets(stored, current map[string]any) int {
@@ -164,6 +219,11 @@ func mergeSecrets(stored, current map[string]any) int {
 		}
 		setValueAt(stored, path, value)
 		copied++
+	}
+	storedDisplay, storedOK := displaySettings(stored)
+	currentDisplay, currentOK := displaySettings(current)
+	if storedOK && currentOK {
+		copied += machines.RestoreHomeUserTokens(storedDisplay, currentDisplay)
 	}
 	return copied
 }

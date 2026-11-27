@@ -204,5 +204,5 @@ func (h *Handlers) applyToMachine(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Applied broker connection to machine #%d %q's own MQTT client settings", machine.ID, machine.Name)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(machines.RedactSystemSettings(result))
+	_, _ = w.Write(machines.RedactSettings(result))
 }

@@ -278,7 +278,7 @@ func TestMachineBackups_RestoreRefusesCraftedEntries(t *testing.T) {
 		entry(id1, ms, "manual", "", `{"format":"gaggiuino-settings","version":1,"wifi":{"ssid":"SECRET-ssid-x","password":"SECRET-wifi-x"}}`),
 		entry(id1, ms, "manual", "", `{"format":"gaggiuino-settings","version":1,"settings":{"system":{"mqttPassword":"SECRET-mqtt-x"}}}`),
 		entry(id1, ms, "manual", "", `{"format":"other","version":1}`),
-		entry(id1, ms, "manual", "", `{"format":"gaggiuino-settings","version":2}`),
+		entry(id1, ms, "manual", "", `{"format":"gaggiuino-settings","version":3}`),
 		entry(id1, ms, "manual", "", `{"format":"gaggiuino-settings","version":1,"pad":"`+strings.Repeat("x", 262145)+`"}`),
 		entry(id1, ms, "manual", "", `"x"`),
 		entry(id1, ms, "hacked", "", canonicalMachineDoc),
