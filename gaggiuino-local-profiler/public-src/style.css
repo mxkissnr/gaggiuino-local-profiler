@@ -1610,6 +1610,8 @@
         .lib-form-grid .lib-form-field:last-child:nth-child(odd) { grid-column: 1 / -1; }
         @media (max-width: 640px) { .lib-form-grid { grid-template-columns: 1fr; } }
         .lib-form-field { display: flex; flex-direction: column; gap: var(--sp-1); }
+        /* Both display rules beat the UA [hidden] rule; the grinder scale form hides its grids and fields (#2233). */
+        .lib-form-grid[hidden], .lib-form-field[hidden] { display: none; }
         .lib-form-field label { font-size: var(--fs-1); color: var(--gray-400); }
         /* Native title-attribute tooltip on the label itself, this icon is
            just the visual affordance that there's more to read on hover. */

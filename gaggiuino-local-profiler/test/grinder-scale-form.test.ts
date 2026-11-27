@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { installBootStubs } from './helpers/boot-stub-dom.js';
 import type { Grinder } from '../public-src/api/types.js';
@@ -492,5 +493,11 @@ describe('grinder scale form fields (#2233)', () => {
     expect(markup).toContain('id="grinderFormScalePart2LabelsField"');
     expect(markup).toContain('id="grinderFormScaleExample"');
     expect(markup).not.toContain('data-i18n="lib_grinder_scale_labels"');
+  });
+
+  // display rules on the form classes beat the UA [hidden] rule, so [hidden] needs its own rule (#2233).
+  it('lets hidden form grids and fields really hide', () => {
+    const css = readFileSync(new URL('../public-src/style.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.lib-form-grid\[hidden\],\s*\.lib-form-field\[hidden\]\s*\{\s*display:\s*none;?\s*\}/);
   });
 });
