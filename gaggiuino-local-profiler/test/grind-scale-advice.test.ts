@@ -139,7 +139,7 @@ describe('suggestGrindDoseForBean on a grinder scale', () => {
   });
 
   it('reads the first number of a stored "8 clicks" on a stepless dial', () => {
-    expect(suggest(library([{ name: GRINDER, isDefault: true, scale: STEPLESS }], '8 clicks')).grindSetting).toBe('8');
+    expect(suggest(library([{ name: GRINDER, isDefault: true, scale: STEPLESS }], '8 clicks')).grindSetting).toBe('8.0');
   });
 
   it('leaves a non-numeric known setting empty on a scaled grinder', () => {
