@@ -1275,9 +1275,11 @@ components:
       required: [installed, latest, updateAvailable, releaseUrl]
       description: GET /api/machine/firmware/version — installed vs latest release; latest/releaseUrl are null when no matching release was found.
       properties:
-        installed: { type: string, nullable: true }
+        installed: { type: string, nullable: true, description: "Controller firmware hash (the machine's coreVersion)." }
+        installedFrontend: { type: string, nullable: true, description: "Frontend firmware hash (the machine's frontVersion); null when the firmware does not report it." }
         latest: { type: string, nullable: true }
-        updateAvailable: { type: boolean }
+        updateAvailable: { type: boolean, description: "True when the controller or the frontend hash differs from the latest release." }
+        partial: { type: boolean, description: "True when the controller and the frontend report different hashes: the last update did not finish." }
         releaseUrl: { type: string, nullable: true }
 
     FirmwareProgress:

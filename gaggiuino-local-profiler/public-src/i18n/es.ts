@@ -457,6 +457,7 @@ const es: Partial<Translations> = {
     settings_machine_firmware_keep_powered:'Mantén la máquina encendida hasta que termine la actualización. Se reinicia varias veces y puede no estar accesible durante unos minutos.', settings_machine_firmware_restarting:'La máquina se está reiniciando…',
     settings_machine_firmware_migration_label:(op, pct)=> op ? `Finalizando la actualización: ${op}… ${pct}%` : `Finalizando la actualización… ${pct}%`,
     settings_machine_firmware_migration_failed_toast:(msg)=>`La migración del firmware ha fallado: ${msg}`,
+    settings_machine_firmware_badge_partial:'Actualización incompleta', settings_machine_firmware_partial:(core, front)=>`Controlador ${core}, frontend ${front}: la última actualización no terminó.`, settings_machine_firmware_stage_failed_toast:(stage)=>`La actualización del firmware falló: ${stage}`,
     mbk_row_action:'Copias', mbk_title:(name)=>`Copias de seguridad · ${name}`, mbk_verdict:(n, when)=>`${n} ${n === 1 ? 'copia' : 'copias'} · la más reciente ${when}`,
     mbk_empty:'Aún no hay copias. Haz una copia ahora o espera a la primera copia automática.', mbk_backup_now:'Copiar ahora', mbk_upload:'Subir', mbk_download:'Descargar', mbk_delete:'Eliminar',
     mbk_kind_manual:'Manual', mbk_kind_scheduled:'Automática', mbk_kind_pre_update:'Antes de actualizar', mbk_kind_uploaded:'Subida',

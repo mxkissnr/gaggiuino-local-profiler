@@ -9637,9 +9637,15 @@ export interface components {
         };
         /** @description GET /api/machine/firmware/version — installed vs latest release; latest/releaseUrl are null when no matching release was found. */
         FirmwareVersion: {
+            /** @description Controller firmware hash (the machine's coreVersion). */
             installed: string | null;
+            /** @description Frontend firmware hash (the machine's frontVersion); null when the firmware does not report it. */
+            installedFrontend?: string | null;
             latest: string | null;
+            /** @description True when the controller or the frontend hash differs from the latest release. */
             updateAvailable: boolean;
+            /** @description True when the controller and the frontend report different hashes: the last update did not finish. */
+            partial?: boolean;
             releaseUrl: string | null;
         };
         /** @description GET /api/machine/firmware/progress — the machine's own OTA progress payload, passed through verbatim. Firmware main-8aaf6f0 and later add an optional migration object for the partition migration that runs after an update; older firmware omits it. */

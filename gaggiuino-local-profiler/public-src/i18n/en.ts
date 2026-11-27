@@ -457,6 +457,7 @@ const en: Translations = {
     settings_machine_firmware_keep_powered:'Keep the machine powered on until the update has finished. It restarts several times and can be unreachable for a few minutes.', settings_machine_firmware_restarting:'Machine is restarting…',
     settings_machine_firmware_migration_label:(op, pct)=> op ? `Finishing update: ${op}… ${pct}%` : `Finishing update… ${pct}%`,
     settings_machine_firmware_migration_failed_toast:(msg)=>`Firmware migration failed: ${msg}`,
+    settings_machine_firmware_badge_partial:'Update incomplete', settings_machine_firmware_partial:(core, front)=>`Controller ${core}, frontend ${front}: the last update did not finish.`, settings_machine_firmware_stage_failed_toast:(stage)=>`Firmware update failed: ${stage}`,
     mbk_row_action:'Backups', mbk_title:(name)=>`Machine backups · ${name}`, mbk_verdict:(n, when)=>`${n} backup${n === 1 ? '' : 's'} · newest ${when}`,
     mbk_empty:'No backups yet. Back up now, or wait for the first automatic backup.', mbk_backup_now:'Back up now', mbk_upload:'Upload', mbk_download:'Download', mbk_delete:'Delete',
     mbk_kind_manual:'Manual', mbk_kind_scheduled:'Automatic', mbk_kind_pre_update:'Before update', mbk_kind_uploaded:'Uploaded',
