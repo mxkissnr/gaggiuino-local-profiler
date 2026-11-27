@@ -80,9 +80,9 @@ func seedDonationFixture(t *testing.T, deps Dependencies) int64 {
 		"rating": float64(4), "beanId": float64(1), "coffee": "SECRET-BEAN",
 		"grinder": "SECRET-GRINDER", "grindSetting": "SECRET-GRIND", "notes": "SECRET-NOTES",
 		"drinkType": "m_SECRET", "dose": float64(18), "tds": float64(9.5),
-		"beanAgeDays": float64(12), "roastDate": "2026-01-02",
+		"beanAgeDays": float64(12), "roastDate": "2026-01-02", "tasteTag": "sour",
 	})
-	seed(donationGaggiMateShotID, gm.ID, nil, map[string]any{"rating": float64(3), "drinkType": "espresso"})
+	seed(donationGaggiMateShotID, gm.ID, nil, map[string]any{"rating": float64(3), "drinkType": "espresso", "tasteTag": "astringent"})
 	seed(987654323, 1, nil, nil)
 	seed(987654324, 1, nil, map[string]any{"rating": float64(0)})
 	return gm.ID
@@ -385,5 +385,46 @@ func TestShotDonation_LookupFields(t *testing.T) {
 	}
 	if _, ok := gaggiuino.Scores["classic"]; !ok {
 		t.Errorf("scores = %v, want a classic entry", gaggiuino.Scores)
+	}
+}
+
+func TestDonationTasteTag_OnlyKnownValues(t *testing.T) {
+	for _, known := range []string{"sour", "bitter", "balanced", "thin"} {
+		got := donationTasteTag(known)
+		if got == nil || *got != known {
+			t.Errorf("donationTasteTag(%q) = %v, want %q", known, got, known)
+		}
+	}
+	for _, v := range []any{"astringent", "Sour", "", float64(0), float64(2), nil} {
+		if got := donationTasteTag(v); got != nil {
+			t.Errorf("donationTasteTag(%v) = %q, want nil", v, *got)
+		}
+	}
+}
+
+func TestShotDonation_TasteTagAllowListed(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	seedDonationFixture(t, deps)
+	f, body := getDonation(t, newMux(h), "")
+	var rated4, rated3 *donationShot
+	for i := range f.Shots {
+		switch f.Shots[i].Annotation.Rating {
+		case 4:
+			rated4 = &f.Shots[i]
+		case 3:
+			rated3 = &f.Shots[i]
+		}
+	}
+	if rated4 == nil || rated3 == nil {
+		t.Fatalf("missing shots: %+v", f.Shots)
+	}
+	if rated4.Annotation.TasteTag == nil || *rated4.Annotation.TasteTag != "sour" {
+		t.Errorf("rating 4 tasteTag = %v, want sour", rated4.Annotation.TasteTag)
+	}
+	if rated3.Annotation.TasteTag != nil {
+		t.Errorf("rating 3 tasteTag = %q, want nil", *rated3.Annotation.TasteTag)
+	}
+	if strings.Contains(body, "astringent") {
+		t.Errorf("body leaks an unknown taste tag: %s", body)
 	}
 }
