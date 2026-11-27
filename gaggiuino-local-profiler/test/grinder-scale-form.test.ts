@@ -496,7 +496,7 @@ describe('grinder scale form fields (#2233)', () => {
   });
 
   // display rules on the form classes beat the UA [hidden] rule, so [hidden] needs its own rule (#2233).
-  it('lets hidden form grids and fields really hide', () => {
+  it("lets hidden form grids and fields really hide", () => {
     const css = readFileSync(new URL('../public-src/style.css', import.meta.url), 'utf8');
     expect(css).toMatch(/\.lib-form-grid\[hidden\],\s*\.lib-form-field\[hidden\]\s*\{\s*display:\s*none;?\s*\}/);
   });
