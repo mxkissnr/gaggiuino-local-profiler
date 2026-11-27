@@ -131,7 +131,7 @@ export function refreshGrindField(inputId: string, grinderName: string | null | 
 
 // ── Grinder form ──────────────────────────────────────────────────────────
 
-const SCALE_DEFAULTS: Record<GrindScale['type'], { min: number; max: number; step: number }> = {
+const SCALE_DEFAULTS: Partial<Record<GrindScale['type'], { min: number; max: number; step: number }>> = {
   stepped:  { min: 0, max: 40, step: 1 },
   stepless: { min: 0, max: 10, step: 0.1 },
 };
