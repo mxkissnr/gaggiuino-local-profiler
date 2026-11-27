@@ -818,3 +818,113 @@ func TestTriggerFirmwareUpdate_BeforeHookNotCalledForInvalidRequests(t *testing.
 		t.Fatalf("updates = %d, want 0", got)
 	}
 }
+
+// firmwareVersionFor serves GET /api/machine/firmware/version for a fake
+// machine whose `versions` settings are versionsJSON and whose latest release
+// on the main channel is latestHash (#2229).
+func firmwareVersionFor(t *testing.T, versionsJSON, latestHash string) map[string]any {
+	t.Helper()
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	fake := newFakeGaggiuinoMachine()
+	t.Cleanup(fake.Close)
+	fake.settingsBody = []byte(versionsJSON)
+
+	releases := fakeGitHubReleases(t, []githubRelease{
+		{TagName: "main-" + latestHash, PublishedAt: "2026-11-20T00:00:00Z", HTMLURL: "https://example.com/main"},
+	})
+	overrideReleasesAPI(t, releases.URL)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodGet, "/api/machine/firmware/version?machineId="+strconv.FormatInt(machine.ID, 10), nil)
+	rec := doRequest(mux, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET firmware/version status = %d, body = %s", rec.Code, rec.Body)
+	}
+	return decodeBody(t, rec.Body.Bytes())
+}
+
+// #2229: the versions a real machine reported after an update that flashed the
+// controller (7cb0a86) but not the frontend (still c929939).
+func TestFirmwareVersion_SplitUpdateIsPartialAndOffersUpdate(t *testing.T) {
+	body := firmwareVersionFor(t, `{"coreVersion":"7cb0a86","frontVersion":"c929939","staticVersion":"1af8db8","releaseChannel":0}`, "7cb0a86")
+	if body["installed"] != "7cb0a86" || body["installedFrontend"] != "c929939" {
+		t.Fatalf("installed/installedFrontend = %v/%v, want 7cb0a86/c929939", body["installed"], body["installedFrontend"])
+	}
+	if body["updateAvailable"] != true {
+		t.Fatalf("updateAvailable = %v, want true (frontend is behind the latest release)", body["updateAvailable"])
+	}
+	if body["partial"] != true {
+		t.Fatalf("partial = %v, want true", body["partial"])
+	}
+}
+
+func TestFirmwareVersion_BothPartsCurrentIsNotPartial(t *testing.T) {
+	body := firmwareVersionFor(t, `{"coreVersion":"7cb0a86","frontVersion":"7cb0a86","staticVersion":"1af8db8","releaseChannel":0}`, "7cb0a86")
+	if body["updateAvailable"] != false || body["partial"] != false {
+		t.Fatalf("updateAvailable/partial = %v/%v, want false/false", body["updateAvailable"], body["partial"])
+	}
+	if body["installedFrontend"] != "7cb0a86" {
+		t.Fatalf("installedFrontend = %v, want 7cb0a86", body["installedFrontend"])
+	}
+}
+
+// Older firmware sends no frontVersion: the answer is the pre-#2229 one.
+func TestFirmwareVersion_WithoutFrontVersionBehavesAsBefore(t *testing.T) {
+	current := firmwareVersionFor(t, `{"coreVersion":"7cb0a86","releaseChannel":0}`, "7cb0a86")
+	if current["installed"] != "7cb0a86" || current["installedFrontend"] != nil {
+		t.Fatalf("installed/installedFrontend = %v/%v, want 7cb0a86/nil", current["installed"], current["installedFrontend"])
+	}
+	if current["updateAvailable"] != false || current["partial"] != false {
+		t.Fatalf("updateAvailable/partial = %v/%v, want false/false", current["updateAvailable"], current["partial"])
+	}
+	behind := firmwareVersionFor(t, `{"coreVersion":"c929939","frontVersion":"","releaseChannel":0}`, "7cb0a86")
+	if behind["updateAvailable"] != true || behind["partial"] != false || behind["installedFrontend"] != nil {
+		t.Fatalf("updateAvailable/partial/installedFrontend = %v/%v/%v, want true/false/nil",
+			behind["updateAvailable"], behind["partial"], behind["installedFrontend"])
+	}
+}
+
+// #2229: the maintenance-log "from" names the frontend too when a half-finished
+// update left it on another hash.
+func TestTriggerFirmwareUpdate_CallbackFromNamesSplitFrontend(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+	fake.settingsBody = []byte(`{"coreVersion":"7cb0a86","frontVersion":"c929939","releaseChannel":0}`)
+
+	releases := fakeGitHubReleases(t, []githubRelease{
+		{TagName: "main-7cb0a86", PublishedAt: "2026-11-20T00:00:00Z", HTMLURL: "https://example.com/main"},
+	})
+	overrideReleasesAPI(t, releases.URL)
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	var from, to string
+	h.SetOnFirmwareUpdate(func(_ *Machine, f, tt string) error {
+		from, to = f, tt
+		return nil
+	})
+	body := `{"machineId":` + strconv.FormatInt(machine.ID, 10) + `}`
+	rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/firmware/update", strings.NewReader(body)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST firmware/update status = %d, body = %s", rec.Code, rec.Body)
+	}
+	if from != "7cb0a86 (frontend c929939)" || to != "7cb0a86" {
+		t.Fatalf("callback from/to = %q/%q, want %q/%q", from, to, "7cb0a86 (frontend c929939)", "7cb0a86")
+	}
+}
