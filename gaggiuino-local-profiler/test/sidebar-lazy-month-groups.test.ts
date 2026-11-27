@@ -288,18 +288,23 @@ describe('quick rating strip on the newest unrated shot (#2226)', () => {
     vi.useRealTimers();
   });
 
+  const only = (nodes: FakeNode[], what: string): FakeNode => {
+    expect(nodes.length).toBe(1);
+    const node = nodes[0];
+    if (node === undefined) throw new Error(`missing ${what}`);
+    return node;
+  };
+
   it('shows the strip on the newest unrated shot only', () => {
     S.shots = [mkShot(2, 0), mkShot(1, 1)];
     renderSidebar();
 
-    const strips = collect(shotsEl, n => n.classList.contains('shot-quick-rating'));
-    expect(strips.length).toBe(1);
-    const wrapper = collect(shotsEl, n => n.id === 'wrapper-2')[0];
-    expect(wrapper).toBeTruthy();
+    const strip = only(collect(shotsEl, n => n.classList.contains('shot-quick-rating')), 'strip');
+    const wrapper = only(collect(shotsEl, n => n.id === 'wrapper-2'), 'wrapper 2');
     expect(wrapper.classList.contains('shot-wrapper--rate')).toBe(true);
-    expect(wrapper.children.includes(strips[0])).toBe(true);
-    expect(strips[0].innerHTML).toContain('data-shot-id="2"');
-    expect(strips[0].innerHTML).not.toContain('quick-rate-dismiss');
+    expect(wrapper.children.includes(strip)).toBe(true);
+    expect(strip.innerHTML).toContain('data-shot-id="2"');
+    expect(strip.innerHTML).not.toContain('quick-rate-dismiss');
   });
 
   it('shows no strip once the newest shot is rated', () => {
