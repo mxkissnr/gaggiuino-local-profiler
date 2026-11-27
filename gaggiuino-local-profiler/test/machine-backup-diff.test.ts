@@ -301,7 +301,7 @@ describe('secrets are never reported', () => {
             expect(JSON.stringify(result)).not.toContain('SECRET-');
         }
     });
-    it('drops every Cafe Mode user\'s tokens from a version 2 home users list', () => {
+    it("drops every Cafe Mode user's tokens from a version 2 home users list", () => {
         const withUsers = (ledR: number, tag: string): TestDoc => {
             const doc = baseDoc();
             doc['version'] = 2;
