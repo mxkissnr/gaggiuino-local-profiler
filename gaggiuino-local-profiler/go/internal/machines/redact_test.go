@@ -229,3 +229,64 @@ func TestMachineSystemSettings_UpdateParseFailureIs502(t *testing.T) {
 		t.Fatalf("settings update was forwarded despite unparseable current settings")
 	}
 }
+
+func TestStripHomeUserTokens(t *testing.T) {
+	display := map[string]any{"homeUsers": []any{
+		map[string]any{"id": json.Number("1"), "preferences": map[string]any{"ledR": json.Number("255"), "visualizerToken": "v1", "sprofilerToken": "s1"}},
+		"not a user",
+		map[string]any{"id": json.Number("2"), "preferences": "not an object"},
+		map[string]any{"id": json.Number("3")},
+	}}
+	StripHomeUserTokens(display)
+	StripHomeUserTokens(map[string]any{"homeUsers": "not a list"})
+	prefs := display["homeUsers"].([]any)[0].(map[string]any)["preferences"].(map[string]any)
+	if _, present := prefs["visualizerToken"]; present {
+		t.Errorf("visualizerToken not removed: %v", prefs)
+	}
+	if _, present := prefs["sprofilerToken"]; present {
+		t.Errorf("sprofilerToken not removed: %v", prefs)
+	}
+	if prefs["ledR"] != json.Number("255") {
+		t.Errorf("ledR = %#v, want 255 kept", prefs["ledR"])
+	}
+}
+
+func TestRestoreHomeUserTokens_MatchesUsersByID(t *testing.T) {
+	user := func(id any, prefs any) map[string]any {
+		u := map[string]any{"id": id}
+		if prefs != nil {
+			u["preferences"] = prefs
+		}
+		return u
+	}
+	target := map[string]any{"homeUsers": []any{
+		user(json.Number("1"), map[string]any{"ledR": json.Number("1")}),
+		user("2", map[string]any{}),
+		user(json.Number("4"), nil),
+		user(json.Number("5"), map[string]any{"visualizerToken": "typed"}),
+	}}
+	current := map[string]any{"homeUsers": []any{
+		user(json.Number("2"), map[string]any{"visualizerToken": "cur-2"}),
+		user(json.Number("4"), map[string]any{"visualizerToken": "cur-4"}),
+		user(json.Number("5"), map[string]any{"visualizerToken": "cur-5v", "sprofilerToken": "cur-5s"}),
+		user(json.Number("1"), map[string]any{"ledR": json.Number("9"), "visualizerToken": "cur-1v", "sprofilerToken": "cur-1s"}),
+	}}
+	if copied := RestoreHomeUserTokens(target, current); copied != 3 {
+		t.Errorf("copied = %d, want 3", copied)
+	}
+	users := target["homeUsers"].([]any)
+	first := users[0].(map[string]any)["preferences"].(map[string]any)
+	if first["visualizerToken"] != "cur-1v" || first["sprofilerToken"] != "cur-1s" || first["ledR"] != json.Number("1") {
+		t.Errorf("user 1 preferences = %v, want the current tokens and its own ledR", first)
+	}
+	if second := users[1].(map[string]any)["preferences"].(map[string]any); len(second) != 0 {
+		t.Errorf("string id \"2\" matched number 2: %v", second)
+	}
+	if _, present := users[2].(map[string]any)["preferences"]; present {
+		t.Errorf("a user without preferences got some: %v", users[2])
+	}
+	fifth := users[3].(map[string]any)["preferences"].(map[string]any)
+	if fifth["visualizerToken"] != "typed" || fifth["sprofilerToken"] != "cur-5s" {
+		t.Errorf("user 5 preferences = %v, want the typed visualizerToken kept and the current sprofilerToken", fifth)
+	}
+}

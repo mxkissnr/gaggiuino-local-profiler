@@ -79,3 +79,77 @@ func RestoreSystemPassword(body, current map[string]any) {
 	}
 	delete(body, "mqttPasswordSet")
 }
+
+// tokenKeys are the visualizer and profiler upload tokens. The system
+// category carries them, and since firmware main-7cb0a86 (#2231) so does each
+// Cafe Mode user's display.homeUsers[*].preferences. They are secrets: never
+// stored in a GLP backup and never sent to the browser.
+var tokenKeys = []string{"visualizerToken", "sprofilerToken"}
+
+// StripHomeUserTokens deletes every per-user token from display, a display
+// settings object. A user or preferences value that is not a JSON object is
+// skipped; a caller that must fail closed checks the shape first.
+func StripHomeUserTokens(display map[string]any) {
+	users, _ := display["homeUsers"].([]any)
+	for _, u := range users {
+		user, _ := u.(map[string]any)
+		prefs, _ := user["preferences"].(map[string]any)
+		for _, key := range tokenKeys {
+			delete(prefs, key)
+		}
+	}
+}
+
+// RestoreHomeUserTokens copies the per-user tokens from current, the
+// machine's current display settings, into target, matching users by id and
+// never by position. Only tokens missing from a target user's preferences are
+// copied, so a value the caller sent on purpose wins. Users found on one side
+// only, and users without a preferences object, are left alone. It returns
+// how many values it copied.
+func RestoreHomeUserTokens(target, current map[string]any) int {
+	byID := map[string]map[string]any{}
+	currentUsers, _ := current["homeUsers"].([]any)
+	for _, u := range currentUsers {
+		user, _ := u.(map[string]any)
+		key, ok := homeUserKey(user)
+		prefs, isObject := user["preferences"].(map[string]any)
+		if _, seen := byID[key]; ok && isObject && !seen {
+			byID[key] = prefs
+		}
+	}
+	copied := 0
+	targetUsers, _ := target["homeUsers"].([]any)
+	for _, u := range targetUsers {
+		user, _ := u.(map[string]any)
+		key, ok := homeUserKey(user)
+		prefs, isObject := user["preferences"].(map[string]any)
+		source, found := byID[key]
+		if !ok || !isObject || !found {
+			continue
+		}
+		for _, name := range tokenKeys {
+			if _, present := prefs[name]; present {
+				continue
+			}
+			if value, has := source[name]; has {
+				prefs[name] = value
+				copied++
+			}
+		}
+	}
+	return copied
+}
+
+// homeUserKey is a user's id as a map key. Numbers and strings stay apart, so
+// 1 and "1" are different users; a user without a usable id has no key.
+func homeUserKey(user map[string]any) (string, bool) {
+	switch id := user["id"].(type) {
+	case json.Number:
+		return "n:" + id.String(), true
+	case float64:
+		return "n:" + strconv.FormatFloat(id, 'f', -1, 64), true
+	case string:
+		return "s:" + id, true
+	}
+	return "", false
+}
