@@ -70,15 +70,17 @@ function makeEl(overrides: Partial<FakeEl> = {}): FakeEl {
 // so the fake does the same for the ids (and their value attributes).
 class FakeRoot {
   onclick: ((e: unknown) => void) | null = null;
+  onchange: ((e: unknown) => void) | null = null;
   markup = '';
   readonly doc: FakeDocument;
   constructor(doc: FakeDocument) { this.doc = doc; }
   get innerHTML(): string { return this.markup; }
   set innerHTML(value: string) {
     this.markup = value;
-    // A re-render without a scale carries value="" for all three, so clear
-    // first: the regex only creates the nodes the markup names.
-    for (const id of ['grinderFormScaleMin', 'grinderFormScaleMax', 'grinderFormScaleStep']) this.doc.node(id).value = '';
+    // A re-render without a scale carries value="" for every number field, so
+    // clear first: the regex only creates the nodes the markup names.
+    for (const id of ['grinderFormScaleMin', 'grinderFormScaleMax', 'grinderFormScaleStep',
+      'grinderFormScaleStart', 'grinderFormScalePart1Count', 'grinderFormScalePart2Count']) this.doc.node(id).value = '';
     for (const m of value.matchAll(/<input[^>]*id="([^"]*)"[^>]*value="([^"]*)"/g)) {
       this.doc.node(m[1] ?? '').value = m[2] ?? '';
     }
@@ -121,7 +123,7 @@ g.Option = FakeOption;
 
 const { S } = await import('../public-src/state/index.js');
 const { openGrinderForm, saveGrinder } = await import('../public-src/views/library/grinders.js');
-const { renderGrindField, grindSelectId } = await import('../public-src/views/shots/grind-field.js');
+const { renderGrindField, grindSelectId, getGrindFieldValue, checkGrindField } = await import('../public-src/views/shots/grind-field.js');
 const { scaleForGrinder } = await import('../public-src/grind-scale.js');
 const { calcNextGrindSuggestion } = await import('../public-src/dialin-convergence.js');
 g.document = doc;
@@ -165,9 +167,12 @@ beforeEach(() => {
   doc.roots = {};
   doc.activeElement = null;
   // The containers renderGrinderScaleForm writes into; the root's own innerHTML
-  // setter only re-creates the range inputs.
+  // setter only re-creates the number inputs.
   for (const id of ['grinderFormScaleType', 'grinderFormScaleRange', 'grinderFormScaleMin',
-    'grinderFormScaleMax', 'grinderFormScaleStep', 'grinderFormScaleError']) doc.node(id);
+    'grinderFormScaleMax', 'grinderFormScaleStep', 'grinderFormScaleError',
+    'grinderFormScaleStepField', 'grinderFormScaleDial', 'grinderFormScalePreset', 'grinderFormScaleStart',
+    'grinderFormScalePart1Count', 'grinderFormScalePart1Labels', 'grinderFormScalePart2Count',
+    'grinderFormScalePart2Labels', 'grinderFormScaleBetween']) doc.node(id);
   S.grinderEditId = null;
   S.coffeeLibrary = { beans: [], grinders: [], baskets: [], puckScreens: [], recipes: [] };
 });
@@ -262,5 +267,104 @@ describe('a saved scale changes behaviour, not only the stored value (#1961)', (
     const stepless = calcNextGrindSuggestion(rounds, scaleForGrinder(libraryGrinders(), 'K6'));
     expect(stepless.nextGrind).toBe(7.7);
     expect(stepless.delta).toBe(-0.3);
+  });
+});
+
+describe('dial scales in the grinder form and the shot field (#2225)', () => {
+  const RING_STORED = {
+    type: 'dial',
+    parts: [{ count: null, start: 0 }, { count: 6, labels: 'number' }],
+    min: '0.0',
+    max: '12.5',
+    stepless: true,
+    resolution: 2,
+  };
+
+  function pickPreset(id: string): void {
+    doc.root('grinderFormScale').onchange?.({ target: { id: 'grinderFormScalePreset', value: id } });
+  }
+
+  function setGrinderScale(scale: unknown, name = 'P64'): void {
+    S.coffeeLibrary = { beans: [], grinders: [{ name, scale }], baskets: [], puckScreens: [], recipes: [] };
+  }
+
+  it('fills a ring dial from its preset and sends it in the dial notation', async () => {
+    openGrinderForm(null);
+    el('grinderFormName').value = 'K6';
+    pickPreset('ring');
+
+    expect(el('grinderFormScaleMin').value).toBe('0.0');
+    expect(el('grinderFormScaleMax').value).toBe('12.5');
+    expect(el('grinderFormScalePart1Count').value).toBe('6');
+    expect(el('grinderFormScaleBetween').value).toBe('2');
+    expect(el('grinderFormScaleDial').hidden).toBe(false);
+    expect(el('grinderFormScaleStepField').hidden).toBe(true);
+
+    await saveGrinder();
+
+    expect(lastPayload().scale).toEqual(RING_STORED);
+  });
+
+  it('reads a letter dial from its fields', async () => {
+    openGrinderForm(null);
+    el('grinderFormName').value = 'K6';
+    pickScaleType('dial');
+    el('grinderFormScaleStart').value = '1';
+    el('grinderFormScalePart1Count').value = '9';
+    el('grinderFormScalePart1Labels').value = 'letter';
+    el('grinderFormScalePart2Count').value = '';
+    el('grinderFormScaleBetween').value = '1';
+    el('grinderFormScaleMin').value = '1A';
+    el('grinderFormScaleMax').value = '31I';
+
+    await saveGrinder();
+
+    expect(lastPayload().scale).toEqual({
+      type: 'dial',
+      parts: [{ count: null, start: 1 }, { count: 9, labels: 'letter' }],
+      min: '1A',
+      max: '31I',
+      stepless: false,
+      resolution: 1,
+    });
+  });
+
+  it('shows the dial error for a dial without steps', async () => {
+    openGrinderForm(null);
+    el('grinderFormName').value = 'K6';
+    pickScaleType('dial');
+    el('grinderFormScalePart1Count').value = '';
+
+    await saveGrinder();
+
+    expect(saveSpy).not.toHaveBeenCalled();
+    expect(el('grinderFormScaleError').hidden).toBe(false);
+    expect(el('grinderFormScaleError').textContent)
+      .toBe('Check the dial: every part needs 2 to 100 steps (up to 26 letters), and From must be below To.');
+  });
+
+  it('types a stepless dial and names a reading in the hint', () => {
+    setGrinderScale(RING_STORED);
+    renderGrindField('annGrindSetting', 'P64', '8.0');
+
+    expect(el('annGrindSetting').hidden).toBe(false);
+    expect(el(grindSelectId('annGrindSetting')).hidden).toBe(true);
+    expect(el('annGrindSetting').attrs.inputmode).toBe('text');
+
+    el('annGrindSetting').value = '8.25';
+    expect(getGrindFieldValue('annGrindSetting')).toBe('8.2,5');
+
+    el('annGrindSetting').value = '8.7';
+    checkGrindField('annGrindSetting');
+    expect(doc.node('grindHint-annGrindSetting').textContent)
+      .toBe('Enter a setting from 0.0 to 12.5 as the dial reads it, like 0.0,5.');
+  });
+
+  it('offers a dropdown for a stepped dial with few readings', () => {
+    setGrinderScale({ type: 'dial', parts: [{ count: null }, { count: 3 }], min: '1.0', max: '2.2' });
+    renderGrindField('annGrindSetting', 'P64', '1.0');
+
+    expect(el(grindSelectId('annGrindSetting')).hidden).toBe(false);
+    expect(el('annGrindSetting').hidden).toBe(true);
   });
 });
