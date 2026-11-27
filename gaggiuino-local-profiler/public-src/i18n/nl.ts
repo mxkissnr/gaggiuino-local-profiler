@@ -95,6 +95,7 @@ const nl: Partial<Translations> = {
     btn_compare_tooltip:'Selecteer als vergelijkingsshot (B). Tip: klik op de naam voor Shot A.', btn_delete_tooltip:'Shot verwijderen',
     ann_title:'Notities & Beoordeling', ann_coffee:'Koffie / Boon',
     ann_rating_star:(n)=>`${n} van 5 sterren`,
+    quick_rating_title:'Beoordeel deze shot', quick_rating_hint:'1 ondrinkbaar · 3 prima · 5 het beste wat ik kan', quick_rating_later:'Later', quick_rating_done:'Klaar',
     ann_grinder:'Molen', ann_grinder_ph:'bijv. Niche Zero',
     ann_grind_setting:'Maalgraad', ann_grind_ph:'bijv. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'bijv. 18',

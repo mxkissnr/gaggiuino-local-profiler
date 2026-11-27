@@ -53,6 +53,11 @@ var donationDrinkTypes = map[string]bool{
 	"cappuccino": true, "latte": true, "flat_white": true,
 }
 
+// donationTasteTags is the allow-list of the taste tags a shot can carry (#1957).
+var donationTasteTags = map[string]bool{
+	"sour": true, "bitter": true, "balanced": true, "thin": true,
+}
+
 type donationFile struct {
 	Format     string         `json:"format"`
 	Version    int            `json:"version"`
@@ -77,6 +82,7 @@ type donationAnnotation struct {
 	Yield       *float64 `json:"yield"`
 	TDS         *float64 `json:"tds"`
 	DrinkType   *string  `json:"drinkType"`
+	TasteTag    *string  `json:"tasteTag"`
 	RoastLevel  *string  `json:"roastLevel"`
 	BeanAgeDays *int     `json:"beanAgeDays"`
 }
@@ -211,6 +217,16 @@ func donationDrinkType(v any) *string {
 	return &s
 }
 
+// donationTasteTag returns the annotation's taste tag when it is one of the
+// four known values; anything else, numbers included, is left out as nil.
+func donationTasteTag(v any) *string {
+	s, _ := v.(string)
+	if !donationTasteTags[s] {
+		return nil
+	}
+	return &s
+}
+
 // donationSecret returns the per-install secret, creating it on first use.
 // INSERT OR IGNORE plus the re-read lets two concurrent first requests agree.
 func donationSecret(db *sql.DB) ([]byte, error) {
@@ -297,7 +313,7 @@ func (d Dependencies) buildShotDonation(since int64) (donationFile, error) {
 			ProfileKey:  donationProfileKey(profile),
 			Profile:     profile,
 			Datapoints:  donationDatapoints(shot),
-			Annotation:  donationAnnotation{Rating: rating, DrinkType: donationDrinkType(ann["drinkType"])},
+			Annotation:  donationAnnotation{Rating: rating, DrinkType: donationDrinkType(ann["drinkType"]), TasteTag: donationTasteTag(ann["tasteTag"])},
 			Scores:      map[string]*int{},
 		}
 		m := shots.ComputeShotMetrics(shot)

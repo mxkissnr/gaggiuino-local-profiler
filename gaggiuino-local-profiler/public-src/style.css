@@ -2066,6 +2066,17 @@
         .live-chart-area { order: 3; display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
         .live-next { order: 4; min-width: 0; }
 
+        /* #2226: quick rating strip (live view after a shot, newest unrated shot in the list) */
+        .quick-rating-host { order: 3; min-width: 0; padding: var(--sp-4); }
+        .quick-rating { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+        .quick-rating-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+        .quick-rating .star { display: inline-flex; align-items: center; justify-content: center; min-width: var(--ctl-height); min-height: var(--ctl-height); }
+        .quick-rating-hint { margin: 0; }
+        .quick-rating-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+        .quick-rating-dismiss { margin-left: auto; }
+        .shot-wrapper--rate { flex-wrap: wrap; }
+        .shot-quick-rating { flex: 1 0 100%; min-width: 0; padding: var(--sp-2) var(--sp-3) var(--sp-3); }
+
         .live-run-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-3); }
         .live-run-head .live-verdict { flex: 1 1 320px; min-width: 0; }
         .live-verdict .analytics-verdict-text { flex: 1; }

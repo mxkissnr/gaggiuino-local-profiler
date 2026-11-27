@@ -95,6 +95,7 @@ const de: Partial<Translations> = {
     btn_compare_tooltip:'Als Vergleichs-Shot (B) wählen. Tipp: Klick auf den Namen wählt Shot A.', btn_delete_tooltip:'Shot löschen',
     ann_title:'Notizen & Bewertung',    ann_coffee:'Kaffee / Bohne',
     ann_rating_star:(n)=>`${n} von 5 Sternen`,
+    quick_rating_title:'Shot bewerten', quick_rating_hint:'1 untrinkbar · 3 in Ordnung · 5 das Beste, was ich hinbekomme', quick_rating_later:'Später', quick_rating_done:'Fertig',
     ann_grinder:'Mühle', ann_grinder_ph:'z.B. Niche Zero',
     ann_grind_setting:'Mahlgrad', ann_grind_ph:'z.B. 23 Clicks',
     ann_dose:'Dosis (g)', ann_dose_ph:'z.B. 18',

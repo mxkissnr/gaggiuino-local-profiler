@@ -95,6 +95,7 @@ const en: Translations = {
     btn_compare_tooltip:'Set as compare shot (B). Tip: click the name to select Shot A.', btn_delete_tooltip:'Delete shot',
     ann_title:'Notes & Rating',    ann_coffee:'Coffee / Bean',
     ann_rating_star:(n)=>`${n} of 5 stars`,
+    quick_rating_title:'Rate this shot', quick_rating_hint:'1 undrinkable · 3 fine · 5 the best I can make', quick_rating_later:'Later', quick_rating_done:'Done',
     ann_grinder:'Grinder', ann_grinder_ph:'e.g. Niche Zero',
     ann_grind_setting:'Grind setting', ann_grind_ph:'e.g. 23 Clicks',
     ann_dose:'Dose (g)', ann_dose_ph:'e.g. 18',
