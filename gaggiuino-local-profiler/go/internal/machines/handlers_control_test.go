@@ -928,3 +928,28 @@ func TestTriggerFirmwareUpdate_CallbackFromNamesSplitFrontend(t *testing.T) {
 		t.Fatalf("callback from/to = %q/%q, want %q/%q", from, to, "7cb0a86 (frontend c929939)", "7cb0a86")
 	}
 }
+
+// #2229: the shared reader behind both firmware handlers. An absent or empty
+// frontVersion must read as "not reported" rather than as an empty hash, so
+// older firmware keeps its previous behaviour.
+func TestInstalledVersions_ReadsBothHashes(t *testing.T) {
+	core, front := installedVersions(json.RawMessage(`{"coreVersion":"7cb0a86","frontVersion":"c929939","staticVersion":"1af8db8"}`))
+	if core == nil || *core != "7cb0a86" || front == nil || *front != "c929939" {
+		t.Fatalf("core/front = %v/%v, want 7cb0a86/c929939", core, front)
+	}
+
+	core, front = installedVersions(json.RawMessage(`{"coreVersion":"7cb0a86","releaseChannel":0}`))
+	if core == nil || *core != "7cb0a86" || front != nil {
+		t.Fatalf("no frontVersion: core/front = %v/%v, want 7cb0a86/nil", core, front)
+	}
+
+	core, front = installedVersions(json.RawMessage(`{"coreVersion":"c929939","frontVersion":""}`))
+	if core == nil || *core != "c929939" || front != nil {
+		t.Fatalf("empty frontVersion: core/front = %v/%v, want c929939/nil", core, front)
+	}
+
+	core, front = installedVersions(nil)
+	if core != nil || front != nil {
+		t.Fatalf("nil raw: core/front = %v/%v, want nil/nil", core, front)
+	}
+}
