@@ -400,7 +400,7 @@ func TestMachineSettings_TokensNeverReachTheBrowser(t *testing.T) {
 
 	for category, body := range map[string]string{"display": `"lcdBrightness":50`, "system": `"releaseChannel":2`} {
 		rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/settings/"+category,
-		strings.NewReader(`{"machineId":`+id+`,`+body+`}`)))
+			strings.NewReader(`{"machineId":`+id+`,`+body+`}`)))
 		if rec.Code != http.StatusOK {
 			t.Fatalf("POST %s status = %d, body=%s", category, rec.Code, rec.Body.Bytes())
 		}
