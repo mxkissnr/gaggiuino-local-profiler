@@ -42,6 +42,58 @@ const fixtureDoc = `{
 // secret values, different key order and different formatting.
 const fixtureDocReordered = `{"wifi":{"password":"SECRET-wifi-pass-zzz","ssid":"SECRET-ssid-zzz"},"settings":{"display":{},"system":{"sprofilerToken":"SECRET-spro-zzz","visualizerToken":"SECRET-vis-zzz","mqttPassword":"SECRET-mqtt-pass-zzz","mqttUsername":"SECRET-mqtt-user-zzz","releaseChannel":1,"mqttHost":"broker.local"},"boiler":{"offset":93.50,"steamSetPoint":145,"brewDeltaState":"true"}},"pumpCalibration":{"lutValid":true,"lut":[1.0,1.1,1.2],"bands":[0,50,100]},"profiles":[{"phases":[{"target":9.0,"type":"brew"},{"target":3.5,"type":"infusion"}],"name":"Bloom <b>&co","id":3},{"phases":[{"target":9.0,"type":"brew"}],"name":"Simple","id":5}],"defaultProfileId":3,"firmware":{"frontend":"8aaf6f0","core":"8aaf6f0"},"version":1,"format":"gaggiuino-settings"}`
 
+// fixtureDocV2 is a version 2 document as firmware main-7cb0a86 sends it with
+// Cafe Mode on (#2231): two home users, each with their own tokens. Every
+// secret is a dummy.
+const fixtureDocV2 = `{
+  "format": "gaggiuino-settings",
+  "version": 2,
+  "firmware": {"core": "7cb0a86", "frontend": "7cb0a86"},
+  "defaultProfileId": 3,
+  "profiles": [{"id": 3, "name": "Bloom", "phases": [{"type": "brew", "target": 9.0}]}],
+  "pumpCalibration": {"bands": [0, 50, 100], "lut": [1.0, 1.1, 1.2], "lutValid": true},
+  "settings": {
+    "boiler": {"brewDeltaState": "true", "steamSetPoint": 145, "offset": 93.50},
+    "system": {"alternativeFlush": false, "autoFlushDurationSeconds": 5, "machineName": "Gaggia", "minShotDurationSeconds": 10, "momentarySwitches": false, "mqttEnabled": true, "mqttHost": "broker.local", "mqttPassword": "SECRET-v2-mqtt-pass", "mqttPort": 1883, "mqttTopicPrefix": "gaggiuino", "mqttUsername": "SECRET-v2-mqtt-user", "pumpFlowAtZero": 0.2, "pumpSpec": 1, "pumpSpecValid": true, "releaseChannel": 1, "servicesState": 0, "sprofilerToken": "SECRET-v2-spro", "timezoneOffsetMinutes": 60, "ungroupHomeTiles": false, "visualizerToken": "SECRET-v2-vis", "wifiEnabled": true},
+    "led": {"state": true},
+    "scales": {"btScalesPinnedMac": "AA:BB:CC:DD:EE:FF"},
+    "display": {"homeUserSwitching": true, "activeHomeUser": 1, "energyCostPerKwh": 0.35, "warmupMinutes": 20, "homeUsers": [
+      {"id": 1, "name": "Ana", "homeLayout": [], "dashboardLayout": [], "dashboardConfigured": true, "preferences": {"alternativeFlush": false, "autoFlushDurationSeconds": 5, "brewDeltaState": "true", "colourPrimary": "#aa5500", "colourSecondary": "#222222", "dashboardFontSize": 1, "defaultProfileId": 3, "dreamSteamState": "false", "forceDesktopView": false, "forcePredictive": false, "languageCode": "de", "lcdBrightness": 80, "lcdCloseOnBrewOff": true, "lcdDarkMode": true, "lcdGoHome": 30, "lcdSleep": 15, "ledB": 0, "ledDisco": false, "ledG": 128, "ledR": 255, "ledState": true, "minShotDurationSeconds": 10, "modernUI": true, "servicesState": 0, "sprofilerToken": "SECRET-v2-u1-spro", "steamSetPoint": 145, "ungroupHomeTiles": false, "version": 1, "visualizerToken": "SECRET-v2-u1-vis", "webThemeId": 0}},
+      {"id": 2, "name": "Ben", "homeLayout": [], "dashboardLayout": [], "dashboardConfigured": false, "preferences": {"alternativeFlush": true, "autoFlushDurationSeconds": 3, "brewDeltaState": "false", "colourPrimary": "#0055aa", "colourSecondary": "#eeeeee", "dashboardFontSize": 0, "defaultProfileId": 3, "dreamSteamState": "true", "forceDesktopView": true, "forcePredictive": true, "languageCode": "en", "lcdBrightness": 40, "lcdCloseOnBrewOff": false, "lcdDarkMode": false, "lcdGoHome": 60, "lcdSleep": 5, "ledB": 255, "ledDisco": true, "ledG": 0, "ledR": 10, "ledState": false, "minShotDurationSeconds": 8, "modernUI": false, "servicesState": 1, "sprofilerToken": "SECRET-v2-u2-spro", "steamSetPoint": 150, "ungroupHomeTiles": true, "version": 1, "visualizerToken": "", "webThemeId": 2}}
+    ]},
+    "theme": {"id": 0},
+    "webUi": {"modernUI": true},
+    "languageCode": "en",
+    "nextHomeUserId": 3
+  },
+  "wifi": {"ssid": "SECRET-v2-ssid", "password": "SECRET-v2-wifi-pass"}
+}`
+
+func secretValuesV2() []string {
+	return []string{
+		"SECRET-v2-mqtt-user", "SECRET-v2-mqtt-pass", "SECRET-v2-vis", "SECRET-v2-spro",
+		"SECRET-v2-u1-vis", "SECRET-v2-u1-spro", "SECRET-v2-u2-spro",
+		"SECRET-v2-ssid", "SECRET-v2-wifi-pass",
+	}
+}
+
+// homeUsersOf returns settings.display.homeUsers of doc by user name.
+func homeUsersOf(t *testing.T, doc map[string]any) map[string]map[string]any {
+	t.Helper()
+	raw, _ := valueAt(doc, []string{"settings", "display", "homeUsers"})
+	list, ok := raw.([]any)
+	if !ok {
+		t.Fatalf("settings.display.homeUsers = %#v, want a list", raw)
+	}
+	out := map[string]map[string]any{}
+	for _, u := range list {
+		user, _ := u.(map[string]any)
+		name, _ := user["name"].(string)
+		out[name] = user
+	}
+	return out
+}
+
 func secretValues() []string {
 	return []string{
 		"SECRET-mqtt-user-4d1", "SECRET-mqtt-pass-9c2", "SECRET-vis-7e3",
@@ -140,12 +192,24 @@ func TestPrepare_RejectsInvalidDocuments(t *testing.T) {
 		{"trailing object", []byte(fixtureDoc + `{}`)},
 		{"wrong format", mutatedDoc(t, func(d map[string]any) { d["format"] = "other" })},
 		{"missing format", mutatedDoc(t, func(d map[string]any) { delete(d, "format") })},
-		{"version 2", mutatedDoc(t, func(d map[string]any) { d["version"] = json.Number("2") })},
+		{"version 3", mutatedDoc(t, func(d map[string]any) { d["version"] = json.Number("3") })},
 		{"version string", mutatedDoc(t, func(d map[string]any) { d["version"] = "1" })},
 		{"missing version", mutatedDoc(t, func(d map[string]any) { delete(d, "version") })},
 		{"wifi not an object", mutatedDoc(t, func(d map[string]any) { d["wifi"] = "x" })},
 		{"system not an object", mutatedDoc(t, func(d map[string]any) {
 			d["settings"].(map[string]any)["system"] = []any{}
+		})},
+		{"display not an object", mutatedDoc(t, func(d map[string]any) {
+			d["settings"].(map[string]any)["display"] = "x"
+		})},
+		{"homeUsers not a list", mutatedDoc(t, func(d map[string]any) {
+			d["settings"].(map[string]any)["display"] = map[string]any{"homeUsers": map[string]any{"1": map[string]any{}}}
+		})},
+		{"home user not an object", mutatedDoc(t, func(d map[string]any) {
+			d["settings"].(map[string]any)["display"] = map[string]any{"homeUsers": []any{"x"}}
+		})},
+		{"home user preferences not an object", mutatedDoc(t, func(d map[string]any) {
+			d["settings"].(map[string]any)["display"] = map[string]any{"homeUsers": []any{map[string]any{"id": json.Number("1"), "preferences": []any{}}}}
 		})},
 		{"too large", pad(machines.MaxSettingsBackupBytes + 1)},
 	}
@@ -358,7 +422,7 @@ func TestMergeDocuments(t *testing.T) {
 		t.Errorf("merged hash = %q, want the stored hash %q: only secrets were added", reprepared.Hash, p.Hash)
 	}
 
-	for _, current := range []string{`{`, `{"format":"gaggiuino-settings","version":2}`} {
+	for _, current := range []string{`{`, `{"format":"gaggiuino-settings","version":3}`} {
 		if _, _, err := mergeDocuments(p.Data, []byte(current)); !errors.Is(err, ErrInvalidDocument) {
 			t.Errorf("mergeDocuments with current %s error = %v, want ErrInvalidDocument", current, err)
 		}
@@ -718,7 +782,7 @@ func TestScheduler_SkipsOfflineBusyUnsupportedAndOtherMachines(t *testing.T) {
 
 	t.Run("unreadable document", func(t *testing.T) {
 		e := newTestEnv(t, gaggiuinoMachine(1))
-		client := &fakeClient{docs: []string{strings.Replace(fixtureDoc, `"version": 1`, `"version": 2`, 1)}}
+		client := &fakeClient{docs: []string{strings.Replace(fixtureDoc, `"version": 1`, `"version": 3`, 1)}}
 		e.clients[1] = client
 		e.tick()
 		if len(e.rows()) != 0 {
@@ -786,5 +850,67 @@ func TestClientFor(t *testing.T) {
 	c, ok := ClientFor(fakeProvider{adapter: machines.NewGaggiuinoAdapter(nil)})(&gaggiuino)
 	if !ok || c == nil {
 		t.Fatal("a Gaggiuino machine did not get a settings backup client")
+	}
+}
+
+func TestPrepare_V2StripsEverySecretIncludingHomeUserTokens(t *testing.T) {
+	p, err := prepare([]byte(fixtureDocV2))
+	if err != nil {
+		t.Fatalf("prepare v2 fixture: %v", err)
+	}
+	for _, secret := range secretValuesV2() {
+		if bytes.Contains(p.Data, []byte(secret)) {
+			t.Errorf("stored v2 document contains secret %q", secret)
+		}
+	}
+	for _, key := range []string{`"visualizerToken"`, `"sprofilerToken"`, `"mqttPassword"`, `"mqttUsername"`, `"wifi"`} {
+		if bytes.Contains(p.Data, []byte(key)) {
+			t.Errorf("stored v2 document still has the key %s: %s", key, p.Data)
+		}
+	}
+	for _, want := range []string{`"version":2`, `"languageCode":"en"`, `"nextHomeUserId":3`,
+		`"btScalesPinnedMac":"AA:BB:CC:DD:EE:FF"`, `"name":"Ana"`, `"ledR":255`, `"homeUserSwitching":true`, `"wifiEnabled":true`} {
+		if !bytes.Contains(p.Data, []byte(want)) {
+			t.Errorf("stored v2 document lost %s: %s", want, p.Data)
+		}
+	}
+	if p.FirmwareCore != "7cb0a86" || p.FirmwareFrontend != "7cb0a86" || p.ProfileCount != 1 {
+		t.Errorf("v2 metadata = %q/%q/%d, want 7cb0a86/7cb0a86/1", p.FirmwareCore, p.FirmwareFrontend, p.ProfileCount)
+	}
+}
+
+func TestMergeSecrets_RestoresHomeUserTokensByID(t *testing.T) {
+	p, err := prepare([]byte(fixtureDocV2))
+	if err != nil {
+		t.Fatalf("prepare v2 fixture: %v", err)
+	}
+	stored, err := parseDocument(p.Data)
+	if err != nil {
+		t.Fatalf("parse stored v2 document: %v", err)
+	}
+	// The machine now lists its users the other way round, with new tokens,
+	// another LED colour for Ana and a third user.
+	current, err := parseDocument([]byte(`{"format":"gaggiuino-settings","version":2,"wifi":{},"settings":{"display":{"homeUsers":[` +
+		`{"id":3,"name":"Cy","preferences":{"visualizerToken":"CUR-u3-vis","sprofilerToken":"CUR-u3-spro"}},` +
+		`{"id":2,"name":"Ben","preferences":{"visualizerToken":"CUR-u2-vis","sprofilerToken":"CUR-u2-spro"}},` +
+		`{"id":1,"name":"Ana","preferences":{"ledR":1,"visualizerToken":"CUR-u1-vis","sprofilerToken":"CUR-u1-spro"}}]}}}`))
+	if err != nil {
+		t.Fatalf("parse current document: %v", err)
+	}
+	if copied := mergeSecrets(stored, current); copied != 5 {
+		t.Errorf("copied = %d, want 5 (wifi and two tokens per stored user)", copied)
+	}
+	users := homeUsersOf(t, stored)
+	if len(users) != 2 {
+		t.Fatalf("stored users = %d, want 2: a restore never adds a user", len(users))
+	}
+	for name, want := range map[string][2]string{"Ana": {"CUR-u1-vis", "CUR-u1-spro"}, "Ben": {"CUR-u2-vis", "CUR-u2-spro"}} {
+		prefs, _ := users[name]["preferences"].(map[string]any)
+		if prefs["visualizerToken"] != want[0] || prefs["sprofilerToken"] != want[1] {
+			t.Errorf("%s tokens = %#v/%#v, want %s/%s", name, prefs["visualizerToken"], prefs["sprofilerToken"], want[0], want[1])
+		}
+	}
+	if prefs, _ := users["Ana"]["preferences"].(map[string]any); prefs["ledR"] != json.Number("255") {
+		t.Errorf("Ana ledR = %#v, want the stored 255", prefs["ledR"])
 	}
 }
