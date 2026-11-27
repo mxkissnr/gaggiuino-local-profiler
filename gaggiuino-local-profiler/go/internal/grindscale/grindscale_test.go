@@ -186,6 +186,16 @@ func TestDial_RingStepsTickByTick(t *testing.T) {
 			t.Errorf("Normalize(%q) = %q, want %q", in, got, want)
 		}
 	}
+	// The tick boundary carries like any other: 0.5 -> 1.0, 9.0 -> 9.1.
+	if got := next(t, ring, "0.5"); got != "1.0" {
+		t.Errorf("next after 0.5 = %q, want 1.0", got)
+	}
+	if got := next(t, ring, "9.0"); got != "9.1" {
+		t.Errorf("next after 9.0 = %q, want 9.1", got)
+	}
+	if got := normalized(ring, "12.5"); got != "12.5" {
+		t.Errorf("Normalize(12.5) = %q, want the last reading 12.5", got)
+	}
 }
 
 func TestDial_HonoursTheResolution(t *testing.T) {
@@ -205,6 +215,17 @@ func TestDial_HonoursTheResolution(t *testing.T) {
 	if got := normalized(rotationScale(t), "1.2.3,5"); got != "<invalid>" {
 		t.Errorf("stepped dial: Normalize(1.2.3,5) = %q, want an error", got)
 	}
+	// 49.35 sits between a half and a quarter tick: the two resolutions
+	// must snap it differently.
+	if got := half.Snap(49.35); got != 49.5 {
+		t.Errorf("half Snap(49.35) = %v, want 49.5", got)
+	}
+	if got := quarter.Snap(49.35); got != 49.25 {
+		t.Errorf("quarter Snap(49.35) = %v, want 49.25", got)
+	}
+	if got := quarter.Format(49.25); got != "8.1,25" {
+		t.Errorf("quarter Format(49.25) = %q, want 8.1,25", got)
+	}
 }
 
 func TestDial_RotationCarriesIntoTheNextRotation(t *testing.T) {
@@ -214,6 +235,15 @@ func TestDial_RotationCarriesIntoTheNextRotation(t *testing.T) {
 	}
 	if got := normalized(rotation, "1.2"); got != "1.2.0" {
 		t.Errorf("Normalize(1.2) = %q, want 1.2.0", got)
+	}
+	if got := next(t, rotation, "0.0.9"); got != "0.1.0" {
+		t.Errorf("next after 0.0.9 = %q, want 0.1.0", got)
+	}
+	if got := normalized(rotation, "4.9.9"); got != "4.9.9" {
+		t.Errorf("Normalize(4.9.9) = %q, want the last reading 4.9.9", got)
+	}
+	if got := normalized(rotation, "5.0.0"); got != "<invalid>" {
+		t.Errorf("Normalize(5.0.0) = %q, want an error past the last reading", got)
 	}
 }
 
@@ -230,6 +260,15 @@ func TestDial_LetterCarriesIntoTheNextNumber(t *testing.T) {
 			t.Errorf("Normalize(%q) = %q, want an error", in, got)
 		}
 	}
+	if got := next(t, sette, "1I"); got != "2A" {
+		t.Errorf("next after 1I = %q, want 2A", got)
+	}
+	if got := normalized(sette, "2a"); got != "2A" {
+		t.Errorf("Normalize(2a) = %q, want 2A (the letter is case-blind)", got)
+	}
+	if got := normalized(sette, "31I"); got != "31I" {
+		t.Errorf("Normalize(31I) = %q, want the last reading 31I", got)
+	}
 }
 
 func TestDial_InBetweenSortsBetweenTicks(t *testing.T) {
@@ -239,6 +278,14 @@ func TestDial_InBetweenSortsBetweenTicks(t *testing.T) {
 	c, _ := ring.parse("8.4")
 	if !(a < b && b < c) {
 		t.Errorf("positions 8.3=%v 8.3,5=%v 8.4=%v, want strictly increasing", a, b, c)
+	}
+	if b != a+0.5 {
+		t.Errorf("position of 8.3,5 = %v, want the half tick %v", b, a+0.5)
+	}
+	// A quarter tick is finer than this dial's resolution, so it is not a
+	// reading on it at all.
+	if _, ok := ring.parse("8.3,25"); ok {
+		t.Error("parse(8.3,25) read a quarter tick on a half-tick dial")
 	}
 }
 

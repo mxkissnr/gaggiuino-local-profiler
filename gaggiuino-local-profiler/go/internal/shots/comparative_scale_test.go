@@ -224,6 +224,15 @@ func TestComparativeAdvice_DialSortsInBetweenTicks(t *testing.T) {
 	if advice.Type != "finer" || !strings.Contains(advice.Text, "grind 8.3,5 →") {
 		t.Errorf("advice = %q %q, want finer towards 8.3,5", advice.Type, advice.Text)
 	}
+	// The evidence stays the position; only the text names the reading.
+	if advice.BestGrindSetting != got[1] || advice.SampleCount != 2 {
+		t.Errorf("best/count = %v/%d, want the position %v and both siblings",
+			advice.BestGrindSetting, advice.SampleCount, got[1])
+	}
+	// A half-tick dial has no quarter-tick reading, so it is not comparable.
+	if _, ok := m.grindOf(comparableShot(9, "Kenya AA", "Lagom P64", "8.3,25", 18, "Espresso")); ok {
+		t.Error("grindOf(8.3,25) read a quarter tick on a half-tick dial")
+	}
 }
 
 // TestComparativeAdvice_TextKeepsTrailingZero: the advice writes 8 on a 0.1
@@ -241,5 +250,15 @@ func TestComparativeAdvice_TextKeepsTrailingZero(t *testing.T) {
 	m.scale = nil
 	if advice := m.advice(siblings, "en"); advice == nil || !strings.Contains(advice.Text, "grind 8 →") {
 		t.Errorf("advice without a scale = %+v, want the text to name 8", advice)
+	}
+	// A stepped scale reads whole numbers plainly: no trailing .0 either.
+	m.scale = steppedScale(60, 1)
+	if advice := m.advice([]comparableSibling{{grind: 6, score: 95}}, "en"); advice == nil || !strings.Contains(advice.Text, "grind 6 →") {
+		t.Errorf("advice on a stepped scale = %+v, want the text to name 6", advice)
+	}
+	// The evidence never becomes the formatted string.
+	m.scale = steplessScale(0, 9, 0.1)
+	if advice := m.advice(siblings, "en"); advice == nil || advice.BestGrindSetting != 8 {
+		t.Errorf("advice on a 0.1 dial = %+v, want BestGrindSetting to stay the position 8", advice)
 	}
 }

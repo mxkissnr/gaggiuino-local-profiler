@@ -77,7 +77,7 @@ func TestLibraryRoundTrip_GrinderScaleUnchanged(t *testing.T) {
 }
 
 // TestLibraryRoundTrip_DialScaleUnchanged: a multi-part dial scale (#2225)
-// survives export and restore with its readings and resolution.
+// survives export and restore with its parts, readings and resolution.
 func TestLibraryRoundTrip_DialScaleUnchanged(t *testing.T) {
 	out := restoreGrinders(t, []library.Entity{
 		{"id": int64(1), "name": "Lagom P64", "scale": map[string]any{
@@ -102,6 +102,14 @@ func TestLibraryRoundTrip_DialScaleUnchanged(t *testing.T) {
 	}
 	if tick, _ := parts[1].(map[string]any); tick["count"] != 6.0 || tick["labels"] != "number" {
 		t.Errorf("restored tick part = %#v", parts[1])
+	}
+	// The first part is the unbounded one: no count, its start kept.
+	first, _ := parts[0].(map[string]any)
+	if count, present := first["count"]; !present || count != nil {
+		t.Errorf("restored first part = %#v, want count null", parts[0])
+	}
+	if first["start"] != 0.0 {
+		t.Errorf("restored first part start = %#v, want 0", first["start"])
 	}
 }
 
