@@ -11,7 +11,7 @@ func matchShot(phases []any, timeInShot, targetPressure, targetPumpFlow []any) S
 			"timeInShot":     timeInShot,
 			"targetPressure": targetPressure,
 			"targetPumpFlow": targetPumpFlow,
-		}
+		},
 	}
 }
 
