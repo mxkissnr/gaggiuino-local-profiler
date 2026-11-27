@@ -192,7 +192,7 @@ function scaleTextField(id: string, labelKey: string, value: string | number | n
 }
 
 function scaleSelectField(id: string, labelKey: string, options: readonly (readonly [string, string])[], value: string): Html {
-  return html`<div class="lib-form-field">
+  return html`<div class="lib-form-field" id="${esc(id)}Field">
     <label for="${esc(id)}" data-i18n="${esc(labelKey)}">${tHtml(labelKey)}</label>
     <select class="lib-select" id="${esc(id)}">${joinHtml(options.map(([v, key]) =>
       html`<option value="${esc(v)}"${v === value ? html` selected` : html``} data-i18n="${esc(key)}">${tHtml(key)}</option>`))}</select>
@@ -220,7 +220,8 @@ function renderScaleTypePills(): void {
 }
 
 // The range shows for every scale, the step only for a one-part scale, the
-// parts only for a dial.
+// parts only for a dial, the third part's notation only with its count, and
+// an example of the settings once the fields form a scale (#2233).
 function showScaleFields(): void {
   const range = document.getElementById('grinderFormScaleRange');
   if (range) range.hidden = !scaleFormType;
@@ -228,7 +229,22 @@ function showScaleFields(): void {
   if (step) step.hidden = scaleFormType === 'dial';
   const dial = document.getElementById('grinderFormScaleDial');
   if (dial) dial.hidden = scaleFormType !== 'dial';
+  const part2Labels = document.getElementById('grinderFormScalePart2LabelsField');
+  if (part2Labels) part2Labels.hidden = fieldValue('grinderFormScalePart2Count') === '';
   for (const id of ['grinderFormScaleMin', 'grinderFormScaleMax']) textField(id)?.setAttribute('inputmode', scaleFormType === 'dial' ? 'text' : 'decimal');
+  const example = document.getElementById('grinderFormScaleExample');
+  if (!example) return;
+  const scale = scaleFromForm();
+  example.textContent = scale ? t('lib_grinder_scale_example', scaleExample(scale)) : '';
+  example.hidden = !scale;
+}
+
+// The lowest setting, one whole unit above it and, between steps on a dial,
+// the first in-between setting, as the scale writes them (#2233).
+function scaleExample(scale: GrindScale): string {
+  const positions = [scale.min, scale.min + (scale.dial ? 1 : scale.step)];
+  if (scale.dial?.stepless) positions.push(scale.min + scale.step);
+  return positions.filter(v => v <= scale.max + 1e-9).map(v => formatGrind(scale, v)).join(' · ');
 }
 
 // Writes every field from a scale, as a preset does.
@@ -253,21 +269,29 @@ function applyScalePreset(id: string): void {
   fillScaleFields(scale);
   renderScaleTypePills();
   showScaleFields();
-  setFieldValue('grinderFormScalePreset', '');
+  setFieldValue('grinderFormScalePreset', id);
 }
 
 function pickScaleType(type: string): void {
   // A dial without parts yet starts from the ring layout.
   if (type === 'dial' && !fieldValue('grinderFormScalePart1Count')) { applyScalePreset('ring'); return; }
   scaleFormType = type;
+  setFieldValue('grinderFormScalePreset', '');
   renderScaleTypePills();
-  showScaleFields();
   const defaults = SCALE_DEFAULTS[type as GrindScale['type']];
-  if (!defaults) return;
-  for (const [id, value] of [['grinderFormScaleMin', defaults.min], ['grinderFormScaleMax', defaults.max], ['grinderFormScaleStep', defaults.step]] as const) {
-    const input = textField(id);
-    if (input && !input.value.trim()) input.value = String(value);
+  if (defaults) {
+    for (const [id, value] of [['grinderFormScaleMin', defaults.min], ['grinderFormScaleMax', defaults.max], ['grinderFormScaleStep', defaults.step]] as const) {
+      const input = textField(id);
+      if (input && !input.value.trim()) input.value = String(value);
+    }
   }
+  showScaleFields();
+}
+
+// A field changed by hand: the form no longer shows a picked layout.
+function scaleFieldEdited(): void {
+  setFieldValue('grinderFormScalePreset', '');
+  showScaleFields();
 }
 
 export function renderGrinderScaleForm(raw: unknown): void {
@@ -289,11 +313,12 @@ export function renderGrinderScaleForm(raw: unknown): void {
     <div class="lib-form-grid" id="grinderFormScaleDial">
       ${scaleTextField('grinderFormScaleStart', 'lib_grinder_scale_start', dial?.parts[0]?.start ?? 0, 'numeric')}
       ${scaleTextField('grinderFormScalePart1Count', 'lib_grinder_scale_part1', dial?.parts[1]?.count, 'numeric')}
-      ${scaleSelectField('grinderFormScalePart1Labels', 'lib_grinder_scale_labels', LABEL_OPTIONS, dial?.parts[1]?.labels ?? 'number')}
+      ${scaleSelectField('grinderFormScalePart1Labels', 'lib_grinder_scale_part1_labels', LABEL_OPTIONS, dial?.parts[1]?.labels ?? 'number')}
       ${scaleTextField('grinderFormScalePart2Count', 'lib_grinder_scale_part2', dial?.parts[2]?.count, 'numeric')}
-      ${scaleSelectField('grinderFormScalePart2Labels', 'lib_grinder_scale_labels', LABEL_OPTIONS, dial?.parts[2]?.labels ?? 'number')}
+      ${scaleSelectField('grinderFormScalePart2Labels', 'lib_grinder_scale_part2_labels', LABEL_OPTIONS, dial?.parts[2]?.labels ?? 'number')}
       ${scaleSelectField('grinderFormScaleBetween', 'lib_grinder_scale_between', BETWEEN_OPTIONS, String(dial?.stepless ? dial.resolution : 1))}
     </div>
+    <p class="settings-card-desc" id="grinderFormScaleExample" aria-live="polite" hidden></p>
     <div class="bf-error" id="grinderFormScaleError" role="alert" hidden></div>`;
   renderScaleTypePills();
   showScaleFields();
@@ -305,6 +330,11 @@ export function renderGrinderScaleForm(raw: unknown): void {
   root.onchange = e => {
     const target = e.target as HTMLSelectElement | null;
     if (target?.id === 'grinderFormScalePreset') applyScalePreset(target.value);
+    else scaleFieldEdited();
+  };
+  root.oninput = e => {
+    const target = e.target as HTMLElement | null;
+    if (target?.id !== 'grinderFormScalePreset') scaleFieldEdited();
   };
 }
 
@@ -320,14 +350,20 @@ function readDialForm(): Record<string, unknown> {
   return { type: 'dial', parts, min: fieldValue('grinderFormScaleMin'), max: fieldValue('grinderFormScaleMax'), stepless: between > 1, resolution: between };
 }
 
+// The scale the fields describe now, null when they do not form one.
+function scaleFromForm(): GrindScale | null {
+  if (!scaleFormType) return null;
+  const read = (id: string): number | null => numericGrind(textField(id)?.value ?? '');
+  return parseGrindScale(scaleFormType === 'dial' ? readDialForm()
+    : { type: scaleFormType, min: read('grinderFormScaleMin'), max: read('grinderFormScaleMax'), step: read('grinderFormScaleStep') });
+}
+
 // null: no scale. undefined: invalid, the error is showing and nothing may be saved.
 export function readGrinderScaleForm(): StoredGrindScale | null | undefined {
   const error = document.getElementById('grinderFormScaleError');
   if (error) { error.textContent = ''; error.hidden = true; }
   if (!scaleFormType) return null;
-  const read = (id: string): number | null => numericGrind(textField(id)?.value ?? '');
-  const scale = parseGrindScale(scaleFormType === 'dial' ? readDialForm()
-    : { type: scaleFormType, min: read('grinderFormScaleMin'), max: read('grinderFormScaleMax'), step: read('grinderFormScaleStep') });
+  const scale = scaleFromForm();
   if (scale) return storedGrindScale(scale);
   if (error) { error.textContent = t(scaleFormType === 'dial' ? 'lib_grinder_scale_invalid_dial' : 'lib_grinder_scale_invalid'); error.hidden = false; }
   return undefined;
