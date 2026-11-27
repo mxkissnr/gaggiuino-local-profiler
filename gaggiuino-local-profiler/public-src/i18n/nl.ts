@@ -457,6 +457,7 @@ const nl: Partial<Translations> = {
     settings_machine_firmware_keep_powered:'Laat de machine aan staan tot de update klaar is. Hij start meerdere keren opnieuw op en kan een paar minuten onbereikbaar zijn.', settings_machine_firmware_restarting:'Machine start opnieuw op…',
     settings_machine_firmware_migration_label:(op, pct)=> op ? `Update wordt afgerond: ${op}… ${pct}%` : `Update wordt afgerond… ${pct}%`,
     settings_machine_firmware_migration_failed_toast:(msg)=>`Firmwaremigratie mislukt: ${msg}`,
+    settings_machine_firmware_badge_partial:'Update onvolledig', settings_machine_firmware_partial:(core, front)=>`Controller ${core}, frontend ${front}: de laatste update is niet voltooid.`, settings_machine_firmware_stage_failed_toast:(stage)=>`Firmware-update mislukt: ${stage}`,
     mbk_row_action:'Backups', mbk_title:(name)=>`Machinebackups · ${name}`, mbk_verdict:(n, when)=>`${n} ${n === 1 ? 'backup' : 'backups'} · nieuwste ${when}`,
     mbk_empty:'Nog geen backups. Maak nu een backup of wacht op de eerste automatische backup.', mbk_backup_now:'Backup maken', mbk_upload:'Uploaden', mbk_download:'Downloaden', mbk_delete:'Verwijderen',
     mbk_kind_manual:'Handmatig', mbk_kind_scheduled:'Automatisch', mbk_kind_pre_update:'Voor update', mbk_kind_uploaded:'Geüpload',
