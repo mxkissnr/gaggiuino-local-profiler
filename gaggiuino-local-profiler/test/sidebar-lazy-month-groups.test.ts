@@ -271,3 +271,41 @@ describe('sidebar lazy month groups (#969)', () => {
     expect(seps.map(s => s.children[0]?.textContent)).toEqual(['1', '0', '0']);
   });
 });
+
+describe('quick rating strip on the newest unrated shot (#2226)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: FIXED_NOW });
+    installDocument();
+    S._expandedMonths = new Set();
+    S.currentFilter = '';
+    S.beanFilter = null;
+    S.machines = [];
+    S.currentSort = 'newest';
+    S.sortAsc = false;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows the strip on the newest unrated shot only', () => {
+    S.shots = [mkShot(2, 0), mkShot(1, 1)];
+    renderSidebar();
+
+    const strips = collect(shotsEl, n => n.classList.contains('shot-quick-rating'));
+    expect(strips.length).toBe(1);
+    const wrapper = collect(shotsEl, n => n.id === 'wrapper-2')[0];
+    expect(wrapper).toBeTruthy();
+    expect(wrapper.classList.contains('shot-wrapper--rate')).toBe(true);
+    expect(wrapper.children.includes(strips[0])).toBe(true);
+    expect(strips[0].innerHTML).toContain('data-shot-id="2"');
+    expect(strips[0].innerHTML).not.toContain('quick-rate-dismiss');
+  });
+
+  it('shows no strip once the newest shot is rated', () => {
+    S.shots = [{ ...mkShot(2, 0), annotation: { rating: 4 } }, mkShot(1, 1)];
+    renderSidebar();
+
+    expect(collect(shotsEl, n => n.classList.contains('shot-quick-rating')).length).toBe(0);
+  });
+});

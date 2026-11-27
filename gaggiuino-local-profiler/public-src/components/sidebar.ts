@@ -9,6 +9,7 @@ import { beanLabel, beanMix } from '../shared/bean-mix.js';
 import type { BeanMixPartInput } from '../shared/bean-mix.js';
 import type { ShotMeta } from '../state/index.js';
 import { safeLocalStorage } from '../storage.js';
+import { newestUnratedShotId, quickRatingHtml } from './quick-rating.js';
 
 // state/index.ts types shot rows as metadata-only `ShotMeta` with an index
 // signature; these local aliases name the fields the sidebar actually reads.
@@ -45,11 +46,17 @@ function starRepeat(n: number): Html {
   return joinHtml(Array.from({ length: n }, () => STAR_ICON_SVG));
 }
 
+// #2226: the newest shot, while it has no rating, carries the quick rating
+// strip; renderSidebar() picks it once per render, _buildShotWrapper() (also
+// used for lazily built month groups) reads it.
+let _quickRateShotId: number | null = null;
+
 export function renderSidebar(): void {
   const el = document.getElementById('shots') as HTMLElement;
   el.innerHTML = html``;
   _pendingMonthShots.clear(); // #969: repopulated below for whatever stays collapsed this render
   updateFlapCounter(S.shots.length);
+  _quickRateShotId = newestUnratedShotId(S.shots);
 
   const shots = sortedShots();
   // #412: day-separator groups only make sense in chronological order —
@@ -234,6 +241,14 @@ function _buildShotWrapper(shot: SidebarShot): HTMLElement {
     wrapper.appendChild(divShot);
     wrapper.appendChild(btnCmp);
     wrapper.appendChild(btnDel);
+    // #2226: outside .shot, so a tap in the strip never opens the shot.
+    if (shot.id === _quickRateShotId) {
+      const rate = document.createElement('div');
+      rate.className = 'shot-quick-rating';
+      rate.innerHTML = quickRatingHtml(shot, false);
+      wrapper.classList.add('shot-wrapper--rate');
+      wrapper.appendChild(rate);
+    }
     return wrapper;
 }
 
