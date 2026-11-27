@@ -20,13 +20,43 @@ export const LOCALE_MAP: Record<string, string> = { de: 'de-DE', en: 'en-US', it
 export const TRANSLATIONS: Record<string, unknown> = { de, en, it, fr, es, nl };
 
 // Single source of truth for "which BCP-47 locale does Intl/toLocale*()
-// get for the active UI language" — every call site used to inline its own
-// `LOCALE_MAP[S.currentLang] || 'de-DE'`, which meant an unsupported/unknown
-// S.currentLang silently rendered dates/numbers in German for every user,
-// not just German ones. Falls back to English instead, matching the same
-// fallback fix applied to S.currentLang itself (state/index.ts) and t() (i18n.ts).
+// get for the active UI language". An unknown language falls back to
+// English (never German), matching S.currentLang (state/index.ts) and t()
+// (i18n.ts). Since #2232 the UI language picks the words and the browser's
+// region the conventions: English UI in a German browser is en-DE, so a
+// 24-hour clock and day-first dates. Without a usable region, or when Intl
+// does not support the combined tag, the LOCALE_MAP entry applies as before.
+const localeCache = new Map<string, string>();
+
 export function localeFor(lang: string): string {
-  return LOCALE_MAP[lang] || LOCALE_MAP.en || 'en-US';
+  const base = LOCALE_MAP[lang] || LOCALE_MAP.en || 'en-US';
+  const browser = browserLanguage();
+  const key = `${base}|${browser}`;
+  let locale = localeCache.get(key);
+  if (locale === undefined) {
+    locale = withBrowserRegion(base, browser);
+    localeCache.set(key, locale);
+  }
+  return locale;
+}
+
+function browserLanguage(): string {
+  try {
+    return navigator.languages[0] || navigator.language || '';
+  } catch {
+    return ''; // no navigator (tests, workers without one)
+  }
+}
+
+function withBrowserRegion(base: string, browser: string): string {
+  try {
+    const region = browser ? new Intl.Locale(browser).region : undefined;
+    if (!region) return base;
+    const tag = `${new Intl.Locale(base).language}-${region}`;
+    return Intl.DateTimeFormat.supportedLocalesOf(tag).length > 0 ? tag : base;
+  } catch {
+    return base; // an invalid browser tag
+  }
 }
 
 // ── Coffee origin countries (ISO 3166-1 alpha-2 + numeric for topojson) ───
