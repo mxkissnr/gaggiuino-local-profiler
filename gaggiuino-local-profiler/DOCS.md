@@ -444,9 +444,11 @@ The shot annotation panel, the pre-shot setup and the guided dial-in pick the gr
 
 A grinder under Library → Grinders can have an optional **Grind scale**: **Stepped** for whole clicks or **Stepless** for a dial, each with a range and a step. On a stepped grinder the grind setting is a dropdown of its valid values. On a stepless grinder you type a number inside the range; a comma is accepted and the value is saved with a dot. A grinder without a scale keeps the free-text field, which also fits formats like `1.2.3`.
 
+A **Dial** scale fits grinders that read in parts: a number with ticks (`8.3`, in between `8.2,5`), rotation.number.click (`1.2.3`) or a number with a letter (`12E`). Set the first number, the steps per number (written as digits or letters), an optional third part, and whether half or quarter steps in between are allowed; **Common layout** fills these fields for the usual layouts, and every field stays editable. Each part counts up to its last step and then moves the next part on (`8.5` is followed by `9.0` with six ticks, `1.9.9` by `2.0.0`, `12I` by `13A`). Advice, best combinations and guided dial-in count in the dial's smallest step, so `8.3,5` sits between `8.3` and `8.4`. A reading the dial cannot have, such as `8.7` with six ticks, is not accepted; `8.25` on a dial with half ticks is saved as `8.2,5`.
+
 Enter the range you actually use rather than the grinder's full mechanical range: the guided dial-in and the comparative grind advice size their steps from it, and never suggest a value outside it or between two valid steps. The comparative advice reports its best setting on the grinder's own step.
 
-Adding a scale never changes a saved setting, and 8 and 8.0 count as the same setting. A saved value that is not on a stepped grinder's list stays at the top of the dropdown, marked as not on this scale, until you choose another one. A setting pre-filled from earlier shots moves to the nearest valid value, and stays empty if it is outside the range. The scale is part of a backup.
+Adding a scale never changes a saved setting, and 8 and 8.0 count as the same setting; values the app fills in or saves are written with every step of the scale, so 8.0 keeps its .0. A saved value that is not on a stepped grinder's list stays at the top of the dropdown, marked as not on this scale, until you choose another one. A setting pre-filled from earlier shots moves to the nearest valid value, and stays empty if it is outside the range. The scale is part of a backup.
 
 ### Guided Dial-In wizard
 
