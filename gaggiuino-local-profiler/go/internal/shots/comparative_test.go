@@ -1,7 +1,13 @@
 package shots
 
-import "testing"
+import (
+	"testing"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
+)
+
+// TestParseGrindNum: without a scale a setting reads as the first number in
+// its free text, as before #2225 (the parser now lives in grindscale.Position).
 func TestParseGrindNum(t *testing.T) {
 	cases := []struct {
 		in     string
@@ -16,9 +22,9 @@ func TestParseGrindNum(t *testing.T) {
 		{"12", 12, true},
 	}
 	for _, c := range cases {
-		got, ok := parseGrindNum(c.in)
+		got, ok := grindscale.Position(nil, c.in)
 		if ok != c.wantOK || (ok && got != c.want) {
-			t.Errorf("parseGrindNum(%q) = %v, %v, want %v, %v", c.in, got, ok, c.want, c.wantOK)
+			t.Errorf("Position(nil, %q) = %v, %v, want %v, %v", c.in, got, ok, c.want, c.wantOK)
 		}
 	}
 }

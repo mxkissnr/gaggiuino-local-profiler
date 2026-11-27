@@ -1,6 +1,7 @@
 package shots
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
@@ -175,5 +176,70 @@ func TestComparativeAdvice_EqualSettingsShareABucket(t *testing.T) {
 	}
 	if advice.BestScore != 80 {
 		t.Errorf("BestScore = %d, want 80 for the two averaged scores", advice.BestScore)
+	}
+}
+
+// ringDial is a ring with six ticks per number and half ticks between (#2225).
+func ringDial(t *testing.T) *grindscale.Scale {
+	t.Helper()
+	s := grindscale.Parse(map[string]any{"type": "dial", "parts": []any{
+		map[string]any{"count": nil}, map[string]any{"count": 6.0},
+	}, "min": "0.0", "max": "12.5", "stepless": true, "resolution": 2.0})
+	if s == nil {
+		t.Fatal("ring dial did not parse")
+	}
+	return s
+}
+
+// TestComparativeAdvice_DialSortsInBetweenTicks: on a ring dial 8.3,5 sits
+// between 8.3 and 8.4, and the advice names the reading, not the position.
+func TestComparativeAdvice_DialSortsInBetweenTicks(t *testing.T) {
+	ring := ringDial(t)
+	SetGrinderScaleSource(func(string) *grindscale.Scale { return ring })
+	t.Cleanup(func() { SetGrinderScaleSource(nil) })
+
+	m := newComparativeMatch(comparableShot(1, "Kenya AA", "Lagom P64", "8.5", 18, "Espresso"))
+	if m == nil {
+		t.Fatal("newComparativeMatch returned nil")
+	}
+	if !m.hasCurrentGrind || m.currentGrind != 53 {
+		t.Fatalf("current grind = %v, %v, want position 53 for 8.5", m.currentGrind, m.hasCurrentGrind)
+	}
+	var got []float64
+	for i, setting := range []string{"8.3", "8.3,5", "8.4"} {
+		g, ok := m.grindOf(comparableShot(int64(i+2), "Kenya AA", "Lagom P64", setting, 18, "Espresso"))
+		if !ok {
+			t.Fatalf("grindOf(%q) is not comparable", setting)
+		}
+		got = append(got, g)
+	}
+	if !(got[0] < got[1] && got[1] < got[2]) {
+		t.Errorf("positions 8.3, 8.3,5, 8.4 = %v, want strictly increasing", got)
+	}
+
+	advice := m.advice([]comparableSibling{{grind: got[1], score: 95}, {grind: got[0], score: 70}}, "en")
+	if advice == nil {
+		t.Fatal("expected advice")
+	}
+	if advice.Type != "finer" || !strings.Contains(advice.Text, "grind 8.3,5 →") {
+		t.Errorf("advice = %q %q, want finer towards 8.3,5", advice.Type, advice.Text)
+	}
+}
+
+// TestComparativeAdvice_TextKeepsTrailingZero: the advice writes 8 on a 0.1
+// dial as 8.0 (#2225); without a scale it stays the plain number.
+func TestComparativeAdvice_TextKeepsTrailingZero(t *testing.T) {
+	m := newComparativeMatch(comparableShot(1, "Kenya AA", "Lagom", "9", 18, "Espresso"))
+	if m == nil {
+		t.Fatal("newComparativeMatch returned nil")
+	}
+	siblings := []comparableSibling{{grind: 8, score: 95}}
+	m.scale = steplessScale(0, 9, 0.1)
+	if advice := m.advice(siblings, "en"); advice == nil || !strings.Contains(advice.Text, "grind 8.0 →") {
+		t.Errorf("advice on a 0.1 dial = %+v, want the text to name 8.0", advice)
+	}
+	m.scale = nil
+	if advice := m.advice(siblings, "en"); advice == nil || !strings.Contains(advice.Text, "grind 8 →") {
+		t.Errorf("advice without a scale = %+v, want the text to name 8", advice)
 	}
 }

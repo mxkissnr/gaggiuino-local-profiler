@@ -76,6 +76,35 @@ func TestLibraryRoundTrip_GrinderScaleUnchanged(t *testing.T) {
 	}
 }
 
+// TestLibraryRoundTrip_DialScaleUnchanged: a multi-part dial scale (#2225)
+// survives export and restore with its readings and resolution.
+func TestLibraryRoundTrip_DialScaleUnchanged(t *testing.T) {
+	out := restoreGrinders(t, []library.Entity{
+		{"id": int64(1), "name": "Lagom P64", "scale": map[string]any{
+			"type": "dial", "parts": []any{
+				map[string]any{"count": nil, "start": 0.0},
+				map[string]any{"count": 6.0, "labels": "number"},
+			},
+			"min": "0.0", "max": "12.5", "stepless": true, "resolution": 2.0,
+		}},
+	})
+
+	scale, ok := out["Lagom P64"]["scale"].(map[string]any)
+	if !ok {
+		t.Fatalf("dial scale did not survive: %+v", out["Lagom P64"])
+	}
+	if scale["type"] != "dial" || scale["min"] != "0.0" || scale["max"] != "12.5" || scale["stepless"] != true || scale["resolution"] != 2.0 {
+		t.Errorf("restored dial scale = %#v", scale)
+	}
+	parts, _ := scale["parts"].([]any)
+	if len(parts) != 2 {
+		t.Fatalf("restored parts = %#v, want two", scale["parts"])
+	}
+	if tick, _ := parts[1].(map[string]any); tick["count"] != 6.0 || tick["labels"] != "number" {
+		t.Errorf("restored tick part = %#v", parts[1])
+	}
+}
+
 // TestLibraryRoundTrip_GrinderGarbageScaleDropped: a crafted scale is dropped
 // by the restore sanitizer, the grinder itself kept.
 func TestLibraryRoundTrip_GrinderGarbageScaleDropped(t *testing.T) {
