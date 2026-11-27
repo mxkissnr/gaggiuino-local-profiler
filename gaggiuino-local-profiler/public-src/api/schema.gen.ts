@@ -9368,6 +9368,11 @@ export interface components {
                 tds: number | null;
                 /** @description A built-in drink id, or other for a custom menu drink */
                 drinkType: string | null;
+                /**
+                 * @description The taste tag; any other stored value is left out as null
+                 * @enum {string|null}
+                 */
+                tasteTag: "sour" | "bitter" | "balanced" | "thin" | null;
                 /** @enum {string|null} */
                 roastLevel: "light" | "medium-light" | "medium" | "medium-dark" | "dark" | null;
                 beanAgeDays: number | null;

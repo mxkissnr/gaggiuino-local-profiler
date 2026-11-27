@@ -886,13 +886,14 @@ components:
           description: Allow-listed numeric series, phaseTransitions as {t, phase, reason}, finalExitReason, bleScaleConnected
         annotation:
           type: object
-          required: [rating, dose, yield, tds, drinkType, roastLevel, beanAgeDays]
+          required: [rating, dose, yield, tds, drinkType, tasteTag, roastLevel, beanAgeDays]
           properties:
             rating:      { type: integer, minimum: 1, maximum: 5 }
             dose:        { type: number, nullable: true }
             yield:       { type: number, nullable: true }
             tds:         { type: number, nullable: true }
             drinkType:   { type: string, nullable: true, description: "A built-in drink id, or other for a custom menu drink" }
+            tasteTag:    { type: string, nullable: true, enum: [sour, bitter, balanced, thin], description: "The taste tag; any other stored value is left out as null" }
             roastLevel:  { type: string, nullable: true, enum: [light, medium-light, medium, medium-dark, dark] }
             beanAgeDays: { type: integer, nullable: true }
         scores:
