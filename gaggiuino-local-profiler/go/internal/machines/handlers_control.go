@@ -111,13 +111,10 @@ func (h *Handlers) getSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "machine unreachable")
 		return
 	}
-	// #1431: the system category carries the machine's own MQTT broker
-	// password, which must never reach the browser. Report that one is set
-	// (mqttPasswordSet) instead; an empty category reads every category, so
-	// redact it too.
-	if category == "" || category == "system" {
-		settings = RedactSystemSettings(settings)
-	}
+	// #1431/#2231: the machine's MQTT password and its visualizer/profiler
+	// tokens (system and each Cafe Mode user's) must never reach the browser.
+	// Every category is redacted, so a token in a new place is covered too.
+	settings = RedactSettings(settings)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(settings)
@@ -170,55 +167,33 @@ func (h *Handlers) updateSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if category == "system" {
-		// #1431: the browser never receives the machine's own mqttPassword
-		// (RedactSystemSettings), so its re-submitted full-category form has no
-		// way to send it back. Restore it from the current settings before
-		// forwarding, so a save never silently wipes it.
-		var bodyMap map[string]any
-		if err := json.Unmarshal(rawBody, &bodyMap); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid settings payload")
+	if category == "system" || category == "display" {
+		// #1431/#2231: the browser never receives the machine's secrets
+		// (RedactSettings), so a form it posts back lacks them. Put the
+		// machine's current values back before forwarding, so a save never
+		// wipes a password or token; a display write is also merged over the
+		// machine's current display settings, so it never drops homeUsers.
+		prepared, err := prepareSettingsWrite(category, rawBody, func() ([]byte, error) {
+			return adapter.GetSettings(r.Context(), machine, category)
+		})
+		if errors.Is(err, errInvalidSettingsPayload) {
+			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		if bodyMap == nil {
-			bodyMap = map[string]any{}
-		}
-		var current map[string]any
-		if _, present := bodyMap["mqttPassword"]; !present {
-			currentRaw, err := adapter.GetSettings(r.Context(), machine, "system")
-			if err != nil {
-				// A save must never silently wipe the password: if the browser
-				// didn't send one and the current one can't be read, fail like
-				// the other machine errors rather than forwarding the payload.
-				writeError(w, http.StatusBadGateway, err.Error())
-				return
-			}
-			if err := json.Unmarshal(currentRaw, &current); err != nil {
-				// A parse failure is as bad as a fetch failure here: the
-				// password can't be recovered, so forwarding the payload would
-				// silently wipe it — fail like the other machine errors.
-				writeError(w, http.StatusBadGateway, err.Error())
-				return
-			}
-		}
-		RestoreSystemPassword(bodyMap, current)
-		merged, err := json.Marshal(bodyMap)
 		if err != nil {
-			internalError(w, err)
+			writeError(w, http.StatusBadGateway, err.Error())
 			return
 		}
-		rawBody = merged
+		rawBody = prepared
 	}
 	result, err := adapter.UpdateSettings(r.Context(), machine, category, rawBody)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	// #1431: the machine's own POST response echoes the applied settings,
-	// including mqttPassword — redact it before forwarding to the browser.
-	if category == "system" {
-		result = RedactSystemSettings(result)
-	}
+	// #1431/#2231: the machine's own POST response echoes the applied
+	// settings, secrets included; redact them before forwarding to the browser.
+	result = RedactSettings(result)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(result)
