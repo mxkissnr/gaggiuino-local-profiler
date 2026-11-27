@@ -71,6 +71,7 @@ function makeEl(overrides: Partial<FakeEl> = {}): FakeEl {
 class FakeRoot {
   onclick: ((e: unknown) => void) | null = null;
   onchange: ((e: unknown) => void) | null = null;
+  oninput: ((e: unknown) => void) | null = null;
   markup = '';
   readonly doc: FakeDocument;
   constructor(doc: FakeDocument) { this.doc = doc; }
@@ -172,7 +173,8 @@ beforeEach(() => {
     'grinderFormScaleMax', 'grinderFormScaleStep', 'grinderFormScaleError',
     'grinderFormScaleStepField', 'grinderFormScaleDial', 'grinderFormScalePreset', 'grinderFormScaleStart',
     'grinderFormScalePart1Count', 'grinderFormScalePart1Labels', 'grinderFormScalePart2Count',
-    'grinderFormScalePart2Labels', 'grinderFormScaleBetween']) doc.node(id);
+    'grinderFormScalePart2Labels', 'grinderFormScaleBetween', 'grinderFormScalePart2LabelsField',
+    'grinderFormScaleExample']) doc.node(id);
   S.grinderEditId = null;
   S.coffeeLibrary = { beans: [], grinders: [], baskets: [], puckScreens: [], recipes: [] };
 });
@@ -366,5 +368,110 @@ describe('dial scales in the grinder form and the shot field (#2225)', () => {
 
     expect(el(grindSelectId('annGrindSetting')).hidden).toBe(false);
     expect(el('annGrindSetting').hidden).toBe(true);
+  });
+});
+
+describe('grinder scale form fields (#2233)', () => {
+  function pickPreset(id: string): void {
+    doc.root('grinderFormScale').onchange?.({ target: { id: 'grinderFormScalePreset', value: id } });
+  }
+
+  function edit(id: string): void {
+    doc.root('grinderFormScale').oninput?.({ target: { id } });
+  }
+
+  it('keeps the picked layout in the select until a field is edited', () => {
+    openGrinderForm(null);
+    pickPreset('ring');
+    expect(el('grinderFormScalePreset').value).toBe('ring');
+
+    edit('grinderFormScaleMax');
+    expect(el('grinderFormScalePreset').value).toBe('');
+
+    pickPreset('letter');
+    expect(el('grinderFormScalePreset').value).toBe('letter');
+    doc.root('grinderFormScale').onchange?.({ target: { id: 'grinderFormScaleBetween', value: '1' } });
+    expect(el('grinderFormScalePreset').value).toBe('');
+
+    pickPreset('ring');
+    expect(el('grinderFormScalePreset').value).toBe('ring');
+    pickScaleType('stepless');
+    expect(el('grinderFormScalePreset').value).toBe('');
+  });
+
+  it('shows only the fields of the chosen scale type', () => {
+    openGrinderForm(null);
+    pickScaleType('stepped');
+    expect(el('grinderFormScaleRange').hidden).toBe(false);
+    expect(el('grinderFormScaleStepField').hidden).toBe(false);
+    expect(el('grinderFormScaleDial').hidden).toBe(true);
+
+    pickScaleType('stepless');
+    expect(el('grinderFormScaleRange').hidden).toBe(false);
+    expect(el('grinderFormScaleStepField').hidden).toBe(false);
+    expect(el('grinderFormScaleDial').hidden).toBe(true);
+
+    pickPreset('ring');
+    expect(el('grinderFormScaleDial').hidden).toBe(false);
+    expect(el('grinderFormScaleStepField').hidden).toBe(true);
+    expect(el('grinderFormScaleRange').hidden).toBe(false);
+
+    pickScaleType('');
+    expect(el('grinderFormScaleRange').hidden).toBe(true);
+    expect(el('grinderFormScaleDial').hidden).toBe(true);
+  });
+
+  it("shows the third part's notation only with a third-part count", () => {
+    openGrinderForm(null);
+    pickPreset('ring');
+    expect(el('grinderFormScalePart2LabelsField').hidden).toBe(true);
+
+    pickPreset('rotation');
+    expect(el('grinderFormScalePart2LabelsField').hidden).toBe(false);
+
+    el('grinderFormScalePart2Count').value = '';
+    edit('grinderFormScalePart2Count');
+    expect(el('grinderFormScalePart2LabelsField').hidden).toBe(true);
+  });
+
+  it('shows an example setting for every layout', () => {
+    const cases: [string, string][] = [
+      ['number_stepped', 'Example: 1 · 2'],
+      ['number_stepless', 'Example: 0.0 · 0.1'],
+      ['clicks', 'Example: 0 · 1'],
+      ['rotation', 'Example: 0.0.0 · 0.0.1'],
+      ['ring', 'Example: 0.0 · 0.1 · 0.0,5'],
+      ['letter', 'Example: 1A · 1B'],
+    ];
+    openGrinderForm(null);
+    for (const [preset, text] of cases) {
+      pickPreset(preset);
+      expect(el('grinderFormScaleExample').textContent).toBe(text);
+      expect(el('grinderFormScaleExample').hidden).toBe(false);
+    }
+  });
+
+  it('hides the example while the fields form no scale', () => {
+    openGrinderForm(null);
+    pickScaleType('stepped');
+    expect(el('grinderFormScaleExample').textContent).toBe('Example: 0 · 1');
+    expect(el('grinderFormScaleExample').hidden).toBe(false);
+
+    setRange('5', '2', '1');
+    edit('grinderFormScaleMin');
+    expect(el('grinderFormScaleExample').hidden).toBe(true);
+    expect(el('grinderFormScaleExample').textContent).toBe('');
+
+    pickScaleType('');
+    expect(el('grinderFormScaleExample').hidden).toBe(true);
+  });
+
+  it("names each dial part's notation", () => {
+    openGrinderForm(null);
+    const markup = doc.root('grinderFormScale').markup;
+    expect(markup).toContain('data-i18n="lib_grinder_scale_part1_labels"');
+    expect(markup).toContain('data-i18n="lib_grinder_scale_part2_labels"');
+    expect(markup).toContain('id="grinderFormScaleExample"');
+    expect(markup).not.toContain('data-i18n="lib_grinder_scale_labels"');
   });
 });
