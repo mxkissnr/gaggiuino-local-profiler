@@ -309,7 +309,7 @@ export async function quickRateShot(id: number, field: 'rating' | 'tasteTag', va
     const saved = await r.json().catch(() => null) as AnnotateResult | null;
     const entry = _shots().find(s => s.id === id);
     if (entry) {
-      entry.annotation = (saved?.annotation ?? { ...entry.annotation, ...patch }) as AnnotationData;
+      entry.annotation = saved?.annotation ?? { ...entry.annotation, ...patch };
       if (saved) entry.score = saved.score;
     }
     // #1957: a new tag changes the grind advice of the open shot.
