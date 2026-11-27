@@ -32,11 +32,14 @@ vi.mock('../public-src/api/machines.js', async (importOriginal) => ({
 
 const { S } = await import('../public-src/state/index.js');
 const {
+  FIRMWARE_ERROR_GRACE_MS,
   FIRMWARE_POLL_MAX_MS,
+  firmwareFailedStageKey,
   firmwarePollStep,
   firmwareProgressLabel,
   firmwareProgressPercent,
   isFirmwareBusy,
+  renderFirmwareRow,
   setFirmwareUpdateBusy,
   triggerMachineFirmwareUpdate,
 } = await import('../public-src/components/machines-settings.js');
@@ -78,6 +81,7 @@ class FakeEl {
   disabled = false;
   textContent = '';
   className = '';
+  title = '';
   querySelector = (): FakeEl | null => null;
   removeAttribute = vi.fn<(name: string) => void>();
   remove = vi.fn<() => void>();
@@ -93,6 +97,20 @@ function fakeRow(): { row: HTMLElement; els: Record<string, FakeEl> } {
 
 const banner = '.machine-firmware-update-banner';
 const button = '.machine-firmware-update-btn';
+
+// #2229: the migration object a real machine reported after a half-finished
+// update AND through the whole successful retry: state "error", not active,
+// empty error. Parsed from JSON because the machine sends more fields than the
+// schema lists.
+const STALE_MIGRATION = JSON.parse('{"layoutVersion":2,"layout":"s3-v2","phase":8,"attempts":0,"retryAllowed":false,"error":"","productionVersion":"8aaf6f0","target":"s3-lcd","headless":false,"runningVersion":"c929939","available":false,"active":false,"state":"error","message":"","operation":"","operationDone":0,"operationTotal":0,"activityAgeMs":16459,"percent":100,"page":"/migration"}') as NonNullable<FirmwareProgress['migration']>;
+// The real final progress of the failed run (controller flashed to 7cb0a86,
+// frontend left on c929939).
+const FAILED_SPLIT: FirmwareProgress = { progress: 0, status: 'ERROR', type: 'F_FW', migration: STALE_MIGRATION };
+// The successful retry on the same machine, 5 s polling, changes only
+// (type, progress); every step was IN_PROGRESS with STALE_MIGRATION.
+const LOGGED_RETRY: Array<[string, number]> = [
+  ['C_FW', 95], ['F_FW', 0], ['F_FW', 5], ['F_FW', 62], ['F_FS', 0], ['F_FS', 46], ['F_FS', 100],
+];
 
 describe('firmwarePollStep (#1876)', () => {
   S.currentLang = 'en';
@@ -182,12 +200,14 @@ describe('firmwarePollStep (#1876)', () => {
     const busy = newPoll();
     expect(stepper(busy)({ status: 'IN_PROGRESS', migration: { active: true, error: 'x' } }).kind).toBe('show');
 
-    // A stale error before the update started must persist for three polls.
+    // #2229: a stale error before the update started waits out the grace
+    // period, then ends the run (the trigger never took effect).
     const stale = newPoll();
-    const third = stepper(stale);
-    expect(third({ status: 'ERROR' })).toEqual({ kind: 'wait' });
-    expect(third({ status: 'ERROR' })).toEqual({ kind: 'wait' });
-    expect(third({ status: 'ERROR' })).toEqual({ kind: 'done', result: 'error', detail: '' });
+    expect(firmwarePollStep(stale, { status: 'ERROR' }, 2000)).toEqual({ kind: 'wait' });
+    expect(firmwarePollStep(stale, { status: 'ERROR' }, 4000)).toEqual({ kind: 'wait' });
+    expect(firmwarePollStep(stale, { status: 'ERROR' }, 6000)).toEqual({ kind: 'wait' });
+    expect(firmwarePollStep(stale, { status: 'ERROR' }, FIRMWARE_ERROR_GRACE_MS - 1)).toEqual({ kind: 'wait' });
+    expect(firmwarePollStep(stale, { status: 'ERROR' }, FIRMWARE_ERROR_GRACE_MS)).toEqual({ kind: 'done', result: 'error', detail: '' });
 
     const long = newPoll();
     const fourth = stepper(long);
@@ -379,5 +399,130 @@ describe('triggerMachineFirmwareUpdate (#1876)', () => {
     expect(els[banner]?.style.display).toBe('');
     expect(els[button]?.disabled).toBe(false);
     expect(toast).toHaveBeenCalledTimes(1);
+  });
+
+  it('toasts the failed stage and keeps it in the row', async () => {
+    apiMocks.getFirmwareProgress
+      .mockResolvedValueOnce({ status: 'IN_PROGRESS' }) // the pre-check adopts it
+      .mockResolvedValue(FAILED_SPLIT);
+    const { row, els } = fakeRow();
+
+    await triggerMachineFirmwareUpdate(9104, row);
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast).toHaveBeenCalledWith('Firmware update failed: Frontend firmware');
+    expect(els['.machine-firmware-update-msg']?.textContent).toBe('Firmware update failed: Frontend firmware');
+    expect(els[banner]?.style.display).toBe('');
+    expect(els[button]?.disabled).toBe(false);
+  });
+
+  it('does not report a retry as failed while the machine still answers the old ERROR', async () => {
+    apiMocks.getFirmwareProgress.mockResolvedValue(FAILED_SPLIT);
+    apiMocks.triggerFirmwareUpdate.mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ success: true }),
+    } as unknown as Response);
+    const { row, els } = fakeRow();
+
+    await triggerMachineFirmwareUpdate(9105, row);
+    await vi.advanceTimersByTimeAsync(10000);
+
+    expect(apiMocks.triggerFirmwareUpdate).toHaveBeenCalledTimes(1);
+    expect(toast).not.toHaveBeenCalled();
+    expect(els[banner]?.style.display).toBe('none');
+    expect(els[button]?.disabled).toBe(true);
+  });
+});
+
+describe('half-finished update (#2229)', () => {
+  S.currentLang = 'en';
+
+  it('names the frontend firmware stage for the real failed-update payload', () => {
+    expect(firmwarePollStep(newPoll(true), FAILED_SPLIT, 2000)).toEqual({
+      kind: 'done', result: 'error', detail: '', stage: 'settings_machine_firmware_stage_f_fw',
+    });
+    expect(firmwareFailedStageKey({ status: 'ERROR' })).toBeNull();
+    expect(firmwareFailedStageKey({ status: 'ERROR', type: 'X_FW', migration: STALE_MIGRATION })).toBeNull();
+  });
+
+  it('a stale migration error does not fail a successful update', () => {
+    for (const finalStatus of ['SUCCESS', 'IDLE']) {
+      const step = stepper(newPoll());
+      LOGGED_RETRY.forEach(([type, progress], i) => {
+        const p: FirmwareProgress = { status: 'IN_PROGRESS', type, progress, migration: STALE_MIGRATION };
+        const s = step(p);
+        expect(s.kind).toBe('show');
+        if (i === 0) expect(firmwareProgressLabel(p, firmwareProgressPercent(p))).toBe('Controller firmware… 95%');
+      });
+      expect(step(null)).toEqual({ kind: 'restarting' });
+      expect(step({ status: finalStatus, progress: 100, type: 'F_FS', migration: STALE_MIGRATION }))
+        .toEqual({ kind: 'done', result: 'success' });
+    }
+  });
+
+  it('a stale ERROR from the failed run does not fail the retry', () => {
+    const step = stepper(newPoll());
+    // The machine still answers the old failed run's status after the trigger.
+    for (let i = 0; i < 5; i++) expect(step(FAILED_SPLIT)).toEqual({ kind: 'wait' });
+    for (const [type, progress] of LOGGED_RETRY) {
+      expect(step({ status: 'IN_PROGRESS', type, progress, migration: STALE_MIGRATION }).kind).toBe('show');
+    }
+    expect(step(null)).toEqual({ kind: 'restarting' });
+    expect(step({ status: 'SUCCESS', progress: 100, type: 'F_FS', migration: STALE_MIGRATION }))
+      .toEqual({ kind: 'done', result: 'success' });
+  });
+
+  it('warns on the row and offers the update for a split machine', () => {
+    const { row, els } = fakeRow();
+    const panel = els['.machine-row-firmware-panel'] ??= new FakeEl();
+    const msg = new FakeEl();
+    panel.querySelector = () => msg;
+    renderFirmwareRow(1, row, {
+      installed: '7cb0a86', installedFrontend: 'c929939', latest: '7cb0a86',
+      updateAvailable: true, partial: true, releaseUrl: 'https://example.com/rel',
+    });
+    const text = 'Controller 7cb0a86, frontend c929939: the last update did not finish.';
+    const status = els['.machine-row-firmware-status'];
+    const update = els['.machine-row-firmware-update'];
+    expect(status?.textContent).toBe('Update incomplete');
+    expect(status?.className).toBe('badge badge--warn machine-row-firmware-status');
+    expect(status?.title).toBe(text);
+    expect(status?.style.display).toBe('');
+    expect(update?.style.display).toBe('');
+    expect(update?.textContent).toBe('Update: 7cb0a86');
+    expect(msg.textContent).toBe(text);
+  });
+
+  it('keeps the old row for a machine without a frontend version', () => {
+    const { row, els } = fakeRow();
+    renderFirmwareRow(1, row, { installed: '7cb0a86', latest: '7cb0a86', updateAvailable: false, releaseUrl: null });
+    expect(els['.machine-row-firmware-status']?.className).toBe('badge badge--ok machine-row-firmware-status');
+    expect(els['.machine-row-firmware-status']?.textContent).toBe('FW 7cb0a86');
+    expect(els['.machine-row-firmware-update']?.style.display).toBe('none');
+  });
+
+  it('shows the split warning without a button when the latest release is unknown', () => {
+    const { row, els } = fakeRow();
+    const panel = els['.machine-row-firmware-panel'] ??= new FakeEl();
+    renderFirmwareRow(1, row, {
+      installed: '7cb0a86', installedFrontend: 'c929939', latest: null,
+      updateAvailable: false, partial: true, releaseUrl: null,
+    });
+    expect(els['.machine-row-firmware-status']?.className).toBe('badge badge--warn machine-row-firmware-status');
+    expect(els['.machine-row-firmware-update']?.style.display).toBe('none');
+    expect(panel.remove).toHaveBeenCalled();
+  });
+
+  it('every language has the #2229 strings', () => {
+    for (const [lang, dict] of Object.entries(LANGS)) {
+      expect(typeof dict.settings_machine_firmware_badge_partial, lang).toBe('string');
+      expect(String(dict.settings_machine_firmware_badge_partial).length, lang).toBeGreaterThan(0);
+      const partial = formatter(dict.settings_machine_firmware_partial)('7cb0a86', 'c929939');
+      expect(partial, lang).toContain('7cb0a86');
+      expect(partial, lang).toContain('c929939');
+      expect(formatter(dict.settings_machine_firmware_stage_failed_toast)('STAGE'), lang).toContain('STAGE');
+    }
   });
 });
