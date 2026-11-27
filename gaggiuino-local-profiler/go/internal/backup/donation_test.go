@@ -298,6 +298,44 @@ func TestShotDonation_AnnotationValues(t *testing.T) {
 	}
 }
 
+func TestDonationTasteTag_OnlyKnownValues(t *testing.T) {
+	for _, tag := range []string{"sour", "bitter", "balanced", "thin"} {
+		got := donationTasteTag(tag)
+		if got == nil || *got != tag {
+			t.Errorf("donationTasteTag(%q) = %v, want %q", tag, got, tag)
+		}
+	}
+	for _, v := range []any{"astringent", "Sour", "", float64(0), float64(2), nil} {
+		if got := donationTasteTag(v); got != nil {
+			t.Errorf("donationTasteTag(%#v) = %q, want nil", v, *got)
+		}
+	}
+}
+
+func TestShotDonation_TasteTagAllowListed(t *testing.T) {
+	h, deps, _ := newTestHandlers(t)
+	seedDonationFixture(t, deps)
+	f, body := getDonation(t, newMux(h), "")
+
+	byRating := map[int]*donationShot{}
+	for i := range f.Shots {
+		byRating[f.Shots[i].Annotation.Rating] = &f.Shots[i]
+	}
+	rated4, rated3 := byRating[4], byRating[3]
+	if rated4 == nil || rated3 == nil {
+		t.Fatalf("missing shots: %+v", f.Shots)
+	}
+	if rated4.Annotation.TasteTag == nil || *rated4.Annotation.TasteTag != "sour" {
+		t.Errorf("rating 4 tasteTag = %v, want sour", rated4.Annotation.TasteTag)
+	}
+	if rated3.Annotation.TasteTag != nil {
+		t.Errorf("rating 3 tasteTag = %q, want nil", *rated3.Annotation.TasteTag)
+	}
+	if strings.Contains(body, "astringent") {
+		t.Errorf("body leaks an unknown taste tag: %s", body)
+	}
+}
+
 func TestShotDonation_ProfileKeyIgnoresNamesButNotTargets(t *testing.T) {
 	profile := func(name string, id float64, phaseName string, end float64, extra map[string]any) shots.Shot {
 		stop := map[string]any{"time": float64(20000)}
@@ -385,46 +423,5 @@ func TestShotDonation_LookupFields(t *testing.T) {
 	}
 	if _, ok := gaggiuino.Scores["classic"]; !ok {
 		t.Errorf("scores = %v, want a classic entry", gaggiuino.Scores)
-	}
-}
-
-func TestDonationTasteTag_OnlyKnownValues(t *testing.T) {
-	for _, known := range []string{"sour", "bitter", "balanced", "thin"} {
-		got := donationTasteTag(known)
-		if got == nil || *got != known {
-			t.Errorf("donationTasteTag(%q) = %v, want %q", known, got, known)
-		}
-	}
-	for _, v := range []any{"astringent", "Sour", "", float64(0), float64(2), nil} {
-		if got := donationTasteTag(v); got != nil {
-			t.Errorf("donationTasteTag(%v) = %q, want nil", v, *got)
-		}
-	}
-}
-
-func TestShotDonation_TasteTagAllowListed(t *testing.T) {
-	h, deps, _ := newTestHandlers(t)
-	seedDonationFixture(t, deps)
-	f, body := getDonation(t, newMux(h), "")
-	var rated4, rated3 *donationShot
-	for i := range f.Shots {
-		switch f.Shots[i].Annotation.Rating {
-		case 4:
-			rated4 = &f.Shots[i]
-		case 3:
-			rated3 = &f.Shots[i]
-		}
-	}
-	if rated4 == nil || rated3 == nil {
-		t.Fatalf("missing shots: %+v", f.Shots)
-	}
-	if rated4.Annotation.TasteTag == nil || *rated4.Annotation.TasteTag != "sour" {
-		t.Errorf("rating 4 tasteTag = %v, want sour", rated4.Annotation.TasteTag)
-	}
-	if rated3.Annotation.TasteTag != nil {
-		t.Errorf("rating 3 tasteTag = %q, want nil", *rated3.Annotation.TasteTag)
-	}
-	if strings.Contains(body, "astringent") {
-		t.Errorf("body leaks an unknown taste tag: %s", body)
 	}
 }
