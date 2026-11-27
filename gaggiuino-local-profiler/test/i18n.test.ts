@@ -36,7 +36,20 @@ const LANGS = { de, en, it: itLang, fr, es, nl };
 
 afterEach(() => {
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
 });
+
+// #2238: the system locale is the second region source. A stubbed system
+// locale needs a fresh constants module, because localeFor's cache key holds
+// only the browser languages, not the system locale.
+function stubSystemLocale(locale: string): void {
+    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions')
+        .mockReturnValue({ locale } as Intl.ResolvedDateTimeFormatOptions);
+}
+async function freshLocaleFor(): Promise<(lang: string) => string> {
+    vi.resetModules();
+    return (await import('../public-src/constants.js')).localeFor;
+}
 
 const NEW_KEYS = [
     'machine_ready', 'export_csv_title', 'export_shot_title', 'share_card_tooltip',
@@ -89,10 +102,12 @@ describe('i18n language files', () => {
         expect(localeForUnset(null)).toBe('en-US');
     });
 
-    it("localeFor() returns the exact LOCALE_MAP entry for every supported language", () => {
+    it("localeFor() returns the exact LOCALE_MAP entry for every supported language", async () => {
         vi.stubGlobal('navigator', { language: 'en', languages: ['en'] });
+        stubSystemLocale('und');
+        const fresh = await freshLocaleFor();
         for (const name of Object.keys(LANGS)) {
-            expect(localeFor(name)).toBe(LOCALE_MAP[name]);
+            expect(fresh(name)).toBe(LOCALE_MAP[name]);
         }
     });
 
@@ -150,21 +165,52 @@ describe('localeFor() follows the browser region (#2232)', () => {
         expect(localeFor('en')).toBe('en-GB');
     });
 
-    it("falls back to the fixed locale without a usable region", () => {
+    it("falls back to the fixed locale without a usable region", async () => {
+        stubSystemLocale('und');
+        const fresh = await freshLocaleFor();
         vi.stubGlobal('navigator', { language: 'de', languages: ['de'] });
-        expect(localeFor('en')).toBe('en-US');
-        expect(localeFor('de')).toBe('de-DE');
+        expect(fresh('en')).toBe('en-US');
+        expect(fresh('de')).toBe('de-DE');
         vi.stubGlobal('navigator', { language: '', languages: [] });
-        expect(localeFor('fr')).toBe('fr-FR');
+        expect(fresh('fr')).toBe('fr-FR');
         vi.stubGlobal('navigator', { language: 'x', languages: ['not a locale!'] });
-        expect(localeFor('nl')).toBe('nl-NL');
+        expect(fresh('nl')).toBe('nl-NL');
         vi.stubGlobal('navigator', undefined);
-        expect(localeFor('it')).toBe('it-IT');
+        expect(fresh('it')).toBe('it-IT');
     });
 
     it("an unknown UI language still falls back to English", () => {
         vi.stubGlobal('navigator', { language: 'de-DE', languages: ['de-DE'] });
         expect(localeFor('pt')).toBe('en-DE');
+    });
+
+    it("a bare first browser language does not hide the region of a later one (#2238)", async () => {
+        vi.stubGlobal('navigator', { language: 'de', languages: ['de', 'de-DE'] });
+        stubSystemLocale('en-US');
+        const fresh = await freshLocaleFor();
+        expect(fresh('en')).toBe('en-DE');
+        expect(fresh('de')).toBe('de-DE');
+    });
+
+    it("without a region in the browser languages the system locale's region applies (#2238)", async () => {
+        vi.stubGlobal('navigator', { language: 'de', languages: ['de'] });
+        stubSystemLocale('de-DE');
+        let fresh = await freshLocaleFor();
+        expect(fresh('en')).toBe('en-DE');
+        vi.restoreAllMocks();
+        vi.stubGlobal('navigator', { language: 'fr', languages: [] });
+        stubSystemLocale('fr-CH');
+        fresh = await freshLocaleFor();
+        expect(fresh('fr')).toBe('fr-CH');
+    });
+
+    it("no region anywhere falls back to the LOCALE_MAP entry (#2238)", async () => {
+        vi.stubGlobal('navigator', { language: 'de', languages: ['de', 'en'] });
+        stubSystemLocale('und');
+        const fresh = await freshLocaleFor();
+        expect(fresh('en')).toBe('en-US');
+        expect(fresh('de')).toBe('de-DE');
+        expect(fresh('pt')).toBe('en-US');
     });
 });
 
