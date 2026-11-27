@@ -102,7 +102,7 @@ describe('i18n language files', () => {
         expect(localeForUnset(null)).toBe('en-US');
     });
 
-    it("localeFor() returns the exact LOCALE_MAP entry for every supported language", async () => {
+    it("localeFor() returns the exact LOCALE_MAP entry for every supported language", async (): Promise<void> => {
         vi.stubGlobal('navigator', { language: 'en', languages: ['en'] });
         stubSystemLocale('und');
         const fresh = await freshLocaleFor();
@@ -165,7 +165,7 @@ describe('localeFor() follows the browser region (#2232)', () => {
         expect(localeFor('en')).toBe('en-GB');
     });
 
-    it("falls back to the fixed locale without a usable region", async () => {
+    it("falls back to the fixed locale without a usable region", async (): Promise<void> => {
         stubSystemLocale('und');
         const fresh = await freshLocaleFor();
         vi.stubGlobal('navigator', { language: 'de', languages: ['de'] });
@@ -184,7 +184,7 @@ describe('localeFor() follows the browser region (#2232)', () => {
         expect(localeFor('pt')).toBe('en-DE');
     });
 
-    it("a bare first browser language does not hide the region of a later one (#2238)", async () => {
+    it("a bare first browser language does not hide the region of a later one (#2238)", async (): Promise<void> => {
         vi.stubGlobal('navigator', { language: 'de', languages: ['de', 'de-DE'] });
         stubSystemLocale('en-US');
         const fresh = await freshLocaleFor();
@@ -192,7 +192,7 @@ describe('localeFor() follows the browser region (#2232)', () => {
         expect(fresh('de')).toBe('de-DE');
     });
 
-    it("without a region in the browser languages the system locale's region applies (#2238)", async () => {
+    it("without a region in the browser languages the system locale's region applies (#2238)", async (): Promise<void> => {
         vi.stubGlobal('navigator', { language: 'de', languages: ['de'] });
         stubSystemLocale('de-DE');
         let fresh = await freshLocaleFor();
@@ -204,7 +204,7 @@ describe('localeFor() follows the browser region (#2232)', () => {
         expect(fresh('fr')).toBe('fr-CH');
     });
 
-    it("no region anywhere falls back to the LOCALE_MAP entry (#2238)", async () => {
+    it("no region anywhere falls back to the LOCALE_MAP entry (#2238)", async (): Promise<void> => {
         vi.stubGlobal('navigator', { language: 'de', languages: ['de', 'en'] });
         stubSystemLocale('und');
         const fresh = await freshLocaleFor();
