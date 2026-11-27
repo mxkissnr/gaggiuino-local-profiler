@@ -342,7 +342,7 @@ describe('quick rating save (#2226)', () => {
     } as unknown as Response);
   }
 
-  it('posts only the tapped rating', async () => {
+  it('quick rating posts only the tapped rating', async () => {
     answerSave({ rating: 4 });
     await quickRateShot(5, 'rating', '4');
     expect(fetchSpy).toHaveBeenCalledTimes(1);
