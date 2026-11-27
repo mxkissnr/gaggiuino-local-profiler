@@ -95,6 +95,7 @@ const it: Partial<Translations> = {
     btn_compare_tooltip:'Seleziona come shot di confronto (B). Suggerimento: clicca sul nome per Shot A.', btn_delete_tooltip:'Elimina shot',
     ann_title:'Note & Valutazione',    ann_coffee:'Caffè / Grani',
     ann_rating_star:(n)=>`${n} di 5 stelle`,
+    quick_rating_title:'Valuta questo shot', quick_rating_hint:'1 imbevibile · 3 discreto · 5 il meglio che so fare', quick_rating_later:'Più tardi', quick_rating_done:'Fatto',
     ann_grinder:'Macinino', ann_grinder_ph:'es. Niche Zero',
     ann_grind_setting:'Macinatura', ann_grind_ph:'es. 23 Click',
     ann_dose:'Dose (g)', ann_dose_ph:'es. 18',
