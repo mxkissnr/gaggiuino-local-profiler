@@ -2,6 +2,7 @@ package machines
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -9,10 +10,10 @@ import (
 	"testing"
 )
 
-func TestRedactSystemSettings(t *testing.T) {
+func TestRedactSettings(t *testing.T) {
 	// mqttPassword present and non-empty -> removed, mqttPasswordSet true, the
 	// rest of the object preserved.
-	got := RedactSystemSettings([]byte(`{"mqttPassword":"secret","releaseChannel":1}`))
+	got := RedactSettings([]byte(`{"mqttPassword":"secret","releaseChannel":1}`))
 	var obj map[string]any
 	if err := json.Unmarshal(got, &obj); err != nil {
 		t.Fatalf("unmarshal redacted %s: %v", got, err)
@@ -28,7 +29,7 @@ func TestRedactSystemSettings(t *testing.T) {
 	}
 
 	// Empty string -> mqttPasswordSet false.
-	got = RedactSystemSettings([]byte(`{"mqttPassword":""}`))
+	got = RedactSettings([]byte(`{"mqttPassword":""}`))
 	obj = nil
 	if err := json.Unmarshal(got, &obj); err != nil {
 		t.Fatalf("unmarshal redacted %s: %v", got, err)
@@ -39,51 +40,122 @@ func TestRedactSystemSettings(t *testing.T) {
 
 	// No mqttPassword -> returned byte-for-byte unchanged.
 	raw := []byte(`{"releaseChannel":2}`)
-	if string(RedactSystemSettings(raw)) != string(raw) {
-		t.Fatalf("body without mqttPassword changed: %s", RedactSystemSettings(raw))
+	if string(RedactSettings(raw)) != string(raw) {
+		t.Fatalf("body without mqttPassword changed: %s", RedactSettings(raw))
 	}
 
 	// Non-object / invalid JSON -> returned unchanged.
 	for _, raw := range [][]byte{[]byte(`[1,2]`), []byte(`"x"`), []byte(`not json`), []byte(`null`)} {
-		if string(RedactSystemSettings(raw)) != string(raw) {
-			t.Fatalf("non-object body changed: %s -> %s", raw, RedactSystemSettings(raw))
+		if string(RedactSettings(raw)) != string(raw) {
+			t.Fatalf("non-object body changed: %s -> %s", raw, RedactSettings(raw))
 		}
 	}
 }
 
-func TestRestoreSystemPassword(t *testing.T) {
-	// Body omits mqttPassword -> current's password is copied in, marker stripped.
-	body := map[string]any{"releaseChannel": float64(1), "mqttPasswordSet": true}
-	RestoreSystemPassword(body, map[string]any{"mqttPassword": "current-secret"})
-	if body["mqttPassword"] != "current-secret" {
-		t.Fatalf("mqttPassword = %v, want the current one", body["mqttPassword"])
+func TestPrepareSettingsWrite_System(t *testing.T) {
+	machine := func() ([]byte, error) {
+		return []byte(`{"mqttPassword":"cur-pw","visualizerToken":"cur-vis","sprofilerToken":"cur-spro","releaseChannel":0}`), nil
 	}
-	if _, present := body["mqttPasswordSet"]; present {
-		t.Fatalf("mqttPasswordSet not stripped: %v", body)
-	}
-
-	// Body carries its own password -> left alone; marker still stripped.
-	body = map[string]any{"mqttPassword": "typed-secret", "mqttPasswordSet": true}
-	RestoreSystemPassword(body, map[string]any{"mqttPassword": "current-secret"})
-	if body["mqttPassword"] != "typed-secret" {
-		t.Fatalf("mqttPassword = %v, want the body's own value", body["mqttPassword"])
-	}
-	if _, present := body["mqttPasswordSet"]; present {
-		t.Fatalf("mqttPasswordSet not stripped: %v", body)
+	decode := func(raw []byte) map[string]any {
+		t.Helper()
+		var obj map[string]any
+		if err := json.Unmarshal(raw, &obj); err != nil {
+			t.Fatalf("unmarshal %s: %v", raw, err)
+		}
+		return obj
 	}
 
-	// Neither side has a password -> no key added.
-	body = map[string]any{"releaseChannel": float64(1)}
-	RestoreSystemPassword(body, map[string]any{})
-	if _, present := body["mqttPassword"]; present {
-		t.Fatalf("unexpected mqttPassword: %v", body)
+	// The browser's form lacks every secret -> all come back, marker dropped.
+	out, err := prepareSettingsWrite("system", []byte(`{"releaseChannel":1,"mqttPasswordSet":true,"brewDeltaState":"true"}`), machine)
+	if err != nil {
+		t.Fatalf("prepareSettingsWrite: %v", err)
+	}
+	got := decode(out)
+	for key, want := range map[string]any{"mqttPassword": "cur-pw", "visualizerToken": "cur-vis", "sprofilerToken": "cur-spro", "releaseChannel": float64(1), "brewDeltaState": "true"} {
+		if got[key] != want {
+			t.Errorf("%s = %#v, want %#v", key, got[key], want)
+		}
+	}
+	if _, present := got["mqttPasswordSet"]; present {
+		t.Errorf("mqttPasswordSet not stripped: %s", out)
 	}
 
-	// A nil current must not panic.
-	body = map[string]any{"mqttPasswordSet": true}
-	RestoreSystemPassword(body, nil)
-	if _, present := body["mqttPasswordSet"]; present {
-		t.Fatalf("mqttPasswordSet not stripped with nil current: %v", body)
+	// The body carries every secret itself -> kept, the machine is not asked.
+	out, err = prepareSettingsWrite("system", []byte(`{"mqttPassword":"typed","visualizerToken":"","sprofilerToken":"t"}`), func() ([]byte, error) {
+		t.Fatal("current settings read although the body carries every secret")
+		return nil, nil
+	})
+	if err != nil {
+		t.Fatalf("prepareSettingsWrite: %v", err)
+	}
+	if got := decode(out); got["mqttPassword"] != "typed" || got["visualizerToken"] != "" || got["sprofilerToken"] != "t" {
+		t.Errorf("body secrets not kept: %s", out)
+	}
+
+	// Errors: a broken body is the caller's fault, an unreadable machine is not.
+	if _, err := prepareSettingsWrite("system", []byte(`[1]`), machine); !errors.Is(err, errInvalidSettingsPayload) {
+		t.Errorf("array body error = %v, want errInvalidSettingsPayload", err)
+	}
+	for _, current := range []string{`not json`, `null`, `[]`} {
+		_, err := prepareSettingsWrite("system", []byte(`{}`), func() ([]byte, error) { return []byte(current), nil })
+		if !errors.Is(err, errUnreadableMachineSettings) {
+			t.Errorf("current %s error = %v, want errUnreadableMachineSettings", current, err)
+		}
+	}
+	boom := errors.New("boom")
+	if _, err := prepareSettingsWrite("system", []byte(`{}`), func() ([]byte, error) { return nil, boom }); !errors.Is(err, boom) {
+		t.Errorf("fetch error = %v, want boom", err)
+	}
+}
+
+func TestPrepareSettingsWrite_DisplayKeepsHomeUsersAndTokens(t *testing.T) {
+	machine := func() ([]byte, error) {
+		return []byte(`{"energyCostPerKwh":0.35,"lcdBrightness":80,"homeUsers":[` +
+			`{"id":1,"name":"Ana","preferences":{"ledR":255,"visualizerToken":"u1-vis","sprofilerToken":"u1-spro"}},` +
+			`{"id":2,"name":"Ben","preferences":{"ledR":10,"visualizerToken":"","sprofilerToken":"u2-spro"}}]}`), nil
+	}
+
+	// A write of one field keeps everything else, homeUsers with its tokens included.
+	out, err := prepareSettingsWrite("display", []byte(`{"machineId":1,"lcdBrightness":50}`), machine)
+	if err != nil {
+		t.Fatalf("prepareSettingsWrite: %v", err)
+	}
+	for _, want := range []string{`"lcdBrightness":50`, `"energyCostPerKwh":0.35`, `"u1-vis"`, `"u1-spro"`, `"u2-spro"`, `"name":"Ben"`} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("forwarded display lacks %s: %s", want, out)
+		}
+	}
+
+	// A write of the redacted users (no tokens, other order, a new colour)
+	// gets each user's tokens back by id and keeps the new colour.
+	out, err = prepareSettingsWrite("display", []byte(`{"homeUsers":[`+
+		`{"id":2,"name":"Ben","preferences":{"ledR":11}},{"id":1,"name":"Ana","preferences":{"ledR":254}}]}`), machine)
+	if err != nil {
+		t.Fatalf("prepareSettingsWrite: %v", err)
+	}
+	want := `"homeUsers":[{"id":2,"name":"Ben","preferences":{"ledR":11,"sprofilerToken":"u2-spro","visualizerToken":""}},` +
+		`{"id":1,"name":"Ana","preferences":{"ledR":254,"sprofilerToken":"u1-spro","visualizerToken":"u1-vis"}}]`
+	if !strings.Contains(string(out), want) {
+		t.Errorf("forwarded display = %s, want it to contain %s", out, want)
+	}
+	if !strings.Contains(string(out), `"lcdBrightness":80`) {
+		t.Errorf("forwarded display dropped a field the body did not send: %s", out)
+	}
+}
+
+func TestRedactSettings_DropsTokensAtAnyDepth(t *testing.T) {
+	raw := []byte(`{"system":{"mqttPassword":"pw","visualizerToken":"sys-vis","sprofilerToken":"sys-spro","releaseChannel":1},` +
+		`"display":{"lcdBrightness":80,"homeUsers":[{"id":1,"preferences":{"brewDeltaState":"true","ledR":255,"visualizerToken":"u1-vis","sprofilerToken":"u1-spro"}}]}}`)
+	got := string(RedactSettings(raw))
+	for _, secret := range []string{`"pw"`, "sys-vis", "sys-spro", "u1-vis", "u1-spro", "visualizerToken", "sprofilerToken"} {
+		if strings.Contains(got, secret) {
+			t.Errorf("redacted body still contains %s: %s", secret, got)
+		}
+	}
+	for _, want := range []string{`"mqttPasswordSet":true`, `"releaseChannel":1`, `"brewDeltaState":"true"`, `"ledR":255`, `"lcdBrightness":80`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("redacted body lost %s: %s", want, got)
+		}
 	}
 }
 
@@ -141,7 +213,7 @@ func TestMachineSystemSettings_RedactAndRestore(t *testing.T) {
 // nested, so mqttPassword sits under `system` rather than at the top level.
 func TestRedactSystemSettings_NestedAllCategories(t *testing.T) {
 	raw := []byte(`{"boiler":{"temperature":93},"system":{"mqttPassword":"s3cret","releaseChannel":1}}`)
-	got := RedactSystemSettings(raw)
+	got := RedactSettings(raw)
 	if strings.Contains(string(got), "s3cret") {
 		t.Fatalf("nested mqttPassword leaked: %s", got)
 	}
@@ -288,5 +360,66 @@ func TestRestoreHomeUserTokens_MatchesUsersByID(t *testing.T) {
 	fifth := users[3].(map[string]any)["preferences"].(map[string]any)
 	if fifth["visualizerToken"] != "typed" || fifth["sprofilerToken"] != "cur-5s" {
 		t.Errorf("user 5 preferences = %v, want the typed visualizerToken kept and the current sprofilerToken", fifth)
+	}
+}
+
+// TestMachineSettings_TokensNeverReachTheBrowser is the handler-level check
+// for #2231: no category read or write answer carries a token, and display
+// and system writes forward the machine's current tokens and keep homeUsers.
+func TestMachineSettings_TokensNeverReachTheBrowser(t *testing.T) {
+	allowLoopbackMachineHost(t)
+	h, registry, _ := newTestHandlers(t)
+	mux := newMux(h)
+
+	fake := newFakeGaggiuinoMachine()
+	defer fake.Close()
+	// The fake answers every category with this body.
+	fake.settingsBody = []byte(`{"mqttPassword":"s3cret","visualizerToken":"sys-vis","sprofilerToken":"sys-spro","releaseChannel":1,` +
+		`"energyCostPerKwh":0.35,"homeUsers":[{"id":1,"name":"Ana","preferences":{"ledR":255,"visualizerToken":"u1-vis","sprofilerToken":"u1-spro"}}]}`)
+	secrets := []string{"s3cret", "sys-vis", "sys-spro", "u1-vis", "u1-spro"}
+
+	machine, err := registry.CreateMachine(MachineInput{
+		Name: strPtr("Fake"), Type: strPtr("gaggiuino"), Host: strPtr(fake.URL),
+	})
+	if err != nil {
+		t.Fatalf("CreateMachine: %v", err)
+	}
+	id := strconv.FormatInt(machine.ID, 10)
+
+	for _, query := range []string{"", "&category=system", "&category=display"} {
+		rec := doRequest(mux, httptest.NewRequest(http.MethodGet, "/api/machine/settings?machineId="+id+query, nil))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s status = %d, body=%s", query, rec.Code, rec.Body.Bytes())
+		}
+		for _, secret := range secrets {
+			if strings.Contains(rec.Body.String(), secret) {
+				t.Errorf("GET %s leaked %s: %s", query, secret, rec.Body.Bytes())
+			}
+		}
+	}
+
+	for category, body := range map[string]string{"display": `"lcdBrightness":50`, "system": `"releaseChannel":2`} {
+		rec := doRequest(mux, httptest.NewRequest(http.MethodPost, "/api/machine/settings/"+category,
+		strings.NewReader(`{"machineId":`+id+`,`+body+`}`)))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("POST %s status = %d, body=%s", category, rec.Code, rec.Body.Bytes())
+		}
+		for _, secret := range secrets {
+			if strings.Contains(rec.Body.String(), secret) {
+				t.Errorf("POST %s response leaked %s: %s", category, secret, rec.Body.Bytes())
+			}
+		}
+		fake.mu.Lock()
+		forwarded := string(fake.lastUpdateSettingsBody)
+		fake.mu.Unlock()
+		wants := []string{body, `"sys-vis"`, `"sys-spro"`, `"s3cret"`}
+		if category == "display" {
+			wants = []string{body, `"u1-vis"`, `"u1-spro"`, `"energyCostPerKwh":0.35`, `"name":"Ana"`}
+		}
+		for _, want := range wants {
+			if !strings.Contains(forwarded, want) {
+				t.Errorf("POST %s forwarded %s, want it to contain %s", category, forwarded, want)
+			}
+		}
 	}
 }
