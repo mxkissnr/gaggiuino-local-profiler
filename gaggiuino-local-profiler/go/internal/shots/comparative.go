@@ -1,9 +1,7 @@
 package shots
 
 import (
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/grindscale"
@@ -14,26 +12,6 @@ import (
 // separate from detail.go's ComputeGrindAdvice (single-shot dial-in
 // heuristic) because it compares the shot with the machine's other shots
 // (Service.GetComparativeGrindAdvice).
-
-// grindNumRe is the regex for the first integer-or-decimal numeric substring
-// in a free-text grind setting string ("Setting 3.5" -> 3.5, "3,5" -> 3.5 via
-// the comma-to-dot swap below).
-var grindNumRe = regexp.MustCompile(`\d+(?:[.,]\d+)?`)
-
-func parseGrindNum(s string) (float64, bool) {
-	if s == "" {
-		return 0, false
-	}
-	m := grindNumRe.FindString(s)
-	if m == "" {
-		return 0, false
-	}
-	f, err := strconv.ParseFloat(strings.Replace(m, ",", ".", 1), 64)
-	if err != nil {
-		return 0, false
-	}
-	return f, true
-}
 
 // ComparativeGrindAdvice is the advice plus its evidence: Type/Icon/Text
 // follow the same convention as GrindAdvice (detail.go), plus the sample count
@@ -116,7 +94,7 @@ func newComparativeMatch(shot Shot) *comparativeMatch {
 		scale:    loadGrinderScale(grinder),
 	}
 	m.dose, m.hasDose = toFloat(ann["dose"])
-	m.currentGrind, m.hasCurrentGrind = parseGrindNum(annotationStr(ann, "grindSetting"))
+	m.currentGrind, m.hasCurrentGrind = grindscale.Position(m.scale, annotationStr(ann, "grindSetting"))
 	return m
 }
 
@@ -144,7 +122,8 @@ func (m *comparativeMatch) grindOf(s Shot) (float64, bool) {
 			return 0, false
 		}
 	}
-	return parseGrindNum(annotationStr(a, "grindSetting"))
+	// Same grinder as the reference shot, so its scale reads this setting too.
+	return grindscale.Position(m.scale, annotationStr(a, "grindSetting"))
 }
 
 // advice ranks the comparable shots' grind settings and phrases the result
@@ -213,7 +192,7 @@ func (m *comparativeMatch) advice(comparable []comparableSibling, lang string) *
 	}
 	diff := m.currentGrind - bestSetting
 	if outcome := tasteOutcome(m.tasteTag, m.direction(diff)); outcome != "" {
-		return tasteAdvice(outcome, lang, n, bestSetting, bestScore)
+		return tasteAdvice(outcome, lang, n, bestSetting, m.label(bestSetting), bestScore)
 	}
 	if m.direction(diff) == "" {
 		return &ComparativeGrindAdvice{
@@ -225,13 +204,13 @@ func (m *comparativeMatch) advice(comparable []comparableSibling, lang string) *
 	if diff > 0 {
 		return &ComparativeGrindAdvice{
 			Type: "finer", Icon: "📊",
-			Text:        cardTextf(lang, "compare_finer", n, bestSetting, bestScore),
+			Text:        cardTextf(lang, "compare_finer", n, m.label(bestSetting), bestScore),
 			SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 		}
 	}
 	return &ComparativeGrindAdvice{
 		Type: "coarser", Icon: "📊",
-		Text:        cardTextf(lang, "compare_coarser", n, bestSetting, bestScore),
+		Text:        cardTextf(lang, "compare_coarser", n, m.label(bestSetting), bestScore),
 		SampleCount: n, BestGrindSetting: bestSetting, BestScore: bestScore,
 	}
 }
@@ -256,6 +235,15 @@ func (m *comparativeMatch) bucket(grind float64) float64 {
 		return roundToHalf(grind)
 	}
 	return m.scale.Snap(grind)
+}
+
+// label is how the advice text writes a setting: as the grinder's scale reads
+// it (8.0, 8.2,5, 12E, #2225), the plain number without a scale.
+func (m *comparativeMatch) label(grind float64) any {
+	if m.scale == nil {
+		return grind
+	}
+	return m.scale.Format(grind)
 }
 
 // direction is grindDirection on the grinder's own scale.

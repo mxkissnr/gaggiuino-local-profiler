@@ -388,8 +388,8 @@ describe('updateLibraryDatalist applies a changed scale (#1961, #1958)', () => {
 
     updateLibraryDatalist();
 
-    expect(el('annGrindSetting').value).toBe('6');
-    expect(getGrindFieldValue('annGrindSetting')).toBe('6');
+    expect(el('annGrindSetting').value).toBe('6.0');
+    expect(getGrindFieldValue('annGrindSetting')).toBe('6.0');
   });
 
   it('leaves the field alone while the user is in it', () => {

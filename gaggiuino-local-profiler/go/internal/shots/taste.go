@@ -110,14 +110,14 @@ func rankableSiblings(all []comparableSibling) []comparableSibling {
 }
 
 // tasteAdvice phrases a non-empty tasteOutcome.
-func tasteAdvice(outcome, lang string, n int, best float64, score int) *ComparativeGrindAdvice {
+func tasteAdvice(outcome, lang string, n int, best float64, label any, score int) *ComparativeGrindAdvice {
 	adviceType := outcome
 	if outcome == tasteHold || outcome == tasteConflict {
 		adviceType = "ok"
 	}
 	return &ComparativeGrindAdvice{
 		Type: adviceType, Icon: "📊",
-		Text:        cardTextf(lang, "compare_taste_"+outcome, n, best, score),
+		Text:        cardTextf(lang, "compare_taste_"+outcome, n, label, score),
 		SampleCount: n, BestGrindSetting: best, BestScore: score,
 	}
 }

@@ -32,7 +32,7 @@ export interface BeanCompareStats {
   best: number | null;
   rating: number | null;
   taste: TasteTag | null;
-  bestGrind: { grinder: string; grindSetting: number } | null;
+  bestGrind: { grinder: string; grindSetting: string | number } | null;
   dose: number | null;
   yield: number | null;
   avgTime: number | null;

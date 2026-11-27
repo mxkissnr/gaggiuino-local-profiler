@@ -203,7 +203,7 @@ describe('renderGrindField on a stepless grinder', () => {
     const second = field('s3b');
     renderGrindField('s3b', 'Niche', '');
     second.input.value = '8.0';
-    expect(getGrindFieldValue('s3b')).toBe('8');
+    expect(getGrindFieldValue('s3b')).toBe('8.0');
   });
 
   it('shows a stored out-of-range value and reads it back unchanged', () => {

@@ -361,13 +361,27 @@ components:
 
     GrinderScale:
       type: object
-      required: [type, min, max, step]
-      description: "A grinder's valid grind settings (#1961). Settings are min + k * step, up to max. min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. Absent for a grinder without a scale, whose grind setting stays free text."
+      required: [type, min, max]
+      description: "A grinder's valid grind settings (#1961, #2225). stepped and stepless: settings are min + k * step, up to max; min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. dial: a reading in parts such as 8.3 (number.tick), 1.2.3 (rotation.number.click) or 12E (number + letter); min and max are readings, and a stepless dial takes in-between values after a comma (8.2,5) in steps of 1/resolution of a tick. Absent for a grinder without a scale, whose grind setting stays free text."
       properties:
-        type: { type: string, enum: [stepped, stepless] }
-        min:  { type: number }
-        max:  { type: number }
-        step: { type: number }
+        type: { type: string, enum: [stepped, stepless, dial] }
+        min:  { oneOf: [{ type: number }, { type: string }], description: "A number on stepped and stepless, a reading on dial" }
+        max:  { oneOf: [{ type: number }, { type: string }], description: "A number on stepped and stepless, a reading on dial" }
+        step: { type: number, description: "stepped and stepless only" }
+        parts:
+          type: array
+          minItems: 2
+          maxItems: 3
+          description: "dial only. The first part counts up from start without end (count null); every later part has count values, written as digits or letters."
+          items:
+            type: object
+            required: [count]
+            properties:
+              count:  { type: integer, nullable: true, minimum: 2, maximum: 100 }
+              start:  { type: integer, minimum: 0, maximum: 1000 }
+              labels: { type: string, enum: [number, letter] }
+        stepless:   { type: boolean, description: "dial only: in-between values after a comma are allowed" }
+        resolution: { type: integer, enum: [1, 2, 4], description: "dial only: in-between values per tick on a stepless dial" }
 
     Grinder:
       type: object
