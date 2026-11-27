@@ -45,8 +45,8 @@ export function localeFor(lang: string): string {
 function browserLanguages(): string[] {
   try {
     // navigator.languages is typed non-nullable but older engines omit it.
-    const langs: readonly string[] | undefined = navigator.languages;
-    return [...(langs ?? []), navigator.language];
+    const nav: { languages?: readonly string[] } = navigator;
+    return [...(nav.languages ?? []), navigator.language];
   } catch {
     return []; // no navigator (tests, workers without one)
   }
