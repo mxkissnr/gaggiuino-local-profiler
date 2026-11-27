@@ -8856,13 +8856,30 @@ export interface components {
             /** @description Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
             consumedG?: number;
         };
-        /** @description A grinder's valid grind settings (#1961). Settings are min + k * step, up to max. min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. Absent for a grinder without a scale, whose grind setting stays free text. */
+        /** @description A grinder's valid grind settings (#1961, #2225). stepped and stepless: settings are min + k * step, up to max; min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. dial: a reading in parts such as 8.3 (number.tick), 1.2.3 (rotation.number.click) or 12E (number + letter); min and max are readings, and a stepless dial takes in-between values after a comma (8.2,5) in steps of 1/resolution of a tick. Absent for a grinder without a scale, whose grind setting stays free text. */
         GrinderScale: {
             /** @enum {string} */
-            type: "stepped" | "stepless";
-            min: number;
-            max: number;
-            step: number;
+            type: "stepped" | "stepless" | "dial";
+            /** @description A number on stepped and stepless, a reading on dial */
+            min: number | string;
+            /** @description A number on stepped and stepless, a reading on dial */
+            max: number | string;
+            /** @description stepped and stepless only */
+            step?: number;
+            /** @description dial only. The first part counts up from start without end (count null); every later part has count values, written as digits or letters. */
+            parts?: {
+                count: number | null;
+                start?: number;
+                /** @enum {string} */
+                labels?: "number" | "letter";
+            }[];
+            /** @description dial only: in-between values after a comma are allowed */
+            stepless?: boolean;
+            /**
+             * @description dial only: in-between values per tick on a stepless dial
+             * @enum {integer}
+             */
+            resolution?: 1 | 2 | 4;
         };
         Grinder: {
             id: number;
