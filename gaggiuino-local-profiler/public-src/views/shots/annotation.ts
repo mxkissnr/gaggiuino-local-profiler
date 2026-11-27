@@ -279,6 +279,48 @@ export function flushAutoSave(): void {
   void _performAnnotationSave();
 }
 
+// #2226: one tap in the quick rating strip (live view after a shot, newest
+// unrated shot in the shot list) saves one field through the same merge
+// endpoint as the autosave above; the stored star or tag tapped again clears
+// it, as in this panel. When the strip's shot is the one open here, the panel
+// takes the value first and a pending autosave is flushed, so this panel's own
+// saves carry the new value instead of the old one.
+export async function quickRateShot(id: number, field: 'rating' | 'tasteTag', value: string): Promise<void> {
+  const ann = _shots().find(s => s.id === id)?.annotation;
+  let patch: { rating: number | null } | { tasteTag: TasteTag | null };
+  if (field === 'rating') {
+    const n = parseInt(value, 10);
+    if (!(n >= 1 && n <= 5)) return;
+    patch = { rating: Number(ann?.rating) === n ? null : n };
+  } else {
+    const tag = tasteTagOf({ tasteTag: value });
+    if (!tag) return;
+    patch = { tasteTag: tasteTagOf(ann) === tag ? null : tag };
+  }
+  if (S.primaryShotId === id) {
+    if ('rating' in patch) { S.currentRating = patch.rating ?? 0; renderStars(S.currentRating); }
+    else _renderTasteTagPills(patch.tasteTag ?? '');
+    flushAutoSave();
+  }
+  _saveCount++;
+  try {
+    const r = await annotateShot(id, patch);
+    if (!r.ok) { window.showToast?.(t('error_generic', r.status)); return; }
+    const saved = await r.json().catch(() => null) as AnnotateResult | null;
+    const entry = _shots().find(s => s.id === id);
+    if (entry) {
+      entry.annotation = (saved?.annotation ?? { ...entry.annotation, ...patch }) as AnnotationData;
+      if (saved) entry.score = saved.score;
+    }
+    // #1957: a new tag changes the grind advice of the open shot.
+    if ('tasteTag' in patch && S.primaryShotId === id && _autoSaveTimer === null) window.updateView?.();
+    renderSidebar();
+    updateSidebarHighlighting();
+  } catch {
+    window.showToast?.(t('error_generic', ''));
+  } finally { _saveCount--; }
+}
+
 // ── Drink & milk pills ────────────────────────────────────────────────────
 
 export async function loadDrinkMenu(): Promise<void> {

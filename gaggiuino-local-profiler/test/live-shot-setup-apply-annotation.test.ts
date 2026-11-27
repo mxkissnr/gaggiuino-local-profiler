@@ -54,7 +54,7 @@ vi.mock('../public-src/views/shots/annotation.js', () => ({
 }));
 
 const { S } = await import('../public-src/state/index.js');
-const { fetchLiveData, handleLiveSnapshotEvent } = await import('../public-src/views/live.js');
+const { fetchLiveData, handleLiveSnapshotEvent, dismissLiveQuickRating } = await import('../public-src/views/live.js');
 
 // The DOM stand-in these tests touch: only the members the live view reads
 // off each element.
@@ -342,5 +342,84 @@ describe('live transitions run on the SSE path too (#1613)', () => {
 
     expect(annotateShotMock).toHaveBeenCalledTimes(1);
     expect(annotateShotMock.mock.calls[0]?.[0]).toBe(12);
+  });
+});
+
+// #2226: the strip under the finished curve belongs to the shot the brew just
+// produced, and disappears on the next brew start or on Later/Done.
+describe('quick rating strip after a brew (#2226)', () => {
+  let draftStore: Record<string, string>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    getLiveDataMock.mockReset();
+    annotateShotMock.mockClear();
+    g.document = makeFakeDocument();
+
+    draftStore = {};
+    g.localStorage = {
+      getItem: (key: string) => (key in draftStore ? draftStore[key] : null),
+      setItem: (key: string, value: string) => { draftStore[key] = value; },
+      removeItem: (key: string) => { delete draftStore[key]; },
+    };
+
+    S.activeMachineId = 1;
+    S.currentLang = 'en';
+    S.liveWasLive = true; // simulate a brew already in progress
+    S.liveLastSeq = 0;
+    S.shots = [
+      { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+      { id: 11, machineId: 2, timestamp: 0, annotation: {} },
+    ];
+  });
+
+  async function triggerBrewEnd({ newShotsAfterSync }: { newShotsAfterSync: ShotMeta[] }) {
+    window.loadData = () => { S.shots = newShotsAfterSync; return Promise.resolve(); };
+    getLiveDataMock.mockReturnValue(liveDataResponse({ isLive: false, seq: 1, profileName: null }));
+    await fetchLiveData();
+    await vi.advanceTimersByTimeAsync(4000);
+  }
+
+  function host() {
+    return document.getElementById('liveQuickRating') as unknown as { style: Record<string, string>; innerHTML?: string };
+  }
+
+  it('shows the strip for the shot the brew produced', async () => {
+    await triggerBrewEnd({
+      newShotsAfterSync: [
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: {} },
+      ],
+    });
+
+    expect(host().style.display).toBe('');
+    expect(host().innerHTML).toContain('data-shot-id="12"');
+    expect(host().innerHTML).toContain('quick-rate-dismiss');
+  });
+
+  it('hides the strip when the next brew starts', async () => {
+    await triggerBrewEnd({
+      newShotsAfterSync: [
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: {} },
+      ],
+    });
+    expect(host().style.display).toBe('');
+
+    getLiveDataMock.mockReturnValue(liveDataResponse({ isLive: true, seq: 2, profileName: null }));
+    await fetchLiveData();
+    expect(host().style.display).toBe('none');
+  });
+
+  it('Later hides the strip', async () => {
+    await triggerBrewEnd({
+      newShotsAfterSync: [
+        { id: 10, machineId: 1, timestamp: 0, annotation: {} },
+        { id: 12, machineId: 1, timestamp: 0, annotation: {} },
+      ],
+    });
+
+    dismissLiveQuickRating();
+    expect(host().style.display).toBe('none');
   });
 });

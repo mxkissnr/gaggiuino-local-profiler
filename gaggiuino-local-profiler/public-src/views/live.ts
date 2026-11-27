@@ -9,6 +9,7 @@ import { getPreheat, getLiveData } from '../api/system.js';
 import { annotateShot } from '../api/shots.js';
 import type { Bean, MachineControlState, ShotAnnotation } from '../api/types.js';
 import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, formatDate, html, esc, joinHtml, detectPhases } from '../utils.js';
+import { quickRatingHtml } from '../components/quick-rating.js';
 import type { ShotDatapoints, ShotSeries } from '../utils.js';
 import { getShotCurve } from '../shot-curves.js';
 import { machineIconAnimatedSvg, setMachineIconMode, updateMachineIconBrewReadout,
@@ -132,6 +133,32 @@ function _isActiveMachineLiveCapable(): boolean {
 // observed yet (treated as brew, so a synthetic live→idle transition with no
 // recorded mode isn't blocked).
 let _liveSessionIsBrew: boolean | null = null;
+
+// #2226: the shot the quick rating strip under the finished curve belongs to,
+// null = no strip. Set once the finished brew's shot has synced, cleared by
+// Later/Done and when the next brew starts. A shot id, never a machine scalar,
+// so a machine switch cannot point it at another machine's shot.
+let _quickRateShotId: number | null = null;
+
+/** Draws the live quick rating strip from the shot list, or hides it. */
+export function renderLiveQuickRating(): void {
+  const host = document.getElementById('liveQuickRating');
+  if (!host) return;
+  const shot = _quickRateShotId === null ? undefined : S.shots.find(s => s.id === _quickRateShotId);
+  if (!shot) {
+    host.innerHTML = html``;
+    host.style.display = 'none';
+    return;
+  }
+  host.innerHTML = quickRatingHtml(shot, true);
+  host.style.display = '';
+}
+
+/** Later/Done: hides the strip until the next shot ends. */
+export function dismissLiveQuickRating(): void {
+  _quickRateShotId = null;
+  renderLiveQuickRating();
+}
 
 // ── Pre-shot setup (bean/dose/grinder/grind/basket/puckscreen/recipe) ──────
 // Lets the user pick the upcoming shot's setup right on the Live/idle screen
@@ -960,6 +987,8 @@ function handleLiveTransitions(msg: LiveMessage): void {
   if (!S.liveWasLive && msg.isLive && msg.profileName) {
     autoApplyRefShot(msg.profileName);
   }
+  // #2226: the next brew ends the previous shot's quick rating strip.
+  if (!S.liveWasLive && msg.isLive && _quickRateShotId !== null) dismissLiveQuickRating();
 
   // Brew just ended → reload shot list after sync delay, then write the
   // pre-shot setup panel's draft (bean/dose/grinder/grind/basket/
@@ -991,7 +1020,15 @@ function handleLiveTransitions(msg: LiveMessage): void {
       const newest = S.shots
         .filter(s => s.machineId === machineId && s.id > priorNewestId)
         .sort((a, b) => b.id - a.id)[0];
-      if (newest) void _applyLiveSetupToShot(newest.id);
+      if (newest) {
+        void _applyLiveSetupToShot(newest.id);
+        // #2226: offer the quick rating for the shot this brew produced,
+        // unless the next brew already started during the sync wait.
+        if (!S.liveWasLive) {
+          _quickRateShotId = newest.id;
+          renderLiveQuickRating();
+        }
+      }
     })(); }, 4000);
   }
   S.liveWasLive = msg.isLive;

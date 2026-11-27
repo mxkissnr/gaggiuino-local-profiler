@@ -29,6 +29,7 @@ const {
   selectTasteTag,
   scheduleAutoSave,
   flushAutoSave,
+  quickRateShot,
 } = await import('../public-src/views/shots/annotation.js');
 const { quickRatingHtml, quickRatingValue, newestUnratedShotId } =
   await import('../public-src/components/quick-rating.js');
@@ -310,5 +311,87 @@ describe('quick rating strip markup (#2226)', () => {
     expect(newestUnratedShotId([{ id: 1, timestamp: 100 }, { id: 2, timestamp: 200, annotation: { rating: 4 } }])).toBeNull();
     expect(newestUnratedShotId([])).toBeNull();
     expect(newestUnratedShotId([{ id: 3, timestamp: 100 }, { id: 5, timestamp: 100 }])).toBe(5);
+  });
+});
+
+// #2226: one tap in the strip writes exactly the tapped field through the same
+// merge endpoint the panel autosave uses.
+describe('quick rating save (#2226)', () => {
+  interface SavedBody { [key: string]: unknown }
+
+  function lastBody(): SavedBody {
+    const call = fetchSpy.mock.calls[0];
+    if (!call) throw new Error('no save request was sent');
+    return JSON.parse(call[1]?.body as string) as SavedBody;
+  }
+
+  beforeEach(() => {
+    S.currentLang = 'en';
+    S.shots = [{ id: 5, timestamp: 1700000100, annotation: {} }, { id: 1, timestamp: 1700000000, annotation: {} }];
+    S.primaryShotId = 1;
+    (g.window as Record<string, unknown>).showToast = vi.fn();
+    fakeAnnotationDom();
+    // renderStars() walks the panel's stars; no panel DOM here.
+    (g.document as Record<string, unknown>).querySelectorAll = () => [];
+  });
+
+  function answerSave(annotation: Record<string, unknown>): void {
+    fetchSpy.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ annotation, score: 60 }),
+    } as unknown as Response);
+  }
+
+  it('posts only the tapped rating', async () => {
+    answerSave({ rating: 4 });
+    await quickRateShot(5, 'rating', '4');
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain('api/shots/5/annotate');
+    expect(lastBody()).toEqual({ rating: 4 });
+    expect(S.shots.find(s => s.id === 5)?.annotation).toEqual({ rating: 4 });
+  });
+
+  it('tapping the stored star again clears the rating', async () => {
+    S.shots = [{ id: 5, timestamp: 1700000100, annotation: { rating: 4 } }, { id: 1, timestamp: 1700000000, annotation: {} }];
+    answerSave({ rating: null });
+    await quickRateShot(5, 'rating', '4');
+    expect(lastBody()).toEqual({ rating: null });
+  });
+
+  it('quick taste tag sets and clears', async () => {
+    S.shots = [{ id: 5, timestamp: 1700000100, annotation: { tasteTag: 'sour' } }, { id: 1, timestamp: 1700000000, annotation: {} }];
+    answerSave({ tasteTag: 'bitter' });
+    await quickRateShot(5, 'tasteTag', 'bitter');
+    expect(lastBody()).toEqual({ tasteTag: 'bitter' });
+
+    fetchSpy.mockClear();
+    S.shots = [{ id: 5, timestamp: 1700000100, annotation: { tasteTag: 'sour' } }, { id: 1, timestamp: 1700000000, annotation: {} }];
+    answerSave({ tasteTag: null });
+    await quickRateShot(5, 'tasteTag', 'sour');
+    expect(lastBody()).toEqual({ tasteTag: null });
+  });
+
+  it('quick rating ignores values it does not know', async () => {
+    await quickRateShot(5, 'rating', '9');
+    await quickRateShot(5, 'tasteTag', 'astringent');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('quick rating keeps the open panel in step', async () => {
+    S.primaryShotId = 5;
+    answerSave({ rating: 3 });
+    await quickRateShot(5, 'rating', '3');
+    expect(S.currentRating).toBe(3);
+
+    answerSave({ tasteTag: 'bitter' });
+    await quickRateShot(5, 'tasteTag', 'bitter');
+    expect(el('annTasteTag').value).toBe('bitter');
+  });
+
+  it('quick rating reports a failed save', async () => {
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 500 } as unknown as Response);
+    await quickRateShot(5, 'rating', '2');
+    expect((g.window as { showToast: unknown }).showToast).toHaveBeenCalledTimes(1);
+    expect(S.shots.find(s => s.id === 5)?.annotation).toEqual({});
   });
 });
