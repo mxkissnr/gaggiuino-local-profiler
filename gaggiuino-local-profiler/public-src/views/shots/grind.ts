@@ -6,7 +6,8 @@ import { calcShotScore }                   from './utils.js';
 import type { ShotLike }                   from './utils.js';
 import { getRawCurve }                     from '../../shot-curves.js';
 import { normalizeGrindToNow }             from '../../grind-zero.js';
-import { grindOnTarget, inGrindRange, prefillGrind, scaleForGrinder, snapGrind } from '../../grind-scale.js';
+import { formatGrind, grindOnTarget, grindPosition, inGrindRange, prefillGrind, scaleForGrinder, snapGrind } from '../../grind-scale.js';
+import type { GrindScale } from '../../grind-scale.js';
 import { LIGHTNING_ICON_SVG, SCALE_ICON_SVG, BAR_CHART_ICON_SVG } from '../../icons.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
 import type { BeanMixPartInput } from '../../shared/bean-mix.js';
@@ -38,7 +39,7 @@ export interface GrindAdvice {
 
 interface ComparativeShot {
   shot: GrindShot;
-  grind: number | null;
+  grind: string | number | null;
   score: number;
 }
 
@@ -48,7 +49,7 @@ interface ComparativeAdvice extends GrindAdvice {
 
 interface GrindCombo {
   grinder: string;
-  grindSetting: number;
+  grindSetting: string | number;
   avgScore: number;
   shotCount: number;
 }
@@ -109,15 +110,15 @@ export function _miniShotChart(shot: GrindShot): Html {
 
 // ── Grind setting parser ───────────────────────────────────────────────────
 
+// The first number of a free-text setting; grind-scale.ts holds the one parser.
 export function _parseGrindNum(s: string | number | null | undefined): number | null {
-  // Only null/undefined and empty/whitespace strings mean "no value" — a
-  // grind setting of 0 is a real setting and must survive.
-  if (s === null || s === undefined) return null;
-  if (typeof s === 'number') return Number.isFinite(s) ? s : null;
-  if (s.trim() === '') return null;
-  const m = s.match(/(\d+(?:[.,]\d+)?)/);
-  const captured = m?.[1];
-  return captured !== undefined ? parseFloat(captured.replace(',', '.')) : null;
+  return grindPosition(null, s);
+}
+
+// #2225: a setting the way the grinder's scale writes it (8.0, 8.2,5, 12E),
+// the plain number without a scale.
+function _grindLabel(scale: GrindScale | null, v: number): string | number {
+  return scale ? formatGrind(scale, v) : v;
 }
 
 // ── Taste tags (#1957) ─────────────────────────────────────────────────────
@@ -239,7 +240,8 @@ export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice 
 // needing to be rewritten. A no-op when the shot's grinder never tracked a
 // zero point.
 function _currentGrindNum(grinderName: string | null | undefined, grindSettingStr: string | number | null | undefined, shotTimestampSec: number | undefined): number | null {
-  const raw = _parseGrindNum(grindSettingStr);
+  // #2225: a dial setting is read on the grinder's scale, as a position.
+  const raw = grindPosition(scaleForGrinder(S.coffeeLibrary?.grinders, grinderName), grindSettingStr);
   return normalizeGrindToNow(S.coffeeLibrary?.grinders, grinderName, raw, shotTimestampSec != null ? shotTimestampSec * 1000 : undefined) ?? null;
 }
 
@@ -275,7 +277,7 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
       const sd = parseFloat(a.dose as string) || null;
       if (!sd || Math.abs(sd - dose) > 1) return false;
     }
-    if (_parseGrindNum(a.grindSetting) === null) return false;
+    if (_currentGrindNum(a.grinder, a.grindSetting, s.timestamp) === null) return false;
     return calcShotScore(s) !== null;
   });
   if (comparable.length < 1) return null;
@@ -305,23 +307,27 @@ export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[
   const n         = ranked.length;
   const bestScore = Math.round(bestAvg);
   const shots: ComparativeShot[] = ranked
-    .map(s => ({ shot: s, grind: _currentGrindNum(s.annotation?.grinder, s.annotation?.grindSetting, s.timestamp), score: calcShotScore(s) as number }))
+    .map(s => {
+      const g = _currentGrindNum(s.annotation?.grinder, s.annotation?.grindSetting, s.timestamp);
+      return { shot: s, grind: g === null ? null : _grindLabel(scale, g), score: calcShotScore(s) as number };
+    })
     .sort((a, b) => b.score - a.score);
+  const best = _grindLabel(scale, bestSetting);
 
   if (currentGrind === null)
-    return { type: 'ok',      icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_ok',      n, bestSetting, bestScore), shots };
+    return { type: 'ok',      icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_ok',      n, best, bestScore), shots };
   const diff = currentGrind - bestSetting;
   const tag = tasteTagOf(ann);
   const outcome = tag && _tasteOutcome(tag, grindOnTarget(scale, diff) ? null : diff > 0 ? 'finer' : 'coarser', false);
   const tasteKey = outcome ? COMPARATIVE_TASTE_KEYS[outcome] : undefined;
   if (outcome && tasteKey) {
-    return { type: outcome === 'finer' || outcome === 'coarser' ? outcome : 'ok', icon: BAR_CHART_ICON_SVG, text: t(tasteKey, n, bestSetting, bestScore), shots };
+    return { type: outcome === 'finer' || outcome === 'coarser' ? outcome : 'ok', icon: BAR_CHART_ICON_SVG, text: t(tasteKey, n, best, bestScore), shots };
   }
   if (grindOnTarget(scale, diff))
-    return { type: 'ok',      icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_ok',      n, bestSetting, bestScore), shots };
+    return { type: 'ok',      icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_ok',      n, best, bestScore), shots };
   if (diff > 0)
-    return { type: 'finer',   icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_finer',   n, bestSetting, bestScore), shots };
-  return   { type: 'coarser', icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_coarser', n, bestSetting, bestScore), shots };
+    return { type: 'finer',   icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_finer',   n, best, bestScore), shots };
+  return   { type: 'coarser', icon: BAR_CHART_ICON_SVG, text: t('grind_comparative_coarser', n, best, bestScore), shots };
 }
 
 // ── Best grinder+grind-setting combo per bean (Coffee Library) ────────────
@@ -354,12 +360,12 @@ export function calcBestGrindCombosForBean(
       : (a.coffee || '').trim().toLowerCase() === name;
     if (!sameBean) return false;
     if (!a.grinder?.trim()) return false;
-    if (_parseGrindNum(a.grindSetting) === null) return false;
+    if (_currentGrindNum(a.grinder, a.grindSetting, s.timestamp) === null) return false;
     return calcShotScore(s) !== null;
   });
   if (!scored.length) return null;
 
-  const byCombo: Record<string, { grinder: string; grindSetting: number; scores: number[] }> = {};
+  const byCombo: Record<string, { grinder: string; grindSetting: string | number; scores: number[] }> = {};
   scored.forEach(s => {
     const grinder = (s.annotation?.grinder as string).trim();
     const scale    = scaleForGrinder(S.coffeeLibrary?.grinders, grinder);
@@ -367,7 +373,7 @@ export function calcBestGrindCombosForBean(
     if (scale && !inGrindRange(scale, current)) return;
     const grind    = scale ? snapGrind(scale, current) : Math.round(current * 2) / 2;
     const key      = `${grinder.toLowerCase()}${grind}`;
-    const combo    = (byCombo[key] ??= { grinder, grindSetting: grind, scores: [] });
+    const combo    = (byCombo[key] ??= { grinder, grindSetting: _grindLabel(scale, grind), scores: [] });
     combo.scores.push(calcShotScore(s) as number);
   });
 
@@ -465,5 +471,5 @@ export function suggestGrindDoseForBean(
   // valid value; one that cannot be stays empty, as in #1954.
   const finalGrinder = defaultGrinder || grinder;
   const scale = scaleForGrinder(coffeeLibrary?.grinders, finalGrinder);
-  return { grinder: finalGrinder, grindSetting: scale ? prefillGrind(scale, _parseGrindNum(grindSetting)) : grindSetting, dose };
+  return { grinder: finalGrinder, grindSetting: scale ? prefillGrind(scale, grindPosition(scale, grindSetting)) : grindSetting, dose };
 }
