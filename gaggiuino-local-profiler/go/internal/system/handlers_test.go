@@ -1,6 +1,7 @@
 package system
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -534,4 +535,96 @@ func TestGetStatus_MachineIdProbe_GetAdapterFailureNoMismatch(t *testing.T) {
 	// fake adapter's default-machine poll never ran) while machineHostname
 	// above already named the requested one -- the mismatch this test
 	// guards against.
+}
+
+// newTwoMachineHAHandlers wires the system routes around the default machine
+// and a second Gaggiuino, each with the given HA switch entity ("" for none),
+// plus a fake HA server. Every HA service call's entity_id is appended to the
+// returned slice, so a test can see which machine's switch was turned on.
+func newTwoMachineHAHandlers(t *testing.T, defaultSwitch, otherSwitch string) (*Poller, *http.ServeMux, *machines.Machine, *machines.Machine, *[]string) {
+	t.Helper()
+	useTempPreheatStateFile(t)
+	entities := []string{}
+	haSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		if id, ok := body["entity_id"].(string); ok {
+			entities = append(entities, id)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(haSrv.Close)
+	t.Setenv("SUPERVISOR_TOKEN", "")
+	t.Setenv("GLP_HA_URL", haSrv.URL)
+	t.Setenv("GLP_HA_TOKEN", "test-token")
+
+	sqlDB := newTestDB(t)
+	p := newTestPollerWithHA(t, &fakeAdapter{}, sqlDB, ha.NewClientFromEnv(), defaultSwitch)
+	def, err := p.registry.GetDefaultMachine()
+	if err != nil || def == nil {
+		t.Fatalf("GetDefaultMachine: %v", err)
+	}
+	other := addOtherMachine(t, p.registry, "Second", "gaggiuino", "second-machine.invalid", true)
+	if otherSwitch != "" {
+		if other, err = p.registry.UpdateMachine(other.ID, machines.MachineInput{SwitchEntity: &otherSwitch}, nil); err != nil {
+			t.Fatalf("UpdateMachine: %v", err)
+		}
+	}
+	demo := NewDemoService(sqlDB, shots.NewRepository(sqlDB), library.NewRepository(sqlDB))
+	return p, newSystemMux(NewHandlers(p, demo, testAPIToken)), def, other, &entities
+}
+
+// TestLiveAndPreheat_MachineIdQuery (#2247): GET /api/live/data and GET
+// /api/preheat answer for the ?machineId machine, the default machine without
+// one, and reject a bad or unknown id like the switch routes do.
+func TestLiveAndPreheat_MachineIdQuery(t *testing.T) {
+	_, mux, def, other, _ := newTwoMachineHAHandlers(t, "", "")
+	for _, route := range []string{"/api/live/data", "/api/preheat"} {
+		if got := decodeMap(t, doGet(mux, route).Body.Bytes())["machineId"]; got != float64(def.ID) {
+			t.Errorf("%s machineId = %v, want the default machine %d", route, got, def.ID)
+		}
+		rec := doGet(mux, fmt.Sprintf("%s?machineId=%d", route, other.ID))
+		if got := decodeMap(t, rec.Body.Bytes())["machineId"]; rec.Code != http.StatusOK || got != float64(other.ID) {
+			t.Errorf("%s?machineId=%d = %d %v, want 200 for machine %d", route, other.ID, rec.Code, got, other.ID)
+		}
+		if rec := doGet(mux, route+"?machineId=abc"); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s?machineId=abc status = %d, want 400", route, rec.Code)
+		}
+		if rec := doGet(mux, route+"?machineId=999"); rec.Code != http.StatusNotFound {
+			t.Errorf("%s?machineId=999 status = %d, want 404", route, rec.Code)
+		}
+	}
+}
+
+// TestPostPreheatReadyBy_UsesRequestedMachine (#2247): a ready-by target for
+// another machine needs that machine's own switch entity and lands in that
+// machine's slots only, never the default machine's.
+func TestPostPreheatReadyBy_UsesRequestedMachine(t *testing.T) {
+	p, mux, def, other, _ := newTwoMachineHAHandlers(t, "switch.default", "")
+	target := time.Now().UnixMilli() + 60*60_000
+	body := fmt.Sprintf(`{"targetAt":%d}`, target)
+	path := fmt.Sprintf("/api/preheat/ready-by?machineId=%d", other.ID)
+
+	if rec := doPost(mux, path, body); rec.Code != http.StatusBadRequest {
+		t.Fatalf("machine without a switch: status = %d, want 400 even though the default machine has one", rec.Code)
+	}
+
+	sw := "switch.other"
+	if _, err := p.registry.UpdateMachine(other.ID, machines.MachineInput{SwitchEntity: &sw}, nil); err != nil {
+		t.Fatalf("UpdateMachine: %v", err)
+	}
+	rec := doPost(mux, path, body)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 once the machine has a switch, body=%s", rec.Code, rec.Body.String())
+	}
+	got := decodeMap(t, rec.Body.Bytes())
+	if got["machineId"] != float64(other.ID) || got["readyByTargetAt"] != float64(target) {
+		t.Errorf("response = %v, want machine %d with readyByTargetAt %d", got, other.ID, target)
+	}
+	if d := decodeMap(t, doGet(mux, "/api/preheat").Body.Bytes()); d["readyByTargetAt"] != nil || d["machineId"] != float64(def.ID) {
+		t.Errorf("default machine's preheat = %v, want no ready-by target", d)
+	}
+	if rec := doPost(mux, "/api/preheat/ready-by?machineId=999", body); rec.Code != http.StatusNotFound {
+		t.Errorf("unknown machine status = %d, want 404", rec.Code)
+	}
 }
