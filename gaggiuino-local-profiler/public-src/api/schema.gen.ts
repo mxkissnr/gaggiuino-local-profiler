@@ -7354,10 +7354,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Preheat progress and current boiler temperature (default machine only) */
+        /** Preheat progress and current boiler temperature */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description #2247: the machine whose preheat to read; omitted = the default machine. 400 when not a number, 404 for an unknown machine */
+                    machineId?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -7400,11 +7403,15 @@ export interface paths {
          *     configured switch on once that time is reached and the machine is off — one-shot, no
          *     re-fire. Rejected with 400 if `targetAt` is non-null and `switch_entity`/the HA token isn't
          *     configured, since the watcher could never fulfill it. `targetAt: null` always clears any
-         *     pending target regardless of configuration state.
+         *     pending target regardless of configuration state. Each machine has its own target (#2247):
+         *     `?machineId` picks the machine and its own switch entity, omitted = the default machine.
          */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description #2247: the machine to schedule; omitted = the default machine. 400 when not a number, 404 for an unknown machine */
+                    machineId?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -7427,8 +7434,15 @@ export interface paths {
                         "application/json": components["schemas"]["PreheatStatus"];
                     };
                 };
-                /** @description targetAt is not a valid epoch-ms number/null, or switch_entity/HA token isn't configured */
+                /** @description targetAt is not a valid epoch-ms number/null, machineId is not a number, or switch_entity/HA token isn't configured */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unknown machine */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -7455,7 +7469,10 @@ export interface paths {
          */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description #2247: the machine whose live data to read; omitted = the default machine. 400 when not a number, 404 for an unknown machine */
+                    machineId?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -7490,11 +7507,14 @@ export interface paths {
         };
         /**
          * Server-Sent Events stream multiplexing every push event type over one connection (#735/#736)
-         * @description text/event-stream. Event types: `sync-progress`, `sync-complete`, `live-snapshot` (LiveData), `preheat-update` (PreheatStatus), `data-changed` (payload `{kind, rev, epoch, id?, src?}` — one write bumped a data kind's revision). A newly connected client is primed with the current in-flight sync-progress (if any), plus one live-snapshot and one preheat-update, so it isn't waiting for the next natural trigger. A `:ping` comment line is sent every 20s as a keepalive; a leading padding comment (2048 spaces) forces an initial flush past HA Ingress buffering (#740). Existing polling endpoints (/api/status, /api/live/data, /api/preheat) stay available unchanged — the frontend falls back to polling them if this stream doesn't work. Not exposed in the OpenAPI response schemas below since this is a raw multiplexed text stream, not JSON. Auth: accepts either the usual `X-GLP-Token` header or, only on this route, a short-lived single-use `?ticket=` from `POST /api/events/ticket` (#1626) — EventSource can't set custom headers, so this is the one exception to header-only auth. The long-lived token is never accepted in the query.
+         * @description text/event-stream. Event types: `sync-progress`, `sync-complete`, `live-snapshot` (LiveData), `preheat-update` (PreheatStatus), `data-changed` (payload `{kind, rev, epoch, id?, src?}` — one write bumped a data kind's revision). A newly connected client is primed with the current in-flight sync-progress (if any), plus one live-snapshot and one preheat-update, so it isn't waiting for the next natural trigger. A `:ping` comment line is sent every 20s as a keepalive; a leading padding comment (2048 spaces) forces an initial flush past HA Ingress buffering (#740). Existing polling endpoints (/api/status, /api/live/data, /api/preheat) stay available unchanged — the frontend falls back to polling them if this stream doesn't work. Not exposed in the OpenAPI response schemas below since this is a raw multiplexed text stream, not JSON. Auth: accepts either the usual `X-GLP-Token` header or, only on this route, a short-lived single-use `?ticket=` from `POST /api/events/ticket` (#1626) — EventSource can't set custom headers, so this is the one exception to header-only auth. The long-lived token is never accepted in the query. `?machineId` (#2247) names one more machine the connection watches: GLP then polls that machine while the connection is open and sends its live-snapshot and preheat-update events (each payload carries `machineId`) to this connection only. The default machine's events reach every connection, with or without it.
          */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description #2247: a non-default machine this connection watches; omitted or invalid = none */
+                    machineId?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -9283,9 +9303,13 @@ export interface components {
             readyByTargetAt?: number | null;
             /** @description Epoch-ms when the preheat watcher will turn the switch on to hit readyByTargetAt, or null */
             plannedSwitchOnAt?: number | null;
+            /** @description #2247: the machine this status describes; a payload without it is the default machine's */
+            machineId?: number;
         };
         /** @description GET /api/live/data and the SSE live-snapshot payload (one shared Go builder, so every key below is always present — null where noted). */
         LiveData: {
+            /** @description #2247: the machine this payload describes; a payload without it is the default machine's */
+            machineId: number;
             isLive: boolean;
             profileName: string;
             /** @description Brew session's per-tenth-second series; null when not brewing. Each series is null until its first sample arrives. */
