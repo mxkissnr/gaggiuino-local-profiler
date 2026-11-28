@@ -74,6 +74,7 @@ describe('public-src/sse.js', () => {
   let connectEvents: (typeof import('../public-src/sse.js'))['connectEvents'];
   let disconnectEvents: (typeof import('../public-src/sse.js'))['disconnectEvents'];
   let onEvent: (typeof import('../public-src/sse.js'))['onEvent'];
+  let setWatchedMachine: (typeof import('../public-src/sse.js'))['setWatchedMachine'];
 
   beforeEach(async () => {
     vi.useFakeTimers();
@@ -82,7 +83,7 @@ describe('public-src/sse.js', () => {
     g.EventSource = FakeEventSource;
 
     ({ S } = await import('../public-src/state/index.js'));
-    ({ connectEvents, disconnectEvents, onEvent } = await import('../public-src/sse.js'));
+    ({ connectEvents, disconnectEvents, onEvent, setWatchedMachine } = await import('../public-src/sse.js'));
     S.sseActive = null;
     S.glpToken = '';
   });
@@ -275,12 +276,46 @@ describe('public-src/sse.js', () => {
       expect(firstSource().url).toBe('api/events');
     });
 
+    it('the watched machine rides along with the stream ticket', async () => {
+      setWatchedMachine(3);
+      connectEvents(() => {});
+      await flush();
+      expect(firstSource().url).toBe('api/events?ticket=t1&machineId=3');
+    });
+
     it('opens nothing when disconnected while the ticket is still pending', async () => {
       connectEvents(() => {});
       disconnectEvents();
       await flush();
       expect(FakeEventSource.instances).toHaveLength(0);
     });
+  });
+
+  // #2247: the Live tab watches one non-default machine over the same stream.
+  it('setWatchedMachine reopens an open stream with ?machineId', () => {
+    connectEvents(() => {});
+    firstSource()._open();
+    setWatchedMachine(7);
+    expect(firstSource().closed).toBe(true);
+    expect(sourceAt(1).url).toBe('api/events?machineId=7');
+    setWatchedMachine(null);
+    expect(sourceAt(1).closed).toBe(true);
+    expect(sourceAt(2).url).toBe('api/events');
+  });
+
+  it('a watch set before connecting only changes the URL', () => {
+    setWatchedMachine(5);
+    connectEvents(() => {});
+    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(firstSource().url).toBe('api/events?machineId=5');
+  });
+
+  it('the same watch twice does not reopen', () => {
+    connectEvents(() => {});
+    firstSource()._open();
+    setWatchedMachine(7);
+    setWatchedMachine(7);
+    expect(FakeEventSource.instances).toHaveLength(2);
   });
 
   it('opens the bare stream URL synchronously without a token (Ingress session)', () => {
