@@ -87,6 +87,7 @@ const it: Partial<Translations> = {
     ach_verdict_of:(total)=>`di ${total} timbri`, ach_verdict_next:(name)=>`Prossimo: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Manca 1 timbro' : `Mancano ${n} timbri`, ach_verdict_all:'Tutti i timbri raccolti', ach_soon:'Quasi fatto', ach_recent:'Timbrati di recente', ach_filter_got:'Raccolti', ach_filter_open:'Da ottenere',
     ach_loading:'Caricamento obiettivi …',
     verdict_no_data:'Dati ancora insufficienti per un giudizio.',
+    verdict_no_extraction:'Nessuna estrazione registrata.',
     verdict_bean_target_hint:'Valutato in base al target di preparazione di questo caffè',
     verdict_pressure_profile_hint:'Valutato in base al target di pressione di questo profilo',
     verdict_pressure_omitted_hint:'Pressione non valutata: questo shot non ha mai raggiunto 5 bar e non è noto alcun target di pressione',

@@ -87,6 +87,7 @@ const fr: Partial<Translations> = {
     ach_verdict_of:(total)=>`sur ${total} tampons`, ach_verdict_next:(name)=>`Prochain : ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Encore 1 tampon à obtenir' : `Encore ${n} tampons à obtenir`, ach_verdict_all:'Tous les tampons obtenus', ach_soon:'Presque là', ach_recent:'Tamponnés récemment', ach_filter_got:'Obtenus', ach_filter_open:'À obtenir',
     ach_loading:'Chargement des succès …',
     verdict_no_data:"Pas encore assez de données pour un verdict.",
+    verdict_no_extraction:"Aucune extraction enregistrée.",
     verdict_bean_target_hint:"Noté selon l'objectif de préparation propre à ce café",
     verdict_pressure_profile_hint:"Noté selon l'objectif de pression propre à ce profil",
     verdict_pressure_omitted_hint:"Pression non notée — ce shot n'a jamais atteint 5 bar et aucun objectif de pression n'est connu pour lui",

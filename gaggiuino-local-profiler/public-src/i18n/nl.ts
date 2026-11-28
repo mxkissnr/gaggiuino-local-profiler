@@ -87,6 +87,7 @@ const nl: Partial<Translations> = {
     ach_verdict_of:(total)=>`van ${total} stempels`, ach_verdict_next:(name)=>`Volgende: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Nog 1 stempel open' : `Nog ${n} stempels open`, ach_verdict_all:'Alle stempels verzameld', ach_soon:'Bijna binnen', ach_recent:'Recent gestempeld', ach_filter_got:'Verzameld', ach_filter_open:'Open',
     ach_loading:'Prestaties laden …',
     verdict_no_data:'Nog niet genoeg gegevens voor een oordeel.',
+    verdict_no_extraction:'Geen extractie vastgelegd.',
     verdict_bean_target_hint:'Beoordeeld op basis van het eigen zettarget van deze boon',
     verdict_pressure_profile_hint:'Beoordeeld op basis van het eigen drukdoel van dit profiel',
     verdict_pressure_omitted_hint:'Druk niet beoordeeld — deze shot bereikte nooit 5 bar en er is geen drukdoel bekend',

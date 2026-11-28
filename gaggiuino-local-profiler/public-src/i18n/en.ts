@@ -87,6 +87,7 @@ const en: Translations = {
     ach_verdict_of:(total)=>`of ${total} stamps`, ach_verdict_next:(name)=>`Next up: ${name}`, ach_verdict_open:(n)=>n === 1 ? '1 stamp still open' : `${n} stamps still open`, ach_verdict_all:'Every stamp collected', ach_soon:'Almost there', ach_recent:'Recently stamped', ach_filter_got:'Collected', ach_filter_open:'Open',
     ach_loading:'Loading achievements …',
     verdict_no_data:'Not enough data yet for a verdict.',
+    verdict_no_extraction:'No extraction recorded.',
     verdict_bean_target_hint:'Scored against this bean\'s own brew target',
     verdict_pressure_profile_hint:'Scored against this profile\'s own pressure target',
     verdict_pressure_omitted_hint:'Pressure not scored — this shot never reached 5 bar and no pressure target is known for it',
