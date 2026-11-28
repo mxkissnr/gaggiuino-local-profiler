@@ -67,7 +67,7 @@ describe('topbar machine icon follows the selected machine (#1201)', () => {
     expect(el.has('is-brewing')).toBe(true);
   });
 
-  it('another machine\'s snapshot does not replace the remembered default snapshot', () => {
+  it("another machine's snapshot does not replace the remembered default snapshot", () => {
     handleTopbarLiveSnapshotEvent({ isLive: true, machineId: 1 });
     handleTopbarLiveSnapshotEvent({ isLive: false, machineId: 2 });
     state.activeMachineId = 2;
