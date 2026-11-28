@@ -73,14 +73,6 @@ const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
         'Fixed: several-machine setups keep profile edits and maintenance entries on the machine they belong to, and saves the server rejects now show an error.',
         'Security: a round of hardening for photos, imports, notifications and Home Assistant ingress handling.',
     ] },
-    { version: '3.4.0', date: '2026-10-09', highlights: [
-        'Before you update: GLP now refuses requests for unknown host names. The Home Assistant sidebar, IP addresses and local names such as .local or .fritz.box keep working. If you open GLP under your own domain, for example through a reverse proxy, add that domain to the new allowed_hosts option right after updating.',
-        'A new coffee library: your beans stand on a shelf as bag photos with a stock bar, every bean opens a detail sheet with bags and actions, and bag photos can be cut out as stickers right on your device.',
-        'Statistics, redesigned: a one-line verdict, a coffee year with streaks, a coffee map with routes to your cup, your beans ranked by score and a few surprising facts.',
-        'Better GaggiMate support: flush and answer brew confirmations from GLP (firmware 1.9.0+), shots sync the moment they are saved, and standby, heating and flushing show correctly.',
-        'Fixed: barcode scanning on iPhone and iPad, view settings that follow you across devices, kiosk orders that keep the chosen milk or bean, and a reliable preheat countdown.',
-        'Security: built with Go 1.27.2 and an updated HTTP/2 library, unknown host names are refused, and the MQTT password no longer reaches the browser.',
-    ] },
 ];
 
 const MAX_ENTRIES = 8;
