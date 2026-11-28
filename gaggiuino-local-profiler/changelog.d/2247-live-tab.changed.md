@@ -1,0 +1,1 @@
+- **The Live tab now follows the machine selected in the topbar switcher, showing that machine's own brews, steam, flush and descale sessions, its preheat countdown and the quick rating after its shot, instead of an unavailable-for-this-machine message; with "All machines" it shows the default machine.** Refs #2247
