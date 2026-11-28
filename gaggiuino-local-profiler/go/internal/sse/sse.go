@@ -61,6 +61,9 @@ type subscriber struct {
 type Hub struct {
 	mu   sync.Mutex
 	subs map[<-chan Event]*subscriber
+	// onWatch runs whenever a connection that watches a machine opens or
+	// closes (#2247), set via SetWatchListener.
+	onWatch func()
 }
 
 // NewHub returns an empty Hub, ready to use.
@@ -122,9 +125,13 @@ func (h *Hub) Subscribe() (<-chan Event, func()) {
 	unsubscribe := func() {
 		once.Do(func() {
 			h.mu.Lock()
+			watch, fn := s.watch, h.onWatch
 			delete(h.subs, s.events)
 			h.mu.Unlock()
 			close(s.events)
+			if watch != 0 && fn != nil {
+				go fn()
+			}
 		})
 	}
 	return s.events, unsubscribe
@@ -142,13 +149,41 @@ func (h *Hub) resyncChan(sub <-chan Event) <-chan struct{} {
 	return nil
 }
 
-// setWatch records the machine sub's connection watches (#2247).
+// setWatch records the machine sub's connection watches (#2247) and tells
+// the watch listener about it.
 func (h *Hub) setWatch(sub <-chan Event, machineID int64) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
-	if s, ok := h.subs[sub]; ok {
+	s, ok := h.subs[sub]
+	if ok {
 		s.watch = machineID
 	}
+	fn := h.onWatch
+	h.mu.Unlock()
+	if ok && machineID != 0 && fn != nil {
+		go fn()
+	}
+}
+
+// SetWatchListener installs fn, called in its own goroutine whenever a
+// connection that watches a machine opens or closes (#2247). nil removes it.
+func (h *Hub) SetWatchListener(fn func()) {
+	h.mu.Lock()
+	h.onWatch = fn
+	h.mu.Unlock()
+}
+
+// WatchedMachines returns the machine ids at least one open connection
+// watches (#2247).
+func (h *Hub) WatchedMachines() map[int64]bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := map[int64]bool{}
+	for _, s := range h.subs {
+		if s.watch != 0 {
+			out[s.watch] = true
+		}
+	}
+	return out
 }
 
 // watchedMachine reads the machine a connection watches from its ?machineId

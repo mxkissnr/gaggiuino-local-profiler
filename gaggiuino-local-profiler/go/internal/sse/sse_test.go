@@ -674,3 +674,32 @@ func TestHandler_MachineIdQueryWatchesMachine(t *testing.T) {
 		t.Errorf("first delivered event = %v, want machine 7's (machine 8's must not arrive)", data)
 	}
 }
+
+// TestHub_WatchedMachinesAndListener (#2247): a watching connection shows up
+// in WatchedMachines and wakes the listener when it opens and when it closes.
+func TestHub_WatchedMachinesAndListener(t *testing.T) {
+	h := NewHub()
+	fired := make(chan struct{}, 4)
+	h.SetWatchListener(func() { fired <- struct{}{} })
+	waitFired := func(when string) {
+		t.Helper()
+		select {
+		case <-fired:
+		case <-time.After(time.Second):
+			t.Fatalf("watch listener did not fire %s", when)
+		}
+	}
+
+	sub, cancel := h.Subscribe()
+	h.setWatch(sub, 7)
+	waitFired("after the watch was set")
+	if got := h.WatchedMachines(); len(got) != 1 || !got[7] {
+		t.Errorf("WatchedMachines() = %v, want {7: true}", got)
+	}
+
+	cancel()
+	waitFired("after the watching connection closed")
+	if got := h.WatchedMachines(); len(got) != 0 {
+		t.Errorf("WatchedMachines() after unsubscribe = %v, want empty", got)
+	}
+}
