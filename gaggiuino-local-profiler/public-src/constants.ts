@@ -26,7 +26,8 @@ export const TRANSLATIONS: Record<string, unknown> = { de, en, it, fr, es, nl };
 // region the conventions: English UI in a German browser is en-DE, so a
 // 24-hour clock and day-first dates. The region is the first one in the
 // browser's language list (many browsers list a bare "de" first, #2238),
-// else the system locale's. Without a usable region, or when Intl does not
+// else the system locale's, else the likely region of the first browser
+// language ("de" -> DE, #2240). Without a usable region, or when Intl does not
 // support the combined tag, the LOCALE_MAP entry applies as before.
 const localeCache = new Map<string, string>();
 
@@ -60,11 +61,20 @@ function regionOf(tag: string): string | undefined {
   }
 }
 
+function likelyRegionOf(tag: string): string | undefined {
+  try {
+    return new Intl.Locale(tag).maximize().region;
+  } catch {
+    return undefined; // an empty or invalid tag
+  }
+}
+
 function withBrowserRegion(base: string, browser: string[]): string {
   try {
     // The system locale is read only on a cache miss: it is slow to resolve.
     const region = browser.map(regionOf).find(Boolean)
-      ?? regionOf(Intl.DateTimeFormat().resolvedOptions().locale);
+      ?? regionOf(Intl.DateTimeFormat().resolvedOptions().locale)
+      ?? browser.map(likelyRegionOf).find(Boolean);
     if (!region) return base;
     const tag = `${new Intl.Locale(base).language}-${region}`;
     return Intl.DateTimeFormat.supportedLocalesOf(tag).length > 0 ? tag : base;

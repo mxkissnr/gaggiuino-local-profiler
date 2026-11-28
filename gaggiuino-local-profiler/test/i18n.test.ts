@@ -103,7 +103,7 @@ describe('i18n language files', () => {
     });
 
     it("localeFor() returns the exact LOCALE_MAP entry for every supported language", async (): Promise<void> => {
-        vi.stubGlobal('navigator', { language: 'en', languages: ['en'] });
+        vi.stubGlobal('navigator', { language: '', languages: [] });
         stubSystemLocale('und');
         const fresh = await freshLocaleFor();
         for (const name of Object.keys(LANGS)) {
@@ -168,9 +168,6 @@ describe('localeFor() follows the browser region (#2232)', () => {
     it("falls back to the fixed locale without a usable region", async (): Promise<void> => {
         stubSystemLocale('und');
         const fresh = await freshLocaleFor();
-        vi.stubGlobal('navigator', { language: 'de', languages: ['de'] });
-        expect(fresh('en')).toBe('en-US');
-        expect(fresh('de')).toBe('de-DE');
         vi.stubGlobal('navigator', { language: '', languages: [] });
         expect(fresh('fr')).toBe('fr-FR');
         vi.stubGlobal('navigator', { language: 'x', languages: ['not a locale!'] });
@@ -204,13 +201,36 @@ describe('localeFor() follows the browser region (#2232)', () => {
         expect(fresh('fr')).toBe('fr-CH');
     });
 
-    it("no region anywhere falls back to the LOCALE_MAP entry (#2238)", async (): Promise<void> => {
+    // #2240: when neither source carries an explicit region, the likely region
+    // of the first bare browser language applies before the LOCALE_MAP entry.
+    it("a bare browser language gives its likely region when no locale has one (#2240)", async (): Promise<void> => {
         vi.stubGlobal('navigator', { language: 'de', languages: ['de', 'en'] });
+        stubSystemLocale('de');
+        const fresh = await freshLocaleFor();
+        expect(fresh('en')).toBe('en-DE');
+        expect(fresh('de')).toBe('de-DE');
+        expect(fresh('pt')).toBe('en-DE');
+    });
+
+    it("an explicit region still wins over a likely one (#2240)", async (): Promise<void> => {
+        vi.stubGlobal('navigator', { language: 'de', languages: ['de', 'en-GB'] });
         stubSystemLocale('und');
         const fresh = await freshLocaleFor();
+        expect(fresh('en')).toBe('en-GB');
+    });
+
+    it("a bare English browser keeps en-US (#2240)", async (): Promise<void> => {
+        vi.stubGlobal('navigator', { language: 'en', languages: ['en'] });
+        stubSystemLocale('en');
+        const fresh = await freshLocaleFor();
         expect(fresh('en')).toBe('en-US');
-        expect(fresh('de')).toBe('de-DE');
-        expect(fresh('pt')).toBe('en-US');
+    });
+
+    it("an invalid first tag is skipped for the likely region (#2240)", async (): Promise<void> => {
+        vi.stubGlobal('navigator', { language: 'fr', languages: ['x', 'fr'] });
+        stubSystemLocale('und');
+        const fresh = await freshLocaleFor();
+        expect(fresh('en')).toBe('en-FR');
     });
 });
 
