@@ -41,6 +41,8 @@ type PreheatStatus struct {
 	TargetTemp        *float64 `json:"targetTemp"`
 	ReadyByTargetAt   *int64   `json:"readyByTargetAt"`
 	PlannedSwitchOnAt *int64   `json:"plannedSwitchOnAt"`
+	// #2247: the machine this status describes, always sent (see LiveData).
+	MachineID int64 `json:"machineId"`
 }
 
 // PreheatStatus is the exported form of buildPreheatResponse, for cmd/server's
@@ -83,28 +85,30 @@ func (p *Poller) defaultSwitchEntity() string {
 // POST /api/preheat/ready-by so both return the identical shape, and by every
 // preheat-update SSE push.
 func (p *Poller) buildPreheatResponse() PreheatStatus {
-	return p.buildPreheatResponseFor(p.defaultSwitchEntity())
+	return p.buildPreheatResponseFor(p.defaultTarget())
 }
 
 // buildPreheatResponseFor is buildPreheatResponse for an already-resolved
-// default machine's switch entity ("" for none) — the poll tick passes its
-// own machine's instead of re-querying the registry (#1616).
-func (p *Poller) buildPreheatResponseFor(switchEntity string) PreheatStatus {
+// machine — the poll tick passes its own machine instead of re-querying the
+// registry (#1616); #2247 builds it for any machine from that machine's own
+// runtime, slots and switch entity ("" for none).
+func (p *Poller) buildPreheatResponseFor(t liveTarget) PreheatStatus {
 	preheatMins := loadPreheatMinutes()
 	preheatMs := int64(preheatMins) * 60_000
-	snap := p.runtime.Get()
+	snap := p.runtimeFor(t).Get()
 
 	p.state.mu.Lock()
-	readyByTargetAt := p.state.readyByTargetAt
-	plannedSwitchOnAt := p.state.plannedSwitchOnAt
+	sl := p.state.slotsLocked(t)
+	readyByTargetAt := sl.readyByTargetAt
+	plannedSwitchOnAt := sl.plannedSwitchOnAt
 	p.state.mu.Unlock()
 
-	machineOff := snap.Standby || (!snap.MachineOn && switchEntity != "")
+	machineOff := snap.Standby || (!snap.MachineOn && t.switchEntity != "")
 	if machineOff || snap.SwitchOnAt == nil {
 		return PreheatStatus{
 			Ready: false, Standby: snap.Standby, Elapsed: 0, Remaining: preheatMins * 60, Pct: 0,
 			PreheatTime: preheatMins, Temp: snap.CurrentTemp, TargetTemp: snap.CurrentTargetTemp,
-			ReadyByTargetAt: readyByTargetAt, PlannedSwitchOnAt: plannedSwitchOnAt,
+			ReadyByTargetAt: readyByTargetAt, PlannedSwitchOnAt: plannedSwitchOnAt, MachineID: t.id,
 		}
 	}
 
@@ -127,8 +131,14 @@ func (p *Poller) buildPreheatResponseFor(switchEntity string) PreheatStatus {
 	return PreheatStatus{
 		Ready: ready, Standby: snap.Standby, Elapsed: elapsed, Remaining: remaining, Pct: pct, PreheatTime: preheatMins,
 		StabilityReady: &stabilityReady, Temp: snap.CurrentTemp, TargetTemp: snap.CurrentTargetTemp,
-		ReadyByTargetAt: readyByTargetAt, PlannedSwitchOnAt: plannedSwitchOnAt,
+		ReadyByTargetAt: readyByTargetAt, PlannedSwitchOnAt: plannedSwitchOnAt, MachineID: t.id,
 	}
+}
+
+// publishPreheat pushes t's preheat status: to every subscriber for the
+// default machine, only to the subscribers watching it otherwise (#2247).
+func (p *Poller) publishPreheat(t liveTarget) {
+	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponseFor(t), MachineID: t.scope()})
 }
 
 // SetReadyByTarget backs POST /api/preheat/ready-by. targetAt == nil cancels a

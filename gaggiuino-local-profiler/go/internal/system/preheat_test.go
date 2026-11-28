@@ -250,7 +250,7 @@ func TestApplyStandbyTransition_LeaveResetsClock(t *testing.T) {
 	p.runtime.SetSwitchOnAt(&old)
 	p.runtime.SetStandby(true)
 
-	p.applyStandbyTransition(time.Now().UnixMilli(), false)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), false)
 
 	snap := p.runtime.Get()
 	if snap.Standby {
@@ -292,7 +292,7 @@ func TestApplyStandbyTransition_EnterResetsPreheatState(t *testing.T) {
 		t.Fatal("precondition: temp history should read as stable")
 	}
 
-	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), true)
 
 	snap := p.runtime.Get()
 	if !snap.Standby {
@@ -338,7 +338,7 @@ func TestApplyStandbyTransition_WakeHotBoilerStartsNewSession(t *testing.T) {
 	}
 
 	before := len(p.PreheatHistory())
-	p.applyStandbyTransition(time.Now().UnixMilli(), false)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), false)
 
 	snap := p.runtime.Get()
 	if snap.Standby {
@@ -374,7 +374,7 @@ func TestApplyStandbyTransition_NoLivePollingNoop(t *testing.T) {
 	p.runtime.SetSwitchOnAt(&old)
 	before := len(p.PreheatHistory())
 
-	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), true)
 
 	snap := p.runtime.Get()
 	if snap.Standby {
@@ -397,12 +397,12 @@ func TestApplyStandbyTransition_EmptyStartRunDiscarded(t *testing.T) {
 	p := newPreheatHistoryPoller(t, fake)
 	markLivePollingActive(t, p)
 
-	p.beginPreheatSession(time.Now().UnixMilli())
+	p.beginPreheatSession(p.defaultTarget(), time.Now().UnixMilli())
 	if len(p.PreheatHistory()) != 1 {
 		t.Fatal("precondition: the started session should have left an open run")
 	}
 
-	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), true)
 
 	if got := len(p.PreheatHistory()); got != 0 {
 		t.Fatalf("history len = %d, want 0 (the empty run dropped)", got)
@@ -421,7 +421,7 @@ func TestApplyStandbyTransition_RunWithSamplesFinalised(t *testing.T) {
 	p.openPreheatRun(onAt)
 	p.recordPreheatSample(onAt+30_000, 90, 93)
 
-	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), true)
 
 	runs := p.PreheatHistory()
 	if len(runs) != 1 {

@@ -11,6 +11,7 @@ import (
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
 // TestPollViaGaggiuinoStatus_MachineReachable is the #655 regression test:
@@ -603,11 +604,11 @@ func TestPollViaGaggiuinoStatus_StandbyThenErrorKeepsNoStaleCountdown(t *testing
 
 	now := time.Now().UnixMilli()
 	p.runtime.SetStandby(true) // the machine was in standby
-	p.applyStandbyTransition(now, false)
+	p.applyStandbyTransition(p.defaultTarget(), now, false)
 	if p.runtime.Get().SwitchOnAt == nil {
 		t.Fatal("precondition: waking should stamp a switch-on time")
 	}
-	p.applyStandbyTransition(now+12_000, true) // 12s later the machine sleeps
+	p.applyStandbyTransition(p.defaultTarget(), now+12_000, true) // 12s later the machine sleeps
 
 	// Unreachable: pollViaGaggiuinoStatus's error path clears the standby flag.
 	fake.setStatus(machinesStatusZero(), errBoom)
@@ -913,5 +914,116 @@ func TestSteamAccumulator_CapsAtMaxLiveAccumPoints(t *testing.T) {
 		if len(series) != maxLiveAccumPoints {
 			t.Errorf("%s series length = %d, want exactly %d", name, len(series), maxLiveAccumPoints)
 		}
+	}
+}
+
+// perMachineAdapters hands every machine its own fake adapter (#2247), so a
+// test can drive two machines' readings independently.
+type perMachineAdapters map[int64]*fakeAdapter
+
+func (a perMachineAdapters) GetAdapter(m *machines.Machine) (machines.Adapter, error) {
+	if f, ok := a[m.ID]; ok {
+		return f, nil
+	}
+	return nil, errBoom
+}
+
+// newTwoMachinePoller wires a Poller around the default machine and a second
+// Gaggiuino, each answered by its own fake adapter.
+func newTwoMachinePoller(t *testing.T) (p *Poller, def, other *machines.Machine, defFake, otherFake *fakeAdapter) {
+	t.Helper()
+	registry := machines.NewRegistry(newTestDB(t))
+	if err := registry.EnsureDefaultMachine(); err != nil {
+		t.Fatalf("EnsureDefaultMachine: %v", err)
+	}
+	host := "fake-machine.invalid"
+	if _, err := registry.UpdateMachine(1, machines.MachineInput{Host: &host}, nil); err != nil {
+		t.Fatalf("UpdateMachine: %v", err)
+	}
+	def, err := registry.GetDefaultMachine()
+	if err != nil || def == nil {
+		t.Fatalf("GetDefaultMachine: %v", err)
+	}
+	other = addOtherMachine(t, registry, "Second", "gaggiuino", "second-machine.invalid", true)
+	defFake, otherFake = &fakeAdapter{}, &fakeAdapter{}
+	p = NewPoller(registry, perMachineAdapters{def.ID: defFake, other.ID: otherFake}, newHubForTest(), newDisabledHAClient())
+	return p, def, other, defFake, otherFake
+}
+
+// TestPollMachine_TwoMachinesKeepOwnLiveState (#2247): two machines brewing
+// at once each keep their own accumulator, sequence counter and readings.
+func TestPollMachine_TwoMachinesKeepOwnLiveState(t *testing.T) {
+	p, def, other, defFake, otherFake := newTwoMachinePoller(t)
+	ctx := context.Background()
+	defFake.setStatus(okStatus(t, `{}`, 93, 94, 9, 5, true, "Default Profile", 1), nil)
+	otherFake.setStatus(okStatus(t, `{}`, 91, 92, 6, 20, true, "Other Profile", 2), nil)
+	p.pollMachine(ctx, def)
+	p.pollMachine(ctx, other)
+	p.pollMachine(ctx, def)
+
+	d := p.buildLiveDataResponseFor(targetOf(def))
+	o := p.buildLiveDataResponseFor(targetOf(other))
+	if !d.IsLive || d.ProfileName != "Default Profile" || d.Datapoints == nil || len(d.Datapoints.TimeInShot) != 2 || d.MachineID != def.ID {
+		t.Fatalf("default machine live data = %+v, want its own brew with 2 samples", d)
+	}
+	if !o.IsLive || o.ProfileName != "Other Profile" || o.Datapoints == nil || len(o.Datapoints.TimeInShot) != 1 || o.MachineID != other.ID {
+		t.Fatalf("other machine live data = %+v, want its own brew with 1 sample", o)
+	}
+	if o.Datapoints.ShotWeight[0] != 200 || *o.Temperature != 91 || *d.Temperature != 93 {
+		t.Errorf("readings mixed up: other weight %d temp %v, default temp %v", o.Datapoints.ShotWeight[0], *o.Temperature, *d.Temperature)
+	}
+
+	// The other machine's shot ends while the default machine keeps brewing.
+	otherFake.setStatus(okStatus(t, `{}`, 91, 92, 0, 20, false, "Other Profile", 2), nil)
+	p.pollMachine(ctx, other)
+	o = p.buildLiveDataResponseFor(targetOf(other))
+	d = p.LiveData()
+	if o.IsLive || o.Seq != 1 {
+		t.Errorf("other machine after its shot: isLive=%v seq=%d, want false and 1", o.IsLive, o.Seq)
+	}
+	if !d.IsLive || d.Seq != 0 || d.MachineID != def.ID {
+		t.Errorf("default machine after the other's shot: isLive=%v seq=%d machineId=%d, want still brewing, seq 0", d.IsLive, d.Seq, d.MachineID)
+	}
+}
+
+// TestPollMachine_OtherMachineSnapshotIsScoped (#2247): a plain subscriber,
+// which is what glp-integration is, receives the default machine's snapshot
+// and never another machine's.
+func TestPollMachine_OtherMachineSnapshotIsScoped(t *testing.T) {
+	p, def, other, defFake, otherFake := newTwoMachinePoller(t)
+	ctx := context.Background()
+	defFake.setStatus(okStatus(t, `{}`, 93, 94, 0, 0, false, "Default Profile", 1), nil)
+	otherFake.setStatus(okStatus(t, `{}`, 91, 92, 0, 0, false, "Other Profile", 2), nil)
+	sub, cancel := p.hub.Subscribe()
+	defer cancel()
+
+	p.pollMachine(ctx, other)
+	p.pollMachine(ctx, def)
+
+	select {
+	case ev := <-sub:
+		ld, ok := ev.Data.(LiveData)
+		if ev.Type != sse.EventLiveSnapshot || ev.MachineID != 0 || !ok || ld.MachineID != def.ID {
+			t.Fatalf("first event = %+v, want the default machine's unscoped live-snapshot", ev)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the default machine's snapshot")
+	}
+	select {
+	case ev := <-sub:
+		t.Errorf("unexpected extra event %+v (the other machine's snapshot must stay scoped)", ev)
+	default:
+	}
+}
+
+// TestBuildPreheatResponse_CarriesMachineID (#2247): the preheat status names
+// the machine it describes.
+func TestBuildPreheatResponse_CarriesMachineID(t *testing.T) {
+	p, def, other, _, _ := newTwoMachinePoller(t)
+	if got := p.buildPreheatResponse().MachineID; got != def.ID {
+		t.Errorf("default preheat machineId = %d, want %d", got, def.ID)
+	}
+	if got := p.buildPreheatResponseFor(targetOf(other)).MachineID; got != other.ID {
+		t.Errorf("other preheat machineId = %d, want %d", got, other.ID)
 	}
 }

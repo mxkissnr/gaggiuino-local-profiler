@@ -120,6 +120,10 @@ type LiveData struct {
 	// when machine control is unsupported, its setting is off, or the machine
 	// is unreachable.
 	MachineControl *machines.ControlState `json:"machineControl"`
+
+	// #2247: the machine this payload describes. Always sent; a client that
+	// reads a payload without it treats it as the default machine's.
+	MachineID int64 `json:"machineId"`
 }
 
 // pollGlobalState holds package-level polling state (as opposed to the
@@ -135,17 +139,10 @@ type pollGlobalState struct {
 	// and cached firmware version. Lazily populated by machine().
 	machines      map[int64]*machinePollState
 	isPollRunning bool
-	liveAccum     *liveAccumState
-	liveSeq       int
-	// #902: steam/flush live sessions, same hard-single-machine slot
-	// pattern as liveAccum/liveSeq above.
-	steamAccum *modeAccumState
-	steamSeq   int
-	flushAccum *modeAccumState
-	flushSeq   int
-	// #983: descale live sessions, same hard-single-machine slot pattern.
-	descaleAccum *modeAccumState
-	descaleSeq   int
+	// liveSlots are the default machine's live-session and ready-by slots;
+	// every other machine keeps its own in others (#2247).
+	liveSlots
+	others map[int64]*otherLive
 
 	// Manual-sync (POST /api/sync) progress. lastManualSync backs the 30s
 	// cooldown; lastSyncTime/lastSyncError are reported by GET /api/status.
@@ -164,6 +161,25 @@ type pollGlobalState struct {
 	// machine, so a slow backfill on one machine never blocks another's.
 	// Lazy-initialized: nil until the first sync.
 	otherSyncInFlight map[int64]bool
+}
+
+// liveSlots is one machine's live-session and ready-by state (#2247): the
+// brew/steam/flush/descale accumulators with their sequence counters, the
+// pending ready-by pair and the preheat-ready push latch. The default machine
+// keeps its slots embedded in pollGlobalState, every other machine its own in
+// pollGlobalState.others, so two machines never share a counter. Guarded by
+// pollGlobalState.mu.
+type liveSlots struct {
+	liveAccum *liveAccumState
+	liveSeq   int
+	// #902: steam/flush live sessions, same slot pattern as liveAccum/liveSeq.
+	steamAccum *modeAccumState
+	steamSeq   int
+	flushAccum *modeAccumState
+	flushSeq   int
+	// #983: descale live sessions, same slot pattern.
+	descaleAccum *modeAccumState
+	descaleSeq   int
 
 	readyByTargetAt   *int64
 	plannedSwitchOnAt *int64
@@ -173,6 +189,81 @@ type pollGlobalState struct {
 	// while a fresh switch-on re-arms it. Cleared on machine-off, like the run
 	// it identifies.
 	preheatNotifiedFor int64
+}
+
+// otherLive is a non-default machine's live state (#2247): its own slots and
+// its own RuntimeState, created on first use by otherLocked. pollRunning is
+// its single-tick guard, the counterpart of pollGlobalState.isPollRunning.
+type otherLive struct {
+	liveSlots
+	runtime     *RuntimeState
+	pollRunning bool
+}
+
+// otherLocked returns non-default machine id's live state, creating it on
+// demand. Caller holds p.state.mu.
+func (s *pollGlobalState) otherLocked(id int64) *otherLive {
+	if s.others == nil {
+		s.others = map[int64]*otherLive{}
+	}
+	o := s.others[id]
+	if o == nil {
+		o = &otherLive{runtime: NewRuntimeState()}
+		s.others[id] = o
+	}
+	return o
+}
+
+// slotsLocked returns t's live slots. Caller holds p.state.mu.
+func (s *pollGlobalState) slotsLocked(t liveTarget) *liveSlots {
+	if t.isDefault {
+		return &s.liveSlots
+	}
+	return &s.otherLocked(t.id).liveSlots
+}
+
+// liveTarget names the machine a live or preheat operation is about (#2247):
+// its id, whether it is the default machine (whose state stays in the
+// original single slots and Poller.runtime) and its HA switch entity.
+type liveTarget struct {
+	id           int64
+	isDefault    bool
+	switchEntity string
+}
+
+func targetOf(m *machines.Machine) liveTarget {
+	return liveTarget{id: m.ID, isDefault: m.IsDefault, switchEntity: switchEntityOf(m)}
+}
+
+// scope is the sse.Event.MachineID t's pushes carry: 0 (every subscriber,
+// exactly as before #2247) for the default machine, its id otherwise (only
+// the subscribers watching it).
+func (t liveTarget) scope() int64 {
+	if t.isDefault {
+		return 0
+	}
+	return t.id
+}
+
+// defaultTarget resolves the configured default machine, with id 0 when the
+// registry has none.
+func (p *Poller) defaultTarget() liveTarget {
+	m, err := p.registry.GetDefaultMachine()
+	if err != nil || m == nil {
+		return liveTarget{isDefault: true}
+	}
+	return targetOf(m)
+}
+
+// runtimeFor returns t's RuntimeState: Poller.runtime for the default
+// machine, the machine's own one otherwise.
+func (p *Poller) runtimeFor(t liveTarget) *RuntimeState {
+	if t.isDefault {
+		return p.runtime
+	}
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	return p.state.otherLocked(t.id).runtime
 }
 
 // machinePollState is one machine's slice of the former default-only poll
@@ -581,26 +672,32 @@ func (p *Poller) livePollActive() bool {
 	return p.liveTicker != nil
 }
 
-// endPreheatSession ends the current preheat session: stamps the switch-off
+// endPreheatSession ends t's current preheat session: stamps the switch-off
 // time, closes the open preheat run, clears the stability flag and the temp
 // history, then persists. Shared by stopLivePolling and applyStandbyTransition
 // so both end a session the same way.
-func (p *Poller) endPreheatSession(now int64) {
-	p.runtime.SetSwitchOffAt(&now)
-	p.closePreheatRun(now)
-	p.runtime.SetStabilityReady(false)
-	p.runtime.ClearTempHistory()
+func (p *Poller) endPreheatSession(t liveTarget, now int64) {
+	rt := p.runtimeFor(t)
+	rt.SetSwitchOffAt(&now)
+	if t.isDefault {
+		p.closePreheatRun(now)
+	}
+	rt.SetStabilityReady(false)
+	rt.ClearTempHistory()
 	p.savePreheatState()
 }
 
-// beginPreheatSession starts a fresh preheat session at now: stamps the
-// switch-on time, opens a new preheat run, clears the temp history and
+// beginPreheatSession starts a fresh preheat session for t at now: stamps
+// the switch-on time, opens a new preheat run, clears the temp history and
 // persists. Shared by startLivePolling and applyStandbyTransition's
 // leave-standby path.
-func (p *Poller) beginPreheatSession(now int64) {
-	p.runtime.SetSwitchOnAt(&now)
-	p.openPreheatRun(now)
-	p.runtime.ClearTempHistory()
+func (p *Poller) beginPreheatSession(t liveTarget, now int64) {
+	rt := p.runtimeFor(t)
+	rt.SetSwitchOnAt(&now)
+	if t.isDefault {
+		p.openPreheatRun(now)
+	}
+	rt.ClearTempHistory()
 	p.savePreheatState()
 }
 
@@ -614,7 +711,7 @@ func (p *Poller) startLivePolling() {
 	now := time.Now().UnixMilli()
 	snap := p.runtime.Get()
 	if snap.SwitchOnAt == nil || !p.runtime.IsStillWarm(now) {
-		p.beginPreheatSession(now)
+		p.beginPreheatSession(p.defaultTarget(), now)
 	} else {
 		p.runtime.ClearTempHistory()
 	}
@@ -671,7 +768,7 @@ func (p *Poller) stopLivePolling() {
 		p.state.mu.Unlock()
 		// #1498: a switched-off machine is not in standby.
 		p.runtime.SetStandby(false)
-		p.endPreheatSession(time.Now().UnixMilli())
+		p.endPreheatSession(liveTarget{id: defaultID, isDefault: true}, time.Now().UnixMilli())
 		log.Printf("system: live polling stopped")
 	}
 	p.liveMu.Unlock()
@@ -680,7 +777,7 @@ func (p *Poller) stopLivePolling() {
 	p.emitLiveSnapshot()
 }
 
-// applyStandbyTransition reconciles the runtime's standby flag with the
+// applyStandbyTransition reconciles t's runtime standby flag with the
 // adapter's latest status (#1498). GaggiMate reports m == 0 (standby) while
 // still reachable, so live polling keeps running in standby; this flag is what
 // tells buildPreheatResponse the machine is off and restarts the preheat clock
@@ -692,18 +789,19 @@ func (p *Poller) stopLivePolling() {
 // The bookkeeping runs under liveMu and is skipped when live polling is not
 // active, so a late transition cannot open a run after stopLivePolling ended
 // the session. The SSE event is published after releasing the lock.
-func (p *Poller) applyStandbyTransition(now int64, standby bool) {
+func (p *Poller) applyStandbyTransition(t liveTarget, now int64, standby bool) {
 	p.liveMu.Lock()
-	if p.liveTicker == nil {
+	if !p.livePollActiveLocked(t) {
 		p.liveMu.Unlock()
 		return
 	}
-	snap := p.runtime.Get()
+	rt := p.runtimeFor(t)
+	snap := rt.Get()
 	if standby == snap.Standby {
 		p.liveMu.Unlock()
 		return
 	}
-	p.runtime.SetStandby(standby)
+	rt.SetStandby(standby)
 	if standby {
 		// End the running preheat, drop the stale stability flag and the temp
 		// window, so a later wake-up cannot report stabilityReady from the
@@ -711,20 +809,29 @@ func (p *Poller) applyStandbyTransition(now int64, standby bool) {
 		// run's samples.
 		// A session opened while the machine was already in standby has no
 		// samples yet; drop it rather than finalising an empty one-second run.
-		p.discardEmptyPreheatRun()
-		p.endPreheatSession(now)
+		if t.isDefault {
+			p.discardEmptyPreheatRun()
+		}
+		p.endPreheatSession(t, now)
 		// The session is over and the machine is off, so drop the switch-on time
 		// too: a later poll error clears the standby flag, and without this
 		// buildPreheatResponse would count down the ended session's stale clock.
-		p.runtime.SetSwitchOnAt(nil)
+		rt.SetSwitchOnAt(nil)
 		p.savePreheatState()
 		log.Printf("system: machine standby -- preheat clock held")
 	} else {
-		p.beginPreheatSession(now)
+		p.beginPreheatSession(t, now)
 		log.Printf("system: machine left standby -- preheat session started")
 	}
 	p.liveMu.Unlock()
-	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+	p.publishPreheat(t)
+}
+
+// livePollActiveLocked reports whether t's live polling is running. Caller
+// holds p.liveMu. Only the default machine is polled live so far; #2247's
+// watch-based polling adds the other machines.
+func (p *Poller) livePollActiveLocked(t liveTarget) bool {
+	return t.isDefault && p.liveTicker != nil
 }
 
 // HandleDefaultMachineChange drops the previous default's live state when the
