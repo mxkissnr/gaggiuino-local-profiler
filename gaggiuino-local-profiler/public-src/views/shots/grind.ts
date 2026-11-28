@@ -10,6 +10,7 @@ import { formatGrind, grindOnTarget, grindPosition, inGrindRange, prefillGrind, 
 import type { GrindScale } from '../../grind-scale.js';
 import { LIGHTNING_ICON_SVG, SCALE_ICON_SVG, BAR_CHART_ICON_SVG } from '../../icons.js';
 import { isBeanMix } from '../../shared/bean-mix.js';
+import { hasNoExtraction } from '../../shared/score.js';
 import type { BeanMixPartInput } from '../../shared/bean-mix.js';
 
 interface GrindAnnotation {
@@ -229,7 +230,16 @@ function _timeGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice | null
   return { type: 'ok', icon: html`✓`, text: `${t('grind_ok')} – ${secs.toFixed(0)} s${avgP > 0 ? `, ${avgP.toFixed(1)} bar Ø` : ''}` };
 }
 
+// #2248: a shot in which nothing was extracted (the score's rule, so a shot
+// without a score gets no grind verdict either). Judged only once the shot's
+// curve is known; without one the advice keeps its duration rules.
+export function shotHasNoExtraction(shot: GrindShot): boolean {
+  const raw = getRawCurve(shot.id) || shot.datapoints;
+  return !!raw && hasNoExtraction(raw);
+}
+
 export function calcGrindAdvice(shot: GrindShot, data: ShotSeries): GrindAdvice | null {
+  if (shotHasNoExtraction(shot)) return null;
   return _applyTaste(_timeGrindAdvice(shot, data), shot);
 }
 
@@ -246,6 +256,7 @@ function _currentGrindNum(grinderName: string | null | undefined, grindSettingSt
 }
 
 export function calcComparativeGrindAdvice(shot: GrindShot, allShots: GrindShot[]): ComparativeAdvice | null {
+  if (shotHasNoExtraction(shot)) return null;
   const ann          = shot.annotation || {};
   // #1837: a mixed shot has no single bean to compare against — its top-level
   // coffee/beanId only name the primary part, so neither it nor any other mixed

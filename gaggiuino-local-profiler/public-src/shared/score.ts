@@ -118,6 +118,20 @@ function _profilePressureMAE(
   return { mae: sum / samples, samples };
 }
 
+// #2248: a shot in which nothing was extracted. It gets no score, and the
+// shot page's grind advice reads the same rule, so the two never disagree.
+// #1538: fewer than 4 pressure samples above 0 bar. #2242: a shot in which the
+// pump never ran (mirror of the Go noWaterMoved): a pump-flow series with no
+// sample above 0, and no water-pumped or weight sample above 0. Shots without
+// a pump-flow series never match the second rule.
+export function hasNoExtraction(datapoints: ShotDatapoints | null | undefined): boolean {
+  const d = datapoints || {};
+  if ((d.pressure || []).filter(v => v > 0).length < 4) return true;
+  const pumpFlow = d.pumpFlow || [];
+  const weightSeries = d.shotWeight || d.weight || [];
+  return pumpFlow.length > 0 && ![pumpFlow, d.waterPumped || [], weightSeries].some(s => s.some(v => v > 0));
+}
+
 // Weighted: pressure 25, temp stability 20, duration 20, brew ratio 20, channeling 15.
 // `bean` (#450) is the coffee-library entry matching the shot's own
 // annotation.coffee, resolved by the caller — optional. When absent, or when
@@ -152,15 +166,7 @@ function calcShotScoreDetail(
   // never reaches 5 bar is scored too — its pressure part against the profile's
   // own target when it has one, or left out when it doesn't. A shot with >=4
   // samples at/above 5 bar takes the unchanged fixed-band path.
-  if (p.filter(v => v > 0).length < 4) return { score: null, usedBeanTarget: false, pressureNote: null };
-  // #2242: a shot in which the pump never ran is not scored either (mirror of
-  // the Go noWaterMoved): a pump-flow series with no sample above 0, and no
-  // water-pumped or weight sample above 0. Shots without pumpFlow never match.
-  const pumpFlow = d.pumpFlow || [];
-  const weightSeries = d.shotWeight || d.weight || [];
-  if (pumpFlow.length > 0 && ![pumpFlow, d.waterPumped || [], weightSeries].some(s => s.some(v => v > 0))) {
-    return { score: null, usedBeanTarget: false, pressureNote: null };
-  }
+  if (hasNoExtraction(d)) return { score: null, usedBeanTarget: false, pressureNote: null };
 
   const scores: number[] = [], weights: number[] = [];
   let usedBeanTarget = false;
