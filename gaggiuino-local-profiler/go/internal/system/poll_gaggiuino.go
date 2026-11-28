@@ -35,8 +35,8 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 // pollMachine is one live poll tick for machine (#2247: any machine, not only
 // the default one). Every value it accumulates goes into that machine's own
 // runtime and slots (liveTarget), so two machines polled at once never
-// overwrite each other. The recovery catch-up, the MQTT transport and the
-// post-brew sync stay default-machine only.
+// overwrite each other. The recovery catch-up and the MQTT transport stay
+// default-machine only; a finished brew syncs that machine's own shots.
 func (p *Poller) pollMachine(ctx context.Context, machine *machines.Machine) {
 	t := targetOf(machine)
 	rt := p.runtimeFor(t)
@@ -289,8 +289,12 @@ func (p *Poller) pollMachine(ctx context.Context, machine *machines.Machine) {
 	p.state.mu.Unlock()
 
 	// #953: 3s after a brew ends, pull the shot the machine just wrote.
-	if brewJustFinished && t.isDefault {
-		p.scheduleSyncAfterBrew()
+	if brewJustFinished {
+		if t.isDefault {
+			p.scheduleSyncAfterBrew()
+		} else {
+			p.scheduleOtherSyncAfterBrew(machine)
+		}
 	}
 
 	p.emitLiveSnapshotFor(t)

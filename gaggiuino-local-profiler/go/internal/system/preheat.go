@@ -155,6 +155,9 @@ func (p *Poller) SetReadyByTarget(t liveTarget, targetAt *int64) {
 		planned := *targetAt - preheatMs
 		sl.plannedSwitchOnAt = &planned
 	}
+	if t.isDefault {
+		p.state.readyByFor = t.id
+	}
 	p.state.mu.Unlock()
 	p.savePreheatState()
 	p.publishPreheat(t)
@@ -276,6 +279,21 @@ func (p *Poller) preheatWatchTick(ctx context.Context) {
 	p.checkReadyByPreheat(ctx)
 	p.maybePreheatReadyNotify(ctx)
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+	// #2247: every polled other machine's countdown reaches its watchers too.
+	// The barista push above stays default-machine only.
+	p.liveMu.Lock()
+	ids := make([]int64, 0, len(p.otherLoops))
+	for id := range p.otherLoops {
+		ids = append(ids, id)
+	}
+	p.liveMu.Unlock()
+	for _, id := range ids {
+		m, err := p.registry.ResolveMachine(&id)
+		if err != nil || m == nil || m.IsDefault {
+			continue
+		}
+		p.publishPreheat(targetOf(m))
+	}
 }
 
 // maybePreheatReadyNotify sends the preheat-ready push once per preheat run.
@@ -463,9 +481,11 @@ func (p *Poller) loadPreheatState() {
 			// is not reconsidered on the next restart.
 			p.savePreheatState()
 		} else {
+			def := p.defaultTarget()
 			p.state.mu.Lock()
 			p.state.readyByTargetAt = s.ReadyByTargetAt
 			p.state.plannedSwitchOnAt = s.PlannedSwitchOnAt
+			p.state.readyByFor = def.id
 			p.state.mu.Unlock()
 		}
 	}
