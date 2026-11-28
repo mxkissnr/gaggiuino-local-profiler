@@ -1,5 +1,25 @@
 ## [Unreleased]
 
+## [3.10.0] - 2026-11-28
+
+### Added
+- **The coffee world map's home country is now a setting under Appearance, the same on every device, with Automatic and None.** Closes #2210
+- **Settings → Data can save an anonymised file of your rated shots that you can post on the GLP Discord to help improve the shot score; GLP uploads nothing itself.** Closes #2220
+- **Grinder scales now cover dials that read in parts, such as number and ticks (8.2,5 in between), rotation.number.click and number plus letter, with ready-made layouts in the grinder form, and a setting like 8.0 keeps its .0.** Closes #2225
+- **Rate a shot in two taps right after it ends, with stars and a taste tag in the live view and on the newest unrated shot in the shot list, and donated shots now carry the taste tag.** Closes #2226
+### Fixed
+- **The coffee world map on the Statistics page now shows only the countries you brewed under the current filter, so its country count always matches the map.** Closes #2200
+- **The score trend on the Statistics page shows each date only once, and the time labels of the shot charts no longer overlap on a phone.** Closes #2201
+- **With several machines, the power button now switches the machine you have selected instead of always the default one.** Closes #2202
+- **On a phone nothing scrolls sideways any more: the shot photo buttons, the library actions and tabs and the achievement filters wrap, and the coffee year shows 22 weeks at a time with buttons to page through the year.** Closes #2214
+- **A firmware update that stopped halfway, with the controller and the frontend on different versions, now shows as incomplete in Settings > Machines and is offered again, and a failed update names the step that failed.** Closes #2229
+- **Machine backups work again with the newest Gaggiuino firmware (main-7cb0a86), and the visualizer and profiler tokens of the machine and of every Cafe Mode user are never stored in a backup nor shown in the browser.** Closes #2231
+- **Dates and times follow your browser's region as well as the app language, so an English interface outside the US shows day-first dates and a 24-hour clock.** Closes #2232
+- **The grinder scale form now shows only the fields of the chosen scale, keeps the chosen layout visible, names each dial part clearly and shows an example setting.** Closes #2233
+- **Dates and times also follow your region when the browser lists a language without a region first, using the next browser language or the system setting that has one.** Closes #2238
+- **Dates and times follow your region even when the browser and the system name only a language, such as German without a country.** Closes #2240
+- **A shot in which the pump never ran, such as one from a profile without phases, no longer gets a perfect score; it gets no score.** Closes #2242
+
 ## [3.9.0] - 2026-11-24
 
 ### New

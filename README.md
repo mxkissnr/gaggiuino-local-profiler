@@ -53,8 +53,10 @@ You love your Gaggiuino or GaggiMate machine, but your shot data disappears into
 - **Shot archive & live view** - every shot is stored with pressure, flow, weight and temperature curves, and the Live tab streams the current brew, preheat state and machine status straight from the controller.
 - **Shot score & dial-in help** - an automatic 0-100 score with a plain-language verdict, grind recommendations, and a guided dial-in wizard that tunes grind against a 25-32 s extraction target, or against a target time you set per profile.
 - **Shot donations for score research** - save an anonymised file of your rated shots (curves, profile structure, ratings and scores, no names, notes, photos or times) and post it yourself on the GLP Discord to help tune the score.
+- **Quick rating** - rate a shot in two taps right after it ends, with stars and a taste tag, in the Live tab or on your newest unrated shot.
 - **Compare mode & ghost curve** - overlay any two shots by hand, or let the shot detail auto-compare against the previous shot on the same profile with delta chips and a dashed ghost curve.
 - **Coffee library** - beans, grinders, baskets, puck screens, recipes and frozen portions in one catalogue, with roaster URL import, barcode/QR scan and per-entity photos.
+- **Grinder scales** - give a grinder a stepped, stepless or dial scale, including dials that read in parts such as number and ticks, rotation.number.click or number plus letter, so grind advice and the guided dial-in count in your grinder's own steps.
 - **Bean shelf** - your beans stand as bag photos with a stock bar, with search, filter and sort, and empty or archived beans tidy themselves away.
 - **Compare two beans** - put two beans side by side from a bean's menu: a verdict on which one works better for you and why, then results, dial-in on the shared grinder, aromas and bag details next to each other.
 - **Multiple beans in one shot** - log a shot with up to four beans and the grams of each; every bag is deducted by its own share, and the largest share is the shot's bean.

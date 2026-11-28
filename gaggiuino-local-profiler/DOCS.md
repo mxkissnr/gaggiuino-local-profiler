@@ -569,6 +569,8 @@ GLP ships with six interface languages selectable in ⚙ Settings → Appearance
 
 The selection is saved in `localStorage`. All UI strings, chart labels, grind recommendations, maintenance reminders, order status messages, and library labels are fully translated in all six languages. On first launch (before any language has been explicitly chosen), GLP defaults to your browser's language if it's one of the six above, and to **English** otherwise — never German by default for an unsupported browser language.
 
+**Dates and times** follow your browser's region as well as the interface language: an English interface in Germany shows day-first dates and a 24-hour clock. If the browser's first language names no region, GLP uses the next browser language that has one, then the system setting.
+
 ### Light / Dark / Auto theme
 
 GLP has a built-in theme toggle (⚙ Settings → Appearance → Theme) with three options. The choice is saved in `localStorage` and applied immediately. **Dark** is the default; **Light** inverts the grey scale to a white-based palette; **Auto** follows the browser/OS `prefers-color-scheme` setting and switches live if it changes while the app stays open — no reload needed. Auto tracks the browser/OS preference specifically, not Home Assistant's own configured theme, which isn't reliably readable through a plain Ingress-embedded view.
@@ -661,10 +663,10 @@ Where the built-in values come from: only the direction is well established — 
 - **Back up now, download and upload.** A downloaded file contains the machine's Wi-Fi password and MQTT login in plain text, so GLP asks before saving it; if the machine is not reachable, the file has no passwords. Uploaded files are checked, and their passwords are not stored.
 - **Compare** two backups to see in plain words what changed: settings, profiles and their phases, the default profile and the firmware.
 - **Restore** sends a backup back to its machine, which then restarts. GLP first saves the machine's current state as a new backup and keeps the machine's current Wi-Fi and MQTT settings. It refuses while the machine is brewing, steaming, descaling or updating, or while GLP still has profile changes for it that have not been sent.
-- **Passwords are never stored.** Wi-Fi, MQTT and visualizer/profiler credentials are removed before a backup is saved and are taken fresh from the machine only for a download or a restore.
+- **Passwords are never stored.** Wi-Fi, MQTT and visualizer/profiler credentials, also those of every Cafe Mode user, are removed before a backup is saved and are taken fresh from the machine only for a download or a restore.
 - **Manual, uploaded and pre-update backups stay until you delete them.** Deleting a machine keeps its backups: they appear under "Backups of deleted machines" in the Backups sheet of every Gaggiuino machine, where you can download, delete or restore them onto a Gaggiuino machine you choose.
 
-Machine backups are part of GLP's own backup (Machines section). GaggiMate machines have no settings backup API, so they don't get this feature. Gaggiuino firmware main-8aaf6f0 or newer is required.
+Machine backups are part of GLP's own backup (Machines section). GaggiMate machines have no settings backup API, so they don't get this feature. Gaggiuino firmware main-8aaf6f0 or newer is required, and the newest firmware (main-7cb0a86) is supported.
 
 ### HA theme
 

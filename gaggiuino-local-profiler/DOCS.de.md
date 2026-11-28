@@ -572,6 +572,8 @@ GLP unterstützt sechs Oberflächensprachen, umschaltbar unter ⚙ Einstellungen
 
 Die Auswahl wird in `localStorage` gespeichert. Alle UI-Texte, Chart-Beschriftungen, Mahlgrad-Empfehlungen, Wartungserinnerungen, Bestellstatus-Meldungen und Bibliothekstexte sind in allen sechs Sprachen vollständig übersetzt. Beim ersten Start (bevor eine Sprache explizit gewählt wurde) verwendet GLP die Sprache deines Browsers, sofern sie eine der sechs obigen ist, sonst **Englisch** — niemals standardmäßig Deutsch bei einer nicht unterstützten Browsersprache.
 
+**Datum und Uhrzeit** richten sich nach der Region deines Browsers und nicht nur nach der Oberflächensprache: Eine englische Oberfläche in Deutschland zeigt Datum mit dem Tag zuerst und die 24-Stunden-Uhr. Nennt die erste Browsersprache keine Region, nimmt GLP die nächste Browsersprache mit Region und danach die Systemeinstellung.
+
 ### Hell / Dunkel / Auto Theme
 
 GLP hat einen eingebauten Theme-Wechsler (⚙ Einstellungen → Darstellung → Theme) mit drei Optionen. Die Wahl wird in `localStorage` gespeichert und sofort angewandt. **Dark** ist die Voreinstellung; **Hell** kehrt die Grau-Skala auf eine weiß-basierte Palette um; **Auto** folgt der Browser-/OS-Einstellung `prefers-color-scheme` und wechselt live, wenn sich diese ändert, während die App geöffnet bleibt — kein Neuladen nötig. Auto folgt dabei gezielt der Browser-/OS-Präferenz, nicht dem eigenen konfigurierten Theme von Home Assistant, das über eine reine Ingress-eingebettete Ansicht nicht zuverlässig auslesbar ist.
@@ -664,10 +666,10 @@ Woher die eingebauten Werte kommen: Gesichert ist nur die Richtung — eine dunk
 - **Jetzt sichern, herunterladen und hochladen.** Eine heruntergeladene Datei enthält das WLAN-Passwort und den MQTT-Login der Maschine im Klartext, deshalb fragt GLP vor dem Speichern nach; ist die Maschine nicht erreichbar, enthält die Datei keine Passwörter. Hochgeladene Dateien werden geprüft, ihre Passwörter werden nicht gespeichert.
 - **Vergleichen** zeigt für zwei Backups in einfachen Worten, was sich geändert hat: Einstellungen, Profile und ihre Phasen, das Standardprofil und die Firmware.
 - **Wiederherstellen** schickt ein Backup zurück an seine Maschine, die danach neu startet. GLP sichert vorher den aktuellen Stand der Maschine als neues Backup und behält ihre aktuellen WLAN- und MQTT-Einstellungen. Solange die Maschine brüht, dampft, entkalkt oder ihre Firmware aktualisiert oder GLP noch nicht gesendete Profiländerungen für sie hat, lehnt GLP ab.
-- **Passwörter werden nie gespeichert.** WLAN-, MQTT- und Visualizer-/Profiler-Zugangsdaten werden vor dem Speichern entfernt und nur für einen Download oder eine Wiederherstellung frisch von der Maschine geholt.
+- **Passwörter werden nie gespeichert.** WLAN-, MQTT- und Visualizer-/Profiler-Zugangsdaten, auch die jedes Cafe-Modus-Nutzers, werden vor dem Speichern entfernt und nur für einen Download oder eine Wiederherstellung frisch von der Maschine geholt.
 - **Manuelle, hochgeladene und Backups vor Updates bleiben, bis du sie löschst.** Löschst du eine Maschine, bleiben ihre Backups erhalten: Sie erscheinen unter „Backups gelöschter Maschinen“ im Backups-Fenster jeder Gaggiuino-Maschine, wo du sie herunterladen, löschen oder auf eine Gaggiuino-Maschine deiner Wahl wiederherstellen kannst.
 
-Maschinen-Backups sind Teil des GLP-Backups (Bereich Maschinen). GaggiMate-Maschinen haben keine Backup-Schnittstelle für Einstellungen und bekommen diese Funktion deshalb nicht. Vorausgesetzt wird Gaggiuino-Firmware main-8aaf6f0 oder neuer.
+Maschinen-Backups sind Teil des GLP-Backups (Bereich Maschinen). GaggiMate-Maschinen haben keine Backup-Schnittstelle für Einstellungen und bekommen diese Funktion deshalb nicht. Vorausgesetzt wird Gaggiuino-Firmware main-8aaf6f0 oder neuer; die neueste Firmware (main-7cb0a86) wird unterstützt.
 
 ### HA-Theme
 
