@@ -143,6 +143,11 @@ type pollGlobalState struct {
 	// every other machine keeps its own in others (#2247).
 	liveSlots
 	others map[int64]*otherLive
+	// readyByFor is the machine id the default slots' ready-by pair was set
+	// for (#2247). The default slots outlive a default-machine change, a
+	// pending target must not: HandleDefaultMachineChange hands it back to
+	// that machine's own slots.
+	readyByFor int64
 
 	// Manual-sync (POST /api/sync) progress. lastManualSync backs the 30s
 	// cooldown; lastSyncTime/lastSyncError are reported by GET /api/status.
@@ -434,6 +439,9 @@ type Poller struct {
 	liveMu     sync.Mutex
 	liveTicker *time.Ticker
 	liveStop   chan struct{}
+	// #2247: stop channels of the non-default machines polled right now,
+	// guarded by liveMu.
+	otherLoops map[int64]chan struct{}
 
 	// lifeCtx is Start()'s context — the parent for every auto-sync
 	// goroutine (sync_triggers.go) so they die with the poller. nil until
@@ -564,6 +572,7 @@ func (p *Poller) MachineKnownOffline(id int64) bool {
 // startLivePolling/stopLivePolling-driven).
 func (p *Poller) Start(ctx context.Context) {
 	p.lifeCtx = ctx
+	p.hub.SetWatchListener(p.reconcileOtherPolling)
 	p.loadPreheatState()
 	if err := p.checkAndApplyMachinePower(ctx); err != nil {
 		log.Printf("system: machine power check failed on startup: %v", err)
@@ -595,6 +604,7 @@ func (p *Poller) Start(ctx context.Context) {
 	httputil.SafeGo("system: live poll shutdown watcher", func() {
 		<-ctx.Done()
 		p.stopLivePolling()
+		p.stopAllOtherLivePolling()
 	})
 }
 
@@ -627,6 +637,8 @@ func (p *Poller) runTicker(ctx context.Context, interval time.Duration, fn func(
 // started for an entity-configured-but-tokenless install, for the entire
 // process lifetime.
 func (p *Poller) checkAndApplyMachinePower(ctx context.Context) error {
+	// #2247: every return path also handles the other machines' switches.
+	defer p.applyOtherMachinePower(ctx)
 	machine, err := p.registry.GetDefaultMachine()
 	if err != nil {
 		return err
@@ -821,11 +833,15 @@ func (p *Poller) applyStandbyTransition(t liveTarget, now int64, standby bool) {
 	p.publishPreheat(t)
 }
 
-// livePollActiveLocked reports whether t's live polling is running. Caller
-// holds p.liveMu. Only the default machine is polled live so far; #2247's
-// watch-based polling adds the other machines.
+// livePollActiveLocked reports whether t's live polling is running: the
+// default loop for the default machine, the machine's own loop otherwise
+// (#2247). Caller holds p.liveMu.
 func (p *Poller) livePollActiveLocked(t liveTarget) bool {
-	return t.isDefault && p.liveTicker != nil
+	if t.isDefault {
+		return p.liveTicker != nil
+	}
+	_, ok := p.otherLoops[t.id]
+	return ok
 }
 
 // HandleDefaultMachineChange drops the previous default's live state when the
@@ -839,7 +855,15 @@ func (p *Poller) livePollActiveLocked(t liveTarget) bool {
 // polling kept running for an off machine, so its later switch-on found the
 // ticker already running and never started a session. Wired from the
 // set-default handler through machines.Handlers.SetOnDefaultChanged.
+//
+// #2247: the new default's own other-machine loop stops first and its state
+// is dropped (the default loop and slots take over); every pending ready-by
+// target stays with its machine. The power check at the end also lets the old
+// default be polled as another machine when it is watched or switched on.
 func (p *Poller) HandleDefaultMachineChange() {
+	newDef := p.defaultTarget()
+	p.stopOtherLivePolling(liveTarget{id: newDef.id})
+	p.handOverDefaultSlots(newDef.id)
 	p.stopLivePolling()
 	p.runtime.SetSwitchOnAt(nil)
 	p.runtime.SetMachineOn(false)
@@ -872,4 +896,202 @@ func (p *Poller) pollTick() {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	p.pollViaGaggiuinoStatus(ctx)
+}
+
+// handOverDefaultSlots keeps every pending ready-by target with its own
+// machine across a default-machine change (#2247): the previous default's
+// pair moves from the default slots into that machine's own slots, the new
+// default's pair moves from its own slots into the default slots, and the new
+// default's other-machine state is dropped. Persisted by the caller.
+func (p *Poller) handOverDefaultSlots(newDefaultID int64) {
+	p.state.mu.Lock()
+	defer p.state.mu.Unlock()
+	var nextAt, nextPlanned *int64
+	if o := p.state.others[newDefaultID]; o != nil {
+		nextAt, nextPlanned = o.readyByTargetAt, o.plannedSwitchOnAt
+		delete(p.state.others, newDefaultID)
+	}
+	prevID := p.state.readyByFor
+	if prevID == newDefaultID {
+		return
+	}
+	at, planned := p.state.readyByTargetAt, p.state.plannedSwitchOnAt
+	p.state.readyByTargetAt, p.state.plannedSwitchOnAt = nextAt, nextPlanned
+	p.state.readyByFor = newDefaultID
+	// An unstamped pair (prevID 0) has no machine to go back to; dropping it
+	// never switches the wrong machine on.
+	if at != nil && prevID != 0 {
+		o := p.state.otherLocked(prevID)
+		o.readyByTargetAt, o.plannedSwitchOnAt = at, planned
+	}
+}
+
+// reconcileOtherPolling starts or stops every non-default machine's live
+// loop (#2247): a machine is polled while it is enabled and configured and
+// either its own HA switch reads on (when it has one and HA is configured) or
+// at least one connection watches it. Nothing else polls another machine, so
+// a machine nobody needs gets no request. Safe to call from any goroutine;
+// start and stop are idempotent.
+func (p *Poller) reconcileOtherPolling() {
+	list, err := p.registry.ListMachines()
+	if err != nil {
+		return
+	}
+	watched := p.hub.WatchedMachines()
+	haOn := p.ha.Enabled()
+	known := map[int64]bool{}
+	for i := range list {
+		m := &list[i]
+		if m.IsDefault {
+			continue
+		}
+		known[m.ID] = true
+		t := targetOf(m)
+		need := watched[m.ID]
+		if t.switchEntity != "" && haOn {
+			need = p.runtimeFor(t).Get().MachineOn
+		}
+		if need && m.Enabled && strings.TrimSpace(m.Host) != "" {
+			p.startOtherLivePolling(m)
+		} else {
+			p.stopOtherLivePolling(t)
+		}
+	}
+	// A deleted machine's loop stops too.
+	p.liveMu.Lock()
+	var gone []int64
+	for id := range p.otherLoops {
+		if !known[id] {
+			gone = append(gone, id)
+		}
+	}
+	p.liveMu.Unlock()
+	for _, id := range gone {
+		p.stopOtherLivePolling(liveTarget{id: id})
+	}
+}
+
+// startOtherLivePolling starts machine m's own 1s live loop unless it runs.
+func (p *Poller) startOtherLivePolling(m *machines.Machine) {
+	t := targetOf(m)
+	p.liveMu.Lock()
+	if _, ok := p.otherLoops[m.ID]; ok {
+		p.liveMu.Unlock()
+		return
+	}
+	if p.otherLoops == nil {
+		p.otherLoops = map[int64]chan struct{}{}
+	}
+	stop := make(chan struct{})
+	p.otherLoops[m.ID] = stop
+	now := time.Now().UnixMilli()
+	rt := p.runtimeFor(t)
+	if rt.Get().SwitchOnAt == nil || !rt.IsStillWarm(now) {
+		p.beginPreheatSession(t, now)
+	} else {
+		rt.ClearTempHistory()
+	}
+	p.liveMu.Unlock()
+	log.Printf("system: live polling started for machine %d", m.ID)
+
+	id := m.ID
+	httputil.SafeGo("system: other machine live poll loop", func() {
+		ticker := time.NewTicker(pollInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				p.pollOtherTick(id)
+			case <-stop:
+				return
+			}
+		}
+	})
+	p.publishPreheat(t)
+}
+
+// pollOtherTick is one tick of a non-default machine's loop, with that
+// machine's own single-tick guard. The machine is re-read every tick, so a
+// host or switch edit applies at once; a machine that became the default
+// is left to the default loop.
+func (p *Poller) pollOtherTick(id int64) {
+	m, err := p.registry.ResolveMachine(&id)
+	if err != nil || m == nil || m.IsDefault {
+		return
+	}
+	p.state.mu.Lock()
+	o := p.state.otherLocked(id)
+	if o.pollRunning {
+		p.state.mu.Unlock()
+		return
+	}
+	o.pollRunning = true
+	p.state.mu.Unlock()
+	defer func() {
+		p.state.mu.Lock()
+		p.state.otherLocked(id).pollRunning = false
+		p.state.mu.Unlock()
+	}()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	p.pollMachine(ctx, m)
+}
+
+// stopOtherLivePolling stops a non-default machine's loop: ends its preheat
+// session, drops its running accumulators and pushes its final state to its
+// watchers. No-op when the machine is not polled.
+func (p *Poller) stopOtherLivePolling(t liveTarget) {
+	p.liveMu.Lock()
+	stop, ok := p.otherLoops[t.id]
+	if !ok {
+		p.liveMu.Unlock()
+		return
+	}
+	close(stop)
+	delete(p.otherLoops, t.id)
+	p.state.mu.Lock()
+	sl := p.state.slotsLocked(t)
+	sl.liveAccum, sl.steamAccum, sl.flushAccum, sl.descaleAccum = nil, nil, nil, nil
+	p.state.machine(t.id).control = nil
+	p.state.mu.Unlock()
+	p.runtimeFor(t).SetStandby(false)
+	p.endPreheatSession(t, time.Now().UnixMilli())
+	p.liveMu.Unlock()
+	log.Printf("system: live polling stopped for machine %d", t.id)
+	p.publishPreheat(t)
+	p.emitLiveSnapshotFor(t)
+}
+
+// stopAllOtherLivePolling stops every non-default machine's loop (shutdown).
+func (p *Poller) stopAllOtherLivePolling() {
+	p.liveMu.Lock()
+	ids := make([]int64, 0, len(p.otherLoops))
+	for id := range p.otherLoops {
+		ids = append(ids, id)
+	}
+	p.liveMu.Unlock()
+	for _, id := range ids {
+		p.stopOtherLivePolling(liveTarget{id: id})
+	}
+}
+
+// applyOtherMachinePower reads every other machine's own HA switch (#2247),
+// stores on/off in that machine's runtime and re-evaluates which machines
+// are polled. Without HA every machine stays switch-less (watch only).
+func (p *Poller) applyOtherMachinePower(ctx context.Context) {
+	if p.ha.Enabled() {
+		if list, err := p.registry.ListMachines(); err == nil {
+			for i := range list {
+				m := &list[i]
+				t := targetOf(m)
+				if m.IsDefault || t.switchEntity == "" {
+					continue
+				}
+				if isOn := p.ha.GetSwitchState(ctx, t.switchEntity); isOn != nil {
+					p.runtimeFor(t).SetMachineOn(*isOn)
+				}
+			}
+		}
+	}
+	p.reconcileOtherPolling()
 }
