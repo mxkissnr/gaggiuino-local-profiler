@@ -217,7 +217,7 @@ func TestBackUpNow_Errors(t *testing.T) {
 			body:      `{"machineId":1}`, wantStatus: http.StatusBadGateway, wantCode: codeInvalidBackup},
 		{name: "unknown document version", machine: gaggiuinoMachine(1), client: true,
 			docs: func(t *testing.T) []string {
-				return []string{string(mutatedDoc(t, func(d map[string]any) { d["version"] = json.Number("2") }))}
+				return []string{string(mutatedDoc(t, func(d map[string]any) { d["version"] = json.Number("3") }))}
 			},
 			body: `{"machineId":1}`, wantStatus: http.StatusBadGateway, wantCode: codeInvalidBackup},
 		{name: "oversized body", machine: gaggiuinoMachine(1), client: true,
@@ -670,7 +670,7 @@ func TestDownload_FallsBackToTheSecretFreeFile(t *testing.T) {
 		{name: "unreadable fresh backup", machines: []machines.Machine{gaggiuinoMachine(1)},
 			client: &fakeClient{docs: []string{`{`}}, clientOn: 1, entryOn: 1},
 		{name: "unknown version", machines: []machines.Machine{gaggiuinoMachine(1)},
-			client:   &fakeClient{docs: []string{strings.Replace(fixtureDocReordered, `"version":1`, `"version":2`, 1)}},
+			client:   &fakeClient{docs: []string{strings.Replace(fixtureDocReordered, `"version":1`, `"version":3`, 1)}},
 			clientOn: 1, entryOn: 1},
 		{name: "no secret", machines: []machines.Machine{gaggiuinoMachine(1)},
 			client: &fakeClient{docs: []string{`{"format":"gaggiuino-settings","version":1}`}}, clientOn: 1, entryOn: 1},
@@ -893,7 +893,7 @@ func TestUpload_RejectsBadRequests(t *testing.T) {
 		{name: "wrong format", machine: gaggiuinoMachine(1),
 			body: `{"machineId":1,"document":{"format":"other","version":1}}`, wantStatus: http.StatusBadRequest, wantCode: codeInvalidBackup},
 		{name: "unknown version", machine: gaggiuinoMachine(1),
-			body:       `{"machineId":1,"document":` + strings.Replace(fixtureDoc, `"version": 1`, `"version": 2`, 1) + `}`,
+			body:       `{"machineId":1,"document":` + strings.Replace(fixtureDoc, `"version": 1`, `"version": 3`, 1) + `}`,
 			wantStatus: http.StatusBadRequest, wantCode: codeInvalidBackup},
 		{name: "missing version", machine: gaggiuinoMachine(1),
 			body: `{"machineId":1,"document":{"format":"gaggiuino-settings"}}`, wantStatus: http.StatusBadRequest, wantCode: codeInvalidBackup},
@@ -997,5 +997,46 @@ func TestDownloadAndUpload_RateLimitsPerIP(t *testing.T) {
 	}
 	if rec := do(h, http.MethodPost, "/api/machine/backups/upload", `{`, "192.0.2.1:1234"); rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("upload over the limit status = %d, want 429 (the limit comes before the body)", rec.Code)
+	}
+}
+
+func TestBackUpNow_V2IsStoredListedAndServedWithoutSecrets(t *testing.T) {
+	e, h := newHandlerEnv(t, gaggiuinoMachine(1))
+	e.clients[1] = &fakeClient{docs: []string{fixtureDocV2}}
+
+	rec := do(h, http.MethodPost, "/api/machine/backups", `{"machineId":1}`, "")
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("back up now status = %d, want 201 (body %s)", rec.Code, rec.Body.String())
+	}
+	entry := decodeEntry(t, rec.Body.Bytes())
+	if entry.FirmwareCore != "7cb0a86" || entry.ProfileCount != 1 {
+		t.Errorf("unexpected v2 entry: %+v", entry)
+	}
+	rows := e.rows()
+	if len(rows) != 1 {
+		t.Fatalf("stored %d rows, want 1", len(rows))
+	}
+	for _, secret := range secretValuesV2() {
+		if strings.Contains(rows[0].data, secret) {
+			t.Errorf("stored row contains secret %q", secret)
+		}
+	}
+
+	rec = do(h, http.MethodGet, "/api/machine/backups?machineId=1", "", "")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"firmwareCore":"7cb0a86"`) {
+		t.Fatalf("list = %d %s, want the v2 entry", rec.Code, rec.Body.String())
+	}
+
+	rec = do(h, http.MethodGet, backupURL(entry.ID, ""), "", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("document status = %d, want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	for _, secret := range secretValuesV2() {
+		if strings.Contains(rec.Body.String(), secret) {
+			t.Errorf("served document contains secret %q", secret)
+		}
+	}
+	if !strings.Contains(rec.Body.String(), `"name":"Ben"`) {
+		t.Errorf("served document lost the home users: %s", rec.Body.String())
 	}
 }

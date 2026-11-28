@@ -577,3 +577,51 @@ func durationComponent(detail ScoreDetail) (ScoreComponent, bool) {
 	}
 	return ScoreComponent{}, false
 }
+
+// pumplessShot builds the shot a phase-less profile records on Gaggiuino
+// main-7cb0a86 (#2242): residual pressure fading to 0, pump flow and water
+// pumped at 0 throughout, no scale, and a flat 1 C temperature and target.
+func pumplessShot() Shot {
+	zeros := mkPoints(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+	return Shot{
+		"duration": 273.0,
+		"datapoints": map[string]any{
+			"pressure":          mkPoints(3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+			"pumpFlow":          zeros,
+			"waterPumped":       zeros,
+			"shotWeight":        zeros,
+			"temperature":       mkPoints(10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10),
+			"targetTemperature": mkPoints(10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10),
+			"timeInShot":        mkPoints(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190),
+		},
+	}
+}
+
+// #2242: the ground-truth shot from a dev install on Gaggiuino main-7cb0a86 —
+// a blind shot with a phase-less profile. It recorded only residual pressure,
+// pump flow / water pumped / weight at 0 throughout, and a flat 1 C
+// temperature and target, and it scored 100 before this rule.
+func TestPumpNeverRanIsNotScored(t *testing.T) {
+	shot := pumplessShot()
+	detail := CalcShotScoreTargets(shot, ScoreTargets{})
+	if detail.Score != nil {
+		t.Fatalf("score = %d, want nil for a shot in which the pump never ran", *detail.Score)
+	}
+	if len(detail.Components) != 0 {
+		t.Errorf("components = %+v, want none for an unscored shot", detail.Components)
+	}
+	if got := scoreWithAdherence(shot, ScoreTargets{}).Score; got != nil {
+		t.Errorf("adherence score = %d, want nil for a shot in which the pump never ran", *got)
+	}
+}
+
+// #2242: the rule only fires when no water moved at all — a shot with pump
+// flow at 0 but a scale reading above 0 is still scored (a GaggiMate shot
+// without pump-flow data at all is too).
+func TestNoWaterMovedKeepsAShotWithWeight(t *testing.T) {
+	shot := pumplessShot()
+	shot["datapoints"].(map[string]any)["shotWeight"] = mkPoints(0, 300) // 30 g
+	if got := CalcShotScoreTargets(shot, ScoreTargets{}).Score; got == nil {
+		t.Error("a shot with a 30 g scale reading should still score, got nil")
+	}
+}

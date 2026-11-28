@@ -96,7 +96,7 @@ describe('calcComparativeGrindAdvice on a grinder scale', () => {
     const shots = [shot(2, 90, '8'), shot(3, 91, '8.0'), shot(4, 89, '8.0')];
     const combos = calcBestGrindCombosForBean('Bean A', shots);
     expect(combos).toHaveLength(1);
-    expect(combos?.[0]).toMatchObject({ grindSetting: 8, shotCount: 3 });
+    expect(combos?.[0]).toMatchObject({ grindSetting: '8.0', shotCount: 3 });
   });
 });
 
@@ -110,7 +110,7 @@ describe('calcBestGrindCombosForBean on a grinder scale', () => {
     ];
     const combos = calcBestGrindCombosForBean('Bean A', shots);
     expect(combos).toHaveLength(1);
-    expect(combos?.[0]).toMatchObject({ grinder: K6, grindSetting: 33, shotCount: 3 });
+    expect(combos?.[0]).toMatchObject({ grinder: K6, grindSetting: '33', shotCount: 3 });
   });
 
   it('drops a combo outside the range', () => {
@@ -139,7 +139,7 @@ describe('suggestGrindDoseForBean on a grinder scale', () => {
   });
 
   it('reads the first number of a stored "8 clicks" on a stepless dial', () => {
-    expect(suggest(library([{ name: GRINDER, isDefault: true, scale: STEPLESS }], '8 clicks')).grindSetting).toBe('8');
+    expect(suggest(library([{ name: GRINDER, isDefault: true, scale: STEPLESS }], '8 clicks')).grindSetting).toBe('8.0');
   });
 
   it('leaves a non-numeric known setting empty on a scaled grinder', () => {

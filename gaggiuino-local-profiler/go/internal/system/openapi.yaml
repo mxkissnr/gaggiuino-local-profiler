@@ -361,13 +361,27 @@ components:
 
     GrinderScale:
       type: object
-      required: [type, min, max, step]
-      description: "A grinder's valid grind settings (#1961). Settings are min + k * step, up to max. min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. Absent for a grinder without a scale, whose grind setting stays free text."
+      required: [type, min, max]
+      description: "A grinder's valid grind settings (#1961, #2225). stepped and stepless: settings are min + k * step, up to max; min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. dial: a reading in parts such as 8.3 (number.tick), 1.2.3 (rotation.number.click) or 12E (number + letter); min and max are readings, and a stepless dial takes in-between values after a comma (8.2,5) in steps of 1/resolution of a tick. Absent for a grinder without a scale, whose grind setting stays free text."
       properties:
-        type: { type: string, enum: [stepped, stepless] }
-        min:  { type: number }
-        max:  { type: number }
-        step: { type: number }
+        type: { type: string, enum: [stepped, stepless, dial] }
+        min:  { oneOf: [{ type: number }, { type: string }], description: "A number on stepped and stepless, a reading on dial" }
+        max:  { oneOf: [{ type: number }, { type: string }], description: "A number on stepped and stepless, a reading on dial" }
+        step: { type: number, description: "stepped and stepless only" }
+        parts:
+          type: array
+          minItems: 2
+          maxItems: 3
+          description: "dial only. The first part counts up from start without end (count null); every later part has count values, written as digits or letters."
+          items:
+            type: object
+            required: [count]
+            properties:
+              count:  { type: integer, nullable: true, minimum: 2, maximum: 100 }
+              start:  { type: integer, minimum: 0, maximum: 1000 }
+              labels: { type: string, enum: [number, letter] }
+        stepless:   { type: boolean, description: "dial only: in-between values after a comma are allowed" }
+        resolution: { type: integer, enum: [1, 2, 4], description: "dial only: in-between values per tick on a stepless dial" }
 
     Grinder:
       type: object
@@ -859,6 +873,47 @@ components:
 
     # ── Backup ────────────────────────────────────────────────────────────
 
+    ShotDonation:
+      type: object
+      required: [format, version, appVersion, donationId, shots]
+      properties:
+        format:     { type: string, enum: [glp-shot-donation] }
+        version:    { type: integer, example: 1 }
+        appVersion: { type: string }
+        donationId: { type: string, description: "16 hex chars, HMAC of a fixed label under the per-install secret" }
+        shots:      { type: array, items: { $ref: '#/components/schemas/ShotDonationShot' } }
+    ShotDonationShot:
+      type: object
+      required: [key, machineType, profileKey, profile, datapoints, annotation, scores]
+      properties:
+        key:         { type: string, description: "16 hex chars, HMAC of the shot id under the per-install secret" }
+        machineType: { type: string, enum: [gaggiuino, gaggimate], nullable: true }
+        profileKey:  { type: string, nullable: true, description: "16 hex chars of SHA-256 over the profile object's JSON" }
+        profile:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Profile structure without names or ids (phases, targets, restrictions, stop conditions, recipe, water temperature); null for GaggiMate shots
+        datapoints:
+          type: object
+          additionalProperties: true
+          description: Allow-listed numeric series, phaseTransitions as {t, phase, reason}, finalExitReason, bleScaleConnected
+        annotation:
+          type: object
+          required: [rating, dose, yield, tds, drinkType, tasteTag, roastLevel, beanAgeDays]
+          properties:
+            rating:      { type: integer, minimum: 1, maximum: 5 }
+            dose:        { type: number, nullable: true }
+            yield:       { type: number, nullable: true }
+            tds:         { type: number, nullable: true }
+            drinkType:   { type: string, nullable: true, description: "A built-in drink id, or other for a custom menu drink" }
+            tasteTag:    { type: string, nullable: true, enum: [sour, bitter, balanced, thin], description: "The taste tag; any other stored value is left out as null" }
+            roastLevel:  { type: string, nullable: true, enum: [light, medium-light, medium, medium-dark, dark] }
+            beanAgeDays: { type: integer, nullable: true }
+        scores:
+          type: object
+          description: "{ [scoreModelId]: score or null }"
+          additionalProperties: { type: integer, nullable: true }
     BackupBundle:
       type: object
       required: [glp_backup, version, created, shots]
@@ -1220,9 +1275,11 @@ components:
       required: [installed, latest, updateAvailable, releaseUrl]
       description: GET /api/machine/firmware/version — installed vs latest release; latest/releaseUrl are null when no matching release was found.
       properties:
-        installed: { type: string, nullable: true }
+        installed: { type: string, nullable: true, description: "Controller firmware hash (the machine's coreVersion)." }
+        installedFrontend: { type: string, nullable: true, description: "Frontend firmware hash (the machine's frontVersion); null when the firmware does not report it." }
         latest: { type: string, nullable: true }
-        updateAvailable: { type: boolean }
+        updateAvailable: { type: boolean, description: "True when the controller or the frontend hash differs from the latest release." }
+        partial: { type: boolean, description: "True when the controller and the frontend report different hashes: the last update did not finish." }
         releaseUrl: { type: string, nullable: true }
 
     FirmwareProgress:
@@ -3133,6 +3190,8 @@ paths:
     get:
       tags: [System]
       summary: Machine power switch state
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer }, description: "#2202: the machine whose switch to read; omitted = the default machine" }
       responses:
         "200":
           description: Switch state
@@ -3144,11 +3203,15 @@ paths:
                   configured: { type: boolean }
                   entity:     { type: string, nullable: true }
                   state:      { type: boolean, nullable: true, description: true = on }
+        "400": { description: machineId is not a number }
+        "404": { description: Unknown machineId }
 
   /api/switch/toggle:
     post:
       tags: [System]
       summary: Toggle machine power switch (requires switch_entity + SUPERVISOR_TOKEN)
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer }, description: "#2202: the machine whose switch to toggle; omitted = the default machine" }
       responses:
         "200":
           description: New switch state
@@ -3159,7 +3222,8 @@ paths:
                 properties:
                   ok:    { type: boolean }
                   state: { type: boolean, description: New state after toggle }
-        "400": { description: switch_entity not configured }
+        "400": { description: "switch_entity not configured, or machineId is not a number" }
+        "404": { description: Unknown machineId }
         "500": { description: HA call failed }
 
   /api/machine/status:
@@ -4337,6 +4401,32 @@ paths:
             application/zip:
               schema: { type: string, format: binary }
         "429": { description: "Rate limit exceeded — per-IP backup download limit, 5/min (separate from GET's budget, #1626)" }
+
+  /api/shot-donation:
+    get:
+      tags: [Backup]
+      summary: Download the anonymised shot donation file
+      description: >
+        Every rated (1-5 stars), non-trashed shot as an anonymised file the user
+        can post on the GLP Discord to help calibrate the shot score (#2220).
+        Built from an allow-list only: no names, notes or other free text, no
+        photos, timestamps, shot or machine ids, hosts, settings or tokens.
+        Shot keys and the donation id are HMACs under a random per-install
+        secret that is never exported in a backup.
+      parameters:
+        - name: since
+          in: query
+          required: false
+          description: Only shots made on or after this local date (YYYY-MM-DD). A server-side filter; the file holds no timestamps.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The donation file (Content-Disposition attachment)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ShotDonation' }
+        "400": { description: "Invalid since date" }
+        "429": { description: "Rate limit exceeded — per-IP limit, 20/min" }
 
   /api/restore:
     post:

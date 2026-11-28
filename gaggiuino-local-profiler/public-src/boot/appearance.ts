@@ -8,6 +8,7 @@ import { onThemeChange, applyChartTheme } from '../utils.js';
 import { THEME_STORAGE_KEY, applyTheme, migrateLegacyAccent } from '../theme.js';
 import { applyActiveMachineAccentTheme, renderAccentSwatches } from '../components/machines-settings.js';
 import { safeLocalStorage } from '../storage.js';
+import { renderHomeCountrySelect, wireHomeCountrySetting } from './home-country.js';
 
 // Theme picker — called by the #themeToggleGroup wiring below.
 function setTheme(theme: string): void {
@@ -59,5 +60,7 @@ export function wireAppearance(): void {
     btn.addEventListener('click', () => setTheme(btn.dataset.themeVal!));
   });
   const langSelect = document.getElementById('settingsLang') as HTMLSelectElement | null;
-  if (langSelect) langSelect.addEventListener('change', () => setLang(langSelect.value));
+  // #2210: the Home country select names its countries in the UI language.
+  if (langSelect) langSelect.addEventListener('change', () => { setLang(langSelect.value); renderHomeCountrySelect(); });
+  wireHomeCountrySetting();
 }

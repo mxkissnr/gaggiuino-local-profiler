@@ -592,6 +592,8 @@
         .world-map-hint { position: absolute; bottom: 4px; right: 8px; font-size: var(--fs-1); color: var(--gray-500); pointer-events: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(100% - 16px); }
         @media (hover: none) { .world-map-hint { display: none; } }
         .map-chips { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-top: var(--sp-2); }
+        /* #2210: the "Set home country" link under the map and its chips, at the right. */
+        .map-home-row { display: flex; justify-content: flex-end; margin-top: var(--sp-2); }
         /* #1467: headings use the library shelf heading look — small, semibold,
            accent — with the grey counters sitting next to them. */
         .analytics-card-head .section-title { margin-bottom: 0; }
@@ -662,8 +664,10 @@
         .analytics-verdict-score-lbl { margin-top: var(--sp-1); font-size: var(--fs-1); color: var(--gray-500); }
 
         /* Coffee year: one column per week, Monday at the top (#1467). Real CSS
-           grid instead of measuring the wrapper, so the fixed cell size keeps
-           the whole year scrollable on phones. */
+           grid with a fixed cell size. Below 900 px the calendar module draws
+           22 weeks at a time with a pager and sizes the cell to fill the
+           wrapper, so the grid never scrolls sideways on a phone (#2214);
+           wider screens show the whole year and may scroll it. */
         .cal-wrapper { --cal-cell: 12px; --cal-label: 26px; --cal-gap: 3px; overflow-x: auto; padding-bottom: var(--sp-1); }
         .cal-grid { display: grid; grid-auto-flow: column; grid-template-columns: var(--cal-label); grid-template-rows: repeat(7, var(--cal-cell)); grid-auto-columns: var(--cal-cell); gap: var(--cal-gap); width: max-content; margin-right: var(--sp-3); }
         .cal-weekday { font-size: .6rem; line-height: var(--cal-cell); color: var(--gray-600); text-align: right; }
@@ -706,6 +710,12 @@
         .cal-legend-part { display: inline-flex; align-items: center; gap: var(--sp-1); }
         .cal-legend-swatches { display: inline-flex; align-items: center; gap: 3px; }
         .cal-legend-swatch { display: inline-block; width: 12px; height: 12px; }
+        /* #2214: pager above the coffee year on a phone (rendered by the
+           calendar module below 900 px): earlier weeks, the shown date range,
+           later weeks. The buttons are the shared .btn--quiet.btn--icon
+           (44 px on touch). */
+        .cal-pager { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); margin-bottom: var(--sp-2); }
+        .cal-pager-range { flex: 1; min-width: 0; text-align: center; font-size: var(--fs-1); color: var(--gray-500); font-variant-numeric: tabular-nums; }
         /* #1741: the coffee-year card is a query container, so the calendar
            grid and the streak figures are laid out by the card's width, not the
            viewport. Two columns fit at 53 weeks x 15px + 53 x 3px gaps + 26px
@@ -1254,7 +1264,16 @@
             .star { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
         }
 
-        .annotation-photo-row { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+        .annotation-photo-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); }
+        /* #2214: on a phone the photo thumb takes its own line (its 88 px width
+           plus a right margin that fills the rest of the line) and the photo
+           buttons share the lines below, two per line; a lone last button
+           takes the whole line. */
+        @media (max-width: 600px) {
+            .annotation-photo-row { gap: var(--sp-2); }
+            .annotation-photo-row .shot-photo-thumb { margin-right: calc(100% - 88px); }
+            .annotation-photo-row > .btn { flex: 1 1 calc(50% - var(--sp-2)); min-width: 0; }
+        }
         .shot-photo-thumb { width: 88px; height: 88px; border-radius: 50%; object-fit: cover; background: var(--gray-800); flex-shrink: 0; }
 
         .annotation-fields {
@@ -1335,14 +1354,11 @@
         .accent-swatches-disabled .accent-swatch { opacity: .45; }
 
         /* ── Shared horizontally-scrolling tab strip ──
-           Applied to every exclusive-view tab bar (.lib-tabs, .chart-tabs,
-           .fs-tabs) so a bar with more tabs than the viewport is wide
-           scrolls itself instead of the whole page. Before this, each bar
-           overflowed silently and, since #main has overflow-x:hidden, the
-           page shifted horizontally on tap/scroll instead — worst on mobile
-           Library, which has 5 tabs. One shared class instead of repeating
-           the fix per bar, since that duplication is exactly what caused
-           the bug to only get fixed in some places and not others. */
+           Applied to the short chart tab bars (.chart-tabs, .fs-tabs) so a bar
+           wider than its box scrolls itself instead of the whole page (#main
+           has overflow-x:hidden, so an overflowing bar shifted the page
+           sideways on tap). The library tabs wrap into rows instead (#2214):
+           on a phone nothing scrolls sideways. */
         .tabs-scroll {
             overflow-x: auto;
             flex-wrap: nowrap;
@@ -1355,9 +1371,15 @@
         /* ── Coffee Library ── */
         #library-view { display: none; flex-direction: column; flex: 1; overflow-y: auto; padding: var(--sp-5); }
         #library-view > .lib-page { max-width: 1400px; width: 100%; }
-        .lib-tabs { display: flex; gap: var(--sp-1); margin-bottom: var(--sp-4); }
+        .lib-tabs { display: flex; flex-wrap: wrap; gap: var(--sp-1); margin-bottom: var(--sp-4); }
         .lib-tab { background: none; border: none; border-bottom: 2px solid transparent; color: var(--gray-500); font-size: var(--fs-1); font-weight: 500; padding: var(--sp-2) var(--sp-3); cursor: pointer; transition: color .15s; }
         .lib-tab { position: relative; }
+        /* #2214: the tabs wrap into rows on a phone; a label never breaks
+           inside its tab, and on touch every tab is a 44 px target. The active
+           underline (.lib-tab.active::after) hangs off the tab itself, so it
+           stays under the active tab in whichever row it sits. */
+        .lib-tab { white-space: nowrap; }
+        @media (pointer: coarse) { .lib-tab { min-height: var(--ctl-height); } }
         .lib-tab.active { color: var(--accent-ink); border-bottom-color: transparent; }
         .lib-tab.active::after { content:''; position:absolute; bottom:-2px; left:0; right:0; height:2px; background: var(--accent); border-radius: var(--radius-full); }
         .lib-body { flex: 1; overflow-y: auto; padding: var(--sp-4) var(--sp-5); }
@@ -1588,6 +1610,8 @@
         .lib-form-grid .lib-form-field:last-child:nth-child(odd) { grid-column: 1 / -1; }
         @media (max-width: 640px) { .lib-form-grid { grid-template-columns: 1fr; } }
         .lib-form-field { display: flex; flex-direction: column; gap: var(--sp-1); }
+        /* Both display rules beat the UA [hidden] rule; the grinder scale form hides its grids and fields (#2233). */
+        .lib-form-grid[hidden], .lib-form-field[hidden] { display: none; }
         .lib-form-field label { font-size: var(--fs-1); color: var(--gray-400); }
         /* Native title-attribute tooltip on the label itself, this icon is
            just the visual affordance that there's more to read on hover. */
@@ -1663,9 +1687,17 @@
             .lib-compare-row { grid-template-columns: minmax(0, 1.2fr) repeat(2, minmax(0, 1fr)); align-items: center; }
             .lib-compare-label { grid-column: auto; }
         }
-        .lib-trigger-row { display: flex; gap: var(--sp-2); }
+        .lib-trigger-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
         .lib-trigger-row .lib-add-trigger { flex: 1; }
         .lib-scan-trigger { white-space: nowrap; }
+        /* #2214: on a phone "+ Add bean" takes its own full-width line and the
+           three quiet buttons (Scan, URL, Sources) share the next line, each
+           growing to fill it; a longer translation moves the last one onto a
+           third line, which it then fills. */
+        @media (max-width: 600px) {
+            .lib-trigger-row .lib-add-trigger { flex: 1 0 100%; }
+            .lib-trigger-row .lib-scan-trigger { flex: 1 1 auto; }
+        }
         .lib-url-row { display:flex; gap: var(--sp-2); margin-top: var(--sp-2); }
         .lib-url-input { flex:1; background:var(--gray-900); border:1px solid var(--gray-700); border-radius:var(--radius); color:var(--gray-200); font-size: var(--fs-1); padding: var(--sp-2) var(--sp-3); outline:none; }
         .lib-url-input:focus { border-color:var(--gray-500); }
@@ -2035,6 +2067,17 @@
         .live-figures { order: 2; }
         .live-chart-area { order: 3; display: flex; flex-direction: column; gap: var(--sp-3); min-width: 0; }
         .live-next { order: 4; min-width: 0; }
+
+        /* #2226: quick rating strip (live view after a shot, newest unrated shot in the list) */
+        .quick-rating-host { order: 3; min-width: 0; padding: var(--sp-4); }
+        .quick-rating { display: flex; flex-direction: column; gap: var(--sp-2); min-width: 0; }
+        .quick-rating-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+        .quick-rating .star { display: inline-flex; align-items: center; justify-content: center; min-width: var(--ctl-height); min-height: var(--ctl-height); }
+        .quick-rating-hint { margin: 0; }
+        .quick-rating-tags { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+        .quick-rating-dismiss { margin-left: auto; }
+        .shot-wrapper--rate { flex-wrap: wrap; }
+        .shot-quick-rating { flex: 1 0 100%; min-width: 0; padding: var(--sp-2) var(--sp-3) var(--sp-3); }
 
         .live-run-head { display: flex; flex-wrap: wrap; align-items: flex-start; gap: var(--sp-3); }
         .live-run-head .live-verdict { flex: 1 1 320px; min-width: 0; }
@@ -2947,6 +2990,11 @@
         .orders-side { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }
         .orders-queue, .orders-progress, .orders-manage { min-width:0; }
         .orders-panel { display:flex; flex-direction:column; gap: var(--sp-4); min-width:0; }
+        .donation-panel { display:flex; flex-direction:column; gap: var(--sp-4); min-width:0; }
+        .donation-range { display:flex; flex-wrap:wrap; align-items:center; gap: var(--sp-2); }
+        .donation-since:not([hidden]) { display:inline-flex; align-items:center; gap: var(--sp-2); }
+        .donation-list { margin:0; padding-inline-start: var(--sp-5); display:flex; flex-direction:column; gap: var(--sp-1); }
+        .donation-actions { display:flex; flex-wrap:wrap; justify-content:flex-end; gap: var(--sp-2); }
         /* Desktop: verdict across the top, the queue left, in progress and manage right. */
         @media (min-width: 900px) {
             .orders-layout { display:grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-areas: "verdict verdict" "queue side"; column-gap: var(--sp-6); row-gap: var(--sp-5); align-items:start; }
@@ -3359,8 +3407,7 @@
            the settings top app bar, category chips, All / Collected / Open,
            the statistics verdict; details open in the shared detail sheet. */
         .ach-filters { display:flex; flex-direction:column; gap: var(--sp-2); min-width:0; }
-        .ach-chips { display:flex; gap: var(--sp-2); overflow-x:auto; scrollbar-width:none; overscroll-behavior-x: contain; }
-        .ach-chips::-webkit-scrollbar { display:none; }
+        .ach-chips { display:flex; flex-wrap:wrap; gap: var(--sp-2); }
         .ach-chips .chip { flex:none; }
         .ach-layout { display:flex; flex-direction:column; gap: var(--sp-5); min-width:0; }
         .ach-layout[data-ach-filter="got"] .ach-field:not(.ach-got),

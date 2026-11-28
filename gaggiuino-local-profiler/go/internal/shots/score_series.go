@@ -23,7 +23,7 @@ func floatSlice(v any) []float64 {
 
 // scoreSeries is the small set of datapoint arrays CalcShotScoreDetail and
 // ComputeShotMetrics actually read. hydrateRow keeps a shot's datapoints as
-// raw JSON bytes (see model.go), so the list scorer parses only these five
+// raw JSON bytes (see model.go), so the list scorer parses only these seven
 // series — typed, never boxed through []any — instead of decoding the whole
 // (much larger) datapoints object per shot (#951).
 type scoreSeries struct {
@@ -31,6 +31,9 @@ type scoreSeries struct {
 	temperature       []float64
 	targetTemperature []float64
 	timeInShot        []float64
+	// #2242: only read to tell a shot in which no water moved
+	pumpFlow    []float64
+	waterPumped []float64
 	// weight follows the `d.shotWeight || d.weight` rule: shotWeight wins
 	// whenever it is present and non-null, even when it is an empty array (in
 	// which case weight is deliberately NOT consulted as a fallback).
@@ -59,6 +62,8 @@ func scoreSeriesFromMap(d map[string]any) scoreSeries {
 		temperature:       floatSlice(d["temperature"]),
 		targetTemperature: floatSlice(d["targetTemperature"]),
 		timeInShot:        floatSlice(d["timeInShot"]),
+		pumpFlow:          floatSlice(d["pumpFlow"]),
+		waterPumped:       floatSlice(d["waterPumped"]),
 	}
 	if v, ok := d["shotWeight"]; ok && v != nil {
 		s.weight = floatSlice(v)
@@ -81,6 +86,8 @@ func scoreSeriesFromRaw(raw stdjson.RawMessage) scoreSeries {
 	s.temperature = decodeFloatArray(m["temperature"])
 	s.targetTemperature = decodeFloatArray(m["targetTemperature"])
 	s.timeInShot = decodeFloatArray(m["timeInShot"])
+	s.pumpFlow = decodeFloatArray(m["pumpFlow"])
+	s.waterPumped = decodeFloatArray(m["waterPumped"])
 	if v, ok := m["shotWeight"]; ok && !isJSONNull(v) {
 		s.weight = decodeFloatArray(v)
 	} else if v, ok := m["weight"]; ok && !isJSONNull(v) {

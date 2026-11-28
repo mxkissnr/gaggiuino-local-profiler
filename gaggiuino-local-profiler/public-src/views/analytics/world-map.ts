@@ -1,12 +1,13 @@
 import { S } from '../../state/index.js';
 import { t, tHtml } from '../../i18n.js';
 import { localeFor, COFFEE_COUNTRIES, COUNTRY_CENTROIDS, countryName, HOME_COUNTRY_NUM } from '../../constants.js';
+import { getUiPref } from '../../ui-prefs.js';
 import { esc, html, joinHtml, scoreClass, themeColor, onThemeChange } from '../../utils.js';
 import type { Html } from '../../utils.js';
 import { openDetailSheet } from '../../components/detail-sheet.js';
 import type { DetailAnchorPoint } from '../../components/detail-sheet.js';
 import { _beans, _counterPeriod, _pageShots } from './shared.js';
-import type { SharedBean, ShotAnnotation } from './shared.js';
+import type { SharedBean, ShotAnnotation, ShotRow } from './shared.js';
 
 // World map: a bean's origins (a blend carries several), the per-country
 // stats the tooltip reads back off a series datum, and the params ECharts
@@ -58,9 +59,10 @@ interface TopojsonModule {
 
 // ── Origin world map ──────────────────────────────────────────────────────
 // Choropleth + region points of coffee origins: shots are joined to library
-// beans by name (case-insensitive, same precedent as the stock math) and
-// colored by shot count; beans with an origin but no shots yet are still
-// highlighted. Rendered with Apache ECharts (roam/zoom + scatter points),
+// beans by name (case-insensitive, same precedent as the stock math). #2200:
+// only beans with at least one shot in the current filter (machine, period,
+// search) are drawn; the regions, points, chips, routes, heading count and
+// empty state all come from that one set. Rendered with Apache ECharts (roam/zoom + scatter points),
 // registered from countries-110m.json via topojson-client — both bundled
 // as real npm deps (no CDN), the topojson data file itself is served
 // locally (CSP connect-src 'self') and cached after the first Analytics visit.
@@ -83,10 +85,13 @@ let _mapLibsPromise: Promise<[typeof import('echarts'), TopojsonModule]> | null 
 // still-latest call writes _worldTopo / touches the DOM after the await.
 let _worldMapReqToken = 0;
 
-// #1467: the home point ([lon, lat]) resolved once from the registered world
-// geometry for the locale's country — null when the locale has no region or
-// it isn't a HOME_COUNTRY_NUM entry, which just means no routes are drawn.
-let _worldMapHome: [number, number] | null = null;
+// #1467/#2210: the home point ([lon, lat]) on the registered world geometry,
+// cached together with the country code it was resolved for. A different code
+// (the setting changed, here or on another device) resolves it again.
+let _worldMapHome: { code: string | null; point: [number, number] | null } | null = null;
+// #2210: the registered geometry's features, kept so the home point can be
+// resolved again after the setting changes.
+let _worldFeatures: GeoJsonFeature[] | null = null;
 // #1467: the map click handler is bound once per echarts instance, so it
 // reads the latest aggregation/home from here instead of closing over one
 // build's locals.
@@ -368,10 +373,9 @@ export function worldMapTooltipFormatter(params: MapTooltipParams) {
 }
 
 // ── Origin map: home country, routes, chips and click-through (#1467) ─────
-// The country the user brews in, from the browser's UI language. Intl.Locale
-// maximize() fills in the likely region ("de" -> DE, "nl" -> NL); null when
-// the tag can't be resolved, which simply means the map draws no routes.
-// Nothing is stored or sent — a local convenience, not a setting.
+// The country guessed from the browser's UI language. Intl.Locale maximize()
+// fills in the likely region ("de" -> DE, "nl" -> NL); null when the tag can't
+// be resolved. This is the Automatic choice of the Home country setting (#2210).
 export function homeCountryFromLocale(lang: string | undefined): string | null {
   if (typeof lang !== 'string' || !lang.trim()) return null;
   try {
@@ -380,6 +384,42 @@ export function homeCountryFromLocale(lang: string | undefined): string | null {
   } catch {
     return null;
   }
+}
+
+// #2210: Settings > Appearance > Home country, kept in the shared UI prefs.
+// Absent or '' = Automatic (the browser-language guess), 'none' = no home,
+// otherwise an ISO alpha-2 code from HOME_COUNTRY_NUM.
+export const HOME_COUNTRY_PREF = 'analytics.home_country';
+
+/** Whether `value` is a country the map can place a home point in. */
+export function isHomeCountryCode(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Z]{2}$/.test(value) && HOME_COUNTRY_NUM[value] !== undefined;
+}
+
+/**
+ * The home country for a stored setting and the browser language: 'none'
+ * gives null, a table code wins over the language, anything else is Automatic.
+ */
+export function resolveHomeCountry(pref: unknown, lang: string | undefined): string | null {
+  if (pref === 'none') return null;
+  if (isHomeCountryCode(pref)) return pref;
+  const guess = homeCountryFromLocale(lang);
+  return isHomeCountryCode(guess) ? guess : null;
+}
+
+function _currentHomeCountry(): string | null {
+  return resolveHomeCountry(
+    getUiPref<unknown>(HOME_COUNTRY_PREF),
+    typeof navigator !== 'undefined' ? navigator.language : undefined,
+  );
+}
+
+/** [lon, lat] of the home point: the centre of the country's largest landmass. */
+export function homePointFor(code: string | null, features: readonly GeoJsonFeature[]): [number, number] | null {
+  const num = code ? HOME_COUNTRY_NUM[code] : undefined;
+  if (!num) return null;
+  const feature = features.find(f => String(f.id) === num);
+  return feature ? featureLabelPoint(feature.geometry) : null;
 }
 
 // [lon, lat] centre of the largest polygon's bounding box in a Polygon or
@@ -569,6 +609,89 @@ function _onMapClick(raw: unknown): void {
   _openCountryDetail(code, anchor);
 }
 
+// #2200: everything the map draws, built from the filtered shots only. A bean
+// is on the map when at least one shot in `shots` used it; a country is in
+// byCode (highlighted, counted, given a chip and a route) when at least one such
+// bean comes from it. Library beans with an origin but no shot here are left
+// out, so the heading count and the drawn regions/points always match.
+interface WorldMapData {
+  entries: MapEntry[];               // brewed beans with an origin, library order
+  shotCounts: Map<MapEntry, number>; // whole shots per brewed bean
+  byCode: Record<string, MapStats>;  // origin countries of those beans only
+  countries: string[];               // the keys of byCode, most-brewed first
+}
+
+export function collectWorldMapData(
+  beans: readonly SharedBean[],
+  shots: readonly ShotRow[],
+  scoreOf: (shot: ShotRow) => number | null,
+): WorldMapData {
+  // bean name (lowercased) → { bean, origins:[{code, weight}] }, restricted to
+  // known coffee countries. A blend's weights come from its per-country
+  // percent when set (normalized to sum to 1), else split equally across its
+  // origin countries — so one shot of a 2-country blend contributes 0.5 to
+  // each by default, or e.g. 0.7/0.3 when weighted.
+  const nameToBean = new Map<string, MapEntry>();
+  const idToBean   = new Map<number, MapEntry>();
+  const allEntries: MapEntry[] = [];
+  for (const b of beans) {
+    const rawOrigins: { code?: string | null; percent?: number | null }[] =
+      Array.isArray(b.origins) && b.origins.length ? b.origins : (b.origin ? [{ code: b.origin }] : []);
+    const valid = rawOrigins.filter(o => COFFEE_COUNTRIES.some(c => c.code === o.code));
+    if (!valid.length) continue;
+    const totalPercent = valid.reduce((sum, o) => sum + (o.percent || 0), 0);
+    const origins = valid.map(o => ({
+      code: o.code as string,
+      weight: totalPercent > 0 ? (o.percent || 0) / totalPercent : 1 / valid.length,
+    }));
+    const entry = { bean: b, origins };
+    allEntries.push(entry);
+    nameToBean.set(String(b.name || '').toLowerCase(), entry);
+    if (b.id != null) idToBean.set(b.id, entry);
+  }
+  // #456: beanId-first lookup (survives bean renames), falling back to the
+  // name key for annotations that predate beanId or a name that no longer
+  // resolves to any current bean.
+  const resolveMapEntry = (ann: ShotAnnotation | null | undefined): MapEntry | undefined =>
+    (ann?.beanId != null && idToBean.get(ann.beanId))
+    || nameToBean.get(String(ann?.coffee || '').toLowerCase());
+
+  // code → { shots, beans, beanShots, ... }, built from the filtered shots
+  // only; beanShots tracks each bean's own weighted contribution to this
+  // country (only interesting, i.e. non-integer, for blends) for the tooltip.
+  const shotCounts = new Map<MapEntry, number>();
+  const byCode: Record<string, MapStats> = {};
+  for (const s of shots) {
+    const entry = resolveMapEntry(s.annotation);
+    if (!entry) continue;
+    shotCounts.set(entry, (shotCounts.get(entry) ?? 0) + 1);
+    const score = scoreOf(s);
+    for (const o of entry.origins) {
+      let stats = byCode[o.code];
+      if (!stats) {
+        stats = { shots: 0, beans: new Set(), beanShots: new Map(), scoreSum: 0, scoreCount: 0, beanScoreSum: new Map(), beanScoreCount: new Map() };
+        byCode[o.code] = stats;
+      }
+      stats.beans.add(entry.bean.name);
+      stats.shots += o.weight;
+      stats.beanShots.set(entry.bean.name, (stats.beanShots.get(entry.bean.name) ?? 0) + o.weight);
+      if (score !== null) {
+        stats.scoreSum += score;
+        stats.scoreCount++;
+        stats.beanScoreSum.set(entry.bean.name, (stats.beanScoreSum.get(entry.bean.name) ?? 0) + score);
+        stats.beanScoreCount.set(entry.bean.name, (stats.beanScoreCount.get(entry.bean.name) ?? 0) + 1);
+      }
+    }
+  }
+  for (const stats of Object.values(byCode)) {
+    stats.shots = Math.round(stats.shots * 10) / 10;
+    for (const [name, val] of stats.beanShots) stats.beanShots.set(name, Math.round(val * 10) / 10);
+  }
+  const countries = Object.keys(byCode)
+    .sort((a, b) => (byCode[b]?.shots ?? 0) - (byCode[a]?.shots ?? 0));
+  return { entries: allEntries.filter(e => shotCounts.has(e)), shotCounts, byCode, countries };
+}
+
 export async function buildWorldMap() {
   const token = ++_worldMapReqToken;
   const wrap = document.getElementById('worldMapWrap');
@@ -589,84 +712,20 @@ export async function buildWorldMap() {
     _worldMapThemeListenerRegistered = true;
   }
 
-  // bean name (lowercased) → { bean, origins:[{code, weight}] }, restricted to
-  // known coffee countries. A blend's weights come from its per-country
-  // percent when set (normalized to sum to 1), else split equally across its
-  // origin countries — so one shot of a 2-country blend contributes 0.5 to
-  // each by default, or e.g. 0.7/0.3 when weighted.
-  const nameToBean = new Map<string, MapEntry>();
-  const idToBean   = new Map<number, MapEntry>();
-  for (const b of _beans()) {
-    const rawOrigins: { code?: string | null; percent?: number | null }[] =
-      Array.isArray(b.origins) && b.origins.length ? b.origins : (b.origin ? [{ code: b.origin }] : []);
-    const valid = rawOrigins.filter(o => COFFEE_COUNTRIES.some(c => c.code === o.code));
-    if (!valid.length) continue;
-    const totalPercent = valid.reduce((sum, o) => sum + (o.percent || 0), 0);
-    const origins = valid.map(o => ({
-      code: o.code as string,
-      weight: totalPercent > 0 ? (o.percent || 0) / totalPercent : 1 / valid.length,
-    }));
-    const entry = { bean: b, origins };
-    nameToBean.set(String(b.name || '').toLowerCase(), entry);
-    if (b.id != null) idToBean.set(b.id, entry);
-  }
-  // #456: beanId-first lookup (survives bean renames), falling back to the
-  // name key for annotations that predate beanId or a name that no longer
-  // resolves to any current bean.
-  const resolveMapEntry = (ann: ShotAnnotation | null | undefined): MapEntry | undefined =>
-    (ann?.beanId != null && idToBean.get(ann.beanId))
-    || nameToBean.get(String(ann?.coffee || '').toLowerCase());
+  const { entries, shotCounts, byCode, countries: countriesWithShots } = collectWorldMapData(
+    _beans(),
+    _pageShots(),
+    // typeof guard: the headless race test runs this without a window global.
+    s => (typeof window !== 'undefined' && window.calcShotScore ? window.calcShotScore(s) : null),
+  );
 
-  // code → { shots, beans:Set, beanShots:Map } — beans with an origin count
-  // even without shots; beanShots tracks each bean's own weighted
-  // contribution to this country (only interesting — i.e. non-integer —
-  // for blends), used to annotate the tooltip.
-  const byCode: Record<string, MapStats> = {};
-  for (const { bean, origins } of nameToBean.values()) {
-    for (const o of origins) {
-      let codeStats = byCode[o.code];
-      if (!codeStats) {
-        codeStats = { shots: 0, beans: new Set(), beanShots: new Map(), scoreSum: 0, scoreCount: 0, beanScoreSum: new Map(), beanScoreCount: new Map() };
-        byCode[o.code] = codeStats;
-      }
-      codeStats.beans.add(bean.name);
-      if (!codeStats.beanShots.has(bean.name)) codeStats.beanShots.set(bean.name, 0);
-    }
-  }
-  for (const s of _pageShots()) {
-    const entry = resolveMapEntry(s.annotation);
-    if (!entry) continue;
-    const score = window.calcShotScore ? window.calcShotScore(s) : null;
-    for (const o of entry.origins) {
-      const stats = byCode[o.code];
-      if (!stats) continue;
-      stats.shots += o.weight;
-      stats.beanShots.set(entry.bean.name, (stats.beanShots.get(entry.bean.name) ?? 0) + o.weight);
-      if (score !== null) {
-        stats.scoreSum += score;
-        stats.scoreCount++;
-        stats.beanScoreSum.set(entry.bean.name, (stats.beanScoreSum.get(entry.bean.name) ?? 0) + score);
-        stats.beanScoreCount.set(entry.bean.name, (stats.beanScoreCount.get(entry.bean.name) ?? 0) + 1);
-      }
-    }
-  }
-  for (const stats of Object.values(byCode)) {
-    stats.shots = Math.round(stats.shots * 10) / 10;
-    for (const [name, val] of stats.beanShots) stats.beanShots.set(name, Math.round(val * 10) / 10);
-  }
-
-  if (Object.keys(byCode).length === 0) {
+  if (countriesWithShots.length === 0) {
     if (_echartsInstance) { _echartsInstance.dispose(); _echartsInstance = null; }
     wrap.innerHTML = html`<p class="empty-note">${tHtml('analytics_map_empty')}</p>`;
     _clearMapExtras(wrap);
     return;
   }
 
-  // #1467: origin countries that actually have shots, most-brewed first —
-  // the chips row, the heading counter and the routes all key off this list.
-  const countriesWithShots = Object.keys(byCode)
-    .filter(code => (byCode[code]?.shots ?? 0) > 0)
-    .sort((a, b) => (byCode[b]?.shots ?? 0) - (byCode[a]?.shots ?? 0));
   if (!wrap.querySelector('.world-map-canvas')) {
     wrap.innerHTML = html`<div class="world-map-canvas" style="width:100%;height:100%"></div>
       <div class="world-map-hint">${tHtml('analytics_map_zoom_hint')}</div>`;
@@ -731,14 +790,8 @@ export async function buildWorldMap() {
         if (bounds) _mapCodeBounds.set(props.code, bounds);
       }
     }
-    // #1467: place the home point on the registered geometry once — the
-    // bounding-box centre of the home country's largest landmass.
-    if (!_worldMapHome) {
-      const homeCode = homeCountryFromLocale(typeof navigator !== 'undefined' ? navigator.language : undefined);
-      const homeNum = homeCode ? HOME_COUNTRY_NUM[homeCode] : undefined;
-      const homeFeature = homeNum ? geo.features.find(f => String(f.id) === homeNum) : undefined;
-      _worldMapHome = homeFeature ? featureLabelPoint(homeFeature.geometry) : null;
-    }
+    // #2210: kept for the home point, which follows the Home country setting.
+    _worldFeatures = geo.features;
     // topojson-client ships no types, so its GeoJSON output can't be matched to ECharts' map input.
     echarts.registerMap('world', geo as unknown as Parameters<typeof echarts.registerMap>[1]);
     _worldMapRegistered = true;
@@ -754,7 +807,8 @@ export async function buildWorldMap() {
   // (jittered a few tenths of a degree per extra bean so points don't stack).
   const seenAtCentroid: Record<string, number> = {};
   const points: { name: string; value: number[]; _region: string | null; _code: string }[] = [];
-  for (const { bean, origins } of nameToBean.values()) {
+  for (const entry of entries) {
+    const { bean, origins } = entry;
     // Even a blend gets exactly one map point — from its geocoded growing
     // region if resolved, else a centroid fallback keyed on its primary
     // (first-listed) origin country.
@@ -769,9 +823,7 @@ export async function buildWorldMap() {
       const jitter = n * 0.35;
       coord = [centroid[0] + (n % 2 === 0 ? jitter : -jitter), centroid[1] + (n % 3) * 0.2];
     }
-    const shots = byCode[primaryCode]?.beans.has(bean.name)
-      ? _pageShots().filter(s => resolveMapEntry(s.annotation)?.bean === bean).length
-      : 0;
+    const shots = shotCounts.get(entry) ?? 0;
     // #1467: the always-visible bean-name labels are gone (the chips below
     // the map replace them); the tooltip still names the bean. _code keys the
     // point back to its primary origin country for click-through.
@@ -790,7 +842,13 @@ export async function buildWorldMap() {
     _echartsInstance.on('click', _onMapClick);
   }
 
-  const home = _worldMapHome;
+  // #1467/#2210: the home point follows the Home country setting; it is
+  // resolved again only when the resolved country changes.
+  const homeCode = _currentHomeCountry();
+  if (!_worldMapHome || _worldMapHome.code !== homeCode) {
+    _worldMapHome = { code: homeCode, point: homePointFor(homeCode, _worldFeatures ?? []) };
+  }
+  const home = _worldMapHome.point;
   const mapPoints = [
     // #1543: frame each origin by its full country extent — a country wider
     // than the padding (India) would otherwise be cut off at the edge — plus
@@ -871,4 +929,16 @@ export async function buildWorldMap() {
     _resizeBound = true;
   }
   _echartsInstance.resize();
+}
+
+/**
+ * #2210: redraws the map when the Home country setting now resolves to a
+ * different country than the drawn one. Only while Statistics is on screen;
+ * the next visit builds the map anyway. Returns whether a redraw started.
+ */
+export function refreshWorldMapHome(): boolean {
+  if (S.currentMode !== 'analytics' || !_worldMapHome) return false;
+  if (_worldMapHome.code === _currentHomeCountry()) return false;
+  void buildWorldMap();
+  return true;
 }

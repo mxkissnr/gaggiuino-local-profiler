@@ -27,7 +27,7 @@ g.localStorage = {
 g.navigator ??= { language: 'en-US' };
 
 const { S } = await import('../public-src/state/index.js');
-const { updateStatus } = await import('../public-src/components/status.js');
+const { updateStatus, toggleMachinePower } = await import('../public-src/components/status.js');
 
 // Only the fields status.ts writes on the rail/topbar nodes it looks up.
 interface FakeStatusElement {
@@ -160,5 +160,33 @@ describe('updateStatus(machineId) — #464', () => {
     };
     await updateStatus();
     expect(doc.getElementById('railMachineName').textContent).toBe('kitchen.local');
+  });
+
+  // #2202: the power-switch read and toggle follow the active machine too, so
+  // the topbar button and the Live-tab gate describe the machine the app shows
+  // instead of always the default one.
+  it('reads the power switch of the active machine', async () => {
+    S.activeMachineId = 2;
+    await updateStatus();
+    expect(fetchCalls).toContain('api/switch?machineId=2');
+  });
+
+  it("reads the default machine's power switch for all machines", async () => {
+    S.activeMachineId = 'all';
+    await updateStatus();
+    expect(fetchCalls).toContain('api/switch');
+  });
+
+  it('toggles the power switch of the active machine', async () => {
+    S.activeMachineId = 2;
+    await toggleMachinePower();
+    expect(fetchCalls).toContain('api/switch/toggle?machineId=2');
+  });
+
+  it('toggles without machineId when all machines are shown', async () => {
+    S.activeMachineId = 'all';
+    await toggleMachinePower();
+    expect(fetchCalls).toContain('api/switch/toggle');
+    expect(fetchCalls.some(u => u.includes('machineId'))).toBe(false);
   });
 });

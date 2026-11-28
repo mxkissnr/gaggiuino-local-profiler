@@ -481,8 +481,8 @@ describe('remaining action buttons (#2112)', () => {
 describe('card titles (#2120)', () => {
   it('gives the settings cards and the backup restore the shared card title', () => {
     const index = read('index.html');
-    // 14 cards plus the barcode scanner's title (#2141)
-    expect(index.split('<h3 class="card-title"').length - 1).toBe(15);
+    // 15 cards plus the barcode scanner's title (#2141); the shot donation card is #2220
+    expect(index.split('<h3 class="card-title"').length - 1).toBe(16);
     expect(index).toContain('<label for="settingsLang" class="card-title" data-i18n="settings_language">');
     expect(index).not.toContain('orders-menu-toggle'); // #2148: the orders folds became Manage rows
     expect(read('boot/popups.ts')).toContain('<h3 class="card-title" data-i18n="settings_popups_title">');

@@ -307,7 +307,7 @@ func TestRestore_RefusesAndSendsNothing(t *testing.T) {
 			r.docs = []string{`{"format":"gaggiuino-settings","version":1,"settings":{"system":{"mqttPassword":"SECRET-x"}}}`}
 		}, status: 502, code: codeInvalidBackup},
 		{name: "fresh backup unknown version", mutate: func(_ *restoreEnv, r *fakeRestorer) {
-			r.docs = []string{strings.Replace(fixtureDocReordered, `"version":1`, `"version":2`, 1)}
+			r.docs = []string{strings.Replace(fixtureDocReordered, `"version":1`, `"version":3`, 1)}
 		}, status: 502, code: codeInvalidBackup},
 
 		// unsent profile changes
@@ -788,5 +788,45 @@ func (re *restoreEnv) mustUpsertDirty(machineID int64, localID *int64, remoteID 
 	re.t.Helper()
 	if _, err := re.profiles.UpsertDirty(machineID, localID, remoteID, name, json.RawMessage(`{}`)); err != nil {
 		re.t.Fatalf("seeding a dirty profile: %v", err)
+	}
+}
+
+func TestRestore_V2KeepsTheMachinesCurrentHomeUserTokens(t *testing.T) {
+	re := newRestoreEnv(t, gaggiuinoMachine(1))
+	current := strings.NewReplacer("SECRET-v2-u1-vis", "CUR-u1-vis", "SECRET-v2-u1-spro", "CUR-u1-spro",
+		"SECRET-v2-u2-spro", "CUR-u2-spro").Replace(fixtureDocV2)
+	r1 := idleRestorer(current)
+	re.clients[1] = r1
+	p, err := prepare([]byte(fixtureDocV2))
+	if err != nil {
+		t.Fatalf("prepare v2 fixture: %v", err)
+	}
+	entry, err := re.repo.insert(1, KindManual, "", p, re.clock)
+	if err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	rec := re.post(entry.ID, 1, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %s)", rec.Code, rec.Body.String())
+	}
+	if len(r1.posted) != 1 {
+		t.Fatalf("machine got %d posts, want 1", len(r1.posted))
+	}
+	doc, err := parseDocument(r1.posted[0])
+	if err != nil {
+		t.Fatalf("parse the posted document: %v", err)
+	}
+	users := homeUsersOf(t, doc)
+	for name, want := range map[string][2]string{"Ana": {"CUR-u1-vis", "CUR-u1-spro"}, "Ben": {"", "CUR-u2-spro"}} {
+		prefs, _ := users[name]["preferences"].(map[string]any)
+		if prefs["visualizerToken"] != want[0] || prefs["sprofilerToken"] != want[1] {
+			t.Errorf("%s tokens = %#v/%#v, want the machine's current %q/%q", name, prefs["visualizerToken"], prefs["sprofilerToken"], want[0], want[1])
+		}
+	}
+	for _, row := range re.rows() {
+		if strings.Contains(row.data, "CUR-") || strings.Contains(row.data, "SECRET-") {
+			t.Errorf("a stored row carries a token: %s", row.data)
+		}
 	}
 }

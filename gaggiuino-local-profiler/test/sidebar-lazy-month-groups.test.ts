@@ -271,3 +271,62 @@ describe('sidebar lazy month groups (#969)', () => {
     expect(seps.map(s => s.children[0]?.textContent)).toEqual(['1', '0', '0']);
   });
 });
+
+describe('quick rating strip on the newest unrated shot (#2226)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: FIXED_NOW });
+    installDocument();
+    S._expandedMonths = new Set();
+    S.currentFilter = '';
+    S.beanFilter = null;
+    S.machines = [];
+    S.currentSort = 'newest';
+    S.sortAsc = false;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const only = (nodes: FakeNode[], what: string): FakeNode => {
+    expect(nodes.length).toBe(1);
+    const node = nodes[0];
+    if (node === undefined) throw new Error(`missing ${what}`);
+    return node;
+  };
+
+  it('shows the strip on the newest unrated shot only', () => {
+    S.shots = [mkShot(2, 0), mkShot(1, 1)];
+    renderSidebar();
+
+    // Exactly one strip, and it belongs to the newest shot's wrapper.
+    expect(collect(shotsEl, n => n.classList.contains('shot-quick-rating')).length).toBe(1);
+    const strip = only(collect(shotsEl, n => n.classList.contains('shot-quick-rating')), 'strip');
+    const wrapper = only(collect(shotsEl, n => n.id === 'wrapper-2'), 'wrapper 2');
+    expect(wrapper.classList.contains('shot-wrapper--rate')).toBe(true);
+    expect(wrapper.children.includes(strip)).toBe(true);
+    expect(strip.innerHTML).toContain('data-shot-id="2"');
+    expect(strip.innerHTML).not.toContain('quick-rate-dismiss');
+
+    // A sibling of .shot, never inside it, so a strip tap cannot open the shot.
+    const shot = only(collect(wrapper, n => n.classList.contains('shot')), 'newest .shot');
+    expect(wrapper.children.indexOf(strip)).toBeGreaterThan(wrapper.children.indexOf(shot));
+
+    // The older unrated shot gets no strip and no wrap class.
+    const older = only(collect(shotsEl, n => n.id === 'wrapper-1'), 'wrapper 1');
+    expect(older.classList.contains('shot-wrapper--rate')).toBe(false);
+    expect(collect(older, n => n.classList.contains('shot-quick-rating')).length).toBe(0);
+  });
+
+  it('shows no strip once the newest shot is rated', () => {
+    S.shots = [{ ...mkShot(2, 0), annotation: { rating: 4 } }, mkShot(1, 1)];
+    renderSidebar();
+
+    expect(collect(shotsEl, n => n.classList.contains('shot-quick-rating')).length).toBe(0);
+    // Shot 1 is still unrated but older, so it must not inherit the strip.
+    const newer = only(collect(shotsEl, n => n.id === 'wrapper-2'), 'wrapper 2');
+    const older = only(collect(shotsEl, n => n.id === 'wrapper-1'), 'wrapper 1');
+    expect(newer.classList.contains('shot-wrapper--rate')).toBe(false);
+    expect(older.classList.contains('shot-wrapper--rate')).toBe(false);
+  });
+});

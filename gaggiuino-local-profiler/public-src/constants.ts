@@ -20,13 +20,67 @@ export const LOCALE_MAP: Record<string, string> = { de: 'de-DE', en: 'en-US', it
 export const TRANSLATIONS: Record<string, unknown> = { de, en, it, fr, es, nl };
 
 // Single source of truth for "which BCP-47 locale does Intl/toLocale*()
-// get for the active UI language" — every call site used to inline its own
-// `LOCALE_MAP[S.currentLang] || 'de-DE'`, which meant an unsupported/unknown
-// S.currentLang silently rendered dates/numbers in German for every user,
-// not just German ones. Falls back to English instead, matching the same
-// fallback fix applied to S.currentLang itself (state/index.ts) and t() (i18n.ts).
+// get for the active UI language". An unknown language falls back to
+// English (never German), matching S.currentLang (state/index.ts) and t()
+// (i18n.ts). Since #2232 the UI language picks the words and the browser's
+// region the conventions: English UI in a German browser is en-DE, so a
+// 24-hour clock and day-first dates. The region is the first one in the
+// browser's language list (many browsers list a bare "de" first, #2238),
+// else the system locale's, else the likely region of the first browser
+// language ("de" -> DE, #2240). Without a usable region, or when Intl does not
+// support the combined tag, the LOCALE_MAP entry applies as before.
+const localeCache = new Map<string, string>();
+
 export function localeFor(lang: string): string {
-  return LOCALE_MAP[lang] || LOCALE_MAP.en || 'en-US';
+  const base = LOCALE_MAP[lang] || LOCALE_MAP.en || 'en-US';
+  const browser = browserLanguages();
+  const key = `${base}|${browser.join(',')}`;
+  let locale = localeCache.get(key);
+  if (locale === undefined) {
+    locale = withBrowserRegion(base, browser);
+    localeCache.set(key, locale);
+  }
+  return locale;
+}
+
+function browserLanguages(): string[] {
+  try {
+    // navigator.languages is typed non-nullable but older engines omit it.
+    const nav: { languages?: readonly string[] } = navigator;
+    return [...(nav.languages ?? []), navigator.language];
+  } catch {
+    return []; // no navigator (tests, workers without one)
+  }
+}
+
+function regionOf(tag: string): string | undefined {
+  try {
+    return new Intl.Locale(tag).region;
+  } catch {
+    return undefined; // an empty or invalid tag
+  }
+}
+
+function likelyRegionOf(tag: string): string | undefined {
+  try {
+    return new Intl.Locale(tag).maximize().region;
+  } catch {
+    return undefined; // an empty or invalid tag
+  }
+}
+
+function withBrowserRegion(base: string, browser: string[]): string {
+  try {
+    // The system locale is read only on a cache miss: it is slow to resolve.
+    const region = browser.map(regionOf).find(Boolean)
+      ?? regionOf(Intl.DateTimeFormat().resolvedOptions().locale)
+      ?? browser.map(likelyRegionOf).find(Boolean);
+    if (!region) return base;
+    const tag = `${new Intl.Locale(base).language}-${region}`;
+    return Intl.DateTimeFormat.supportedLocalesOf(tag).length > 0 ? tag : base;
+  } catch {
+    return base;
+  }
 }
 
 // ── Coffee origin countries (ISO 3166-1 alpha-2 + numeric for topojson) ───

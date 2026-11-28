@@ -4,6 +4,7 @@ import { describe, it, expect } from 'vitest';
 import {
   parseGrindScale, scaleForGrinder, inGrindRange, snapGrind, grindOnTarget,
   grindValues, numericGrind, normalizeGrindInput, prefillGrind, GRIND_REFERENCE_SPAN,
+  parseGrind, formatGrind, grindPosition, storedGrindScale,
 } from '../public-src/grind-scale.js';
 import type { GrindScale } from '../public-src/grind-scale.js';
 
@@ -105,7 +106,7 @@ describe('grindValues', () => {
   });
 
   it('has no float noise on a fractional step', () => {
-    expect(grindValues({ type: 'stepless', min: 0, max: 0.3, step: 0.1 })).toEqual(['0', '0.1', '0.2', '0.3']);
+    expect(grindValues({ type: 'stepless', min: 0, max: 0.3, step: 0.1 })).toEqual(['0.0', '0.1', '0.2', '0.3']);
   });
 });
 
@@ -127,7 +128,7 @@ describe('numericGrind', () => {
 describe('normalizeGrindInput', () => {
   it('stores a valid setting in the one number format', () => {
     expect(normalizeGrindInput(STEPLESS_09, '8,3')).toBe('8.3');
-    expect(normalizeGrindInput(STEPLESS_09, '8.0')).toBe('8');
+    expect(normalizeGrindInput(STEPLESS_09, '8.0')).toBe('8.0');
     expect(normalizeGrindInput(STEPLESS_09, '8.30')).toBe('8.3');
   });
 
@@ -181,5 +182,121 @@ describe('scaleForGrinder', () => {
 
   it('keeps the reference span the fixed numbers were sized for', () => {
     expect(GRIND_REFERENCE_SPAN).toBe(50);
+  });
+});
+
+// #2225: multi-part dials. Mirrors the dial cases in grindscale_test.go.
+const RING = parseGrindScale({ type: 'dial', parts: [{ count: null, start: 0 }, { count: 6, labels: 'number' }], min: '0.0', max: '12.5', stepless: true, resolution: 2 }) as GrindScale;
+const RING_QUARTER = parseGrindScale({ type: 'dial', parts: [{ count: null }, { count: 6 }], min: '0.0', max: '12.5', stepless: true, resolution: 4 }) as GrindScale;
+const ROTATION = parseGrindScale({ type: 'dial', parts: [{ count: null }, { count: 10 }, { count: 10 }], min: '0.0.0', max: '4.9.9' }) as GrindScale;
+const SETTE = parseGrindScale({ type: 'dial', parts: [{ count: null, start: 1 }, { count: 9, labels: 'letter' }], min: '1A', max: '31I' }) as GrindScale;
+const next = (scale: GrindScale, setting: string): string => prefillGrind(scale, (parseGrind(scale, setting) as number) + 1);
+
+describe('dial scales (#2225)', () => {
+  it('reads a dial scale as linear positions in its smallest unit', () => {
+    expect(RING).toMatchObject({ type: 'dial', min: 0, max: 77, step: 0.5 });
+    expect(ROTATION).toMatchObject({ type: 'dial', min: 0, max: 499, step: 1 });
+    expect(SETTE).toMatchObject({ type: 'dial', min: 0, max: 278, step: 1 });
+    expect(parseGrind(RING, '8.3,5')).toBe(51.5);
+  });
+
+  it('rejects a broken dial scale', () => {
+    const parts = [{ count: null }, { count: 6 }];
+    for (const raw of [
+      { type: 'dial', parts: [{ count: null }], min: '0', max: '9' },
+      { type: 'dial', parts: [{ count: 6 }, { count: 6 }], min: '0.0', max: '9.5' },
+      { type: 'dial', parts: [{ count: null }, { count: 1 }], min: '0.0', max: '9.0' },
+      { type: 'dial', parts: [{ count: null }, { count: 27, labels: 'letter' }], min: '0A', max: '9A' },
+      { type: 'dial', parts, min: '9.0', max: '0.0' },
+      { type: 'dial', parts, min: '0.0', max: '9.6' },
+      { type: 'dial', parts, min: 0, max: 9 },
+      { type: 'dial', parts, min: '0.0', max: '9.0', stepless: true, resolution: 3 },
+    ]) expect(parseGrindScale(raw)).toBeNull();
+  });
+
+  it('steps a ring scale tick by tick: 8.5 is followed by 9.0', () => {
+    expect(next(RING, '8.5')).toBe('9.0');
+    expect(next(RING, '8.0')).toBe('8.1');
+  });
+
+  it('rejects a tick at or above the tick count', () => {
+    expect(normalizeGrindInput(RING, '8.6')).toBeNull();
+    expect(normalizeGrindInput(RING, '8.7')).toBeNull();
+    expect(normalizeGrindInput(RING, '12.6')).toBeNull();
+  });
+
+  it('rewrites 8.25 on a stepless ring to 8.2,5', () => {
+    expect(normalizeGrindInput(RING, '8.25')).toBe('8.2,5');
+    expect(normalizeGrindInput(RING, '8.2,5')).toBe('8.2,5');
+    expect(normalizeGrindInput(RING, '8')).toBe('8.0');
+    expect(normalizeGrindInput(RING, '8.0')).toBe('8.0');
+  });
+
+  it('honours the resolution: half and quarter ticks', () => {
+    expect(normalizeGrindInput(RING, '8.2,25')).toBeNull();
+    expect(normalizeGrindInput(RING_QUARTER, '8.2,25')).toBe('8.2,25');
+    expect(snapGrind(RING, 49.3)).toBe(49.5);
+    expect(snapGrind(RING_QUARTER, 49.3)).toBe(49.25);
+    expect(normalizeGrindInput(ROTATION, '1.2.3,5')).toBeNull();
+  });
+
+  it('carries a click into the next number and rotation: 1.9.9 is followed by 2.0.0', () => {
+    expect(next(ROTATION, '1.9.9')).toBe('2.0.0');
+    expect(normalizeGrindInput(ROTATION, '1.2')).toBe('1.2.0');
+  });
+
+  it('carries a letter into the next number: 12I is followed by 13A', () => {
+    expect(next(SETTE, '12I')).toBe('13A');
+    expect(normalizeGrindInput(SETTE, '12e')).toBe('12E');
+    expect(normalizeGrindInput(SETTE, '12J')).toBeNull();
+    expect(normalizeGrindInput(SETTE, '0I')).toBeNull();
+    expect(normalizeGrindInput(SETTE, '12')).toBeNull();
+  });
+
+  it('sorts 8.3,5 between 8.3 and 8.4', () => {
+    const order = ['8.4', '8.3,5', '8.3'].sort((a, b) => (parseGrind(RING, a) as number) - (parseGrind(RING, b) as number));
+    expect(order).toEqual(['8.3', '8.3,5', '8.4']);
+  });
+
+  it('lists every reading of a dial in its stored form', () => {
+    const small = parseGrindScale({ type: 'dial', parts: [{ count: null }, { count: 3 }], min: '1.1', max: '2.1', stepless: true, resolution: 2 }) as GrindScale;
+    expect(grindValues(small)).toEqual(['1.1', '1.1,5', '1.2', '1.2,5', '2.0', '2.0,5', '2.1']);
+  });
+
+  it('stores a dial scale in its notation and an old scale unchanged', () => {
+    expect(storedGrindScale(RING)).toEqual({ type: 'dial', parts: [{ count: null, start: 0 }, { count: 6, labels: 'number' }], min: '0.0', max: '12.5', stepless: true, resolution: 2 });
+    expect(storedGrindScale(STEPLESS_09)).toEqual({ type: 'stepless', min: 0, max: 9, step: 0.1 });
+    expect(parseGrindScale(storedGrindScale(SETTE))).toEqual(SETTE);
+  });
+});
+
+describe('8.0 keeps its .0 (#2225)', () => {
+  it('formats a one-part scale with the decimals of its step', () => {
+    expect(formatGrind(STEPLESS_09, 8)).toBe('8.0');
+    expect(prefillGrind(STEPLESS_09, 8)).toBe('8.0');
+    expect(formatGrind(STEPPED_60, 8)).toBe('8');
+  });
+
+  it('writes every stepped part of a dial', () => {
+    expect(prefillGrind(RING, 48)).toBe('8.0');
+    expect(formatGrind(ROTATION, 100)).toBe('1.0.0');
+  });
+});
+
+describe('grindPosition (#2225)', () => {
+  it('reads free text as before without a scale or on a one-part scale', () => {
+    expect(grindPosition(null, 'Setting 3.5')).toBe(3.5);
+    expect(grindPosition(null, '8.2,5')).toBe(8.2);
+    expect(grindPosition(STEPLESS_09, '8 clicks')).toBe(8);
+    expect(grindPosition(null, 0)).toBe(0);
+    expect(grindPosition(null, '  ')).toBeNull();
+    expect(grindPosition(undefined, null)).toBeNull();
+  });
+
+  it('reads a dial setting through the scale first, with no free-text fallback', () => {
+    expect(grindPosition(RING, '8.3,5')).toBe(51.5);
+    expect(grindPosition(RING, 8.3)).toBe(51);
+    expect(grindPosition(RING, 'Setting 8.3')).toBeNull();
+    expect(grindPosition(SETTE, '13A')).toBe(108);
   });
 });

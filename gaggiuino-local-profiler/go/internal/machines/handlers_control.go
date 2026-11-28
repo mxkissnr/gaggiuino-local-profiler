@@ -111,13 +111,10 @@ func (h *Handlers) getSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, "machine unreachable")
 		return
 	}
-	// #1431: the system category carries the machine's own MQTT broker
-	// password, which must never reach the browser. Report that one is set
-	// (mqttPasswordSet) instead; an empty category reads every category, so
-	// redact it too.
-	if category == "" || category == "system" {
-		settings = RedactSystemSettings(settings)
-	}
+	// #1431/#2231: the machine's MQTT password and its visualizer/profiler
+	// tokens (system and each Cafe Mode user's) must never reach the browser.
+	// Every category is redacted, so a token in a new place is covered too.
+	settings = RedactSettings(settings)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(settings)
@@ -170,55 +167,33 @@ func (h *Handlers) updateSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	if category == "system" {
-		// #1431: the browser never receives the machine's own mqttPassword
-		// (RedactSystemSettings), so its re-submitted full-category form has no
-		// way to send it back. Restore it from the current settings before
-		// forwarding, so a save never silently wipes it.
-		var bodyMap map[string]any
-		if err := json.Unmarshal(rawBody, &bodyMap); err != nil {
-			writeError(w, http.StatusBadRequest, "invalid settings payload")
+	if category == "system" || category == "display" {
+		// #1431/#2231: the browser never receives the machine's secrets
+		// (RedactSettings), so a form it posts back lacks them. Put the
+		// machine's current values back before forwarding, so a save never
+		// wipes a password or token; a display write is also merged over the
+		// machine's current display settings, so it never drops homeUsers.
+		prepared, err := prepareSettingsWrite(category, rawBody, func() ([]byte, error) {
+			return adapter.GetSettings(r.Context(), machine, category)
+		})
+		if errors.Is(err, errInvalidSettingsPayload) {
+			writeError(w, http.StatusBadRequest, err.Error())
 			return
 		}
-		if bodyMap == nil {
-			bodyMap = map[string]any{}
-		}
-		var current map[string]any
-		if _, present := bodyMap["mqttPassword"]; !present {
-			currentRaw, err := adapter.GetSettings(r.Context(), machine, "system")
-			if err != nil {
-				// A save must never silently wipe the password: if the browser
-				// didn't send one and the current one can't be read, fail like
-				// the other machine errors rather than forwarding the payload.
-				writeError(w, http.StatusBadGateway, err.Error())
-				return
-			}
-			if err := json.Unmarshal(currentRaw, &current); err != nil {
-				// A parse failure is as bad as a fetch failure here: the
-				// password can't be recovered, so forwarding the payload would
-				// silently wipe it — fail like the other machine errors.
-				writeError(w, http.StatusBadGateway, err.Error())
-				return
-			}
-		}
-		RestoreSystemPassword(bodyMap, current)
-		merged, err := json.Marshal(bodyMap)
 		if err != nil {
-			internalError(w, err)
+			writeError(w, http.StatusBadGateway, err.Error())
 			return
 		}
-		rawBody = merged
+		rawBody = prepared
 	}
 	result, err := adapter.UpdateSettings(r.Context(), machine, category, rawBody)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	// #1431: the machine's own POST response echoes the applied settings,
-	// including mqttPassword — redact it before forwarding to the browser.
-	if category == "system" {
-		result = RedactSystemSettings(result)
-	}
+	// #1431/#2231: the machine's own POST response echoes the applied
+	// settings, secrets included; redact them before forwarding to the browser.
+	result = RedactSettings(result)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(result)
@@ -426,8 +401,27 @@ func writePreUpdateError(w http.ResponseWriter, err error) {
 	}
 }
 
+// installedVersions reads the controller (coreVersion) and frontend
+// (frontVersion) firmware hashes from the machine's `versions` settings
+// (#2229). An absent or empty frontVersion yields nil, so older firmware that
+// does not report it behaves exactly as before.
+func installedVersions(raw json.RawMessage) (core, front *string) {
+	var versions struct {
+		CoreVersion  *string `json:"coreVersion"`
+		FrontVersion *string `json:"frontVersion"`
+	}
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &versions)
+	}
+	if versions.FrontVersion != nil && *versions.FrontVersion == "" {
+		versions.FrontVersion = nil
+	}
+	return versions.CoreVersion, versions.FrontVersion
+}
+
 // firmwareFromTo best-effort resolves the version being replaced (from: the
-// machine's installed `versions`.coreVersion) and the version it is updating
+// machine's installed `versions`.coreVersion, plus the frontVersion when a
+// half-finished update left it on another hash, #2229) and the version it is updating
 // to (to: the latest release on the machine's `system`.releaseChannel),
 // mirroring the reads firmwareVersion above already does. Both reads are
 // wrapped in SafeCall and swallow every error/panic, so a missing or
@@ -438,14 +432,12 @@ func (h *Handlers) firmwareFromTo(ctx context.Context, machine *Machine, adapter
 	httputil.SafeCall("machines: firmware update from-version fetch", func() {
 		versionsRaw, _ = adapter.GetSettings(ctx, machine, "versions")
 	})
-	var versions struct {
-		CoreVersion *string `json:"coreVersion"`
-	}
-	if len(versionsRaw) > 0 {
-		_ = json.Unmarshal(versionsRaw, &versions)
-	}
-	if versions.CoreVersion != nil {
-		from = *versions.CoreVersion
+	core, front := installedVersions(versionsRaw)
+	if core != nil {
+		from = *core
+		if from != "" && front != nil && *front != from {
+			from += " (frontend " + *front + ")"
+		}
 	}
 
 	var systemRaw json.RawMessage
@@ -538,14 +530,12 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 		}
 		slog.Warn("firmware version: versions settings fetch failed, reporting unknown", "err", versionsErr)
 		writeJSON(w, http.StatusOK, map[string]any{
-			"installed": nil, "latest": nil, "updateAvailable": false, "releaseUrl": nil,
+			"installed": nil, "installedFrontend": nil, "latest": nil,
+			"updateAvailable": false, "partial": false, "releaseUrl": nil,
 		})
 		return
 	}
-	var versions struct {
-		CoreVersion *string `json:"coreVersion"`
-	}
-	_ = json.Unmarshal(versionsRaw, &versions)
+	installed, front := installedVersions(versionsRaw)
 	var system map[string]any
 	if systemErr != nil {
 		slog.Warn("firmware version: system settings fetch failed, using default release channel", "err", systemErr)
@@ -560,13 +550,20 @@ func (h *Handlers) firmwareVersion(w http.ResponseWriter, r *http.Request) {
 		latest = nil
 	}
 
-	installed := versions.CoreVersion
-	updateAvailable := installed != nil && *installed != "" && latest != nil && *installed != latest.Hash
+	// #2229: a half-finished update leaves the controller on the new hash and
+	// the frontend on the old one. Either part behind the latest release is an
+	// available update, and two different hashes mark the split state.
+	hasCore := installed != nil && *installed != ""
+	partial := hasCore && front != nil && *front != *installed
+	updateAvailable := hasCore && latest != nil &&
+		(*installed != latest.Hash || (front != nil && *front != latest.Hash))
 	resp := map[string]any{
-		"installed":       nullOr(installed),
-		"latest":          nil,
-		"updateAvailable": updateAvailable,
-		"releaseUrl":      nil,
+		"installed":         nullOr(installed),
+		"installedFrontend": nullOr(front),
+		"latest":            nil,
+		"updateAvailable":   updateAvailable,
+		"partial":           partial,
+		"releaseUrl":        nil,
 	}
 	if latest != nil {
 		resp["latest"] = latest.Hash

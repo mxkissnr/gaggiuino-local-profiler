@@ -199,7 +199,7 @@ function renderFsChart(): void {
       },
       scales: {
         x:  { type:'linear', min:0, max:maxTime, clip:false,
-              ticks:{ color:C.tick, font:{family:'Figtree'}, stepSize:5, callback:v=>formatTimeLabel(v as number) },
+              ticks:{ color:C.tick, font:{family:'Figtree'}, ...chartRegistry.chartTimeTicks() },
               grid:{ color:C.grid } },
         y:  { type:'linear', position:'left',  min:0, max:12, ticks:{color:C.tick}, grid:{color:C.grid} },
         y1: { type:'linear', position:'right', min:0, max:tms, ticks:{color:C.tick}, grid:{drawOnChartArea:false} }

@@ -301,6 +301,31 @@ describe('secrets are never reported', () => {
             expect(JSON.stringify(result)).not.toContain('SECRET-');
         }
     });
+    it("drops every Cafe Mode user's tokens from a version 2 home users list", () => {
+        const withUsers = (ledR: number, tag: string): TestDoc => {
+            const doc = baseDoc();
+            doc['version'] = 2;
+            setAt(doc, ['settings', 'display'], {
+                lcdBrightness: 70,
+                homeUsers: [{ id: 1, name: 'Ana', preferences: { ledR, visualizerToken: `SECRET-vis-${tag}`, sprofilerToken: `SECRET-spro-${tag}` } }],
+            });
+            return doc;
+        };
+        const from = withUsers(255, 'a');
+        const result = diffMachineBackups(from, withUsers(10, 'b'));
+        expect(result).toStrictEqual([{
+            kind: 'setting', path: ['display', 'homeUsers'], change: 'changed',
+            from: [{ id: 1, name: 'Ana', preferences: { ledR: 255 } }],
+            to: [{ id: 1, name: 'Ana', preferences: { ledR: 10 } }],
+        }]);
+        expect(JSON.stringify(result)).not.toContain('SECRET-');
+        expect(diffMachineBackups(from, withUsers(255, 'b'))).toStrictEqual([]);
+        expect(JSON.stringify(from)).toContain('SECRET-vis-a');
+        const odd = baseDoc();
+        setAt(odd, ['settings', 'display'], { lcdBrightness: 70, homeUsers: [null, 5, { id: 2, preferences: 'x' }] });
+        expect(() => diffMachineBackups(from, odd)).not.toThrow();
+        expect(JSON.stringify(diffMachineBackups(from, odd))).not.toContain('SECRET-');
+    });
 });
 
 describe('pump calibration and other keys', () => {

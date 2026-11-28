@@ -4795,7 +4795,10 @@ export interface paths {
         /** Machine power switch state */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description #2202: the machine whose switch to read; omitted = the default machine */
+                    machineId?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -4815,6 +4818,20 @@ export interface paths {
                             state?: boolean | null;
                         };
                     };
+                };
+                /** @description machineId is not a number */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unknown machineId */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
                 };
             };
         };
@@ -4838,7 +4855,10 @@ export interface paths {
         /** Toggle machine power switch (requires switch_entity + SUPERVISOR_TOKEN) */
         post: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description #2202: the machine whose switch to toggle; omitted = the default machine */
+                    machineId?: number;
+                };
                 header?: never;
                 path?: never;
                 cookie?: never;
@@ -4858,8 +4878,15 @@ export interface paths {
                         };
                     };
                 };
-                /** @description switch_entity not configured */
+                /** @description switch_entity not configured, or machineId is not a number */
                 400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Unknown machineId */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -8125,6 +8152,62 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shot-donation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the anonymised shot donation file
+         * @description Every rated (1-5 stars), non-trashed shot as an anonymised file the user can post on the GLP Discord to help calibrate the shot score (#2220). Built from an allow-list only: no names, notes or other free text, no photos, timestamps, shot or machine ids, hosts, settings or tokens. Shot keys and the donation id are HMACs under a random per-install secret that is never exported in a backup.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Only shots made on or after this local date (YYYY-MM-DD). A server-side filter; the file holds no timestamps. */
+                    since?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The donation file (Content-Disposition attachment) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ShotDonation"];
+                    };
+                };
+                /** @description Invalid since date */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Rate limit exceeded — per-IP limit, 20/min */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/restore": {
         parameters: {
             query?: never;
@@ -8773,13 +8856,30 @@ export interface components {
             /** @description Total grams drawn from the bean, computed on read (#1122); absent for an untracked (unlimited-stock) bean */
             consumedG?: number;
         };
-        /** @description A grinder's valid grind settings (#1961). Settings are min + k * step, up to max. min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. Absent for a grinder without a scale, whose grind setting stays free text. */
+        /** @description A grinder's valid grind settings (#1961, #2225). stepped and stepless: settings are min + k * step, up to max; min is at least 0, step is above 0 and at most max - min, each with at most 3 decimals; a stepped scale has fewer than 500 values. dial: a reading in parts such as 8.3 (number.tick), 1.2.3 (rotation.number.click) or 12E (number + letter); min and max are readings, and a stepless dial takes in-between values after a comma (8.2,5) in steps of 1/resolution of a tick. Absent for a grinder without a scale, whose grind setting stays free text. */
         GrinderScale: {
             /** @enum {string} */
-            type: "stepped" | "stepless";
-            min: number;
-            max: number;
-            step: number;
+            type: "stepped" | "stepless" | "dial";
+            /** @description A number on stepped and stepless, a reading on dial */
+            min: number | string;
+            /** @description A number on stepped and stepless, a reading on dial */
+            max: number | string;
+            /** @description stepped and stepless only */
+            step?: number;
+            /** @description dial only. The first part counts up from start without end (count null); every later part has count values, written as digits or letters. */
+            parts?: {
+                count: number | null;
+                start?: number;
+                /** @enum {string} */
+                labels?: "number" | "letter";
+            }[];
+            /** @description dial only: in-between values after a comma are allowed */
+            stepless?: boolean;
+            /**
+             * @description dial only: in-between values per tick on a stepless dial
+             * @enum {integer}
+             */
+            resolution?: 1 | 2 | 4;
         };
         Grinder: {
             id: number;
@@ -9253,6 +9353,52 @@ export interface components {
             machineSystemErrorCode: number;
             machineControl: components["schemas"]["MachineControlState"] | null;
         };
+        ShotDonation: {
+            /** @enum {string} */
+            format: "glp-shot-donation";
+            /** @example 1 */
+            version: number;
+            appVersion: string;
+            /** @description 16 hex chars, HMAC of a fixed label under the per-install secret */
+            donationId: string;
+            shots: components["schemas"]["ShotDonationShot"][];
+        };
+        ShotDonationShot: {
+            /** @description 16 hex chars, HMAC of the shot id under the per-install secret */
+            key: string;
+            /** @enum {string|null} */
+            machineType: "gaggiuino" | "gaggimate" | null;
+            /** @description 16 hex chars of SHA-256 over the profile object's JSON */
+            profileKey: string | null;
+            /** @description Profile structure without names or ids (phases, targets, restrictions, stop conditions, recipe, water temperature); null for GaggiMate shots */
+            profile: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Allow-listed numeric series, phaseTransitions as {t, phase, reason}, finalExitReason, bleScaleConnected */
+            datapoints: {
+                [key: string]: unknown;
+            };
+            annotation: {
+                rating: number;
+                dose: number | null;
+                yield: number | null;
+                tds: number | null;
+                /** @description A built-in drink id, or other for a custom menu drink */
+                drinkType: string | null;
+                /**
+                 * @description The taste tag; any other stored value is left out as null
+                 * @enum {string|null}
+                 */
+                tasteTag: "sour" | "bitter" | "balanced" | "thin" | null;
+                /** @enum {string|null} */
+                roastLevel: "light" | "medium-light" | "medium" | "medium-dark" | "dark" | null;
+                beanAgeDays: number | null;
+            };
+            /** @description { [scoreModelId]: score or null } */
+            scores: {
+                [key: string]: number | null;
+            };
+        };
         BackupBundle: {
             /** @example true */
             glp_backup: boolean;
@@ -9491,9 +9637,15 @@ export interface components {
         };
         /** @description GET /api/machine/firmware/version — installed vs latest release; latest/releaseUrl are null when no matching release was found. */
         FirmwareVersion: {
+            /** @description Controller firmware hash (the machine's coreVersion). */
             installed: string | null;
+            /** @description Frontend firmware hash (the machine's frontVersion); null when the firmware does not report it. */
+            installedFrontend?: string | null;
             latest: string | null;
+            /** @description True when the controller or the frontend hash differs from the latest release. */
             updateAvailable: boolean;
+            /** @description True when the controller and the frontend report different hashes: the last update did not finish. */
+            partial?: boolean;
             releaseUrl: string | null;
         };
         /** @description GET /api/machine/firmware/progress — the machine's own OTA progress payload, passed through verbatim. Firmware main-8aaf6f0 and later add an optional migration object for the partition migration that runs after an update; older firmware omits it. */

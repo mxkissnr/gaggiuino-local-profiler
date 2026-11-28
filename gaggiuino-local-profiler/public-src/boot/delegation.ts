@@ -40,7 +40,8 @@ import { switchActiveMachine, setDefaultMachine } from '../components/machines-s
 import { closeSetupWizard, setupWizardGetStarted, setupWizardSkipToDemo } from '../views/setup-wizard.js';
 import { closeEasterEggPanel } from '../components/topbar-machine-icon.js';
 import { toggleFlush, confirmBrewFromDialog, cancelBrewFromDialog } from '../components/machine-control.js';
-import { openRefPicker, chooseReferenceShot, openLiveSetupSheet } from '../views/live.js';
+import { openRefPicker, chooseReferenceShot, openLiveSetupSheet, renderLiveQuickRating, dismissLiveQuickRating } from '../views/live.js';
+import { quickRateShot } from '../views/shots/annotation.js';
 import { isActiveMachineGaggiMate } from './library.js';
 
 // #1619: keep role="button" cards operable without turning their block
@@ -155,6 +156,10 @@ export function wireDelegation(): void {
       case 'select-milk':        selectMilkType(strId()); break;
       case 'select-frozen-portion': selectFrozenPortion(strId()); break;
       case 'select-taste-tag':   selectTasteTag(strId()); break;
+      // #2226: the quick rating strip (live view after a shot, newest unrated shot in the list).
+      case 'quick-rate':         void quickRateShot(numId(), 'rating', el.dataset.val ?? '').then(renderLiveQuickRating); break;
+      case 'quick-taste':        void quickRateShot(numId(), 'tasteTag', el.dataset.val ?? '').then(renderLiveQuickRating); break;
+      case 'quick-rate-dismiss': dismissLiveQuickRating(); break;
       case 'reload-data':        void loadData(); break;
       // #807: the "why is this empty" notices (in-view block and app-wide
       // banner, components/api-port-notice.ts) both link here.
