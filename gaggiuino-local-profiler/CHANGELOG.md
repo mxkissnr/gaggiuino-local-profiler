@@ -14,10 +14,8 @@
 - **On a phone nothing scrolls sideways any more: the shot photo buttons, the library actions and tabs and the achievement filters wrap, and the coffee year shows 22 weeks at a time with buttons to page through the year.** Closes #2214
 - **A firmware update that stopped halfway, with the controller and the frontend on different versions, now shows as incomplete in Settings > Machines and is offered again, and a failed update names the step that failed.** Closes #2229
 - **Machine backups work again with the newest Gaggiuino firmware (main-7cb0a86), and the visualizer and profiler tokens of the machine and of every Cafe Mode user are never stored in a backup nor shown in the browser.** Closes #2231
-- **Dates and times follow your browser's region as well as the app language, so an English interface outside the US shows day-first dates and a 24-hour clock.** Closes #2232
+- **Dates and times follow your browser's region as well as the app language, so an English interface outside the US shows day-first dates and a 24-hour clock, even when the browser or system names only a language without a country.** Closes #2232, #2238, #2240
 - **The grinder scale form now shows only the fields of the chosen scale, keeps the chosen layout visible, names each dial part clearly and shows an example setting.** Closes #2233
-- **Dates and times also follow your region when the browser lists a language without a region first, using the next browser language or the system setting that has one.** Closes #2238
-- **Dates and times follow your region even when the browser and the system name only a language, such as German without a country.** Closes #2240
 - **A shot in which the pump never ran, such as one from a profile without phases, no longer gets a perfect score; it gets no score.** Closes #2242
 
 ## [3.9.0] - 2026-11-24
