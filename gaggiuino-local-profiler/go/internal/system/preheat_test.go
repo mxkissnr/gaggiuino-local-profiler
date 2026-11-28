@@ -280,10 +280,10 @@ func TestApplyStandbyTransition_EnterResetsPreheatState(t *testing.T) {
 
 	onAt := time.Now().UnixMilli() - 5*60_000
 	p.runtime.SetSwitchOnAt(&onAt)
-	p.openPreheatRun(onAt)
+	p.openPreheatRun(1, onAt)
 	// A sample so this is a run worth recording: an empty one is discarded on
 	// standby entry (see TestApplyStandbyTransition_EmptyStartRunDiscarded).
-	p.recordPreheatSample(onAt+30_000, 92, 92)
+	p.recordPreheatSample(1, onAt+30_000, 92, 92)
 	p.runtime.SetStabilityReady(true)
 	for i := 0; i < tempStableMin; i++ {
 		p.runtime.PushTempHistory(92.0)
@@ -418,8 +418,8 @@ func TestApplyStandbyTransition_RunWithSamplesFinalised(t *testing.T) {
 	markLivePollingActive(t, p)
 
 	onAt := time.Now().UnixMilli() - 60_000
-	p.openPreheatRun(onAt)
-	p.recordPreheatSample(onAt+30_000, 90, 93)
+	p.openPreheatRun(1, onAt)
+	p.recordPreheatSample(1, onAt+30_000, 90, 93)
 
 	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), true)
 

@@ -530,7 +530,7 @@ func TestPollViaGaggiuinoStatus_StandbySkipsPreheatSampling(t *testing.T) {
 	// Deliberately open a run and flag standby without the transition's close,
 	// so the sampling gate is what this test exercises (not the closed run).
 	onAt := time.Now().UnixMilli() - 60_000
-	p.openPreheatRun(onAt)
+	p.openPreheatRun(1, onAt)
 	p.runtime.SetStandby(true)
 
 	st := okStatus(t, `{"waterLevel":80,"upTime":1234}`, 35.0, 0, 0, 0, false, "", 0)
