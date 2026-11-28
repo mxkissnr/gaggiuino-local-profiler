@@ -664,6 +664,7 @@ export interface ShotDatapoints {
   phaseIndex?: number[];
   pumpFlow?: number[];
   targetPumpFlow?: number[];
+  waterPumped?: number[];
   shotWeight?: number[];
   weight?: number[];
   bleScaleConnected?: boolean | null;

@@ -20,7 +20,7 @@ import (
 // TestScoreVersionPinsParityFixture fails when test/fixtures/score-parity.json's
 // expected scores change without a bump. It is spliced into SQL as a
 // literal, so it must stay a plain [a-z0-9] tag.
-const scoreVersion = "v3"
+const scoreVersion = "v4"
 
 // Bean is the subset of a library bean's fields the scorer reads
 // (brewTempC/brewRatio) to replace the generic fixed-band targets with the
@@ -195,6 +195,25 @@ func durationScore(secs, lo, hi float64) float64 {
 	}
 }
 
+// noWaterMoved reports a shot in which the pump never ran (#2242): it has a
+// pump-flow series and neither that, the water-pumped series nor the weight
+// series has a sample above 0. A phase-less profile on Gaggiuino main-7cb0a86
+// records exactly that, with only residual pressure. Shots without a
+// pump-flow series (older data, hand-built shots) are never matched.
+func noWaterMoved(ss scoreSeries) bool {
+	if len(ss.pumpFlow) == 0 {
+		return false
+	}
+	for _, series := range [][]float64{ss.pumpFlow, ss.waterPumped, ss.weight} {
+		for _, v := range series {
+			if v > 0 {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // CalcShotScoreTargets scores a shot, operating on the Shot map hydrateRow
 // produces (a shot's "datapoints"/"duration"/"annotation" fields).
 //
@@ -229,7 +248,8 @@ func CalcShotScoreTargets(shot Shot, targets ScoreTargets) ScoreDetail {
 	// pressure part against the profile's own target when it has one, or left
 	// out when it doesn't. Any shot with >=4 samples at/above 5 bar takes the
 	// unchanged fixed-band path below, byte-for-byte as before #1538.
-	if nonzero < 4 {
+	// #2242: a shot in which no water moved is not scored either.
+	if nonzero < 4 || noWaterMoved(ss) {
 		return ScoreDetail{}
 	}
 
