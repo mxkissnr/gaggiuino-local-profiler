@@ -153,6 +153,14 @@ function calcShotScoreDetail(
   // own target when it has one, or left out when it doesn't. A shot with >=4
   // samples at/above 5 bar takes the unchanged fixed-band path.
   if (p.filter(v => v > 0).length < 4) return { score: null, usedBeanTarget: false, pressureNote: null };
+  // #2242: a shot in which the pump never ran is not scored either (mirror of
+  // the Go noWaterMoved): a pump-flow series with no sample above 0, and no
+  // water-pumped or weight sample above 0. Shots without pumpFlow never match.
+  const pumpFlow = d.pumpFlow || [];
+  const weightSeries = d.shotWeight || d.weight || [];
+  if (pumpFlow.length > 0 && ![pumpFlow, d.waterPumped || [], weightSeries].some(s => s.some(v => v > 0))) {
+    return { score: null, usedBeanTarget: false, pressureNote: null };
+  }
 
   const scores: number[] = [], weights: number[] = [];
   let usedBeanTarget = false;
