@@ -170,9 +170,7 @@ func (p *Poller) pollMachine(ctx context.Context, machine *machines.Machine) {
 		// history or the open run's samples.
 		if !snap.Standby {
 			rt.PushTempHistory(derived.Temperature)
-			if t.isDefault {
-				p.recordPreheatSample(now, derived.Temperature, derived.TargetTemperature)
-			}
+			p.recordPreheatSample(t.id, now, derived.Temperature, derived.TargetTemperature)
 		}
 		if !snap.Standby && snap.SwitchOnAt != nil && derived.TargetTemperature > 0 &&
 			derived.Temperature >= derived.TargetTemperature-2 && rt.IsTempStable() {
@@ -180,9 +178,7 @@ func (p *Poller) pollMachine(ctx context.Context, machine *machines.Machine) {
 			if now-*snap.SwitchOnAt < preheatMs {
 				// Record the real stabilisation time before backdating the
 				// runtime's SwitchOnAt to "preheat complete".
-				if t.isDefault {
-					p.markPreheatStable(now)
-				}
+				p.markPreheatStable(t.id, now)
 				newOnAt := now - preheatMs
 				rt.SetSwitchOnAt(&newOnAt)
 				rt.SetStabilityReady(true)

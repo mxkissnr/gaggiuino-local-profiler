@@ -679,9 +679,7 @@ func (p *Poller) livePollActive() bool {
 func (p *Poller) endPreheatSession(t liveTarget, now int64) {
 	rt := p.runtimeFor(t)
 	rt.SetSwitchOffAt(&now)
-	if t.isDefault {
-		p.closePreheatRun(now)
-	}
+	p.closePreheatRun(t.id, now)
 	rt.SetStabilityReady(false)
 	rt.ClearTempHistory()
 	p.savePreheatState()
@@ -694,9 +692,7 @@ func (p *Poller) endPreheatSession(t liveTarget, now int64) {
 func (p *Poller) beginPreheatSession(t liveTarget, now int64) {
 	rt := p.runtimeFor(t)
 	rt.SetSwitchOnAt(&now)
-	if t.isDefault {
-		p.openPreheatRun(now)
-	}
+	p.openPreheatRun(t.id, now)
 	rt.ClearTempHistory()
 	p.savePreheatState()
 }
@@ -809,9 +805,7 @@ func (p *Poller) applyStandbyTransition(t liveTarget, now int64, standby bool) {
 		// run's samples.
 		// A session opened while the machine was already in standby has no
 		// samples yet; drop it rather than finalising an empty one-second run.
-		if t.isDefault {
-			p.discardEmptyPreheatRun()
-		}
+		p.discardEmptyPreheatRun(t.id)
 		p.endPreheatSession(t, now)
 		// The session is over and the machine is off, so drop the switch-on time
 		// too: a later poll error clears the standby flag, and without this

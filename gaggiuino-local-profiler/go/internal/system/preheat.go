@@ -212,7 +212,8 @@ func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	// Remember the pair right before clearing it, so the run this turn-on is
 	// about to start can attribute the ready-by target to itself
 	// (preheat_history.go's lastReadyBy).
-	p.rememberLastReadyBy(readyByTargetAt, plannedSwitchOnAt)
+	defaultID, _ := p.defaultMachineID()
+	p.rememberLastReadyBy(defaultID, readyByTargetAt, plannedSwitchOnAt)
 	p.clearReadyByTarget()
 }
 
