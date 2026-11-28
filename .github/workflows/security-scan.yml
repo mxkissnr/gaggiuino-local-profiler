@@ -103,24 +103,12 @@ jobs:
             cat trivy.tsv
           fi
 
-      # #2243: the artifact holds a folder named after the branch, so the report
-      # job sees findings/<branch>/<scanner>.txt however many artifacts exist.
-      - name: Group findings by branch
-        if: ${{ !cancelled() }}
-        env:
-          BRANCH: ${{ matrix.branch }}
-        run: |
-          mkdir -p "artifact/$BRANCH"
-          if [ -d findings ]; then
-            find findings -maxdepth 1 -type f -name '*.txt' -exec mv {} "artifact/$BRANCH/" \;
-          fi
-
       - name: Upload findings
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: findings-${{ matrix.branch }}
-          path: artifact/
+          path: findings/
           if-no-files-found: ignore
 
   release-attestation:
@@ -155,21 +143,12 @@ jobs:
           [ "$rc" -eq 1 ] || rm -f findings/attestation.txt
           [ "$rc" -eq 0 ] || [ "$rc" -eq 1 ] || exit "$rc"
 
-      # See the scan job: the artifact always holds one folder, never bare files.
-      - name: Group findings by branch
-        if: ${{ !cancelled() }}
-        run: |
-          mkdir -p artifact/release
-          if [ -d findings ]; then
-            find findings -maxdepth 1 -type f -name '*.txt' -exec mv {} artifact/release/ \;
-          fi
-
       - name: Upload findings
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: findings-release
-          path: artifact/
+          path: findings/
           if-no-files-found: ignore
 
   report:
@@ -186,13 +165,9 @@ jobs:
         with:
           pattern: findings-*
           path: findings
-          merge-multiple: true
 
       - name: Open or update the security issue per branch
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          SCAN_OK: ${{ needs.scan.result == 'success' }}
-          RELEASE_OK: ${{ needs.release-attestation.result == 'success' }}
         with:
           script: |
             const fs = require('fs');
@@ -200,34 +175,32 @@ jobs:
             const { owner, repo } = context.repo;
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
             const root = 'findings';
-            const dirs = fs.existsSync(root) ? fs.readdirSync(root).filter(d => fs.statSync(path.join(root, d)).isDirectory()) : [];
-            const titleFor = b => b === 'release'
-              ? 'Security scan: published images failed attestation check'
-              : `Security scan: vulnerabilities found on ${b}`;
+            const dirs = fs.existsSync(root) ? fs.readdirSync(root) : [];
 
-            try {
-              await github.rest.issues.createLabel({ owner, repo, name: 'security', color: 'b60205' });
-            } catch (e) {
-              if (e.status !== 422) throw e; // 422 = label already exists
-            }
-
-            const open = await github.paginate(github.rest.issues.listForRepo, {
-              owner, repo, labels: 'security', state: 'open', per_page: 100,
-            });
-
-            const reported = new Set();
-            for (const branch of dirs) {
+            for (const dir of dirs) {
+              const branch = dir.replace(/^findings-/, '');
               const sections = [];
-              for (const f of fs.readdirSync(path.join(root, branch)).sort()) {
-                const text = fs.readFileSync(path.join(root, branch, f), 'utf8').trim().slice(0, 20000);
+              for (const f of fs.readdirSync(path.join(root, dir)).sort()) {
+                const text = fs.readFileSync(path.join(root, dir, f), 'utf8').trim().slice(0, 20000);
                 sections.push(`### ${path.basename(f, '.txt')}\n\n\`\`\`\n${text}\n\`\`\``);
               }
               if (sections.length === 0) continue;
-              reported.add(branch);
 
-              const title = titleFor(branch);
-              const body = [...(branch === 'release' ? [] : [`Branch: \`${branch}\``]), `Run: ${runUrl}`, '', ...sections].join('\n');
+              const isRelease = branch === 'release';
+              const title = isRelease
+                ? 'Security scan: published images failed attestation check'
+                : `Security scan: vulnerabilities found on ${branch}`;
+              const body = [...(isRelease ? [] : [`Branch: \`${branch}\``]), `Run: ${runUrl}`, '', ...sections].join('\n');
 
+              try {
+                await github.rest.issues.createLabel({ owner, repo, name: 'security', color: 'b60205' });
+              } catch (e) {
+                if (e.status !== 422) throw e; // 422 = label already exists
+              }
+
+              const open = await github.paginate(github.rest.issues.listForRepo, {
+                owner, repo, labels: 'security', state: 'open', per_page: 100,
+              });
               const existing = open.find(i => !i.pull_request && i.title === title);
               if (existing) {
                 await github.rest.issues.createComment({ owner, repo, issue_number: existing.number, body });
@@ -238,19 +211,4 @@ jobs:
                 });
                 core.info(`${branch}: opened #${created.number}.`);
               }
-            }
-
-            // #2243: a branch whose scan succeeded without findings closes its
-            // open issue. A failed or skipped job never closes anything.
-            const clean = [
-              ...(process.env.SCAN_OK === 'true' ? ['dev', 'main'] : []), // the scan matrix
-              ...(process.env.RELEASE_OK === 'true' ? ['release'] : []),
-            ].filter(b => !reported.has(b));
-            for (const b of clean) {
-              const issue = open.find(i => !i.pull_request && i.title === titleFor(b));
-              if (!issue) continue;
-              await github.rest.issues.createComment({ owner, repo, issue_number: issue.number,
-                body: `No findings any more in ${runUrl}. Closing; a new finding reopens a fresh issue.` });
-              await github.rest.issues.update({ owner, repo, issue_number: issue.number, state: 'closed', state_reason: 'completed' });
-              core.info(`${b}: clean, closed #${issue.number}.`);
             }
