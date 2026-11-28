@@ -376,11 +376,13 @@ describe('the advice edges follow the profile window (#1504)', () => {
 // #2248: a shot in which nothing was extracted has no score, so it gets no
 // grind verdict either. The shared parity fixture holds a 27 s shot in which
 // the pump never ran and two shots whose pump did run.
+type GrindParityCase = { name: string; shot: { duration: number; datapoints: ShotDatapoints }; expected: number | null };
+
 describe('no grind verdict without an extraction (#2248)', () => {
   const fixture = JSON.parse(readFileSync(
     join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'score-parity.json'), 'utf8',
-  )) as { name: string; shot: { duration: number; datapoints: ShotDatapoints }; expected: number | null }[];
-  const fixtureCase = (name: string): (typeof fixture)[number] => {
+  )) as GrindParityCase[];
+  const fixtureCase = (name: string): GrindParityCase => {
     const c = fixture.find(x => x.name === name);
     if (!c) throw new Error(`missing fixture case ${name}`);
     return c;
@@ -391,6 +393,7 @@ describe('no grind verdict without an extraction (#2248)', () => {
     return withCurve ? { duration, datapoints, annotation: {} } : { duration, annotation: {} };
   };
   const NEVER_RAN = 'pump never ran (#2242)';
+  const TOO_LITTLE = 'too little data';
 
   it('gives no advice for a shot in which the pump never ran, with or without a tag', () => {
     const shot = fixtureShot(NEVER_RAN);
@@ -405,12 +408,21 @@ describe('no grind verdict without an extraction (#2248)', () => {
   it('gives no advice for a shot without pressure above 0 bar', () => {
     const zeros = Array.from({ length: 27 }, () => 0);
     const shot: GrindShot = { duration: 270, datapoints: { pressure: zeros }, annotation: {} };
+    expect(shotHasNoExtraction(shot)).toBe(true);
     expect(calcGrindAdvice(shot, series([], zeros))).toBeNull();
+  });
+
+  it('gives no advice for the too-little-data fixture shot, timed like a good one', () => {
+    // 30 s would read "Grind setting is good" under the duration rules alone.
+    const shot = fixtureShot(TOO_LITTLE);
+    expect(shotHasNoExtraction(shot)).toBe(true);
+    expect(calcGrindAdvice(shot, mapShotDatapoints(shot.datapoints))).toBeNull();
   });
 
   it('keeps the advice of every fixture shot that has a score', () => {
     const scored = fixture.filter(c => c.expected !== null);
     expect(scored.map(c => c.name)).toContain('residual pressure but the pump ran (#2242)');
+    expect(scored.length).toBe(fixture.length - 2);
     for (const c of scored) {
       const shot = fixtureShot(c.name);
       const data = mapShotDatapoints(shot.datapoints);
@@ -429,6 +441,7 @@ describe('no grind verdict without an extraction (#2248)', () => {
   it('gives no similar-shots advice for a viewed shot without an extraction', () => {
     expect(calcComparativeGrindAdvice(viewed('24'), siblings())).not.toBeNull();
     const shot: GrindShot = { ...viewed('24'), datapoints: fixtureCase(NEVER_RAN).shot.datapoints };
+    expect(shotHasNoExtraction(shot)).toBe(true);
     expect(calcComparativeGrindAdvice(shot, siblings())).toBeNull();
   });
 });

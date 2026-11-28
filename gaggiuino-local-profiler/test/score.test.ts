@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { calcShotScore, calcShotScoreDetail, hasNoExtraction, parseBrewRatio } from '../public-src/shared/score.js';
-import { detectChanneling } from '../public-src/utils.js';
+import { detectChanneling, type ShotDatapoints } from '../public-src/utils.js';
 
 describe('calcShotScore', () => {
     it('returns null for a shot with no datapoints', () => {
@@ -308,13 +308,18 @@ describe('calcShotScore — 0.0 °C thermocouple dropouts (#1688)', () => {
 // #2248: the score and the shot page's grind advice share one no-extraction
 // rule. Over every shared parity case (Go and TS agree on them) a shot has no
 // extraction exactly when it has no score.
+type ScoreParityCase = { name: string; shot: { datapoints?: ShotDatapoints }; expected: number | null };
+
 describe('hasNoExtraction (#2248)', () => {
     const fixture = JSON.parse(readFileSync(
         join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'score-parity.json'), 'utf8',
-    )) as { name: string; shot: { datapoints?: Record<string, number[]> }; expected: number | null }[];
+    )) as ScoreParityCase[];
 
     it('matches the score on every parity fixture case', () => {
-        expect(fixture.some(c => c.expected === null)).toBe(true);
+        expect(fixture.filter(c => c.expected === null).map(c => c.name)).toEqual([
+            'too little data',
+            'pump never ran (#2242)',
+        ]);
         for (const c of fixture) {
             expect(hasNoExtraction(c.shot.datapoints), c.name).toBe(c.expected === null);
         }
