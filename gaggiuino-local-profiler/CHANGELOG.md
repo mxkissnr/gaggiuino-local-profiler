@@ -4,9 +4,9 @@
 
 ### Added
 - **The coffee world map's home country is now a setting under Appearance, the same on every device, with Automatic and None.** Closes #2210
-- **Settings → Data can save an anonymised file of your rated shots that you can post on the GLP Discord to help improve the shot score; GLP uploads nothing itself.** Closes #2220
+- **Settings > Data can save an anonymised file of your rated shots that you can post on the GLP Discord to help improve the shot score; GLP uploads nothing itself.** Closes #2220
 - **Grinder scales now cover dials that read in parts, such as number and ticks (8.2,5 in between), rotation.number.click and number plus letter, with ready-made layouts in the grinder form, and a setting like 8.0 keeps its .0.** Closes #2225
-- **Rate a shot in two taps right after it ends, with stars and a taste tag in the live view and on the newest unrated shot in the shot list, and donated shots now carry the taste tag.** Closes #2226
+- **Rate a shot in two taps right after it ends, with stars and a taste tag in the Live tab and on the newest unrated shot in the shot list, and donated shots now carry the taste tag.** Closes #2226
 ### Fixed
 - **The coffee world map on the Statistics page now shows only the countries you brewed under the current filter, so its country count always matches the map.** Closes #2200
 - **The score trend on the Statistics page shows each date only once, and the time labels of the shot charts no longer overlap on a phone.** Closes #2201

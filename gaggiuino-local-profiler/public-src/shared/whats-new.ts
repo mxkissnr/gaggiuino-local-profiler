@@ -22,9 +22,9 @@ export interface WhatsNewEntry {
 
 const WHATS_NEW_ENTRIES: WhatsNewEntry[] = [
     { version: '3.10.0', date: '2026-11-28', highlights: [
+        'Help improve the shot score: Settings > Data > Donate shots saves an anonymised file of your rated shots to post in #shot-donations on the GLP Discord. GLP uploads nothing itself.',
         'Grinder scales cover dials that read in parts, such as number and ticks, with ready-made layouts and an example setting in the grinder form.',
         'Rate a shot in two taps right after it ends: stars and a taste tag in the Live tab and on your newest unrated shot.',
-        'Settings > Data can save an anonymised file of your rated shots to post on the GLP Discord and help improve the shot score. GLP uploads nothing itself.',
         'Choose the home country of the coffee world map in Settings, and dates and times follow your browser region.',
         'Works with the newest Gaggiuino firmware: machine backups work again, Cafe Mode tokens are never stored in a backup or shown in the browser, and a half-finished firmware update is detected and offered again.',
         'Fixed: the power button switches the selected machine, the world map and score trend show the right counts and labels, nothing scrolls sideways on a phone, and a shot without a pump run gets no score.',
