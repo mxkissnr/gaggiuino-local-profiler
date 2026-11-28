@@ -12,7 +12,6 @@ import (
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/redact"
-	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
 // pollViaGaggiuinoStatus is adapter-agnostic despite the name:
@@ -30,6 +29,17 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	if err != nil || machine == nil {
 		return
 	}
+	p.pollMachine(ctx, machine)
+}
+
+// pollMachine is one live poll tick for machine (#2247: any machine, not only
+// the default one). Every value it accumulates goes into that machine's own
+// runtime and slots (liveTarget), so two machines polled at once never
+// overwrite each other. The recovery catch-up and the MQTT transport stay
+// default-machine only; a finished brew syncs that machine's own shots.
+func (p *Poller) pollMachine(ctx context.Context, machine *machines.Machine) {
+	t := targetOf(machine)
+	rt := p.runtimeFor(t)
 	// #718: no host configured anywhere -- skip cleanly, don't request against a
 	// placeholder/fallback hostname, and don't touch machineReachable (nil stays
 	// nil on this early-return path).
@@ -69,9 +79,9 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		ms.control = nil
 		p.state.mu.Unlock()
 		// #1498: an unreachable machine is not in standby.
-		p.runtime.SetStandby(false)
+		rt.SetStandby(false)
 		log.Printf("system: live poll error: %v", err)
-		p.emitLiveSnapshotFor(machine.ID)
+		p.emitLiveSnapshotFor(t)
 		return
 	}
 
@@ -80,7 +90,7 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	// so live polling keeps running; without this the time-only preheat
 	// countdown starts from startLivePolling and reports "ready" from a cold
 	// boiler.
-	p.applyStandbyTransition(time.Now().UnixMilli(), status.Standby)
+	p.applyStandbyTransition(t, time.Now().UnixMilli(), status.Standby)
 
 	// #1324: refresh the opt-in machine-control snapshot. ControlStateFor
 	// reads only the registry cache and one KV row (no network), so it runs
@@ -111,8 +121,11 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	p.maybeFetchFirmwareName(ctx, machine, adapter)
 
 	// #725: unreachable->reachable recovery with an outstanding sync — catch
-	// up now instead of waiting for the next scheduled pull.
-	p.maybeCatchUpAfterRecovery(prevReachable)
+	// up now instead of waiting for the next scheduled pull. The scheduled
+	// sync already covers every other machine.
+	if t.isDefault {
+		p.maybeCatchUpAfterRecovery(prevReachable)
+	}
 
 	// #608/#1447: MQTT for a Gaggiuino default machine when the Settings toggle
 	// selects it, the adapter's WS session otherwise. The Gaggiuino firmware's
@@ -148,54 +161,55 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 		SysState:   sysState,
 	})
 	derived := result.MachineStatus
-	p.runtime.SetMachineStatus(&derived)
-	p.runtime.SetCurrentTemps(zeroToNil(derived.Temperature), zeroToNil(derived.TargetTemperature))
+	rt.SetMachineStatus(&derived)
+	rt.SetCurrentTemps(zeroToNil(derived.Temperature), zeroToNil(derived.TargetTemperature))
 
-	snap := p.runtime.Get()
+	snap := rt.Get()
 	if derived.Temperature > 0 && !result.IsBrewing {
 		// #1498: standby readings are cold/idle — never let them into the temp
 		// history or the open run's samples.
 		if !snap.Standby {
-			p.runtime.PushTempHistory(derived.Temperature)
-			p.recordPreheatSample(now, derived.Temperature, derived.TargetTemperature)
+			rt.PushTempHistory(derived.Temperature)
+			p.recordPreheatSample(t.id, now, derived.Temperature, derived.TargetTemperature)
 		}
 		if !snap.Standby && snap.SwitchOnAt != nil && derived.TargetTemperature > 0 &&
-			derived.Temperature >= derived.TargetTemperature-2 && p.runtime.IsTempStable() {
+			derived.Temperature >= derived.TargetTemperature-2 && rt.IsTempStable() {
 			preheatMs := int64(loadPreheatMinutes()) * 60_000
 			if now-*snap.SwitchOnAt < preheatMs {
 				// Record the real stabilisation time before backdating the
 				// runtime's SwitchOnAt to "preheat complete".
-				p.markPreheatStable(now)
+				p.markPreheatStable(t.id, now)
 				newOnAt := now - preheatMs
-				p.runtime.SetSwitchOnAt(&newOnAt)
-				p.runtime.SetStabilityReady(true)
+				rt.SetSwitchOnAt(&newOnAt)
+				rt.SetStabilityReady(true)
 				p.savePreheatState()
 				log.Printf("system: temperature stable -- preheat marked complete")
-				p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponseFor(switchEntityOf(machine))})
+				p.publishPreheat(t)
 			}
 		}
 	} else if result.IsBrewing {
-		p.runtime.ClearTempHistory()
+		rt.ClearTempHistory()
 	}
 
 	p.state.mu.Lock()
-	if result.IsBrewing && p.state.liveAccum == nil {
-		p.state.liveAccum = &liveAccumState{startTime: now, profileName: result.ProfileName, prevWeight: derived.Weight}
+	sl := p.state.slotsLocked(t)
+	if result.IsBrewing && sl.liveAccum == nil {
+		sl.liveAccum = &liveAccumState{startTime: now, profileName: result.ProfileName, prevWeight: derived.Weight}
 		log.Printf("system: brew started: profile %s", result.ProfileName)
 		debugLogf("Brew started detail: brewSwitchState=%v sensorBrewActive=%v upTime=%d",
 			rawStatus.Brewing, sensorSnap != nil && sensorSnap.BrewActive, rawStatus.UpTime)
 	}
 	brewJustFinished := false
-	if !result.IsBrewing && p.state.liveAccum != nil {
+	if !result.IsBrewing && sl.liveAccum != nil {
 		log.Printf("system: brew finished")
 		debugLogf("Brew finished detail: brewSwitchState=%v sensorBrewActive=%v upTime=%d",
 			rawStatus.Brewing, sensorSnap != nil && sensorSnap.BrewActive, rawStatus.UpTime)
-		p.state.liveAccum = nil
-		p.state.liveSeq++
+		sl.liveAccum = nil
+		sl.liveSeq++
 		brewJustFinished = true
 	}
-	if result.IsBrewing && p.state.liveAccum != nil && !liveAccumFull(p.state.liveAccum.datapoints.TimeInShot) {
-		acc := p.state.liveAccum
+	if result.IsBrewing && sl.liveAccum != nil && !liveAccumFull(sl.liveAccum.datapoints.TimeInShot) {
+		acc := sl.liveAccum
 		elapsed := elapsedTenths(now, acc.startTime)
 		weightFlow := derived.Weight - acc.prevWeight
 		if weightFlow < 0 {
@@ -225,49 +239,49 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 	effectiveFlushing := result.IsFlushing && !result.IsBrewing && !result.IsSteaming
 	effectiveDescaling := result.IsDescaling && !result.IsBrewing && !result.IsSteaming && !result.IsFlushing
 
-	if effectiveSteaming && p.state.steamAccum == nil {
-		p.state.steamAccum = &modeAccumState{startTime: now}
+	if effectiveSteaming && sl.steamAccum == nil {
+		sl.steamAccum = &modeAccumState{startTime: now}
 		log.Printf("system: steam started")
 	}
-	if !effectiveSteaming && p.state.steamAccum != nil {
+	if !effectiveSteaming && sl.steamAccum != nil {
 		log.Printf("system: steam finished")
-		p.state.steamAccum = nil
-		p.state.steamSeq++
+		sl.steamAccum = nil
+		sl.steamSeq++
 	}
-	if effectiveSteaming && p.state.steamAccum != nil && !liveAccumFull(p.state.steamAccum.datapoints.TimeInMode) {
-		acc := p.state.steamAccum
+	if effectiveSteaming && sl.steamAccum != nil && !liveAccumFull(sl.steamAccum.datapoints.TimeInMode) {
+		acc := sl.steamAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
 		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
 		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
 	}
 
-	if effectiveFlushing && p.state.flushAccum == nil {
-		p.state.flushAccum = &modeAccumState{startTime: now}
+	if effectiveFlushing && sl.flushAccum == nil {
+		sl.flushAccum = &modeAccumState{startTime: now}
 		log.Printf("system: flush started")
 	}
-	if !effectiveFlushing && p.state.flushAccum != nil {
+	if !effectiveFlushing && sl.flushAccum != nil {
 		log.Printf("system: flush finished")
-		p.state.flushAccum = nil
-		p.state.flushSeq++
+		sl.flushAccum = nil
+		sl.flushSeq++
 	}
-	if effectiveFlushing && p.state.flushAccum != nil && !liveAccumFull(p.state.flushAccum.datapoints.TimeInMode) {
-		acc := p.state.flushAccum
+	if effectiveFlushing && sl.flushAccum != nil && !liveAccumFull(sl.flushAccum.datapoints.TimeInMode) {
+		acc := sl.flushAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
 		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
 		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
 	}
 
-	if effectiveDescaling && p.state.descaleAccum == nil {
-		p.state.descaleAccum = &modeAccumState{startTime: now}
+	if effectiveDescaling && sl.descaleAccum == nil {
+		sl.descaleAccum = &modeAccumState{startTime: now}
 		log.Printf("system: descale started")
 	}
-	if !effectiveDescaling && p.state.descaleAccum != nil {
+	if !effectiveDescaling && sl.descaleAccum != nil {
 		log.Printf("system: descale finished")
-		p.state.descaleAccum = nil
-		p.state.descaleSeq++
+		sl.descaleAccum = nil
+		sl.descaleSeq++
 	}
-	if effectiveDescaling && p.state.descaleAccum != nil && !liveAccumFull(p.state.descaleAccum.datapoints.TimeInMode) {
-		acc := p.state.descaleAccum
+	if effectiveDescaling && sl.descaleAccum != nil && !liveAccumFull(sl.descaleAccum.datapoints.TimeInMode) {
+		acc := sl.descaleAccum
 		acc.datapoints.TimeInMode = append(acc.datapoints.TimeInMode, elapsedTenths(now, acc.startTime))
 		acc.datapoints.Pressure = append(acc.datapoints.Pressure, round10(derived.Pressure))
 		acc.datapoints.Temperature = append(acc.datapoints.Temperature, round10(derived.Temperature))
@@ -276,10 +290,14 @@ func (p *Poller) pollViaGaggiuinoStatus(ctx context.Context) {
 
 	// #953: 3s after a brew ends, pull the shot the machine just wrote.
 	if brewJustFinished {
-		p.scheduleSyncAfterBrew()
+		if t.isDefault {
+			p.scheduleSyncAfterBrew()
+		} else {
+			p.scheduleOtherSyncAfterBrew(machine)
+		}
 	}
 
-	p.emitLiveSnapshotFor(machine.ID)
+	p.emitLiveSnapshotFor(t)
 }
 
 // switchEntityOf is defaultSwitchEntity for an already-resolved machine.

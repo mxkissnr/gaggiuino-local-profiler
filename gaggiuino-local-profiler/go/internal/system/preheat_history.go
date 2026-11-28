@@ -52,6 +52,9 @@ type PreheatSample struct {
 // the real switch-on time even after the stability shortcut moves the
 // runtime's own SwitchOnAt back to backdate "preheat complete".
 type PreheatRun struct {
+	// MachineID is the machine the run belongs to (#2247). A run recorded
+	// before #2247 has none (0) and counts as the default machine's.
+	MachineID         int64           `json:"machineId,omitempty"`
 	SwitchOnAt        int64           `json:"switchOnAt"`
 	SwitchOffAt       *int64          `json:"switchOffAt"`
 	PreheatMinutes    int             `json:"preheatMinutes"`
@@ -70,8 +73,9 @@ type readyByPair struct {
 	plannedSwitchOnAt int64
 }
 
-// preheatHistoryStore holds the closed runs (oldest first), the single open
-// run and the pending ready-by pair. It has its own mutex rather than reusing
+// preheatHistoryStore holds the closed runs of every machine (oldest first)
+// plus, per machine (#2247), the open run and the pending ready-by pair. It
+// has its own mutex rather than reusing
 // Poller.state's: every access here is self-contained (it never needs a
 // Poller.state or RuntimeState field), so a separate lock avoids adding a third
 // participant to the documented RuntimeState.mu -> state.mu ordering.
@@ -79,8 +83,8 @@ type preheatHistoryStore struct {
 	mu          sync.Mutex
 	loaded      bool
 	runs        []PreheatRun
-	open        *PreheatRun
-	lastReadyBy *readyByPair
+	open        map[int64]*PreheatRun
+	lastReadyBy map[int64]*readyByPair
 }
 
 // ensureLoadedLocked reads preheatHistoryFile once. A missing file is a normal
@@ -120,39 +124,68 @@ func (s *preheatHistoryStore) saveLocked() {
 	_ = os.Rename(tmp, preheatHistoryFile)
 }
 
-// finalizeOpenRunLocked stamps the open run's switch-off, appends it to the
-// history, trims the oldest runs and persists. No-op when nothing is open.
-func (s *preheatHistoryStore) finalizeOpenRunLocked(now int64) {
-	if s.open == nil {
+// finalizeOpenRunLocked stamps machine id's open run's switch-off, appends it
+// to the history, trims that machine's oldest runs and persists. No-op when
+// nothing is open for it.
+func (s *preheatHistoryStore) finalizeOpenRunLocked(id int64, now int64) {
+	run := s.open[id]
+	if run == nil {
 		return
 	}
 	at := now
-	s.open.SwitchOffAt = &at
-	s.runs = append(s.runs, *s.open)
-	s.open = nil
-	if len(s.runs) > preheatHistoryMaxRuns {
-		s.runs = s.runs[len(s.runs)-preheatHistoryMaxRuns:]
-	}
+	run.SwitchOffAt = &at
+	s.runs = append(s.runs, *run)
+	delete(s.open, id)
+	s.trimRunsLocked(id)
 	s.saveLocked()
 }
 
-// openPreheatRun starts recording a run at the real switch-on time now.
-func (p *Poller) openPreheatRun(now int64) {
+// trimRunsLocked drops machine id's oldest closed runs beyond
+// preheatHistoryMaxRuns. The cap is per machine (#2247), so a busy second
+// machine never pushes the default machine's runs out; runs recorded before
+// #2247 (no machine id) form their own group.
+func (s *preheatHistoryStore) trimRunsLocked(id int64) {
+	n := 0
+	for _, r := range s.runs {
+		if r.MachineID == id {
+			n++
+		}
+	}
+	drop := n - preheatHistoryMaxRuns
+	if drop <= 0 {
+		return
+	}
+	kept := s.runs[:0]
+	for _, r := range s.runs {
+		if r.MachineID == id && drop > 0 {
+			drop--
+			continue
+		}
+		kept = append(kept, r)
+	}
+	s.runs = kept
+}
+
+// openPreheatRun starts recording a run for machine id at the real switch-on
+// time now.
+func (p *Poller) openPreheatRun(id int64, now int64) {
 	p.preheatHist.mu.Lock()
 	defer p.preheatHist.mu.Unlock()
 	s := &p.preheatHist
 	s.ensureLoadedLocked()
-	// At most one open run: a leftover one is finalised rather than dropped.
-	s.finalizeOpenRunLocked(now)
+	// At most one open run per machine: a leftover one is finalised rather
+	// than dropped.
+	s.finalizeOpenRunLocked(id, now)
 	minutes := loadPreheatMinutes()
 	run := PreheatRun{
+		MachineID:        id,
 		SwitchOnAt:       now,
 		PreheatMinutes:   minutes,
 		PredictedReadyAt: now + int64(minutes)*60_000,
 		Samples:          []PreheatSample{},
 	}
-	if lr := s.lastReadyBy; lr != nil {
-		s.lastReadyBy = nil
+	if lr := s.lastReadyBy[id]; lr != nil {
+		delete(s.lastReadyBy, id)
 		diff := now - lr.plannedSwitchOnAt
 		if diff < 0 {
 			diff = -diff
@@ -164,18 +197,22 @@ func (p *Poller) openPreheatRun(now int64) {
 			run.PlannedSwitchOnAt = &planned
 		}
 	}
-	s.open = &run
+	if s.open == nil {
+		s.open = map[int64]*PreheatRun{}
+	}
+	s.open[id] = &run
 }
 
-// recordPreheatSample appends one sample to the open run, at most every 30s,
-// only before it stabilises and only while it is younger than 60 minutes.
-func (p *Poller) recordPreheatSample(now int64, temp, target float64) {
+// recordPreheatSample appends one sample to machine id's open run, at most
+// every 30s, only before it stabilises and only while it is younger than 60
+// minutes.
+func (p *Poller) recordPreheatSample(id int64, now int64, temp, target float64) {
 	if temp == 0 {
 		return
 	}
 	p.preheatHist.mu.Lock()
 	defer p.preheatHist.mu.Unlock()
-	run := p.preheatHist.open
+	run := p.preheatHist.open[id]
 	if run == nil || run.StableAt != nil {
 		return
 	}
@@ -192,24 +229,24 @@ func (p *Poller) recordPreheatSample(now int64, temp, target float64) {
 	run.Samples = append(run.Samples, PreheatSample{TS: ts, TempC: temp, TargetC: target})
 }
 
-// markPreheatStable stamps the open run's stability time. Callers must do this
-// BEFORE moving the runtime's SwitchOnAt backwards; the run's own SwitchOnAt
-// deliberately stays the real switch-on time.
-func (p *Poller) markPreheatStable(now int64) {
+// markPreheatStable stamps machine id's open run's stability time. Callers
+// must do this BEFORE moving the runtime's SwitchOnAt backwards; the run's own
+// SwitchOnAt deliberately stays the real switch-on time.
+func (p *Poller) markPreheatStable(id int64, now int64) {
 	p.preheatHist.mu.Lock()
 	defer p.preheatHist.mu.Unlock()
-	if run := p.preheatHist.open; run != nil && run.StableAt == nil {
+	if run := p.preheatHist.open[id]; run != nil && run.StableAt == nil {
 		at := now
 		run.StableAt = &at
 	}
 }
 
-// closePreheatRun finalises and persists the open run at switch-off.
-func (p *Poller) closePreheatRun(now int64) {
+// closePreheatRun finalises and persists machine id's open run at switch-off.
+func (p *Poller) closePreheatRun(id int64, now int64) {
 	p.preheatHist.mu.Lock()
 	defer p.preheatHist.mu.Unlock()
 	p.preheatHist.ensureLoadedLocked()
-	p.preheatHist.finalizeOpenRunLocked(now)
+	p.preheatHist.finalizeOpenRunLocked(id, now)
 }
 
 // discardEmptyPreheatRun drops the open run without finalising it when it has
@@ -218,43 +255,51 @@ func (p *Poller) closePreheatRun(now int64) {
 // would leave an empty one-second entry in the history. A run that already has
 // samples is left for closePreheatRun to finalise as usual (which entering
 // standby does right after this). Returns true when an empty run was dropped.
-func (p *Poller) discardEmptyPreheatRun() bool {
+func (p *Poller) discardEmptyPreheatRun(id int64) bool {
 	p.preheatHist.mu.Lock()
 	defer p.preheatHist.mu.Unlock()
-	if run := p.preheatHist.open; run != nil && len(run.Samples) == 0 {
-		p.preheatHist.open = nil
+	if run := p.preheatHist.open[id]; run != nil && len(run.Samples) == 0 {
+		delete(p.preheatHist.open, id)
 		return true
 	}
 	return false
 }
 
-// rememberLastReadyBy captures the ready-by pair just before
+// rememberLastReadyBy captures machine id's ready-by pair just before
 // checkReadyByPreheat clears it, for the run that turn-on is about to start.
-func (p *Poller) rememberLastReadyBy(readyByTargetAt, plannedSwitchOnAt *int64) {
+func (p *Poller) rememberLastReadyBy(id int64, readyByTargetAt, plannedSwitchOnAt *int64) {
 	if readyByTargetAt == nil || plannedSwitchOnAt == nil {
 		return
 	}
 	p.preheatHist.mu.Lock()
 	defer p.preheatHist.mu.Unlock()
-	p.preheatHist.lastReadyBy = &readyByPair{
+	if p.preheatHist.lastReadyBy == nil {
+		p.preheatHist.lastReadyBy = map[int64]*readyByPair{}
+	}
+	p.preheatHist.lastReadyBy[id] = &readyByPair{
 		readyByTargetAt:   *readyByTargetAt,
 		plannedSwitchOnAt: *plannedSwitchOnAt,
 	}
 }
 
-// PreheatHistory returns a deep copy of the recorded runs, newest first, with
-// the currently open run (SwitchOffAt == nil) as the first element when one
-// exists. The MCP get_preheat_history tool reads through this.
+// PreheatHistory returns a deep copy of the default machine's recorded runs,
+// newest first, with its currently open run (SwitchOffAt == nil) as the first
+// element when one exists. Runs recorded before #2247 carry no machine id and
+// count as the default machine's. The MCP get_preheat_history tool reads
+// through this.
 func (p *Poller) PreheatHistory() []PreheatRun {
+	defaultID, _ := p.defaultMachineID()
 	p.preheatHist.mu.Lock()
 	defer p.preheatHist.mu.Unlock()
 	p.preheatHist.ensureLoadedLocked()
 	out := make([]PreheatRun, 0, len(p.preheatHist.runs)+1)
-	if p.preheatHist.open != nil {
-		out = append(out, copyPreheatRun(*p.preheatHist.open))
+	if open := p.preheatHist.open[defaultID]; open != nil {
+		out = append(out, copyPreheatRun(*open))
 	}
 	for i := len(p.preheatHist.runs) - 1; i >= 0; i-- {
-		out = append(out, copyPreheatRun(p.preheatHist.runs[i]))
+		if r := p.preheatHist.runs[i]; r.MachineID == defaultID || r.MachineID == 0 {
+			out = append(out, copyPreheatRun(r))
+		}
 	}
 	return out
 }

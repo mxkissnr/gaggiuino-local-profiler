@@ -800,14 +800,16 @@ components:
         targetTemp:  { type: number, description: Target boiler temperature °C, nullable: true }
         readyByTargetAt:   { type: integer, nullable: true, description: "Epoch-ms wall-clock target set via POST /api/preheat/ready-by, or null if none is pending" }
         plannedSwitchOnAt: { type: integer, nullable: true, description: "Epoch-ms when the preheat watcher will turn the switch on to hit readyByTargetAt, or null" }
+        machineId: { type: integer, description: "#2247: the machine this status describes; a payload without it is the default machine's" }
 
     LiveData:
       type: object
       description: >
         GET /api/live/data and the SSE live-snapshot payload (one shared Go
         builder, so every key below is always present — null where noted).
-      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel, machineWarnings, machineUpdateAvailable, machineSystemState, machineSystemErrorCode, machineControl]
+      required: [isLive, profileName, datapoints, seq, machineReachable, isSteaming, steamSeq, steamDatapoints, isFlushing, flushSeq, flushDatapoints, isDescaling, descaleSeq, descaleDatapoints, temperature, targetTemperature, pressure, waterLevel, machineWarnings, machineUpdateAvailable, machineSystemState, machineSystemErrorCode, machineControl, machineId]
       properties:
+        machineId: { type: integer, description: "#2247: the machine this payload describes; a payload without it is the default machine's" }
         isLive:      { type: boolean }
         profileName: { type: string }
         datapoints:
@@ -4021,7 +4023,9 @@ paths:
   /api/preheat:
     get:
       tags: [System]
-      summary: Preheat progress and current boiler temperature (default machine only)
+      summary: Preheat progress and current boiler temperature
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer }, description: "#2247: the machine whose preheat to read; omitted = the default machine. 400 when not a number, 404 for an unknown machine" }
       responses:
         "200":
           description: Preheat status
@@ -4040,7 +4044,10 @@ paths:
         configured switch on once that time is reached and the machine is off — one-shot, no
         re-fire. Rejected with 400 if `targetAt` is non-null and `switch_entity`/the HA token isn't
         configured, since the watcher could never fulfill it. `targetAt: null` always clears any
-        pending target regardless of configuration state.
+        pending target regardless of configuration state. Each machine has its own target (#2247):
+        `?machineId` picks the machine and its own switch entity, omitted = the default machine.
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer }, description: "#2247: the machine to schedule; omitted = the default machine. 400 when not a number, 404 for an unknown machine" }
       requestBody:
         required: true
         content:
@@ -4055,13 +4062,16 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PreheatStatus' }
-        "400": { description: "targetAt is not a valid epoch-ms number/null, or switch_entity/HA token isn't configured" }
+        "400": { description: "targetAt is not a valid epoch-ms number/null, machineId is not a number, or switch_entity/HA token isn't configured" }
+        "404": { description: Unknown machine }
 
   /api/live/data:
     get:
       tags: [System]
       summary: Live brew data (updated during active shot)
       description: Poll this endpoint during a shot to get real-time data. Check `seq` to detect updates.
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer }, description: "#2247: the machine whose live data to read; omitted = the default machine. 400 when not a number, 404 for an unknown machine" }
       responses:
         "200":
           description: Live data
@@ -4091,7 +4101,14 @@ paths:
         route, a short-lived single-use `?ticket=` from
         `POST /api/events/ticket` (#1626) — EventSource can't set custom
         headers, so this is the one exception to header-only auth. The
-        long-lived token is never accepted in the query.
+        long-lived token is never accepted in the query. `?machineId` (#2247)
+        names one more machine the connection watches: GLP then polls that
+        machine while the connection is open and sends its live-snapshot and
+        preheat-update events (each payload carries `machineId`) to this
+        connection only. The default machine's events reach every
+        connection, with or without it.
+      parameters:
+        - { name: machineId, in: query, schema: { type: integer }, description: "#2247: a non-default machine this connection watches; omitted or invalid = none" }
       security:
         - tokenAuth: []
         - ticketQueryAuth: []

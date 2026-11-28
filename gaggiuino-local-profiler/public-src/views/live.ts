@@ -6,6 +6,7 @@ import * as timerRegistry from '../state/timers.js';
 import { t, tHtml } from '../i18n.js';
 import { isApiPortBlocked } from '../api/transport.js';
 import { getPreheat, getLiveData } from '../api/system.js';
+import { setWatchedMachine } from '../sse.js';
 import { annotateShot } from '../api/shots.js';
 import type { Bean, MachineControlState, ShotAnnotation } from '../api/types.js';
 import { mapToXY, formatTimeLabel, chartColors, mapShotDatapoints, formatDate, html, esc, joinHtml, detectPhases } from '../utils.js';
@@ -47,6 +48,8 @@ interface LiveDatapoints {
 }
 
 interface LiveMessage {
+  // #2247: the machine this payload describes; absent = the default machine.
+  machineId?: number;
   isLive?: boolean;
   profileName?: string;
   seq?: number;
@@ -75,6 +78,8 @@ interface LiveMessage {
 // GET /api/preheat — the fields updatePreheatWidget() reads. `ready`/`remaining`
 // are always present in the payload, hence required.
 interface PreheatData {
+  // #2247: the machine this payload describes; absent = the default machine.
+  machineId?: number;
   ready: boolean;
   remaining: number;
   pct?: number;
@@ -112,17 +117,35 @@ interface LiveShotAnnotation {
   score?: number | null;
 }
 
-// Multi-machine live gating (#325, #341) — shot sync now covers every
-// registered machine, but real-time live status/brew-detection is
-// still hardcoded to the default machine only — deferred, not built yet.
-// 'all' and a not-yet-loaded activeMachineId both count as "assume default
-// machine" so single-machine installs (the vast majority) are unaffected.
-function _isActiveMachineLiveCapable(): boolean {
+// #2247: which machine the Live tab shows. 'default' stands for the default
+// machine ('all', no machine list yet, or the default machine selected);
+// otherwise the selected non-default machine's id.
+type LiveMachineKey = number | 'default';
+
+function _shownMachineKey(): LiveMachineKey {
   const active = S.activeMachineId;
-  if (active == null || active === 'all') return true;
-  const defaultId = getDefaultMachineId();
-  return defaultId == null || active === defaultId;
+  const def = getDefaultMachineId();
+  if (typeof active !== 'number' || def == null || active === def) return 'default';
+  return active;
 }
+
+// A payload without machineId (demo frames, older servers) is the default
+// machine's.
+function _payloadMachineKey(machineId: number | undefined): LiveMachineKey {
+  const def = getDefaultMachineId();
+  if (machineId === undefined || def == null || machineId === def) return 'default';
+  return machineId;
+}
+
+// The ?machineId to request and watch: none for the default machine.
+function _shownMachineParam(): number | undefined {
+  const key = _shownMachineKey();
+  return key === 'default' ? undefined : key;
+}
+
+// The key connectLiveStream last opened the view for, so a machine switch
+// can drop the previous machine's remembered payloads.
+let _liveShownKey: LiveMachineKey | null = null;
 
 // #1120 review: whether the live session last observed was a brew. The live
 // payload reports a brew via msg.isLive (poll.go's liveAccum, brew-only) and
@@ -651,39 +674,28 @@ function _showRunning(on: boolean): void {
 }
 
 export function connectLiveStream(): void {
-  const banner  = document.getElementById('liveMachineUnavailableBanner');
   const content = document.getElementById('live-content');
-  const idle    = document.getElementById('live-idle');
   const refBar  = document.getElementById('live-ref-bar');
-  if (!_isActiveMachineLiveCapable()) {
-    disconnectLiveStream();
-    if (banner)  banner.style.display  = '';
-    if (content) content.style.display = 'none';
-    // #1449: handleLiveData() (SSE-driven) still carries the default
-    // machine's readings while a non-default machine is selected -- hide the
-    // idle panel and reference bar along with the live content so they don't
-    // keep showing another machine's numbers.
-    if (idle)    idle.style.display    = 'none';
-    if (refBar)  refBar.style.display  = 'none';
-    // #2153: the chart, the figures and the next-shot rows sit outside
-    // #live-content; they hide with it.
-    _setDisplay(['liveChartArea', 'liveFigures', 'live-shot-setup'], 'none');
-    setLiveBadge('error', t('live_machine_unavailable'));
-    return;
-  }
-  if (banner)  banner.style.display  = 'none';
   if (content) content.style.display = '';
   if (refBar)  refBar.style.display  = '';
   // #2153: the chart area must be visible before initLiveChart() sizes
   // the canvas; handleLiveData() hides it again for the idle state.
   _setDisplay(['liveChartArea', 'live-shot-setup'], '');
-  disconnectLiveStream();
+  _stopLiveTimers();
   initLiveChart();
   renderLiveShotSetupPanel();
   setLiveBadge('connecting');
   S.liveLastSeq = -1;
   S.liveWasLive = false;
   _liveSessionIsBrew = null;
+  const key = _shownMachineKey();
+  if (_liveShownKey !== key) {
+    _liveShownKey = key;
+    _lastLiveMsg = null;
+    _lastPreheat = null;
+    dismissLiveQuickRating();
+  }
+  setWatchedMachine(_shownMachineParam() ?? null);
   void fetchLiveData();
   void fetchPreheatData();
   // #736 review: SSE push (handleLiveSnapshotEvent/handlePreheatUpdateEvent,
@@ -703,10 +715,14 @@ export function connectLiveStream(): void {
 }
 
 export async function fetchPreheatData(): Promise<void> {
+  // #2247: a response that arrives after a machine switch is dropped.
+  const key = _shownMachineKey();
   try {
-    const r = await getPreheat();
+    const r = await getPreheat(_shownMachineParam());
     if (!r.ok) return;
-    updatePreheatWidget(await r.json() as PreheatData);
+    const d = await r.json() as PreheatData;
+    if (key !== _shownMachineKey()) return;
+    updatePreheatWidget(d);
   } catch { /* ignore */ }
 }
 
@@ -794,8 +810,10 @@ export function updatePreheatWidget(d: PreheatData): void {
 }
 
 export async function fetchLiveData(): Promise<void> {
+  // #2247: a response that arrives after a machine switch is dropped.
+  const key = _shownMachineKey();
   try {
-    const r = await getLiveData();
+    const r = await getLiveData(_shownMachineParam());
     if (!r.ok) {
       // #807: same reasoning as the Shots view -- a bare "HTTP 401" in the
       // Live badge says nothing about the deliberately-closed direct port.
@@ -803,6 +821,7 @@ export async function fetchLiveData(): Promise<void> {
       return;
     }
     const msg = await r.json() as LiveMessage;
+    if (key !== _shownMachineKey()) return;
 
     // First successful response — mark as ready
     const statusEl = document.getElementById('live-status-text');
@@ -819,16 +838,23 @@ export async function fetchLiveData(): Promise<void> {
     // indefinitely. Route through the same unreachable path as the explicit
     // msg.machineReachable === false branch below so this failure mode
     // clears the panel exactly like the other two already do.
-    handleLiveData({ machineReachable: false, datapoints: {} });
+    if (key === _shownMachineKey()) handleLiveData({ machineReachable: false, datapoints: {} });
   }
 }
 
-export function disconnectLiveStream(): void {
+function _stopLiveTimers(): void {
   timerRegistry.dispose('livePollInterval');
   timerRegistry.dispose('preheatPollInterval');
   timerRegistry.dispose('liveTimerTick');
   chartRegistry.dispose('liveChart');
   S.liveBrewStartWall = null;
+}
+
+export function disconnectLiveStream(): void {
+  _stopLiveTimers();
+  // #2247: leaving the Live tab ends the watch, so the backend stops polling
+  // a non-default machine nobody looks at.
+  setWatchedMachine(null);
 }
 
 // #2096: the live status is a shared status badge; the state picks its
@@ -934,12 +960,16 @@ function stopElapsedTimer(elId: string | null, finalElapsedSec: number | null): 
 // (connectEvents()/onEvent()), independent of whichever view is currently
 // open. Both payloads are already the identical shape their REST
 // counterparts (GET /api/live/data, GET /api/preheat) return -- so these
-// are thin passthroughs, not adapters.
+// are thin passthroughs, not adapters. #2247: the stream also carries the
+// machine this tab watches; a payload of another machine than the shown one
+// is dropped here.
 export function handleLiveSnapshotEvent(payload: LiveMessage): void {
+  if (_payloadMachineKey(payload.machineId) !== _shownMachineKey()) return;
   handleLiveData(payload);
 }
 
 export function handlePreheatUpdateEvent(payload: PreheatData): void {
+  if (_payloadMachineKey(payload.machineId) !== _shownMachineKey()) return;
   updatePreheatWidget(payload);
 }
 
@@ -1013,7 +1043,8 @@ function handleLiveTransitions(msg: LiveMessage): void {
   // even if S.liveWasLive was somehow set.
   if (S.liveWasLive && !msg.isLive && _liveSessionIsBrew !== false && msg.seq !== S.liveLastSeq) {
     S.liveLastSeq = msg.seq!;
-    const machineId = S.activeMachineId;
+    // #2247: the shown machine's real id ('all' shows the default machine).
+    const machineId = typeof S.activeMachineId === 'number' ? S.activeMachineId : getDefaultMachineId();
     const priorNewestId = S.shots.reduce((max, s) => (s.machineId === machineId && s.id > max ? s.id : max), 0);
     setTimeout(() => { void (async () => {
       if (window.loadData) await window.loadData();
@@ -1036,9 +1067,6 @@ function handleLiveTransitions(msg: LiveMessage): void {
 
 export function handleLiveData(msg: LiveMessage): void {
   handleLiveTransitions(msg);
-  // #1449: while a non-default machine is selected, the backend still pushes
-  // the default machine's readings -- don't render them under the banner.
-  if (!_isActiveMachineLiveCapable()) return;
   const dp: LiveDatapoints = msg.datapoints || {};
   const times   = dp.timeInShot  || [];
   const lastIdx = times.length - 1;

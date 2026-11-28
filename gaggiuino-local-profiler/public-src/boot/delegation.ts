@@ -2,7 +2,6 @@
 // data-action element in dynamically rendered content. Moved verbatim out of
 // main.ts's DOMContentLoaded handler; run through runStep() so a failure only
 // skips this step.
-import { S } from '../state/index.js';
 import { toggleMonthGroup, clearBeanFilter } from '../components/sidebar.js';
 import { switchMode, goToShot } from '../components/mode.js';
 import { loadData, restoreShot, permanentDeleteShot, selectDrinkType, selectMilkType, selectFrozenPortion, selectTasteTag } from '../views/shots.js';
@@ -36,7 +35,7 @@ import { openDialinWizard, startDialinFromBean, dialinGrinderChange, dialinConfi
          dialinOverride, dialinEnd, dialinSaveKnownGrind, dialinClose } from '../views/dialin-wizard.js';
 import { startProfileDialinFromList, profileDialinClose, profileDialinToggleSymptom, profileDialinAcceptNext,
          profileDialinOverride, profileDialinEnd, profileDialinConfirmShot } from '../views/profile-dialin-wizard.js';
-import { switchActiveMachine, setDefaultMachine } from '../components/machines-settings.js';
+import { switchActiveMachine } from '../components/machines-settings.js';
 import { closeSetupWizard, setupWizardGetStarted, setupWizardSkipToDemo } from '../views/setup-wizard.js';
 import { closeEasterEggPanel } from '../components/topbar-machine-icon.js';
 import { toggleFlush, confirmBrewFromDialog, cancelBrewFromDialog } from '../components/machine-control.js';
@@ -227,15 +226,6 @@ export function wireDelegation(): void {
       case 'machine-flush-toggle':        void toggleFlush(); break;
       case 'brew-confirm-start':          void confirmBrewFromDialog(); break;
       case 'brew-confirm-cancel':         void cancelBrewFromDialog(); break;
-      // #1449: the Live tab's "not available for this machine" banner offers
-      // to make the currently selected machine the default. Reuses the existing
-      // setDefaultMachine() from components/machines-settings.ts unchanged -- it
-      // already reloads the machine list, and loadMachines() ->
-      // applyActiveMachineChange() reconnects the Live tab (window.connectLiveStream()
-      // when S.currentMode === 'live'), so no new reload logic lives here.
-      case 'live-set-default-machine':
-        if (typeof S.activeMachineId === 'number') void setDefaultMachine(S.activeMachineId);
-        break;
       // #2153: the Live tab's reference chip opens the reference list, a row
       // picks that shot; a next-shot row opens the fields in the sheet.
       case 'live-ref-open':     openRefPicker(el); break;

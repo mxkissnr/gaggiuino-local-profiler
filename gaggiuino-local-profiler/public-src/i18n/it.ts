@@ -114,7 +114,6 @@ const it: Partial<Translations> = {
     autosave_pending:'Salvataggio…', autosave_saved:'Salvato', autosave_failed:'Non salvato',
     grind_ok:'Macinatura corretta',
     live_connecting:'Connessione …', live_brewing:'Estrazione …',
-    live_machine_unavailable:'La vista Live non è ancora disponibile per questa macchina.',
     machine_unreachable_title:'Macchina non raggiungibile',
     power_btn_on_title:'Macchina ACCESA – clicca per spegnere',
     power_btn_off_title:'Macchina SPENTA – clicca per accendere',

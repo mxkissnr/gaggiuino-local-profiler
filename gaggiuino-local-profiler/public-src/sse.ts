@@ -51,6 +51,15 @@ let currentOnReconnect: (() => void) | undefined;
 let openGeneration = 0;
 const listeners = new Map<string, Set<(data: unknown) => void>>(); // type -> Set<cb>
 const attachedTypes = new Set<string>(); // types with a native listener already wired on the current `source`
+// #2247: the non-default machine the Live tab watches, null for none. Sent as
+// ?machineId on the stream URL; the server then polls that machine and sends
+// its live-snapshot/preheat-update events on this connection as well.
+let watchedMachineId: number | null = null;
+
+function withWatch(url: string): string {
+  if (watchedMachineId === null) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}machineId=${watchedMachineId}`;
+}
 
 function clearWatchdog(): void {
   if (watchdogTimer) { clearTimeout(watchdogTimer); watchdogTimer = null; }
@@ -159,7 +168,7 @@ function _open(onFallback: (() => void) | undefined, onReconnect: (() => void) |
 }
 
 function _attach(url: string, onFallback: (() => void) | undefined, onReconnect: (() => void) | undefined): void {
-  source = new EventSource(url);
+  source = new EventSource(withWatch(url));
   for (const type of listeners.keys()) attachType(type);
 
   source.onopen = () => {
@@ -232,4 +241,22 @@ export function onEvent(type: string, cb: (data: unknown) => void): void {
 
 export function offEvent(type: string, cb: (data: unknown) => void): void {
   listeners.get(type)?.delete(cb);
+}
+
+/**
+ * #2247: watch one more machine on the stream (null = none). An open stream is
+ * reopened with the new ?machineId, as a reconnect, so onReconnect resyncs what
+ * the gap may have missed. Before connectEvents(), or while a ticket is still
+ * pending, the next open simply uses the new id.
+ */
+export function setWatchedMachine(id: number | null): void {
+  if (id === watchedMachineId) return;
+  watchedMachineId = id;
+  if (!source) return;
+  openGeneration++;
+  clearReconnect();
+  source.close();
+  source = null;
+  attachedTypes.clear();
+  _open(currentOnFallback, currentOnReconnect, true);
 }

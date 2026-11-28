@@ -79,14 +79,14 @@ func TestPreheatHistory_LifecycleOpenToClose(t *testing.T) {
 func TestPreheatHistory_SamplesSpacingAndStable(t *testing.T) {
 	p := newPreheatHistoryPoller(t, &fakeAdapter{})
 	base := time.Now().UnixMilli()
-	p.openPreheatRun(base)
+	p.openPreheatRun(1, base)
 
-	p.recordPreheatSample(base, 0, 93)           // temp 0 -> skipped
-	p.recordPreheatSample(base, 90, 93)          // first sample
-	p.recordPreheatSample(base+10_000, 91, 93)   // < 30s -> skipped
-	p.recordPreheatSample(base+30_000, 92, 93)   // 30s -> appended
-	p.recordPreheatSample(base+45_000, 92.5, 93) // < 30s -> skipped
-	p.recordPreheatSample(base+60_000, 93, 93)   // appended
+	p.recordPreheatSample(1, base, 0, 93)           // temp 0 -> skipped
+	p.recordPreheatSample(1, base, 90, 93)          // first sample
+	p.recordPreheatSample(1, base+10_000, 91, 93)   // < 30s -> skipped
+	p.recordPreheatSample(1, base+30_000, 92, 93)   // 30s -> appended
+	p.recordPreheatSample(1, base+45_000, 92.5, 93) // < 30s -> skipped
+	p.recordPreheatSample(1, base+60_000, 93, 93)   // appended
 
 	run := p.PreheatHistory()[0]
 	if len(run.Samples) != 3 {
@@ -98,7 +98,7 @@ func TestPreheatHistory_SamplesSpacingAndStable(t *testing.T) {
 		}
 	}
 
-	p.markPreheatStable(base + 60_000)
+	p.markPreheatStable(1, base+60_000)
 	run = p.PreheatHistory()[0]
 	if run.StableAt == nil || *run.StableAt != base+60_000 {
 		t.Fatalf("StableAt = %v, want %d", run.StableAt, base+60_000)
@@ -107,7 +107,7 @@ func TestPreheatHistory_SamplesSpacingAndStable(t *testing.T) {
 		t.Fatalf("run SwitchOnAt = %d, want the real %d", run.SwitchOnAt, base)
 	}
 
-	p.recordPreheatSample(base+90_000, 93, 93)
+	p.recordPreheatSample(1, base+90_000, 93, 93)
 	if got := len(p.PreheatHistory()[0].Samples); got != 3 {
 		t.Fatalf("samples after stable = %d, want 3", got)
 	}
@@ -118,10 +118,10 @@ func TestPreheatHistory_SamplesSpacingAndStable(t *testing.T) {
 func TestPreheatHistory_SampleCap(t *testing.T) {
 	p := newPreheatHistoryPoller(t, &fakeAdapter{})
 	now := time.Now().UnixMilli()
-	p.openPreheatRun(now)
+	p.openPreheatRun(1, now)
 
-	p.preheatHist.open.Samples = make([]PreheatSample, preheatHistoryMaxSamples)
-	p.recordPreheatSample(now+preheatSampleIntervalMS, 93, 93)
+	p.preheatHist.open[1].Samples = make([]PreheatSample, preheatHistoryMaxSamples)
+	p.recordPreheatSample(1, now+preheatSampleIntervalMS, 93, 93)
 
 	if got := len(p.PreheatHistory()[0].Samples); got != preheatHistoryMaxSamples {
 		t.Fatalf("samples = %d, want cap %d", got, preheatHistoryMaxSamples)
@@ -137,8 +137,8 @@ func TestPreheatHistory_RunCapAndReload(t *testing.T) {
 	total := preheatHistoryMaxRuns + 5
 	for i := 0; i < total; i++ {
 		at := base + int64(i)*60_000
-		p.openPreheatRun(at)
-		p.closePreheatRun(at + 30_000)
+		p.openPreheatRun(1, at)
+		p.closePreheatRun(1, at+30_000)
 	}
 
 	h := p.PreheatHistory()
@@ -169,11 +169,11 @@ func TestPreheatHistory_RunCapAndReload(t *testing.T) {
 // PreheatHistory promises: the open run first, then closed runs newest-first.
 func TestPreheatHistory_NewestFirstOpenFirst(t *testing.T) {
 	p := newPreheatHistoryPoller(t, &fakeAdapter{})
-	p.openPreheatRun(1000)
-	p.closePreheatRun(2000)
-	p.openPreheatRun(3000)
-	p.closePreheatRun(4000)
-	p.openPreheatRun(5000)
+	p.openPreheatRun(1, 1000)
+	p.closePreheatRun(1, 2000)
+	p.openPreheatRun(1, 3000)
+	p.closePreheatRun(1, 4000)
+	p.openPreheatRun(1, 5000)
 
 	h := p.PreheatHistory()
 	if len(h) != 3 {
@@ -191,8 +191,8 @@ func TestPreheatHistory_NewestFirstOpenFirst(t *testing.T) {
 // mutate the poller's internal state.
 func TestPreheatHistory_ReturnsCopy(t *testing.T) {
 	p := newPreheatHistoryPoller(t, &fakeAdapter{})
-	p.openPreheatRun(1000)
-	p.recordPreheatSample(1000, 90, 93)
+	p.openPreheatRun(1, 1000)
+	p.recordPreheatSample(1, 1000, 90, 93)
 
 	h := p.PreheatHistory()
 	h[0].SwitchOnAt = 7
@@ -211,9 +211,9 @@ func TestPreheatHistory_ReadyByPairAttached(t *testing.T) {
 	p := newPreheatHistoryPoller(t, &fakeAdapter{})
 	planned := int64(100_000)
 	target := planned + 20*60_000
-	p.rememberLastReadyBy(&target, &planned)
+	p.rememberLastReadyBy(1, &target, &planned)
 
-	p.openPreheatRun(planned + 5*60_000)
+	p.openPreheatRun(1, planned+5*60_000)
 	run := p.PreheatHistory()[0]
 	if run.ReadyByTargetAt == nil || *run.ReadyByTargetAt != target {
 		t.Fatalf("ReadyByTargetAt = %v, want %d", run.ReadyByTargetAt, target)
@@ -222,8 +222,8 @@ func TestPreheatHistory_ReadyByPairAttached(t *testing.T) {
 		t.Fatalf("PlannedSwitchOnAt = %v, want %d", run.PlannedSwitchOnAt, planned)
 	}
 
-	p.closePreheatRun(planned + 6*60_000)
-	p.openPreheatRun(planned + 7*60_000)
+	p.closePreheatRun(1, planned+6*60_000)
+	p.openPreheatRun(1, planned+7*60_000)
 	if r := p.PreheatHistory()[0]; r.ReadyByTargetAt != nil || r.PlannedSwitchOnAt != nil {
 		t.Fatalf("second run inherited the pair: %+v", r)
 	}
@@ -235,15 +235,15 @@ func TestPreheatHistory_ReadyByPairOutsideWindowDropped(t *testing.T) {
 	p := newPreheatHistoryPoller(t, &fakeAdapter{})
 	planned := int64(1_000_000)
 	target := planned + 20*60_000
-	p.rememberLastReadyBy(&target, &planned)
+	p.rememberLastReadyBy(1, &target, &planned)
 
-	p.openPreheatRun(planned + 20*60_000)
+	p.openPreheatRun(1, planned+20*60_000)
 	if r := p.PreheatHistory()[0]; r.ReadyByTargetAt != nil || r.PlannedSwitchOnAt != nil {
 		t.Fatalf("stale pair attached: %+v", r)
 	}
 
-	p.closePreheatRun(planned + 21*60_000)
-	p.openPreheatRun(planned + 22*60_000)
+	p.closePreheatRun(1, planned+21*60_000)
+	p.openPreheatRun(1, planned+22*60_000)
 	if r := p.PreheatHistory()[0]; r.ReadyByTargetAt != nil || r.PlannedSwitchOnAt != nil {
 		t.Fatalf("stale pair resurrected: %+v", r)
 	}
@@ -270,7 +270,7 @@ func TestCheckReadyByPreheat_RemembersPairForNextRun(t *testing.T) {
 		t.Fatal("checkReadyByPreheat should clear the target after firing")
 	}
 
-	p.openPreheatRun(now)
+	p.openPreheatRun(1, now)
 	run := p.PreheatHistory()[0]
 	if run.ReadyByTargetAt == nil || *run.ReadyByTargetAt != target {
 		t.Fatalf("ReadyByTargetAt = %v, want %d", run.ReadyByTargetAt, target)
@@ -289,7 +289,7 @@ func TestPollViaGaggiuinoStatus_StableMarksRun(t *testing.T) {
 	p := newPreheatHistoryPoller(t, fake)
 
 	realOn := time.Now().UnixMilli() - 5_000
-	p.openPreheatRun(realOn)
+	p.openPreheatRun(1, realOn)
 	p.runtime.SetSwitchOnAt(&realOn)
 	for i := 0; i < tempStableMin; i++ {
 		p.runtime.PushTempHistory(93.5)
@@ -306,5 +306,92 @@ func TestPollViaGaggiuinoStatus_StableMarksRun(t *testing.T) {
 	}
 	if got := p.runtime.Get().SwitchOnAt; got == nil || *got == realOn {
 		t.Fatalf("runtime SwitchOnAt = %v, want it backdated", got)
+	}
+}
+
+// TestPreheatHistory_TwoMachinesKeepOwnRuns (#2247): each machine has its own
+// open run, and the default machine's history never shows another machine's.
+func TestPreheatHistory_TwoMachinesKeepOwnRuns(t *testing.T) {
+	p := newPreheatHistoryPoller(t, &fakeAdapter{})
+	p.openPreheatRun(1, 1000)
+	p.openPreheatRun(2, 1500)
+	p.recordPreheatSample(2, 1500, 90, 93)
+	p.closePreheatRun(1, 2000)
+
+	h := p.PreheatHistory()
+	if len(h) != 1 || h[0].SwitchOnAt != 1000 || h[0].SwitchOffAt == nil || h[0].MachineID != 1 {
+		t.Fatalf("default history = %+v, want only machine 1's closed run", h)
+	}
+	p.preheatHist.mu.Lock()
+	open2 := p.preheatHist.open[2]
+	p.preheatHist.mu.Unlock()
+	if open2 == nil || open2.SwitchOffAt != nil || len(open2.Samples) != 1 || open2.MachineID != 2 {
+		t.Fatalf("machine 2's open run = %+v, want still open with its one sample", open2)
+	}
+
+	p.closePreheatRun(2, 3000)
+	if h := p.PreheatHistory(); len(h) != 1 || h[0].MachineID != 1 {
+		t.Errorf("default history after machine 2 closed = %+v, want only machine 1's run", h)
+	}
+}
+
+// TestPreheatHistory_LegacyRunsCountAsDefault (#2247): a run stored before
+// runs carried a machine id belongs to the default machine.
+func TestPreheatHistory_LegacyRunsCountAsDefault(t *testing.T) {
+	p := newPreheatHistoryPoller(t, &fakeAdapter{})
+	legacy := `[{"switchOnAt":1000,"switchOffAt":2000,"preheatMinutes":15,"predictedReadyAt":901000,"stableAt":null,"readyByTargetAt":null,"plannedSwitchOnAt":null,"samples":[]}]`
+	if err := os.WriteFile(preheatHistoryFile, []byte(legacy), 0o644); err != nil {
+		t.Fatalf("write legacy history: %v", err)
+	}
+	if h := p.PreheatHistory(); len(h) != 1 || h[0].SwitchOnAt != 1000 {
+		t.Fatalf("history = %+v, want the legacy run", h)
+	}
+}
+
+// TestPreheatHistory_RunCapIsPerMachine (#2247): a busy second machine never
+// pushes the default machine's runs out of the capped history.
+func TestPreheatHistory_RunCapIsPerMachine(t *testing.T) {
+	p := newPreheatHistoryPoller(t, &fakeAdapter{})
+	p.openPreheatRun(1, 1)
+	p.closePreheatRun(1, 2)
+	for i := 0; i < preheatHistoryMaxRuns+5; i++ {
+		at := int64(10 + i*10)
+		p.openPreheatRun(2, at)
+		p.closePreheatRun(2, at+5)
+	}
+	if h := p.PreheatHistory(); len(h) != 1 || h[0].SwitchOnAt != 1 {
+		t.Fatalf("default history = %+v, want machine 1's single run kept", h)
+	}
+	p.preheatHist.mu.Lock()
+	n := 0
+	for _, r := range p.preheatHist.runs {
+		if r.MachineID == 2 {
+			n++
+		}
+	}
+	p.preheatHist.mu.Unlock()
+	if n != preheatHistoryMaxRuns {
+		t.Errorf("machine 2 kept %d runs, want %d", n, preheatHistoryMaxRuns)
+	}
+}
+
+// TestPreheatHistory_ReadyByPairPerMachine (#2247): a ready-by pair attaches
+// to the next run of its own machine only.
+func TestPreheatHistory_ReadyByPairPerMachine(t *testing.T) {
+	p := newPreheatHistoryPoller(t, &fakeAdapter{})
+	planned := time.Now().UnixMilli()
+	target := planned + 15*60_000
+	p.rememberLastReadyBy(2, &target, &planned)
+
+	p.openPreheatRun(1, planned+60_000)
+	if r := p.PreheatHistory()[0]; r.ReadyByTargetAt != nil {
+		t.Errorf("default machine's run took machine 2's ready-by target %v", *r.ReadyByTargetAt)
+	}
+	p.openPreheatRun(2, planned+60_000)
+	p.preheatHist.mu.Lock()
+	run := p.preheatHist.open[2]
+	p.preheatHist.mu.Unlock()
+	if run == nil || run.ReadyByTargetAt == nil || *run.ReadyByTargetAt != target {
+		t.Errorf("machine 2's run = %+v, want its ready-by target %d", run, target)
 	}
 }

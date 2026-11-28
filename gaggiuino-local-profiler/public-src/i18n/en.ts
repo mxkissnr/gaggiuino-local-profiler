@@ -114,7 +114,6 @@ const en: Translations = {
     autosave_pending:'Saving…', autosave_saved:'Saved', autosave_failed:'Not saved',
     grind_ok:'Grind setting is good',
     live_connecting:'Connecting …', live_brewing:'Brewing …',
-    live_machine_unavailable:'Live view is not available for this machine yet.',
     machine_unreachable_title:'Machine unreachable',
     power_btn_on_title:'Machine ON – click to switch off',
     power_btn_off_title:'Machine OFF – click to switch on',

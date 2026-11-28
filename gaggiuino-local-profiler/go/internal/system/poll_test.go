@@ -3,14 +3,20 @@ package system
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
 )
 
 // TestPollViaGaggiuinoStatus_MachineReachable is the #655 regression test:
@@ -529,7 +535,7 @@ func TestPollViaGaggiuinoStatus_StandbySkipsPreheatSampling(t *testing.T) {
 	// Deliberately open a run and flag standby without the transition's close,
 	// so the sampling gate is what this test exercises (not the closed run).
 	onAt := time.Now().UnixMilli() - 60_000
-	p.openPreheatRun(onAt)
+	p.openPreheatRun(1, onAt)
 	p.runtime.SetStandby(true)
 
 	st := okStatus(t, `{"waterLevel":80,"upTime":1234}`, 35.0, 0, 0, 0, false, "", 0)
@@ -603,11 +609,11 @@ func TestPollViaGaggiuinoStatus_StandbyThenErrorKeepsNoStaleCountdown(t *testing
 
 	now := time.Now().UnixMilli()
 	p.runtime.SetStandby(true) // the machine was in standby
-	p.applyStandbyTransition(now, false)
+	p.applyStandbyTransition(p.defaultTarget(), now, false)
 	if p.runtime.Get().SwitchOnAt == nil {
 		t.Fatal("precondition: waking should stamp a switch-on time")
 	}
-	p.applyStandbyTransition(now+12_000, true) // 12s later the machine sleeps
+	p.applyStandbyTransition(p.defaultTarget(), now+12_000, true) // 12s later the machine sleeps
 
 	// Unreachable: pollViaGaggiuinoStatus's error path clears the standby flag.
 	fake.setStatus(machinesStatusZero(), errBoom)
@@ -913,5 +919,301 @@ func TestSteamAccumulator_CapsAtMaxLiveAccumPoints(t *testing.T) {
 		if len(series) != maxLiveAccumPoints {
 			t.Errorf("%s series length = %d, want exactly %d", name, len(series), maxLiveAccumPoints)
 		}
+	}
+}
+
+// perMachineAdapters hands every machine its own fake adapter (#2247), so a
+// test can drive two machines' readings independently.
+type perMachineAdapters map[int64]*fakeAdapter
+
+func (a perMachineAdapters) GetAdapter(m *machines.Machine) (machines.Adapter, error) {
+	if f, ok := a[m.ID]; ok {
+		return f, nil
+	}
+	return nil, errBoom
+}
+
+// newTwoMachinePoller wires a Poller around the default machine and a second
+// Gaggiuino, each answered by its own fake adapter.
+func newTwoMachinePoller(t *testing.T) (p *Poller, def, other *machines.Machine, defFake, otherFake *fakeAdapter) {
+	t.Helper()
+	registry := machines.NewRegistry(newTestDB(t))
+	if err := registry.EnsureDefaultMachine(); err != nil {
+		t.Fatalf("EnsureDefaultMachine: %v", err)
+	}
+	host := "fake-machine.invalid"
+	if _, err := registry.UpdateMachine(1, machines.MachineInput{Host: &host}, nil); err != nil {
+		t.Fatalf("UpdateMachine: %v", err)
+	}
+	def, err := registry.GetDefaultMachine()
+	if err != nil || def == nil {
+		t.Fatalf("GetDefaultMachine: %v", err)
+	}
+	other = addOtherMachine(t, registry, "Second", "gaggiuino", "second-machine.invalid", true)
+	defFake, otherFake = &fakeAdapter{}, &fakeAdapter{}
+	p = NewPoller(registry, perMachineAdapters{def.ID: defFake, other.ID: otherFake}, newHubForTest(), newDisabledHAClient())
+	return p, def, other, defFake, otherFake
+}
+
+// TestPollMachine_TwoMachinesKeepOwnLiveState (#2247): two machines brewing
+// at once each keep their own accumulator, sequence counter and readings.
+func TestPollMachine_TwoMachinesKeepOwnLiveState(t *testing.T) {
+	p, def, other, defFake, otherFake := newTwoMachinePoller(t)
+	ctx := context.Background()
+	defFake.setStatus(okStatus(t, `{}`, 93, 94, 9, 5, true, "Default Profile", 1), nil)
+	otherFake.setStatus(okStatus(t, `{}`, 91, 92, 6, 20, true, "Other Profile", 2), nil)
+	p.pollMachine(ctx, def)
+	p.pollMachine(ctx, other)
+	p.pollMachine(ctx, def)
+
+	d := p.buildLiveDataResponseFor(targetOf(def))
+	o := p.buildLiveDataResponseFor(targetOf(other))
+	if !d.IsLive || d.ProfileName != "Default Profile" || d.Datapoints == nil || len(d.Datapoints.TimeInShot) != 2 || d.MachineID != def.ID {
+		t.Fatalf("default machine live data = %+v, want its own brew with 2 samples", d)
+	}
+	if !o.IsLive || o.ProfileName != "Other Profile" || o.Datapoints == nil || len(o.Datapoints.TimeInShot) != 1 || o.MachineID != other.ID {
+		t.Fatalf("other machine live data = %+v, want its own brew with 1 sample", o)
+	}
+	if o.Datapoints.ShotWeight[0] != 200 || *o.Temperature != 91 || *d.Temperature != 93 {
+		t.Errorf("readings mixed up: other weight %d temp %v, default temp %v", o.Datapoints.ShotWeight[0], *o.Temperature, *d.Temperature)
+	}
+
+	// The other machine's shot ends while the default machine keeps brewing.
+	otherFake.setStatus(okStatus(t, `{}`, 91, 92, 0, 20, false, "Other Profile", 2), nil)
+	p.pollMachine(ctx, other)
+	o = p.buildLiveDataResponseFor(targetOf(other))
+	d = p.LiveData()
+	if o.IsLive || o.Seq != 1 {
+		t.Errorf("other machine after its shot: isLive=%v seq=%d, want false and 1", o.IsLive, o.Seq)
+	}
+	if !d.IsLive || d.Seq != 0 || d.MachineID != def.ID {
+		t.Errorf("default machine after the other's shot: isLive=%v seq=%d machineId=%d, want still brewing, seq 0", d.IsLive, d.Seq, d.MachineID)
+	}
+}
+
+// TestPollMachine_OtherMachineSnapshotIsScoped (#2247): a plain subscriber,
+// which is what glp-integration is, receives the default machine's snapshot
+// and never another machine's.
+func TestPollMachine_OtherMachineSnapshotIsScoped(t *testing.T) {
+	p, def, other, defFake, otherFake := newTwoMachinePoller(t)
+	ctx := context.Background()
+	defFake.setStatus(okStatus(t, `{}`, 93, 94, 0, 0, false, "Default Profile", 1), nil)
+	otherFake.setStatus(okStatus(t, `{}`, 91, 92, 0, 0, false, "Other Profile", 2), nil)
+	sub, cancel := p.hub.Subscribe()
+	defer cancel()
+
+	p.pollMachine(ctx, other)
+	p.pollMachine(ctx, def)
+
+	select {
+	case ev := <-sub:
+		ld, ok := ev.Data.(LiveData)
+		if ev.Type != sse.EventLiveSnapshot || ev.MachineID != 0 || !ok || ld.MachineID != def.ID {
+			t.Fatalf("first event = %+v, want the default machine's unscoped live-snapshot", ev)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the default machine's snapshot")
+	}
+	select {
+	case ev := <-sub:
+		t.Errorf("unexpected extra event %+v (the other machine's snapshot must stay scoped)", ev)
+	default:
+	}
+}
+
+// TestBuildPreheatResponse_CarriesMachineID (#2247): the preheat status names
+// the machine it describes.
+func TestBuildPreheatResponse_CarriesMachineID(t *testing.T) {
+	p, def, other, _, _ := newTwoMachinePoller(t)
+	if got := p.buildPreheatResponse().MachineID; got != def.ID {
+		t.Errorf("default preheat machineId = %d, want %d", got, def.ID)
+	}
+	if got := p.buildPreheatResponseFor(targetOf(other)).MachineID; got != other.ID {
+		t.Errorf("other preheat machineId = %d, want %d", got, other.ID)
+	}
+}
+
+// useTempPreheatFiles points the preheat state and history files at a
+// throwaway directory: starting or stopping a loop persists both.
+func useTempPreheatFiles(t *testing.T) {
+	t.Helper()
+	useTempPreheatStateFile(t)
+	orig := preheatHistoryFile
+	preheatHistoryFile = filepath.Join(t.TempDir(), "preheat_history.json")
+	t.Cleanup(func() { preheatHistoryFile = orig })
+}
+
+// otherLoopActive reports whether machine m's own live loop runs.
+func otherLoopActive(p *Poller, m *machines.Machine) bool {
+	p.liveMu.Lock()
+	defer p.liveMu.Unlock()
+	return p.livePollActiveLocked(targetOf(m))
+}
+
+// TestReconcileOtherPolling_WatchStartsAndStops (#2247): a connection that
+// watches a non-default machine starts that machine's own loop, and the loop
+// and its preheat run end when the connection closes.
+func TestReconcileOtherPolling_WatchStartsAndStops(t *testing.T) {
+	useTempPreheatFiles(t)
+	p, _, other, _, otherFake := newTwoMachinePoller(t)
+	otherFake.setStatus(okStatus(t, `{}`, 91, 92, 0, 0, false, "Other Profile", 2), nil)
+	p.hub.SetWatchListener(p.reconcileOtherPolling)
+	t.Cleanup(p.stopAllOtherLivePolling)
+	srv := httptest.NewServer(&sse.Handler{Hub: p.hub})
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/api/events?machineId=%d", srv.URL, other.ID), nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	waitFor(t, 2*time.Second, func() bool { return otherLoopActive(p, other) })
+	cancel()
+	waitFor(t, 2*time.Second, func() bool { return !otherLoopActive(p, other) })
+	p.preheatHist.mu.Lock()
+	open := p.preheatHist.open[other.ID]
+	p.preheatHist.mu.Unlock()
+	if open != nil {
+		t.Errorf("the other machine's preheat run is still open after its watcher left: %+v", open)
+	}
+}
+
+// TestReconcileOtherPolling_UnwatchedMachineIsNotPolled (#2247): nobody
+// watches the other machine and it has no switch, so it gets no loop and no
+// live state.
+func TestReconcileOtherPolling_UnwatchedMachineIsNotPolled(t *testing.T) {
+	useTempPreheatFiles(t)
+	p, _, other, _, _ := newTwoMachinePoller(t)
+	p.reconcileOtherPolling()
+	p.liveMu.Lock()
+	loops := len(p.otherLoops)
+	p.liveMu.Unlock()
+	if loops != 0 {
+		t.Errorf("%d other-machine loops run, want none", loops)
+	}
+	p.state.mu.Lock()
+	_, has := p.state.others[other.ID]
+	p.state.mu.Unlock()
+	if has {
+		t.Error("the unwatched machine got live state")
+	}
+}
+
+// TestApplyOtherMachinePower_SwitchOnStartsPolling (#2247): a non-default
+// machine whose own HA switch reads on is polled without a watcher, and its
+// loop stops once the switch reads off.
+func TestApplyOtherMachinePower_SwitchOnStartsPolling(t *testing.T) {
+	useTempPreheatFiles(t)
+	var state atomic.Value
+	state.Store("on")
+	haSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/states/switch.second") {
+			fmt.Fprintf(w, `{"state":%q}`, state.Load())
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(haSrv.Close)
+	t.Setenv("SUPERVISOR_TOKEN", "")
+	t.Setenv("GLP_HA_URL", haSrv.URL)
+	t.Setenv("GLP_HA_TOKEN", "test-token")
+	p := newTestPollerWithHA(t, &fakeAdapter{}, newTestDB(t), ha.NewClientFromEnv(), "")
+	t.Cleanup(p.stopAllOtherLivePolling)
+	other := addOtherMachine(t, p.registry, "Second", "gaggiuino", "second-machine.invalid", true)
+	sw := "switch.second"
+	other, err := p.registry.UpdateMachine(other.ID, machines.MachineInput{SwitchEntity: &sw}, nil)
+	if err != nil {
+		t.Fatalf("UpdateMachine: %v", err)
+	}
+	ctx := context.Background()
+
+	p.applyOtherMachinePower(ctx)
+	if !otherLoopActive(p, other) {
+		t.Fatal("switched-on other machine is not polled")
+	}
+	state.Store("off")
+	p.applyOtherMachinePower(ctx)
+	if otherLoopActive(p, other) {
+		t.Error("other machine still polled after its switch read off")
+	}
+}
+
+// TestHandleDefaultMachineChange_DropsNewDefaultsOtherLoop (#2247): the
+// machine that becomes the default leaves its own loop and state behind; the
+// default loop takes over.
+func TestHandleDefaultMachineChange_DropsNewDefaultsOtherLoop(t *testing.T) {
+	useTempPreheatFiles(t)
+	p, _, other, _, otherFake := newTwoMachinePoller(t)
+	otherFake.setStatus(okStatus(t, `{}`, 91, 92, 0, 0, false, "Other Profile", 2), nil)
+	t.Cleanup(p.stopLivePolling)
+	t.Cleanup(p.stopAllOtherLivePolling)
+	p.startOtherLivePolling(other)
+	if _, err := p.registry.SetDefaultMachine(other.ID); err != nil {
+		t.Fatalf("SetDefaultMachine: %v", err)
+	}
+
+	p.HandleDefaultMachineChange()
+
+	if otherLoopActive(p, &machines.Machine{ID: other.ID}) {
+		t.Error("the new default still runs its other-machine loop")
+	}
+	p.state.mu.Lock()
+	_, has := p.state.others[other.ID]
+	p.state.mu.Unlock()
+	if has {
+		t.Error("the new default still has other-machine state")
+	}
+	if !p.livePollActive() {
+		t.Error("the default loop did not take over the new default")
+	}
+}
+
+// TestHandleDefaultMachineChange_ReadyByStaysWithItsMachine (#2247): a
+// default change neither moves a pending ready-by target to another machine
+// nor drops it; each target stays with the machine it was set for.
+func TestHandleDefaultMachineChange_ReadyByStaysWithItsMachine(t *testing.T) {
+	useTempPreheatFiles(t)
+	p, def, other, _, _ := newTwoMachinePoller(t)
+	t.Cleanup(p.stopLivePolling)
+	t.Cleanup(p.stopAllOtherLivePolling)
+	defAt := time.Now().Add(2 * time.Hour).UnixMilli()
+	otherAt := time.Now().Add(3 * time.Hour).UnixMilli()
+	p.SetReadyByTarget(targetOf(def), &defAt)
+	p.SetReadyByTarget(targetOf(other), &otherAt)
+	if _, err := p.registry.SetDefaultMachine(other.ID); err != nil {
+		t.Fatalf("SetDefaultMachine: %v", err)
+	}
+
+	p.HandleDefaultMachineChange()
+
+	oldDef, err := p.registry.ResolveMachine(&def.ID)
+	if err != nil || oldDef == nil || oldDef.IsDefault {
+		t.Fatalf("ResolveMachine(old default) = %+v, %v", oldDef, err)
+	}
+	newDef, err := p.registry.ResolveMachine(&other.ID)
+	if err != nil || newDef == nil || !newDef.IsDefault {
+		t.Fatalf("ResolveMachine(new default) = %+v, %v", newDef, err)
+	}
+	if got := p.buildPreheatResponseFor(targetOf(newDef)).ReadyByTargetAt; got == nil || *got != otherAt {
+		t.Errorf("new default's readyByTargetAt = %v, want its own %d", got, otherAt)
+	}
+	if got := p.buildPreheatResponseFor(targetOf(oldDef)).ReadyByTargetAt; got == nil || *got != defAt {
+		t.Errorf("old default's readyByTargetAt = %v, want its own %d", got, defAt)
+	}
+	found := false
+	for _, rt := range p.readyByTargets() {
+		if rt.id == def.ID && !rt.isDefault {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("readyByTargets() misses the old default's pending target")
 	}
 }

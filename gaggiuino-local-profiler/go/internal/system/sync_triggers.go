@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/httputil"
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 )
 
 // sync_triggers.go implements the automatic drivers of the default
@@ -125,6 +126,32 @@ func (p *Poller) scheduleSyncAfterBrew() {
 		// profile edits made while it was offline, no extra network cost
 		// beyond what already just happened.
 		p.pushDirtyProfilesForDefaultMachine(ctx)
+	})
+}
+
+// scheduleOtherSyncAfterBrew is scheduleSyncAfterBrew for a non-default
+// machine (#2247): 3s after its brew ends, pull that machine's new shot so
+// the Live tab's quick rating finds it. The per-machine single-run guard of
+// syncOtherMachines applies; a sync already running for it covers the shot.
+func (p *Poller) scheduleOtherSyncAfterBrew(m *machines.Machine) {
+	if p.shots == nil {
+		return
+	}
+	ctx := p.syncCtx()
+	machine := *m
+	p.goBackground("system: post-brew sync (other machine)", func() {
+		select {
+		case <-time.After(syncAfterBrewDelay):
+		case <-ctx.Done():
+			return
+		}
+		if !p.beginOtherMachineSync(machine.ID) {
+			return
+		}
+		defer p.endOtherMachineSync(machine.ID)
+		if err := p.syncOneOtherMachine(ctx, &machine); err != nil {
+			log.Printf("system: post-brew sync (%s) failed: %v", machine.Name, err)
+		}
 	})
 }
 

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -33,6 +34,11 @@ const (
 type Event struct {
 	Type string
 	Data any
+	// MachineID scopes a machine's live-snapshot/preheat-update push
+	// (#2247): 0 goes to every subscriber (the default machine's pushes and
+	// every other event type, exactly as before), a machine id only to the
+	// subscribers watching that machine (see Handler's ?machineId).
+	MachineID int64
 }
 
 // subscriber is one open connection's delivery state: events is the channel
@@ -45,6 +51,8 @@ type Event struct {
 type subscriber struct {
 	events chan Event
 	resync chan struct{}
+	// watch is the machine id this connection watches (#2247), 0 for none.
+	watch int64
 }
 
 // Hub is a minimal in-process pub/sub every open SSE connection subscribes
@@ -53,6 +61,9 @@ type subscriber struct {
 type Hub struct {
 	mu   sync.Mutex
 	subs map[<-chan Event]*subscriber
+	// onWatch runs whenever a connection that watches a machine opens or
+	// closes (#2247), set via SetWatchListener.
+	onWatch func()
 }
 
 // NewHub returns an empty Hub, ready to use.
@@ -76,6 +87,9 @@ func (h *Hub) Publish(ev Event) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for _, s := range h.subs {
+		if ev.MachineID != 0 && s.watch != ev.MachineID {
+			continue
+		}
 		select {
 		case s.events <- ev:
 		default:
@@ -111,9 +125,13 @@ func (h *Hub) Subscribe() (<-chan Event, func()) {
 	unsubscribe := func() {
 		once.Do(func() {
 			h.mu.Lock()
+			watch, fn := s.watch, h.onWatch
 			delete(h.subs, s.events)
 			h.mu.Unlock()
 			close(s.events)
+			if watch != 0 && fn != nil {
+				go fn()
+			}
 		})
 	}
 	return s.events, unsubscribe
@@ -129,6 +147,54 @@ func (h *Hub) resyncChan(sub <-chan Event) <-chan struct{} {
 		return s.resync
 	}
 	return nil
+}
+
+// setWatch records the machine sub's connection watches (#2247) and tells
+// the watch listener about it.
+func (h *Hub) setWatch(sub <-chan Event, machineID int64) {
+	h.mu.Lock()
+	s, ok := h.subs[sub]
+	if ok {
+		s.watch = machineID
+	}
+	fn := h.onWatch
+	h.mu.Unlock()
+	if ok && machineID != 0 && fn != nil {
+		go fn()
+	}
+}
+
+// SetWatchListener installs fn, called in its own goroutine whenever a
+// connection that watches a machine opens or closes (#2247). nil removes it.
+func (h *Hub) SetWatchListener(fn func()) {
+	h.mu.Lock()
+	h.onWatch = fn
+	h.mu.Unlock()
+}
+
+// WatchedMachines returns the machine ids at least one open connection
+// watches (#2247).
+func (h *Hub) WatchedMachines() map[int64]bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	out := map[int64]bool{}
+	for _, s := range h.subs {
+		if s.watch != 0 {
+			out[s.watch] = true
+		}
+	}
+	return out
+}
+
+// watchedMachine reads the machine a connection watches from its ?machineId
+// (#2247). Absent, malformed or not positive means none: the connection then
+// gets the default machine's pushes only, exactly as before.
+func watchedMachine(r *http.Request) int64 {
+	id, err := strconv.ParseInt(r.URL.Query().Get("machineId"), 10, 64)
+	if err != nil || id <= 0 {
+		return 0
+	}
+	return id
 }
 
 // Handler serves GET /api/events: same headers, same padding comment, same
@@ -173,25 +239,28 @@ func drainBuffered(ch <-chan Event, first Event) (batch []Event, closed bool) {
 	}
 }
 
-// coalesceLiveSnapshots drops every live-snapshot event except the last —
-// each one is a full state snapshot, so the intermediate ones are pure
-// redundancy once a burst has queued up. Order of every other event type is
-// preserved, and the surviving snapshot keeps the position of the last one.
-// Returns events unchanged (no allocation) when it holds 0 or 1 snapshots.
+// coalesceLiveSnapshots drops every live-snapshot event except the last one
+// per machine (#2247: keyed by Event.MachineID, so a watched machine's
+// snapshot never replaces the default machine's) — each one is a full state
+// snapshot, so the intermediate ones are pure redundancy once a burst has
+// queued up. Order of every other event type is preserved, and each surviving
+// snapshot keeps the position of its machine's last one. Returns events
+// unchanged when no machine has more than one snapshot in the batch.
 func coalesceLiveSnapshots(events []Event) []Event {
-	lastSnap, snapCount := -1, 0
+	last := map[int64]int{}
+	snapCount := 0
 	for i, e := range events {
 		if e.Type == EventLiveSnapshot {
-			lastSnap = i
+			last[e.MachineID] = i
 			snapCount++
 		}
 	}
-	if snapCount <= 1 {
+	if snapCount <= len(last) {
 		return events
 	}
-	out := make([]Event, 0, len(events)-snapCount+1)
+	out := make([]Event, 0, len(events)-snapCount+len(last))
 	for i, e := range events {
-		if e.Type == EventLiveSnapshot && i != lastSnap {
+		if e.Type == EventLiveSnapshot && last[e.MachineID] != i {
 			continue
 		}
 		out = append(out, e)
@@ -241,6 +310,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// harmless.
 	sub, unsubscribe := h.Hub.Subscribe()
 	defer unsubscribe()
+	h.Hub.setWatch(sub, watchedMachine(r))
 	resync := h.Hub.resyncChan(sub)
 
 	if h.Prime != nil {

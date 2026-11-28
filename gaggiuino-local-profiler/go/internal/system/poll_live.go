@@ -24,18 +24,18 @@ import (
 // package's own RuntimeState.SetMachineStatus relies on the same
 // never-mutated-after-set invariant, see its doc comment).
 func (p *Poller) buildLiveDataResponse() LiveData {
-	defaultID, _ := p.defaultMachineID()
-	return p.buildLiveDataResponseFor(defaultID)
+	return p.buildLiveDataResponseFor(p.defaultTarget())
 }
 
 // buildLiveDataResponseFor is buildLiveDataResponse for an already-resolved
-// default machine id — the poll tick resolves the default machine once and
-// passes its id down instead of re-querying the registry (#1616).
-func (p *Poller) buildLiveDataResponseFor(defaultID int64) LiveData {
+// machine — the poll tick resolves its machine once and passes it down
+// instead of re-querying the registry (#1616); #2247 builds it for any
+// machine from that machine's own runtime and slots.
+func (p *Poller) buildLiveDataResponseFor(t liveTarget) LiveData {
 	// #902 idle stats: read the per-tick machineStatus (RuntimeState.mu
 	// first, then p.state.mu — the fixed lock ordering, see RuntimeState's
 	// doc comment). Get() releases before p.state.mu is taken below.
-	rt := p.runtime.Get()
+	rt := p.runtimeFor(t).Get()
 	var temp, targetTemp, pressure *float64
 	var waterLevel *int
 	// #1409: never nil, so machineWarnings is always a JSON array.
@@ -57,29 +57,30 @@ func (p *Poller) buildLiveDataResponseFor(defaultID int64) LiveData {
 
 	p.state.mu.Lock()
 	defer p.state.mu.Unlock()
+	sl := p.state.slotsLocked(t)
 	var dp *liveDatapoints
 	profileName := ""
-	isLive := p.state.liveAccum != nil
-	if p.state.liveAccum != nil {
-		dp = copyDatapoints(&p.state.liveAccum.datapoints)
-		profileName = p.state.liveAccum.profileName
+	isLive := sl.liveAccum != nil
+	if sl.liveAccum != nil {
+		dp = copyDatapoints(&sl.liveAccum.datapoints)
+		profileName = sl.liveAccum.profileName
 	}
 	var steamDP, flushDP, descaleDP *modeDatapoints
-	if p.state.steamAccum != nil {
-		steamDP = copyModeDatapoints(&p.state.steamAccum.datapoints)
+	if sl.steamAccum != nil {
+		steamDP = copyModeDatapoints(&sl.steamAccum.datapoints)
 	}
-	if p.state.flushAccum != nil {
-		flushDP = copyModeDatapoints(&p.state.flushAccum.datapoints)
+	if sl.flushAccum != nil {
+		flushDP = copyModeDatapoints(&sl.flushAccum.datapoints)
 	}
-	if p.state.descaleAccum != nil {
-		descaleDP = copyModeDatapoints(&p.state.descaleAccum.datapoints)
+	if sl.descaleAccum != nil {
+		descaleDP = copyModeDatapoints(&sl.descaleAccum.datapoints)
 	}
 	var machineReachable *bool
 	// #1324: copy the control snapshot (including its slice) under the lock,
 	// same copy-under-lock-then-hand-out-lock-free reasoning as copyDatapoints
 	// above — the JSON for this LiveData may be marshalled after this returns.
 	var machineControl *machines.ControlState
-	if ms := p.state.machines[defaultID]; ms != nil {
+	if ms := p.state.machines[t.id]; ms != nil {
 		machineReachable = ms.reachable
 		if ms.control != nil {
 			ctrl := *ms.control
@@ -88,21 +89,22 @@ func (p *Poller) buildLiveDataResponseFor(defaultID int64) LiveData {
 		}
 	}
 	return LiveData{
+		MachineID:        t.id,
 		IsLive:           isLive,
 		ProfileName:      profileName,
 		Datapoints:       dp,
-		Seq:              p.state.liveSeq,
+		Seq:              sl.liveSeq,
 		MachineReachable: machineReachable,
 
-		IsSteaming:      p.state.steamAccum != nil,
-		SteamSeq:        p.state.steamSeq,
+		IsSteaming:      sl.steamAccum != nil,
+		SteamSeq:        sl.steamSeq,
 		SteamDatapoints: steamDP,
-		IsFlushing:      p.state.flushAccum != nil,
-		FlushSeq:        p.state.flushSeq,
+		IsFlushing:      sl.flushAccum != nil,
+		FlushSeq:        sl.flushSeq,
 		FlushDatapoints: flushDP,
 
-		IsDescaling:       p.state.descaleAccum != nil,
-		DescaleSeq:        p.state.descaleSeq,
+		IsDescaling:       sl.descaleAccum != nil,
+		DescaleSeq:        sl.descaleSeq,
 		DescaleDatapoints: descaleDP,
 
 		Temperature:       temp,
@@ -161,7 +163,10 @@ func (p *Poller) emitLiveSnapshot() {
 }
 
 // emitLiveSnapshotFor is emitLiveSnapshot for the poll tick's already
-// resolved default machine (see buildLiveDataResponseFor).
-func (p *Poller) emitLiveSnapshotFor(defaultID int64) {
-	p.hub.Publish(sse.Event{Type: sse.EventLiveSnapshot, Data: p.buildLiveDataResponseFor(defaultID)})
+// resolved machine (see buildLiveDataResponseFor). The default machine's
+// snapshot goes to every subscriber as before; any other machine's only to
+// the subscribers watching it (#2247), so glp-integration keeps seeing the
+// default machine alone.
+func (p *Poller) emitLiveSnapshotFor(t liveTarget) {
+	p.hub.Publish(sse.Event{Type: sse.EventLiveSnapshot, Data: p.buildLiveDataResponseFor(t), MachineID: t.scope()})
 }

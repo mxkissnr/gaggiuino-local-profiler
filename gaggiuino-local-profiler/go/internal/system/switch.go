@@ -64,30 +64,38 @@ func (h *Handlers) postSwitchToggle(w http.ResponseWriter, r *http.Request) {
 }
 
 // switchEntityForRequest resolves the request's ?machineId to that machine's
-// HA switch entity through the machine registry (#2202), "" when the machine
-// has none. No machineId keeps the default machine (glp-integration and the
-// Orders view call without one). ok is false once an error response has been
-// written: 400 for a machineId that is not a number, 404 for one that names no
-// machine (never silently the default machine's switch), 500 for a registry
-// error.
+// HA switch entity (#2202), "" when the machine has none; see
+// targetForRequest.
 func (h *Handlers) switchEntityForRequest(w http.ResponseWriter, r *http.Request) (string, bool) {
+	t, ok := h.targetForRequest(w, r)
+	return t.switchEntity, ok
+}
+
+// targetForRequest resolves the request's ?machineId to that machine through
+// the machine registry (#2202, #2247): the switch, live-data, preheat and
+// ready-by routes all read it here. No machineId keeps the default machine
+// (glp-integration, the Orders view and older clients call without one). ok
+// is false once an error response has been written: 400 for a machineId that
+// is not a number, 404 for one that names no machine (never silently the
+// default machine), 500 for a registry error.
+func (h *Handlers) targetForRequest(w http.ResponseWriter, r *http.Request) (liveTarget, bool) {
 	raw := r.URL.Query().Get("machineId")
 	if raw == "" {
-		return h.poller.defaultSwitchEntity(), true
+		return h.poller.defaultTarget(), true
 	}
 	id, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid machineId")
-		return "", false
+		return liveTarget{}, false
 	}
 	machine, err := h.poller.registry.ResolveMachine(&id)
 	if errors.Is(err, machines.ErrUnknownMachine) {
 		writeError(w, http.StatusNotFound, "Unknown machine")
-		return "", false
+		return liveTarget{}, false
 	}
 	if err != nil {
 		internalError(w, err)
-		return "", false
+		return liveTarget{}, false
 	}
-	return switchEntityOf(machine), true
+	return targetOf(machine), true
 }

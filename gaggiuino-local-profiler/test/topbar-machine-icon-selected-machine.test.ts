@@ -57,6 +57,27 @@ describe('topbar machine icon follows the selected machine (#1201)', () => {
     expect(el.has('is-on')).toBe(false);
   });
 
+  // #2247: a Live tab watching machine 2 puts its payloads on the same stream.
+  it("a watched machine's snapshot never drives the default machine's icon", () => {
+    // The module remembers the previous test's snapshot; start from an idle one.
+    handleTopbarLiveSnapshotEvent({ isLive: false, machineId: 1 });
+    handleTopbarLiveSnapshotEvent({ isLive: true, machineId: 2 });
+    expect(el.has('is-brewing')).toBe(false);
+    handleTopbarLiveSnapshotEvent({ isLive: true, machineId: 1 });
+    expect(el.has('is-brewing')).toBe(true);
+  });
+
+  it("another machine's snapshot does not replace the remembered default snapshot", () => {
+    handleTopbarLiveSnapshotEvent({ isLive: true, machineId: 1 });
+    handleTopbarLiveSnapshotEvent({ isLive: false, machineId: 2 });
+    state.activeMachineId = 2;
+    renderTopbarMachineIcon();
+    syncTopbarMachineIconFallback(false);
+    state.activeMachineId = 1;
+    renderTopbarMachineIcon();
+    expect(el.has('is-brewing')).toBe(true);
+  });
+
   it('switching back to the default re-applies the last snapshot', () => {
     handleTopbarLiveSnapshotEvent({ isLive: true });
     state.activeMachineId = 2;

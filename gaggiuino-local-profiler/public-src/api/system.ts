@@ -1,4 +1,4 @@
-import { apiFetch, jsonBody } from './fetch.js';
+import { apiFetch, jsonBody, pathSeg } from './fetch.js';
 import { apiFetchToBlob, apiUpload } from './transport.js';
 import type { ApiFetchToBlobResult, ApiUploadResult } from './transport.js';
 import type { UiPrefs } from './types.js';
@@ -59,14 +59,14 @@ export function triggerSync(): Promise<Response> {
 
 // ── Live data (#325) ─────────────────────────────────────────────────────
 
-/** GET /api/preheat — the preheat widget's data. */
-export function getPreheat(): Promise<Response> {
-  return apiFetch('api/preheat');
+/** GET /api/preheat — the preheat widget's data; machineId reads a non-default machine (#2247). */
+export function getPreheat(machineId?: number): Promise<Response> {
+  return apiFetch(machineId === undefined ? 'api/preheat' : `api/preheat?machineId=${pathSeg(machineId)}`);
 }
 
-/** GET /api/live/data — one poll of the live shot state. */
-export function getLiveData(): Promise<Response> {
-  return apiFetch('api/live/data');
+/** GET /api/live/data — one poll of the live shot state; machineId reads a non-default machine (#2247). */
+export function getLiveData(machineId?: number): Promise<Response> {
+  return apiFetch(machineId === undefined ? 'api/live/data' : `api/live/data?machineId=${pathSeg(machineId)}`);
 }
 
 // ── Version / menu / achievements ────────────────────────────────────────

@@ -129,7 +129,7 @@ func TestSetReadyByTarget_RoundTrip(t *testing.T) {
 	p, _ := newTestPoller(t, fake)
 
 	target := time.Now().UnixMilli() + 30*60_000
-	p.SetReadyByTarget(&target)
+	p.SetReadyByTarget(p.defaultTarget(), &target)
 
 	status := p.PreheatStatus()
 	if status.ReadyByTargetAt == nil || *status.ReadyByTargetAt != target {
@@ -140,7 +140,7 @@ func TestSetReadyByTarget_RoundTrip(t *testing.T) {
 		t.Fatalf("PlannedSwitchOnAt = %v, want %d", status.PlannedSwitchOnAt, wantPlanned)
 	}
 
-	p.SetReadyByTarget(nil)
+	p.SetReadyByTarget(p.defaultTarget(), nil)
 	status = p.PreheatStatus()
 	if status.ReadyByTargetAt != nil || status.PlannedSwitchOnAt != nil {
 		t.Errorf("expected both fields nil after clearing, got %v / %v", status.ReadyByTargetAt, status.PlannedSwitchOnAt)
@@ -167,7 +167,7 @@ func TestCheckReadyByPreheat_FiresSwitchOnAndClearsTarget(t *testing.T) {
 	p := registryDeps
 
 	past := time.Now().UnixMilli() - 1000
-	p.SetReadyByTarget(nil) // no-op, ensures clean state
+	p.SetReadyByTarget(p.defaultTarget(), nil) // no-op, ensures clean state
 	p.state.mu.Lock()
 	target := past + 60_000
 	planned := past
@@ -250,7 +250,7 @@ func TestApplyStandbyTransition_LeaveResetsClock(t *testing.T) {
 	p.runtime.SetSwitchOnAt(&old)
 	p.runtime.SetStandby(true)
 
-	p.applyStandbyTransition(time.Now().UnixMilli(), false)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), false)
 
 	snap := p.runtime.Get()
 	if snap.Standby {
@@ -280,10 +280,10 @@ func TestApplyStandbyTransition_EnterResetsPreheatState(t *testing.T) {
 
 	onAt := time.Now().UnixMilli() - 5*60_000
 	p.runtime.SetSwitchOnAt(&onAt)
-	p.openPreheatRun(onAt)
+	p.openPreheatRun(1, onAt)
 	// A sample so this is a run worth recording: an empty one is discarded on
 	// standby entry (see TestApplyStandbyTransition_EmptyStartRunDiscarded).
-	p.recordPreheatSample(onAt+30_000, 92, 92)
+	p.recordPreheatSample(1, onAt+30_000, 92, 92)
 	p.runtime.SetStabilityReady(true)
 	for i := 0; i < tempStableMin; i++ {
 		p.runtime.PushTempHistory(92.0)
@@ -292,7 +292,7 @@ func TestApplyStandbyTransition_EnterResetsPreheatState(t *testing.T) {
 		t.Fatal("precondition: temp history should read as stable")
 	}
 
-	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), true)
 
 	snap := p.runtime.Get()
 	if !snap.Standby {
@@ -338,7 +338,7 @@ func TestApplyStandbyTransition_WakeHotBoilerStartsNewSession(t *testing.T) {
 	}
 
 	before := len(p.PreheatHistory())
-	p.applyStandbyTransition(time.Now().UnixMilli(), false)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), false)
 
 	snap := p.runtime.Get()
 	if snap.Standby {
@@ -374,7 +374,7 @@ func TestApplyStandbyTransition_NoLivePollingNoop(t *testing.T) {
 	p.runtime.SetSwitchOnAt(&old)
 	before := len(p.PreheatHistory())
 
-	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), true)
 
 	snap := p.runtime.Get()
 	if snap.Standby {
@@ -397,12 +397,12 @@ func TestApplyStandbyTransition_EmptyStartRunDiscarded(t *testing.T) {
 	p := newPreheatHistoryPoller(t, fake)
 	markLivePollingActive(t, p)
 
-	p.beginPreheatSession(time.Now().UnixMilli())
+	p.beginPreheatSession(p.defaultTarget(), time.Now().UnixMilli())
 	if len(p.PreheatHistory()) != 1 {
 		t.Fatal("precondition: the started session should have left an open run")
 	}
 
-	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), true)
 
 	if got := len(p.PreheatHistory()); got != 0 {
 		t.Fatalf("history len = %d, want 0 (the empty run dropped)", got)
@@ -418,10 +418,10 @@ func TestApplyStandbyTransition_RunWithSamplesFinalised(t *testing.T) {
 	markLivePollingActive(t, p)
 
 	onAt := time.Now().UnixMilli() - 60_000
-	p.openPreheatRun(onAt)
-	p.recordPreheatSample(onAt+30_000, 90, 93)
+	p.openPreheatRun(1, onAt)
+	p.recordPreheatSample(1, onAt+30_000, 90, 93)
 
-	p.applyStandbyTransition(time.Now().UnixMilli(), true)
+	p.applyStandbyTransition(p.defaultTarget(), time.Now().UnixMilli(), true)
 
 	runs := p.PreheatHistory()
 	if len(runs) != 1 {
@@ -547,5 +547,42 @@ func TestSavePreheatState_ConcurrentSavesLeaveNoTempFile(t *testing.T) {
 	}
 	if len(tmps) != 0 {
 		t.Fatalf("leftover temp files after concurrent saves: %v", tmps)
+	}
+}
+
+// TestCheckReadyByPreheat_SwitchesTheTargetMachineOn (#2247): a due ready-by
+// target of another machine turns on that machine's own switch and is
+// consumed, the default machine's switch is left alone.
+func TestCheckReadyByPreheat_SwitchesTheTargetMachineOn(t *testing.T) {
+	p, _, _, other, entities := newTwoMachineHAHandlers(t, "switch.default", "switch.other")
+	target := time.Now().UnixMilli() + int64(loadPreheatMinutes())*60_000 - 1000
+	p.SetReadyByTarget(targetOf(other), &target)
+
+	p.checkReadyByPreheat(context.Background())
+
+	if len(*entities) != 1 || (*entities)[0] != "switch.other" {
+		t.Fatalf("HA calls = %v, want exactly one turn_on for switch.other", *entities)
+	}
+	if st := p.buildPreheatResponseFor(targetOf(other)); st.ReadyByTargetAt != nil {
+		t.Errorf("other machine's target not consumed: %v", *st.ReadyByTargetAt)
+	}
+}
+
+// TestPreheatState_OtherMachineSurvivesRestart (#2247): another machine's
+// ready-by target is persisted next to the default machine's fields and
+// restored for that machine only.
+func TestPreheatState_OtherMachineSurvivesRestart(t *testing.T) {
+	p, _, _, other, _ := newTwoMachineHAHandlers(t, "switch.default", "switch.other")
+	target := time.Now().UnixMilli() + 60*60_000
+	p.SetReadyByTarget(targetOf(other), &target)
+
+	restarted := NewPoller(p.registry, p.adapters, newHubForTest(), p.ha)
+	restarted.loadPreheatState()
+
+	if st := restarted.buildPreheatResponseFor(targetOf(other)); st.ReadyByTargetAt == nil || *st.ReadyByTargetAt != target {
+		t.Errorf("other machine's restored target = %v, want %d", st.ReadyByTargetAt, target)
+	}
+	if st := restarted.buildPreheatResponse(); st.ReadyByTargetAt != nil {
+		t.Errorf("default machine got a target %v, want none", *st.ReadyByTargetAt)
 	}
 }
