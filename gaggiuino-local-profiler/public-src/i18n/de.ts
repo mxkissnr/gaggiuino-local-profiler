@@ -87,6 +87,7 @@ const de: Partial<Translations> = {
     ach_verdict_of:(total)=>`von ${total} Stempeln`, ach_verdict_next:(name)=>`Als Nächstes: ${name}`, ach_verdict_open:(n)=>n === 1 ? 'Noch 1 Stempel offen' : `Noch ${n} Stempel offen`, ach_verdict_all:'Alle Stempel gesammelt', ach_soon:'Fast geschafft', ach_recent:'Zuletzt gestempelt', ach_filter_got:'Gesammelt', ach_filter_open:'Offen',
     ach_loading:'Erfolge werden geladen …',
     verdict_no_data:'Noch nicht genug Daten für ein Urteil.',
+    verdict_no_extraction:'Keine Extraktion aufgezeichnet.',
     verdict_bean_target_hint:'Bewertet anhand des eigenen Brew-Ziels dieser Bohne',
     verdict_pressure_profile_hint:'Bewertet anhand des eigenen Druckziels dieses Profils',
     verdict_pressure_omitted_hint:'Druck nicht bewertet – dieser Shot erreichte nie 5 bar und für ihn ist kein Druckziel bekannt',
