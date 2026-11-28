@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { calcShotScore, calcShotScoreDetail, parseBrewRatio } from '../public-src/shared/score.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { calcShotScore, calcShotScoreDetail, hasNoExtraction, parseBrewRatio } from '../public-src/shared/score.js';
 import { detectChanneling } from '../public-src/utils.js';
 
 describe('calcShotScore', () => {
@@ -299,5 +302,31 @@ describe('calcShotScore — 0.0 °C thermocouple dropouts (#1688)', () => {
             },
         };
         expect(calcShotScore(sparse)).toBe(calcShotScore(clean));
+    });
+});
+
+// #2248: the score and the shot page's grind advice share one no-extraction
+// rule. Over every shared parity case (Go and TS agree on them) a shot has no
+// extraction exactly when it has no score.
+describe('hasNoExtraction (#2248)', () => {
+    const fixture = JSON.parse(readFileSync(
+        join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'score-parity.json'), 'utf8',
+    )) as { name: string; shot: { datapoints?: Record<string, number[]> }; expected: number | null }[];
+
+    it('matches the score on every parity fixture case', () => {
+        expect(fixture.some(c => c.expected === null)).toBe(true);
+        for (const c of fixture) {
+            expect(hasNoExtraction(c.shot.datapoints), c.name).toBe(c.expected === null);
+        }
+    });
+
+    it('needs 4 pressure samples above 0, and a pump that ran when pump flow is recorded', () => {
+        const pressure = [40, 40, 40, 40];
+        expect(hasNoExtraction(undefined)).toBe(true);
+        expect(hasNoExtraction({ pressure: [40, 40, 40] })).toBe(true);
+        expect(hasNoExtraction({ pressure })).toBe(false);
+        expect(hasNoExtraction({ pressure, pumpFlow: [0, 0, 0, 0], waterPumped: [0, 0, 0, 0] })).toBe(true);
+        expect(hasNoExtraction({ pressure, pumpFlow: [0, 0, 0, 0], shotWeight: [0, 0, 0, 12] })).toBe(false);
+        expect(hasNoExtraction({ pressure, pumpFlow: [0, 5, 0, 0] })).toBe(false);
     });
 });
