@@ -120,18 +120,33 @@ func (h *Handlers) machineStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// liveData serves GET /api/live/data.
+// liveData serves GET /api/live/data for the ?machineId machine (#2247),
+// the default machine without one.
 func (h *Handlers) liveData(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, h.poller.buildLiveDataResponse())
+	t, ok := h.targetForRequest(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, h.poller.buildLiveDataResponseFor(t))
 }
 
-// getPreheat serves GET /api/preheat.
+// getPreheat serves GET /api/preheat for the ?machineId machine (#2247), the
+// default machine without one.
 func (h *Handlers) getPreheat(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, h.poller.buildPreheatResponse())
+	t, ok := h.targetForRequest(w, r)
+	if !ok {
+		return
+	}
+	writeJSON(w, http.StatusOK, h.poller.buildPreheatResponseFor(t))
 }
 
-// postPreheatReadyBy serves POST /api/preheat/ready-by (#541).
+// postPreheatReadyBy serves POST /api/preheat/ready-by (#541) for the
+// ?machineId machine (#2247), the default machine without one.
 func (h *Handlers) postPreheatReadyBy(w http.ResponseWriter, r *http.Request) {
+	t, ok := h.targetForRequest(w, r)
+	if !ok {
+		return
+	}
 	body, ok := decodeOptionalJSONBody(w, r)
 	if !ok {
 		return
@@ -154,15 +169,12 @@ func (h *Handlers) postPreheatReadyBy(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "targetAt must not be in the past")
 		return
 	}
-	if targetAt != nil {
-		entity := h.poller.defaultSwitchEntity()
-		if !h.poller.ha.Enabled() || entity == "" {
-			writeError(w, http.StatusBadRequest, "switch_entity nicht konfiguriert")
-			return
-		}
+	if targetAt != nil && (!h.poller.ha.Enabled() || t.switchEntity == "") {
+		writeError(w, http.StatusBadRequest, "switch_entity nicht konfiguriert")
+		return
 	}
-	h.poller.SetReadyByTarget(targetAt)
-	writeJSON(w, http.StatusOK, h.poller.buildPreheatResponse())
+	h.poller.SetReadyByTarget(t, targetAt)
+	writeJSON(w, http.StatusOK, h.poller.buildPreheatResponseFor(t))
 }
 
 // getVersion serves GET /api/version.
