@@ -18,7 +18,7 @@ import type { ShotLike } from './utils.js';
 import { formatTimeWindow } from '../library/profile-time-target.js';
 import { mapShotDatapoints } from '../../utils.js';
 import { ensureCurves, getRawCurve, getCachedShotData, evictCurve } from '../../shot-curves.js';
-import { calcGrindAdvice, calcComparativeGrindAdvice, _miniShotChart } from './grind.js';
+import { calcGrindAdvice, calcComparativeGrindAdvice, shotHasNoExtraction, _miniShotChart } from './grind.js';
 import { renderAnnotationPanel, annotationBusy, _applyShotDefaults } from './annotation.js';
 import { markDirty }                                          from '../../live-sync.js';
 import { updatePQChart }                                      from './charts.js';
@@ -873,11 +873,15 @@ export async function updateView(): Promise<void> {
     ].filter(Boolean);
     const scoreHint: Html = hintTitles.length
       ? html`<span class="verdict-bean-target-hint" title="${esc(hintTitles.join('\n'))}">${TARGET_ICON_SVG}</span>` : html``;
-    _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(t('verdict_no_data'))}${scoreHint}`;
+    // #2248: a shot in which nothing was extracted has no score and no grind
+    // verdict; the header and the share card say so instead.
+    const noExtraction = shotHasNoExtraction(shotA);
+    const fallbackText = noExtraction ? t('verdict_no_extraction') : t('verdict_no_data');
+    _el('verdictHeadline').innerHTML = html`${advice ? html`${advice.icon} ${esc(advice.text)}` : esc(fallbackText)}${scoreHint}`;
     // #2166: the share card draws this same verdict.
     rememberShotVerdict(shotA.id, {
       type: advice?.type ?? '',
-      text: advice?.text ?? '',
+      text: advice?.text ?? (noExtraction ? fallbackText : ''),
       delta: previousShot && sc != null && prevScore != null ? sc - prevScore : null,
       vs: previousShot && sc != null && prevScore != null ? verdictComparisonText(comparable) : '',
     });
