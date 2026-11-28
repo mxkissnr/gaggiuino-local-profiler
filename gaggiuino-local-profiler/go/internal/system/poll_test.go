@@ -3,12 +3,17 @@ package system
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/ha"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/machines/proto"
 	"github.com/mxkissnr/gaggiuino-local-profiler/go/internal/sse"
@@ -1025,5 +1030,190 @@ func TestBuildPreheatResponse_CarriesMachineID(t *testing.T) {
 	}
 	if got := p.buildPreheatResponseFor(targetOf(other)).MachineID; got != other.ID {
 		t.Errorf("other preheat machineId = %d, want %d", got, other.ID)
+	}
+}
+
+// useTempPreheatFiles points the preheat state and history files at a
+// throwaway directory: starting or stopping a loop persists both.
+func useTempPreheatFiles(t *testing.T) {
+	t.Helper()
+	useTempPreheatStateFile(t)
+	orig := preheatHistoryFile
+	preheatHistoryFile = filepath.Join(t.TempDir(), "preheat_history.json")
+	t.Cleanup(func() { preheatHistoryFile = orig })
+}
+
+// otherLoopActive reports whether machine m's own live loop runs.
+func otherLoopActive(p *Poller, m *machines.Machine) bool {
+	p.liveMu.Lock()
+	defer p.liveMu.Unlock()
+	return p.livePollActiveLocked(targetOf(m))
+}
+
+// TestReconcileOtherPolling_WatchStartsAndStops (#2247): a connection that
+// watches a non-default machine starts that machine's own loop, and the loop
+// and its preheat run end when the connection closes.
+func TestReconcileOtherPolling_WatchStartsAndStops(t *testing.T) {
+	useTempPreheatFiles(t)
+	p, _, other, _, otherFake := newTwoMachinePoller(t)
+	otherFake.setStatus(okStatus(t, `{}`, 91, 92, 0, 0, false, "Other Profile", 2), nil)
+	p.hub.SetWatchListener(p.reconcileOtherPolling)
+	t.Cleanup(p.stopAllOtherLivePolling)
+	srv := httptest.NewServer(&sse.Handler{Hub: p.hub})
+	t.Cleanup(srv.Close)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/api/events?machineId=%d", srv.URL, other.ID), nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+
+	waitFor(t, 2*time.Second, func() bool { return otherLoopActive(p, other) })
+	cancel()
+	waitFor(t, 2*time.Second, func() bool { return !otherLoopActive(p, other) })
+	p.preheatHist.mu.Lock()
+	open := p.preheatHist.open[other.ID]
+	p.preheatHist.mu.Unlock()
+	if open != nil {
+		t.Errorf("the other machine's preheat run is still open after its watcher left: %+v", open)
+	}
+}
+
+// TestReconcileOtherPolling_UnwatchedMachineIsNotPolled (#2247): nobody
+// watches the other machine and it has no switch, so it gets no loop and no
+// live state.
+func TestReconcileOtherPolling_UnwatchedMachineIsNotPolled(t *testing.T) {
+	useTempPreheatFiles(t)
+	p, _, other, _, _ := newTwoMachinePoller(t)
+	p.reconcileOtherPolling()
+	p.liveMu.Lock()
+	loops := len(p.otherLoops)
+	p.liveMu.Unlock()
+	if loops != 0 {
+		t.Errorf("%d other-machine loops run, want none", loops)
+	}
+	p.state.mu.Lock()
+	_, has := p.state.others[other.ID]
+	p.state.mu.Unlock()
+	if has {
+		t.Error("the unwatched machine got live state")
+	}
+}
+
+// TestApplyOtherMachinePower_SwitchOnStartsPolling (#2247): a non-default
+// machine whose own HA switch reads on is polled without a watcher, and its
+// loop stops once the switch reads off.
+func TestApplyOtherMachinePower_SwitchOnStartsPolling(t *testing.T) {
+	useTempPreheatFiles(t)
+	var state atomic.Value
+	state.Store("on")
+	haSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/states/switch.second") {
+			fmt.Fprintf(w, `{"state":%q}`, state.Load())
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(haSrv.Close)
+	t.Setenv("SUPERVISOR_TOKEN", "")
+	t.Setenv("GLP_HA_URL", haSrv.URL)
+	t.Setenv("GLP_HA_TOKEN", "test-token")
+	p := newTestPollerWithHA(t, &fakeAdapter{}, newTestDB(t), ha.NewClientFromEnv(), "")
+	t.Cleanup(p.stopAllOtherLivePolling)
+	other := addOtherMachine(t, p.registry, "Second", "gaggiuino", "second-machine.invalid", true)
+	sw := "switch.second"
+	other, err := p.registry.UpdateMachine(other.ID, machines.MachineInput{SwitchEntity: &sw}, nil)
+	if err != nil {
+		t.Fatalf("UpdateMachine: %v", err)
+	}
+	ctx := context.Background()
+
+	p.applyOtherMachinePower(ctx)
+	if !otherLoopActive(p, other) {
+		t.Fatal("switched-on other machine is not polled")
+	}
+	state.Store("off")
+	p.applyOtherMachinePower(ctx)
+	if otherLoopActive(p, other) {
+		t.Error("other machine still polled after its switch read off")
+	}
+}
+
+// TestHandleDefaultMachineChange_DropsNewDefaultsOtherLoop (#2247): the
+// machine that becomes the default leaves its own loop and state behind; the
+// default loop takes over.
+func TestHandleDefaultMachineChange_DropsNewDefaultsOtherLoop(t *testing.T) {
+	useTempPreheatFiles(t)
+	p, _, other, _, otherFake := newTwoMachinePoller(t)
+	otherFake.setStatus(okStatus(t, `{}`, 91, 92, 0, 0, false, "Other Profile", 2), nil)
+	t.Cleanup(p.stopLivePolling)
+	t.Cleanup(p.stopAllOtherLivePolling)
+	p.startOtherLivePolling(other)
+	if _, err := p.registry.SetDefaultMachine(other.ID); err != nil {
+		t.Fatalf("SetDefaultMachine: %v", err)
+	}
+
+	p.HandleDefaultMachineChange()
+
+	if otherLoopActive(p, &machines.Machine{ID: other.ID}) {
+		t.Error("the new default still runs its other-machine loop")
+	}
+	p.state.mu.Lock()
+	_, has := p.state.others[other.ID]
+	p.state.mu.Unlock()
+	if has {
+		t.Error("the new default still has other-machine state")
+	}
+	if !p.livePollActive() {
+		t.Error("the default loop did not take over the new default")
+	}
+}
+
+// TestHandleDefaultMachineChange_ReadyByStaysWithItsMachine (#2247): a
+// default change neither moves a pending ready-by target to another machine
+// nor drops it; each target stays with the machine it was set for.
+func TestHandleDefaultMachineChange_ReadyByStaysWithItsMachine(t *testing.T) {
+	useTempPreheatFiles(t)
+	p, def, other, _, _ := newTwoMachinePoller(t)
+	t.Cleanup(p.stopLivePolling)
+	t.Cleanup(p.stopAllOtherLivePolling)
+	defAt := time.Now().Add(2 * time.Hour).UnixMilli()
+	otherAt := time.Now().Add(3 * time.Hour).UnixMilli()
+	p.SetReadyByTarget(targetOf(def), &defAt)
+	p.SetReadyByTarget(targetOf(other), &otherAt)
+	if _, err := p.registry.SetDefaultMachine(other.ID); err != nil {
+		t.Fatalf("SetDefaultMachine: %v", err)
+	}
+
+	p.HandleDefaultMachineChange()
+
+	oldDef, err := p.registry.ResolveMachine(&def.ID)
+	if err != nil || oldDef == nil || oldDef.IsDefault {
+		t.Fatalf("ResolveMachine(old default) = %+v, %v", oldDef, err)
+	}
+	newDef, err := p.registry.ResolveMachine(&other.ID)
+	if err != nil || newDef == nil || !newDef.IsDefault {
+		t.Fatalf("ResolveMachine(new default) = %+v, %v", newDef, err)
+	}
+	if got := p.buildPreheatResponseFor(targetOf(newDef)).ReadyByTargetAt; got == nil || *got != otherAt {
+		t.Errorf("new default's readyByTargetAt = %v, want its own %d", got, otherAt)
+	}
+	if got := p.buildPreheatResponseFor(targetOf(oldDef)).ReadyByTargetAt; got == nil || *got != defAt {
+		t.Errorf("old default's readyByTargetAt = %v, want its own %d", got, defAt)
+	}
+	found := false
+	for _, rt := range p.readyByTargets() {
+		if rt.id == def.ID && !rt.isDefault {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("readyByTargets() misses the old default's pending target")
 	}
 }
