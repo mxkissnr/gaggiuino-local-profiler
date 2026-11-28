@@ -65,12 +65,10 @@ function legacyDurationScore(secs: number): number {
 // phase-less profile records on Gaggiuino main-7cb0a86: residual pressure only,
 // so it is unscored. The second is the same residue with the pump running, and
 // the third has no pump-flow series at all, so it keeps its pre-#2242 score.
-const noWaterCaseNames = [
-    'pump never ran (#2242)',
-    'residual pressure but the pump ran (#2242)',
-    "pump flow series missing keeps today's score (#2242)",
-];
-const caseNames = new Set(cases.map(c => c.name));
+const neverRanCase = 'pump never ran (#2242)';
+const pumpRanCase = 'residual pressure but the pump ran (#2242)';
+const missingPumpFlowCase = "pump flow series missing keeps today's score (#2242)";
+const noWaterCases = [neverRanCase, pumpRanCase, missingPumpFlowCase];
 
 const textbookShot = (cases.find(c => c.name === 'textbook shot')?.shot ?? {}) as Record<string, unknown>;
 function textbookShotWithDuration(duration: number): Record<string, unknown> {
@@ -98,17 +96,20 @@ describe('durationScore matches the legacy generic band (#1504)', () => {
 });
 
 describe('no-water rule mirrors the Go scorer (#2242)', () => {
-    it('has the shared fixture cases', () => {
-        for (const name of noWaterCaseNames) expect(caseNames.has(name), name).toBe(true);
+    it('has the three shared fixture cases', () => {
+        const names = new Set(cases.map(c => c.name));
+        for (const name of noWaterCases) {
+            expect(names.has(name), name).toBe(true);
+        }
     });
 
     it('scores no shot in which the pump never ran', () => {
-        const shot = cases.find(c => c.name === noWaterCaseNames[0])?.shot;
+        const shot = cases.find(c => c.name === neverRanCase)?.shot;
         expect(calcShotScore(shot)).toBeNull();
     });
 
-    it('keeps scoring when the pump ran or no pump-flow series exists', () => {
-        for (const name of noWaterCaseNames.slice(1)) {
+    it('keeps scoring a shot whose pump ran, or without a pump-flow series', () => {
+        for (const name of [pumpRanCase, missingPumpFlowCase]) {
             const shot = cases.find(c => c.name === name)?.shot;
             expect(calcShotScore(shot), name).not.toBeNull();
         }
