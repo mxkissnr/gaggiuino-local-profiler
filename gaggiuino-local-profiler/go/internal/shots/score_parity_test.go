@@ -63,6 +63,16 @@ var profileWindowParityCases = []string{
 	"no window: 29 s keeps the generic band",
 }
 
+// noWaterParityCases are the #2242 cases that must exist in the shared
+// fixture: a shot in which the pump never ran (unscored), the same residual
+// pressure with the pump running (still scored), and a shot with no pump-flow
+// series at all (keeps its pre-#2242 score).
+var noWaterParityCases = []string{
+	"pump never ran (#2242)",
+	"residual pressure but the pump ran (#2242)",
+	"pump flow series missing keeps today's score (#2242)",
+}
+
 // TestScoreParityFixture scores every fixture case with the same expectations
 // its TypeScript twin uses, including the per-profile time window (#1504).
 func TestScoreParityFixture(t *testing.T) {
@@ -74,6 +84,11 @@ func TestScoreParityFixture(t *testing.T) {
 	for _, name := range profileWindowParityCases {
 		if !seen[name] {
 			t.Fatalf("score parity fixture is missing the #1504 case %q", name)
+		}
+	}
+	for _, name := range noWaterParityCases {
+		if !seen[name] {
+			t.Fatalf("score parity fixture is missing the #2242 case %q", name)
 		}
 	}
 

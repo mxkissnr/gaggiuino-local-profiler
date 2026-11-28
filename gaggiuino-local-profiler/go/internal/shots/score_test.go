@@ -580,57 +580,38 @@ func durationComponent(detail ScoreDetail) (ScoreComponent, bool) {
 
 // pumplessShot builds the shot a phase-less profile records on Gaggiuino
 // main-7cb0a86 (#2242): residual pressure fading to 0, pump flow and water
-// pumped at 0 throughout, no scale, and a flat 1 C temperature.
+// pumped at 0 throughout, no scale, and a flat 1 C temperature and target.
 func pumplessShot() Shot {
-	pressure := make([]any, 20)
-	for i := range pressure {
-		switch {
-		case i < 4:
-			pressure[i] = 3.0
-		case i < 7:
-			pressure[i] = 2.0
-		case i < 10:
-			pressure[i] = 1.0
-		default:
-			pressure[i] = 0.0
-		}
-	}
-	zeros := make([]any, 20)
-	for i := range zeros {
-		zeros[i] = 0.0
-	}
-	temperature := make([]any, 20)
-	targetTemperature := make([]any, 20)
-	timeInShot := make([]any, 20)
-	for i := range temperature {
-		temperature[i] = 1.0
-		targetTemperature[i] = 1.0
-		timeInShot[i] = float64(i) * 10
-	}
+	zeros := mkPoints(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 	return Shot{
 		"duration": 273.0,
 		"datapoints": map[string]any{
-			"pressure":          pressure,
+			"pressure":          mkPoints(3, 3, 3, 2, 2, 2, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
 			"pumpFlow":          zeros,
 			"waterPumped":       zeros,
 			"shotWeight":        zeros,
-			"temperature":       temperature,
-			"targetTemperature": targetTemperature,
-			"timeInShot":        timeInShot,
+			"temperature":       mkPoints(10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10),
+			"targetTemperature": mkPoints(10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10),
+			"timeInShot":        mkPoints(0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190),
 		},
-		"annotation": map[string]any{"dose": 18.0},
 	}
 }
 
-// #2242: a shot in which the pump never ran gets no score, in the classic
-// model and in the adherence model (which starts from the classic result).
-func TestNoWaterMovedIsNotScored(t *testing.T) {
+// #2242: the ground-truth shot from a dev install on Gaggiuino main-7cb0a86 —
+// a blind shot with a phase-less profile. It recorded only residual pressure,
+// pump flow / water pumped / weight at 0 throughout, and a flat 1 C
+// temperature and target, and it scored 100 before this rule.
+func TestPumpNeverRanIsNotScored(t *testing.T) {
 	shot := pumplessShot()
-	if got := CalcShotScoreTargets(shot, ScoreTargets{}).Score; got != nil {
-		t.Errorf("classic score = %d, want nil for a shot whose pump never ran", *got)
+	detail := CalcShotScoreTargets(shot, ScoreTargets{})
+	if detail.Score != nil {
+		t.Fatalf("score = %d, want nil for a shot in which the pump never ran", *detail.Score)
+	}
+	if len(detail.Components) != 0 {
+		t.Errorf("components = %+v, want none for an unscored shot", detail.Components)
 	}
 	if got := scoreWithAdherence(shot, ScoreTargets{}).Score; got != nil {
-		t.Errorf("adherence score = %d, want nil for a shot whose pump never ran", *got)
+		t.Errorf("adherence score = %d, want nil for a shot in which the pump never ran", *got)
 	}
 }
 
