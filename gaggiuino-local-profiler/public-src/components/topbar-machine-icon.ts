@@ -60,14 +60,25 @@ function iconMachine() {
       || (S.machines || [])[0];
 }
 
-// SSE live data only describes the default machine (#952), so it may drive
-// the icon only while the icon shows that one. A single-machine install
-// always counts as default.
+// SSE live data drives the icon only for the default machine (#952), so only
+// while the icon shows that one. The stream also carries the machine a Live
+// tab watches (#2247); those payloads are filtered by machineId below. A
+// single-machine install always counts as default.
 function iconShowsDefaultMachine(): boolean {
   const machines = S.machines || [];
   if (machines.length <= 1) return true;
   const machine = iconMachine();
   return !machine || machine.isDefault === true;
+}
+
+// #2247: the stream also carries the machine a Live tab watches; only the
+// default machine's payloads drive this icon. No machineId (older servers,
+// demo frames) counts as the default machine.
+function isDefaultMachinePayload(payload: unknown): boolean {
+  const id = (payload as { machineId?: unknown } | null)?.machineId;
+  if (typeof id !== 'number') return true;
+  const def = (S.machines || []).find(m => m.isDefault)?.id;
+  return def === undefined || id === def;
 }
 
 let _lastSnapshot: unknown = null;
@@ -94,12 +105,14 @@ let _lastPreheat: unknown = null;
 // live.ts's own handlers for the same two event types (multiple listeners
 // per event are supported, see sse.ts's onEvent()).
 export function handleTopbarLiveSnapshotEvent(msg: unknown): void {
+  if (!isDefaultMachinePayload(msg)) return;
   _lastSnapshot = msg;
   if (!iconShowsDefaultMachine()) return;
   _applyState(msg);
 }
 
 export function handleTopbarPreheatUpdateEvent(preheat: unknown): void {
+  if (!isDefaultMachinePayload(preheat)) return;
   _lastPreheat = preheat;
   if (!iconShowsDefaultMachine()) return;
   // #1383: resolve against the last live snapshot, not null — a preheat event
