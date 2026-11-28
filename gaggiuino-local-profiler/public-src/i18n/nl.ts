@@ -114,7 +114,6 @@ const nl: Partial<Translations> = {
     autosave_pending:'Opslaan…', autosave_saved:'Opgeslagen', autosave_failed:'Niet opgeslagen',
     grind_ok:'Maalgraad is goed',
     live_connecting:'Verbinden …', live_brewing:'Extraheren …',
-    live_machine_unavailable:'Live-weergave is nog niet beschikbaar voor deze machine.',
     machine_unreachable_title:'Machine niet bereikbaar',
     power_btn_on_title:'Machine AAN – klik om uit te schakelen',
     power_btn_off_title:'Machine UIT – klik om in te schakelen',

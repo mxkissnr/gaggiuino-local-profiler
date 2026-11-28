@@ -114,7 +114,6 @@ const de: Partial<Translations> = {
     autosave_pending:'Speichert…', autosave_saved:'Gespeichert', autosave_failed:'Nicht gespeichert',
     grind_ok:'Mahlgrad passt',
     live_connecting:'Verbinde …', live_brewing:'Brüht …',
-    live_machine_unavailable:'Live-Ansicht ist für diese Maschine noch nicht verfügbar.',
     machine_unreachable_title:'Maschine nicht erreichbar',
     power_btn_on_title:'Maschine AN – zum Ausschalten klicken',
     power_btn_off_title:'Maschine AUS – zum Einschalten klicken',
