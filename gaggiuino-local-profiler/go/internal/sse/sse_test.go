@@ -582,3 +582,95 @@ func TestHandler_EventPublishedDuringPrimeIsNotLost(t *testing.T) {
 		t.Errorf("event data = %v, want from:prime", data)
 	}
 }
+
+// TestHub_PublishScopedToWatchers (#2247): an event scoped to a machine
+// reaches only the subscribers watching that machine, an unscoped one (the
+// default machine's pushes) still reaches every subscriber.
+func TestHub_PublishScopedToWatchers(t *testing.T) {
+	h := NewHub()
+	plain, cancelPlain := h.Subscribe()
+	defer cancelPlain()
+	watching, cancelWatching := h.Subscribe()
+	defer cancelWatching()
+	h.setWatch(watching, 7)
+
+	h.Publish(Event{Type: EventLiveSnapshot, Data: "other", MachineID: 7})
+	h.Publish(Event{Type: EventLiveSnapshot, Data: "default"})
+
+	if got := <-plain; got.Data != "default" {
+		t.Errorf("unwatched subscriber got %v first, want only the default machine's event", got.Data)
+	}
+	select {
+	case got := <-plain:
+		t.Errorf("unwatched subscriber got an extra event %v", got.Data)
+	default:
+	}
+	if got := <-watching; got.Data != "other" || got.MachineID != 7 {
+		t.Errorf("watching subscriber's first event = %+v, want the machine 7 event", got)
+	}
+	if got := <-watching; got.Data != "default" {
+		t.Errorf("watching subscriber's second event = %v, want the default machine's event", got.Data)
+	}
+}
+
+// TestCoalesceLiveSnapshots_PerMachine (#2247): a burst holding two machines'
+// snapshots keeps the newest one of each machine.
+func TestCoalesceLiveSnapshots_PerMachine(t *testing.T) {
+	snap := func(machineID int64, n int) Event {
+		return Event{Type: EventLiveSnapshot, Data: n, MachineID: machineID}
+	}
+	in := []Event{snap(0, 1), snap(7, 2), snap(0, 3), snap(7, 4)}
+	got := coalesceLiveSnapshots(in)
+	if len(got) != 2 || got[0].Data != 3 || got[0].MachineID != 0 || got[1].Data != 4 || got[1].MachineID != 7 {
+		t.Fatalf("got %+v, want the default machine's snapshot 3 then machine 7's snapshot 4", got)
+	}
+	one := []Event{snap(0, 1), snap(7, 2)}
+	if got := coalesceLiveSnapshots(one); &got[0] != &one[0] {
+		t.Error("expected the input slice returned unchanged with one snapshot per machine")
+	}
+}
+
+// TestWatchedMachine (#2247): only a positive integer ?machineId watches a
+// machine; anything else watches none.
+func TestWatchedMachine(t *testing.T) {
+	for query, want := range map[string]int64{"": 0, "?machineId=": 0, "?machineId=abc": 0, "?machineId=0": 0, "?machineId=-3": 0, "?machineId=12": 12} {
+		r := httptest.NewRequest(http.MethodGet, "/api/events"+query, nil)
+		if got := watchedMachine(r); got != want {
+			t.Errorf("watchedMachine(%q) = %d, want %d", query, got, want)
+		}
+	}
+}
+
+// TestHandler_MachineIdQueryWatchesMachine (#2247): a stream opened with
+// ?machineId=7 receives machine 7's scoped events but not machine 8's.
+func TestHandler_MachineIdQueryWatchesMachine(t *testing.T) {
+	hub := NewHub()
+	handler := &Handler{
+		Hub: hub,
+		// Prime runs after the handler subscribed and recorded the watch, so
+		// reading the primed event proves the watch is in place.
+		Prime: func() []Event { return []Event{{Type: EventPreheatUpdate, Data: map[string]any{"ready": true}}} },
+	}
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/api/events?machineId=7")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	defer resp.Body.Close()
+	reader := bufio.NewReader(resp.Body)
+	readLines(t, reader, 5, 2*time.Second)
+
+	hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"m": 8}, MachineID: 8})
+	hub.Publish(Event{Type: EventLiveSnapshot, Data: map[string]any{"m": 7}, MachineID: 7})
+
+	lines := readLines(t, reader, 3, 2*time.Second)
+	var data map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimPrefix(lines[1], "data: ")), &data); err != nil {
+		t.Fatalf("decoding event data: %v", err)
+	}
+	if data["m"] != float64(7) {
+		t.Errorf("first delivered event = %v, want machine 7's (machine 8's must not arrive)", data)
+	}
+}
