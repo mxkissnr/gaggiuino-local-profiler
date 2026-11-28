@@ -141,22 +141,23 @@ func (p *Poller) publishPreheat(t liveTarget) {
 	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponseFor(t), MachineID: t.scope()})
 }
 
-// SetReadyByTarget backs POST /api/preheat/ready-by. targetAt == nil cancels a
-// pending target.
-func (p *Poller) SetReadyByTarget(targetAt *int64) {
+// SetReadyByTarget backs POST /api/preheat/ready-by for machine t (#2247:
+// every machine has its own target). targetAt == nil cancels a pending target.
+func (p *Poller) SetReadyByTarget(t liveTarget, targetAt *int64) {
 	p.state.mu.Lock()
+	sl := p.state.slotsLocked(t)
 	if targetAt == nil {
-		p.state.readyByTargetAt = nil
-		p.state.plannedSwitchOnAt = nil
+		sl.readyByTargetAt = nil
+		sl.plannedSwitchOnAt = nil
 	} else {
 		preheatMs := int64(loadPreheatMinutes()) * 60_000
-		p.state.readyByTargetAt = targetAt
+		sl.readyByTargetAt = targetAt
 		planned := *targetAt - preheatMs
-		p.state.plannedSwitchOnAt = &planned
+		sl.plannedSwitchOnAt = &planned
 	}
 	p.state.mu.Unlock()
 	p.savePreheatState()
-	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+	p.publishPreheat(t)
 }
 
 // readyByExpired reports whether a ready-by target is more than readyByGrace
@@ -165,32 +166,65 @@ func readyByExpired(targetAt int64, now time.Time) bool {
 	return now.UnixMilli() > targetAt+readyByGrace.Milliseconds()
 }
 
-// clearReadyByTarget drops a pending ready-by pair, persists the cleared state
-// and pushes the preheat update to open pages. Shared by the two places a
-// target is consumed: after a switch-on, and when a target turns out stale.
-func (p *Poller) clearReadyByTarget() {
+// clearReadyByTarget drops t's pending ready-by pair, persists the cleared
+// state and pushes the preheat update to open pages. Shared by the two places
+// a target is consumed: after a switch-on, and when a target turns out stale.
+func (p *Poller) clearReadyByTarget(t liveTarget) {
 	p.state.mu.Lock()
-	p.state.readyByTargetAt = nil
-	p.state.plannedSwitchOnAt = nil
+	sl := p.state.slotsLocked(t)
+	sl.readyByTargetAt = nil
+	sl.plannedSwitchOnAt = nil
 	p.state.mu.Unlock()
 	p.savePreheatState()
-	p.hub.Publish(sse.Event{Type: sse.EventPreheatUpdate, Data: p.buildPreheatResponse()})
+	p.publishPreheat(t)
 }
 
-// checkReadyByPreheat is one-shot: it fires the switch on once the planned
-// time is reached, then clears the target so it never re-fires, cleared
-// regardless of whether the HA call succeeds (a persistently unreachable HA
-// instance shouldn't be hammered every 30s tick). A target that went stale
-// while the app was running is cleared without switching on.
+// checkReadyByPreheat runs the ready-by check for the default machine and for
+// every other machine with a pending target (#2247).
 func (p *Poller) checkReadyByPreheat(ctx context.Context) {
+	for _, t := range p.readyByTargets() {
+		p.checkReadyByPreheatFor(ctx, t)
+	}
+}
+
+// readyByTargets is the default machine plus every other registered machine
+// whose slots hold a ready-by target.
+func (p *Poller) readyByTargets() []liveTarget {
+	def := p.defaultTarget()
+	var ids []int64
 	p.state.mu.Lock()
-	readyByTargetAt := p.state.readyByTargetAt
-	plannedSwitchOnAt := p.state.plannedSwitchOnAt
+	for id, o := range p.state.others {
+		if id != def.id && o.readyByTargetAt != nil {
+			ids = append(ids, id)
+		}
+	}
+	p.state.mu.Unlock()
+	out := []liveTarget{def}
+	for _, id := range ids {
+		m, err := p.registry.ResolveMachine(&id)
+		if err != nil || m == nil || m.IsDefault {
+			continue
+		}
+		out = append(out, targetOf(m))
+	}
+	return out
+}
+
+// checkReadyByPreheatFor is one-shot: it fires t's own switch on once the
+// planned time is reached, then clears the target so it never re-fires,
+// cleared regardless of whether the HA call succeeds (a persistently
+// unreachable HA instance shouldn't be hammered every 30s tick). A target that
+// went stale while the app was running is cleared without switching on.
+func (p *Poller) checkReadyByPreheatFor(ctx context.Context, t liveTarget) {
+	p.state.mu.Lock()
+	sl := p.state.slotsLocked(t)
+	readyByTargetAt := sl.readyByTargetAt
+	plannedSwitchOnAt := sl.plannedSwitchOnAt
 	p.state.mu.Unlock()
 	if readyByTargetAt == nil || plannedSwitchOnAt == nil {
 		return
 	}
-	if p.runtime.Get().MachineOn {
+	if p.runtimeFor(t).Get().MachineOn {
 		return
 	}
 	now := time.Now()
@@ -199,10 +233,10 @@ func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	}
 	if readyByExpired(*readyByTargetAt, now) {
 		log.Printf("system: discarded stale ready-by target from %s", time.UnixMilli(*readyByTargetAt).Format(time.RFC3339))
-		p.clearReadyByTarget()
+		p.clearReadyByTarget(t)
 		return
 	}
-	if entity := p.defaultSwitchEntity(); entity != "" {
+	if entity := t.switchEntity; entity != "" {
 		if err := p.ha.CallHaService(ctx, "switch", "turn_on", map[string]any{"entity_id": entity}); err != nil {
 			log.Printf("system: ready-by preheat switch-on failed: %v", err)
 		} else {
@@ -212,9 +246,8 @@ func (p *Poller) checkReadyByPreheat(ctx context.Context) {
 	// Remember the pair right before clearing it, so the run this turn-on is
 	// about to start can attribute the ready-by target to itself
 	// (preheat_history.go's lastReadyBy).
-	defaultID, _ := p.defaultMachineID()
-	p.rememberLastReadyBy(defaultID, readyByTargetAt, plannedSwitchOnAt)
-	p.clearReadyByTarget()
+	p.rememberLastReadyBy(t.id, readyByTargetAt, plannedSwitchOnAt)
+	p.clearReadyByTarget(t)
 }
 
 // preheatReadyNotifier is the process-wide callback that delivers the
@@ -285,6 +318,10 @@ type preheatStateFileShape struct {
 	SwitchOffAt       *int64 `json:"switchOffAt"`
 	ReadyByTargetAt   *int64 `json:"readyByTargetAt"`
 	PlannedSwitchOnAt *int64 `json:"plannedSwitchOnAt"`
+	// Machines holds every other machine's session and ready-by target
+	// (#2247), keyed by machine id; the four fields above stay the default
+	// machine's, so an older binary still reads the file.
+	Machines map[int64]preheatStateFileShape `json:"machines,omitempty"`
 }
 
 // preheatSaveMu serializes savePreheatState so two callers can't interleave
@@ -309,6 +346,7 @@ func (p *Poller) savePreheatState() {
 	b, err := json.Marshal(preheatStateFileShape{
 		SwitchOnAt: snap.SwitchOnAt, SwitchOffAt: snap.SwitchOffAt,
 		ReadyByTargetAt: readyByTargetAt, PlannedSwitchOnAt: plannedSwitchOnAt,
+		Machines: p.otherPreheatStates(),
 	})
 	if err != nil {
 		log.Printf("system: saving preheat state: %v", err)
@@ -338,6 +376,61 @@ func (p *Poller) savePreheatState() {
 	}
 }
 
+// otherPreheatStates snapshots every other machine's persisted preheat fields
+// (#2247), leaving out machines with nothing to persist; nil when none has
+// any. Takes p.state.mu and each RuntimeState.mu one after the other, never
+// nested.
+func (p *Poller) otherPreheatStates() map[int64]preheatStateFileShape {
+	type entry struct {
+		id                         int64
+		rt                         *RuntimeState
+		readyByTargetAt, plannedAt *int64
+	}
+	var entries []entry
+	p.state.mu.Lock()
+	for id, o := range p.state.others {
+		entries = append(entries, entry{id, o.runtime, o.readyByTargetAt, o.plannedSwitchOnAt})
+	}
+	p.state.mu.Unlock()
+	var out map[int64]preheatStateFileShape
+	for _, e := range entries {
+		snap := e.rt.Get()
+		if snap.SwitchOnAt == nil && snap.SwitchOffAt == nil && e.readyByTargetAt == nil {
+			continue
+		}
+		if out == nil {
+			out = map[int64]preheatStateFileShape{}
+		}
+		out[e.id] = preheatStateFileShape{
+			SwitchOnAt: snap.SwitchOnAt, SwitchOffAt: snap.SwitchOffAt,
+			ReadyByTargetAt: e.readyByTargetAt, PlannedSwitchOnAt: e.plannedAt,
+		}
+	}
+	return out
+}
+
+// restoreOtherPreheatState restores one other machine's persisted session
+// and ready-by target with the same TTL and staleness rules loadPreheatState
+// applies to the default machine.
+func (p *Poller) restoreOtherPreheatState(id int64, s preheatStateFileShape, now time.Time) {
+	nowMs := now.UnixMilli()
+	ttl := preheatStateTTL.Milliseconds()
+	p.state.mu.Lock()
+	o := p.state.otherLocked(id)
+	if s.ReadyByTargetAt != nil && s.PlannedSwitchOnAt != nil && !readyByExpired(*s.ReadyByTargetAt, now) {
+		o.readyByTargetAt = s.ReadyByTargetAt
+		o.plannedSwitchOnAt = s.PlannedSwitchOnAt
+	}
+	rt := o.runtime
+	p.state.mu.Unlock()
+	if s.SwitchOnAt != nil && nowMs-*s.SwitchOnAt < ttl {
+		rt.SetSwitchOnAt(s.SwitchOnAt)
+	}
+	if s.SwitchOffAt != nil && nowMs-*s.SwitchOffAt < ttl {
+		rt.SetSwitchOffAt(s.SwitchOffAt)
+	}
+}
+
 // loadPreheatState, called once from Start(): restores switchOnAt/switchOffAt
 // (only if within preheatStateTTL of now — no reviving a preheat session from
 // days ago) and any pending ready-by target, dropping a target that is already
@@ -351,6 +444,9 @@ func (p *Poller) loadPreheatState() {
 	var s preheatStateFileShape
 	if err := json.Unmarshal(data, &s); err != nil {
 		return
+	}
+	for id, ms := range s.Machines {
+		p.restoreOtherPreheatState(id, ms, time.Now())
 	}
 	now := time.Now().UnixMilli()
 	ttl := preheatStateTTL.Milliseconds()
