@@ -201,6 +201,8 @@ describe('localeFor() follows the browser region (#2232)', () => {
         expect(fresh('fr')).toBe('fr-CH');
     });
 
+    // #2240: when neither source carries an explicit region, the likely region
+    // of the first bare browser language applies before the LOCALE_MAP entry.
     it("a bare browser language gives its likely region when no locale has one (#2240)", async (): Promise<void> => {
         vi.stubGlobal('navigator', { language: 'de', languages: ['de', 'en'] });
         stubSystemLocale('de');
